@@ -1,0 +1,781 @@
+diff --git a/client/src/components/modules/PackingList/PackingList.jsx b/client/src/components/modules/PackingList/PackingList.jsx
+index 312e58bf..09b1dc6e 100644
+--- a/client/src/components/modules/PackingList/PackingList.jsx
++++ b/client/src/components/modules/PackingList/PackingList.jsx
+@@ -10,40 +10,6 @@ import axios from '../../../utils/api';
+ import CustomDatePicker from '../../shared/CustomDatePicker';
+ import './PackingList.css';
+ 
+-const numberToWordsUSD = (amount) => {
+-    const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+-    const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+-    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+-    const convertChunk = (num) => {
+-        let s = '';
+-        if (num >= 100) { s += units[Math.floor(num / 100)] + ' Hundred '; num %= 100; }
+-        if (num >= 10 && num <= 19) { s += teens[num - 10] + ' '; }
+-        else { if (num >= 20) { s += tens[Math.floor(num / 10)] + ' '; num %= 10; } if (num > 0) { s += units[num] + ' '; } }
+-        return s;
+-    };
+-    if (amount === 0) return 'US Dollar: Zero Only';
+-    const parts = amount.toFixed(2).split('.');
+-    let dollar = parseInt(parts[0]), cents = parseInt(parts[1]);
+-    let words = 'US Dollar: ';
+-    if (dollar === 0) { words += 'Zero '; } else {
+-        let tw = '';
+-        if (dollar >= 10000000) { tw += convertChunk(Math.floor(dollar / 10000000)) + 'Crore '; dollar %= 10000000; }
+-        if (dollar >= 100000) { tw += convertChunk(Math.floor(dollar / 100000)) + 'Lac '; dollar %= 100000; }
+-        if (dollar >= 1000) { tw += convertChunk(Math.floor(dollar / 1000)) + 'Thousand '; dollar %= 1000; }
+-        if (dollar > 0) { tw += convertChunk(dollar); }
+-        words += tw;
+-    }
+-    words += cents > 0 ? 'And Cents ' + convertChunk(cents) + 'Only' : 'Only';
+-    return words.replace(/\s+/g, ' ').trim();
+-};
+-
+-const getRevName = (name) => {
+-    if (!name) return 'Original PI';
+-    if (name === 'Original PI') return 'Original PI';
+-    const match = name.match(/REVISE NO-(\d+)/i);
+-    return match ? `Revised ${parseInt(match[1])}` : name;
+-};
+-
+ function PackingList({
+     importers = [],
+     exporters = [],
+@@ -68,15 +34,14 @@ function PackingList({
+     const [submitStatus, setSubmitStatus] = useState(null);
+     const [searchQuery, setSearchQuery] = useState('');
+     const [editingId, setEditingId] = useState(null);
+-    const [selectedPiRaw, setSelectedPiRaw] = useState(null);
+     const [activeDropdown, setActiveDropdown] = useState(null);
+     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+     const [toast, setToast] = useState(null);
+     const [expandedCardId, setExpandedCardId] = useState(null);
+-
++    
+     // Auto-population dropdown state
+     const [piSearchQuery, setPiSearchQuery] = useState('');
+-
++    
+     const toastTimerRef = useRef(null);
+     const piDropdownRef = useRef(null);
+     const importerRef = useRef(null);
+@@ -122,9 +87,7 @@ function PackingList({
+         trNumber: '',
+         trDate: '',
+         trName: '',
+-        demurrage: '03',
+-        days: '05',
+-        invoiceStyle: 'Style 2 AAS',
++        invoiceStyle: 'Style 1 SAA',
+         bankName: '',
+         branchName: '',
+         lcAmendment: '',
+@@ -136,13 +99,12 @@ function PackingList({
+         countryFinalDest: 'BANGLADESH',
+         certification: '',
+         otherReferences: '',
+-        buyerName: '',
+-        selectedRevisionNo: ''
++        buyerName: ''
+     });
+ 
+     useEffect(() => {
+         fetchRecords();
+-        preloadAlgerianFont().catch(() => { });
++        preloadAlgerianFont().catch(() => {});
+     }, []);
+ 
+     useEffect(() => {
+@@ -200,153 +162,63 @@ function PackingList({
+         setFormData(prev => ({ ...prev, [name]: value }));
+     };
+ 
+-    const loadPiRevision = (rawPi, revisionNo) => {
+-        const isRevised = revisionNo && revisionNo !== 'Original PI';
+-        const displayPiNumber = isRevised ? `${rawPi.piNumber} (REVISED)` : (rawPi.piNumber || '');
+-
+-        // Look up the LC that references this PI number
+-        const cleanPiNo = rawPi.piNumber || '';
+-        const matchedLcByPi = lcRecords?.find(lc => {
+-            const lcPi = (lc.piNo || '').replace(' (REVISED)', '');
+-            return lcPi === cleanPiNo;
+-        });
+-
+-        // The revisions array in rawPi
+-        const revisions = rawPi.revisions || [];
+-        // The selected revision object (could be 'Original PI' or subsequent revisions)
+-        const selectedRev = revisions.find(r => r.reviseNo === revisionNo) || rawPi;
+-
+-        // Use the selected revision's date if available
+-        const piDate = selectedRev.reviseDate || selectedRev.date || rawPi.date || '';
+-
+-        let revisedTotalAmount = 0;
+-        let mappedProducts = [];
+-
+-        if (isRevised && revisions.length > 0) {
+-            const originalRev = revisions.find(r => r.reviseNo === 'Original PI') || rawPi;
+-            const originalProducts = originalRev?.productsList || [];
+-
+-            // Filter and map only the changed products between selected revision and original revision
+-            const revisedProducts = selectedRev.productsList || [];
+-            revisedProducts.forEach(p => {
+-                const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
+-                const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
+-                const revQty = parseFloat(p.quantity) || 0;
+-                const diffQty = revQty - origQty;
+-
+-                if (diffQty !== 0) {
+-                    // This product has changed!
+-                    // If quantity decreased (diffQty < 0), show remaining value (revQty).
+-                    // If quantity increased (diffQty > 0), keep the difference (diffQty).
+-                    const displayQty = diffQty < 0 ? revQty : diffQty;
+-                    const calculatedAmt = displayQty * (parseFloat(p.rate) || 0);
+-                    const calculatedFrt = displayQty * (parseFloat(p.freight) || 0);
+-                    revisedTotalAmount += calculatedAmt + calculatedFrt;
+-                    mappedProducts.push({
+-                        productName: p.productName || '',
+-                        hsCode: p.hsCode || '',
+-                        quantity: String(displayQty),
+-                        bagCount: '',
+-                        netWeight: String(displayQty),
+-                        grossWeight: '',
+-                        rate: p.rate || '',
+-                        amount: String(calculatedAmt.toFixed(2)),
+-                        freight: p.freight || '',
+-                        totalFreight: String(calculatedFrt.toFixed(2))
+-                    });
+-                }
+-            });
+-
+-            if (mappedProducts.length === 0) {
+-                mappedProducts = revisedProducts.map(p => {
+-                    const amt = parseFloat(p.amount) || 0;
+-                    const frt = parseFloat(p.totalFreight) || 0;
+-                    revisedTotalAmount += amt + frt;
+-                    return {
+-                        productName: p.productName || '',
+-                        hsCode: p.hsCode || '',
+-                        quantity: p.quantity || '',
+-                        bagCount: '',
+-                        netWeight: p.quantity || '',
+-                        grossWeight: '',
+-                        rate: p.rate || '',
+-                        amount: p.amount || '',
+-                        freight: p.freight || '',
+-                        totalFreight: p.totalFreight || ''
+-                    };
+-                });
+-            }
+-        } else {
+-            // Unrevised or Original option: show all products, netWeight = full quantity of selectedRev/rawPi
+-            const productsSource = selectedRev.productsList || rawPi.productsList || [];
+-            mappedProducts = productsSource.map(p => ({
+-                productName: p.productName || '',
+-                hsCode: p.hsCode || '',
+-                quantity: p.quantity || '',
+-                bagCount: '',
+-                netWeight: p.quantity || '',
+-                grossWeight: '',
+-                rate: p.rate || '',
+-                amount: p.amount || '',
+-                freight: p.freight || '',
+-                totalFreight: p.totalFreight || ''
+-            }));
+-        }
+-
+-        if (mappedProducts.length === 0) {
+-            mappedProducts = [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }];
+-        }
+-
++    // Auto-populate form when a Proforma Invoice is selected
++    const handlePISelect = (pi) => {
++        const matchedLc = lcRecords?.find(l => l.lcNo === pi.lcNumber);
+         setFormData(prev => ({
+             ...prev,
+-            piNumber: displayPiNumber,
+-            piDate: piDate ? piDate.split('T')[0] : '',
+-            partyName: rawPi.partyName || '',
+-            partyAddress: rawPi.partyAddress || '',
+-            partyContact: rawPi.partyContact || '',
+-            exporterName: rawPi.exporterName || '',
+-            exporterAddress: rawPi.exporterAddress || '',
+-            exporterContact: rawPi.exporterContact || '',
+-            exporterEmail: rawPi.exporterEmail || '',
+-            portOfLoading: rawPi.portOfLoading || '',
+-            portOfDischarge: rawPi.portOfDischarge || '',
+-            vesselFlightNo: rawPi.vesselFlightNo || 'BY TRUCK',
+-            preCarriageBy: rawPi.preCarriageBy || 'ROAD',
+-            placeOfReceipt: rawPi.placeOfReceipt || rawPi.placeOfReceiptByPreCarrier || 'BY ROAD',
+-            finalDestination: rawPi.finalDestination || 'BANGLADESH',
+-            marksNo: rawPi.marksNo || '',
+-            buyerOrderNo: rawPi.buyerOrderNo || '',
+-            buyerOrderDate: rawPi.buyerOrderDate ? rawPi.buyerOrderDate.split('T')[0] : '',
+-            lcNumber: matchedLcByPi ? (matchedLcByPi.lcNo || '') : '',
+-            lcDate: matchedLcByPi ? (matchedLcByPi.openingDate ? matchedLcByPi.openingDate.split('T')[0] : '') : '',
+-            partySignature: rawPi.partySignature || '',
+-            exporterSignature: rawPi.exporterSignature || '',
+-            invoiceStyle: rawPi.invoiceStyle || 'Style 2 AAS',
+-            bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : '',
+-            lcAmendment: matchedLcByPi ? (matchedLcByPi.lcAmendment || '') : '',
+-            descriptionGoods: rawPi.descriptionGoods || '',
+-            termsDeliveryPayment: rawPi.termsDeliveryPayment || '',
+-            totalAmount: isRevised ? String(revisedTotalAmount.toFixed(2)) : (selectedRev.totalAmount || rawPi.totalAmount || ''),
+-            totalAmountWords: isRevised ? numberToWordsUSD(revisedTotalAmount) : (selectedRev.totalAmountWords || rawPi.totalAmountWords || ''),
+-            countryOrigin: rawPi.countryOrigin || 'INDIA',
+-            countryFinalDest: rawPi.countryFinalDest || 'BANGLADESH',
+-            certification: rawPi.certification || '',
+-            otherReferences: rawPi.otherReferences || '',
+-            buyerName: rawPi.buyerName || '',
+-            selectedRevisionNo: revisionNo,
+-            productsList: mappedProducts,
+-            productsImage: ''
++            piNumber: pi.piNumber || '',
++            piDate: pi.date ? pi.date.split('T')[0] : '',
++            partyName: pi.partyName || '',
++            partyAddress: pi.partyAddress || '',
++            partyContact: pi.partyContact || '',
++            exporterName: pi.exporterName || '',
++            exporterAddress: pi.exporterAddress || '',
++            exporterContact: pi.exporterContact || '',
++            exporterEmail: pi.exporterEmail || '',
++            portOfLoading: pi.portOfLoading || '',
++            portOfDischarge: pi.portOfDischarge || '',
++            vesselFlightNo: pi.vesselFlightNo || 'BY TRUCK',
++            preCarriageBy: pi.preCarriageBy || 'ROAD',
++            placeOfReceipt: pi.placeOfReceipt || pi.placeOfReceiptByPreCarrier || 'BY ROAD',
++            finalDestination: pi.finalDestination || 'BANGLADESH',
++            marksNo: pi.marksNo || '',
++            buyerOrderNo: pi.buyerOrderNo || '',
++            buyerOrderDate: pi.buyerOrderDate ? pi.buyerOrderDate.split('T')[0] : '',
++            lcNumber: pi.lcNumber || '',
++            lcDate: pi.lcDate ? pi.lcDate.split('T')[0] : '',
++            partySignature: pi.partySignature || '',
++            exporterSignature: pi.exporterSignature || '',
++            invoiceStyle: pi.invoiceStyle || 'Style 1 SAA',
++            bankName: matchedLc ? (matchedLc.bankName || '') : '',
++            lcAmendment: '',
++            descriptionGoods: pi.descriptionGoods || '',
++            termsDeliveryPayment: pi.termsDeliveryPayment || '',
++            totalAmount: pi.totalAmount || '',
++            totalAmountWords: pi.totalAmountWords || '',
++            countryOrigin: pi.countryOrigin || 'INDIA',
++            countryFinalDest: pi.countryFinalDest || 'BANGLADESH',
++            certification: pi.certification || '',
++            otherReferences: pi.otherReferences || '',
++            buyerName: pi.buyerName || '',
++            productsList: Array.isArray(pi.productsList) && pi.productsList.length > 0
++                ? pi.productsList.map(p => ({
++                    productName: p.productName || '',
++                    hsCode: p.hsCode || '',
++                    quantity: p.quantity || '',
++                    bagCount: '',
++                    netWeight: p.quantity || '', // default net weight to product quantity
++                    grossWeight: '',
++                    rate: p.rate || '',
++                    amount: p.amount || '',
++                    freight: p.freight || '',
++                    totalFreight: p.totalFreight || ''
++                }))
++                : [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }]
+         }));
+         setPiSearchQuery('');
+         setActiveDropdown(null);
+-        showToast(`Copied data from PI Number ${displayPiNumber}`);
+-    };
+-
+-    // Auto-populate form when a Proforma Invoice is selected
+-    const handlePISelect = (pi) => {
+-        const rawPi = pi.rawPi || pi;
+-        setSelectedPiRaw(rawPi);
+-        loadPiRevision(rawPi, 'Original PI');
++        showToast(`Copied data from PI Number ${pi.piNumber}`);
+     };
+ 
+     const handleProductsImageChange = (e) => {
+@@ -422,9 +294,7 @@ function PackingList({
+             trNumber: '',
+             trDate: '',
+             trName: '',
+-            demurrage: '03',
+-            days: '05',
+-            invoiceStyle: 'Style 2 AAS',
++            invoiceStyle: 'Style 1 SAA',
+             bankName: '',
+             branchName: '',
+             lcAmendment: '',
+@@ -436,13 +306,11 @@ function PackingList({
+             countryFinalDest: 'BANGLADESH',
+             certification: '',
+             otherReferences: '',
+-            buyerName: '',
+-            selectedRevisionNo: ''
++            buyerName: ''
+         });
+         setPiSearchQuery('');
+         setEditingId(null);
+         setSubmitStatus(null);
+-        setSelectedPiRaw(null);
+     };
+ 
+     const handleSubmit = async (e) => {
+@@ -460,7 +328,7 @@ function PackingList({
+                 const response = await axios.put(`${API_BASE_URL}/api/packing-lists/${editingId}`, formData);
+                 setRecords(prev => prev.map(rec => rec._id === editingId ? response.data : rec));
+                 showToast('Packing List updated successfully.');
+-
++                
+                 // Add system notification
+                 addNotification(
+                     'Packing List Updated',
+@@ -492,20 +360,6 @@ function PackingList({
+ 
+     const handleEditClick = (record) => {
+         setEditingId(record._id);
+-
+-        const basePiNumber = (record.piNumber || '').replace(' (REVISED)', '').trim();
+-        const matchedRawPi = piRecords.find(pi => (pi.piNumber || '').trim() === basePiNumber);
+-        setSelectedPiRaw(matchedRawPi || null);
+-
+-        let revisionNo = record.selectedRevisionNo || '';
+-        if (!revisionNo && matchedRawPi && matchedRawPi.revisions && matchedRawPi.revisions.length > 0) {
+-            if ((record.piNumber || '').includes('(REVISED)')) {
+-                revisionNo = matchedRawPi.revisions[matchedRawPi.revisions.length - 1].reviseNo || 'Original PI';
+-            } else {
+-                revisionNo = 'Original PI';
+-            }
+-        }
+-
+         setFormData({
+             packingListNumber: record.packingListNumber || '',
+             date: record.date ? record.date.split('T')[0] : '',
+@@ -550,9 +404,7 @@ function PackingList({
+             trNumber: record.trNumber || '',
+             trDate: record.trDate ? record.trDate.split('T')[0] : '',
+             trName: record.trName || '',
+-            demurrage: record.demurrage || '03',
+-            days: record.days || '05',
+-            invoiceStyle: record.invoiceStyle || 'Style 2 AAS',
++            invoiceStyle: record.invoiceStyle || 'Style 1 SAA',
+             bankName: record.bankName || '',
+             branchName: record.branchName || '',
+             lcAmendment: record.lcAmendment || '',
+@@ -564,8 +416,7 @@ function PackingList({
+             countryFinalDest: record.countryFinalDest || 'BANGLADESH',
+             certification: record.certification || '',
+             otherReferences: record.otherReferences || '',
+-            buyerName: record.buyerName || '',
+-            selectedRevisionNo: revisionNo
++            buyerName: record.buyerName || ''
+         });
+         setShowForm(true);
+     };
+@@ -637,74 +488,30 @@ function PackingList({
+         });
+     }, [trSetups, formData.trName]);
+ 
+-    const piOptions = useMemo(() => {
+-        const list = [];
+-        piRecords.forEach(pi => {
+-            const hasRevisions = pi.revisions && pi.revisions.length > 0;
+-            if (hasRevisions) {
+-                // Only show Original PI in the selection list
+-                const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
+-                if (originalRev) {
+-                    list.push({
+-                        ...pi,
+-                        ...originalRev,
+-                        _dropdownKey: `${pi._id}-original`,
+-                        isRevisedOption: false,
+-                        displayPiNumber: pi.piNumber,
+-                        rawPi: pi
+-                    });
+-                } else {
+-                    list.push({
+-                        ...pi,
+-                        _dropdownKey: pi._id,
+-                        isRevisedOption: false,
+-                        displayPiNumber: pi.piNumber,
+-                        rawPi: pi
+-                    });
+-                }
+-            } else {
+-                list.push({
+-                    ...pi,
+-                    _dropdownKey: pi._id,
+-                    isRevisedOption: false,
+-                    displayPiNumber: pi.piNumber,
+-                    rawPi: pi
+-                });
+-            }
+-        });
+-        return list;
+-    }, [piRecords]);
+-
+-    const filteredPIs = useMemo(() => {
+-        return piOptions.filter(pi => {
+-            if (piSearchQuery) {
+-                const query = piSearchQuery.toLowerCase();
+-                return (pi.displayPiNumber || '').toLowerCase().includes(query) ||
+-                    (pi.partyName || '').toLowerCase().includes(query);
+-            }
+-            return true;
+-        });
+-    }, [piOptions, piSearchQuery]);
+-
++    const filteredPIs = piRecords.filter(pi => {
++        if (piSearchQuery) {
++            const query = piSearchQuery.toLowerCase();
++            return (pi.piNumber || '').toLowerCase().includes(query) ||
++                (pi.partyName || '').toLowerCase().includes(query);
++        }
++        return true;
++    });
+ 
+     const filteredLcs = useMemo(() => {
+         let list = lcRecords;
+-
++        
+         // Filter by PI number if one is entered
+         if (formData.piNumber) {
+-            const piNoClean = (formData.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
+-            list = list.filter(lc => {
+-                const lcPiClean = (lc.piNo || '').replace(' (REVISED)', '').trim().toLowerCase();
+-                return lcPiClean === piNoClean;
+-            });
++            const piNoClean = (formData.piNumber || '').trim().toLowerCase();
++            list = list.filter(lc => (lc.piNo || '').trim().toLowerCase() === piNoClean);
+         }
+-
++        
+         // Filter by the search input typed inside the LC Number field
+         if (formData.lcNumber) {
+             const search = formData.lcNumber.toLowerCase();
+             list = list.filter(lc => (lc.lcNo || '').toLowerCase().includes(search));
+         }
+-
++        
+         return list;
+     }, [lcRecords, formData.piNumber, formData.lcNumber]);
+ 
+@@ -750,6 +557,8 @@ function PackingList({
+ 
+             {showForm && (
+                 <div className="pl-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
++                    <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl pointer-events-none"></div>
++                    <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl pointer-events-none"></div>
+ 
+                     <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
+                         <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit Packing List' : 'New Packing List Creation'}</h3>
+@@ -762,81 +571,33 @@ function PackingList({
+                     {!editingId && (
+                         <div className="mb-8 p-4 bg-blue-50/50 border border-blue-100 rounded-xl relative z-20 dropdown-container" ref={piDropdownRef}>
+                             <label className="block text-xs font-semibold text-blue-700 uppercase tracking-wider mb-2">Auto-populate from Proforma Invoice (PI)</label>
+-                            <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+-                                <div className="relative flex-1 max-w-md">
+-                                    <input
+-                                        type="text"
+-                                        placeholder="Search PI number or importer name to pre-fill..."
+-                                        value={piSearchQuery}
+-                                        onChange={(e) => { setPiSearchQuery(e.target.value); setActiveDropdown('piList'); setHighlightedIndex(-1); }}
+-                                        onFocus={() => { setActiveDropdown('piList'); setHighlightedIndex(-1); }}
+-                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'piList', filteredPIs)}
+-                                        className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+-                                    />
+-                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+-                                        <SearchIcon className="h-4 w-4 text-blue-400" />
+-                                    </div>
+-                                    {activeDropdown === 'piList' && filteredPIs.length > 0 && (
+-                                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+-                                            {filteredPIs.map((pi, idx) => (
+-                                                <button
+-                                                    key={pi._dropdownKey}
+-                                                    type="button"
+-                                                    onClick={() => handlePISelect(pi)}
+-                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+-                                                    className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+-                                                >
+-                                                    <span className="font-semibold">
+-                                                        {pi.piNumber}
+-                                                        {pi.isRevisedOption ? (
+-                                                            <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">REVISED</span>
+-                                                        ) : (
+-                                                            pi.revisions && pi.revisions.length > 0 && (
+-                                                                <span className="ml-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">ORIGINAL</span>
+-                                                            )
+-                                                        )}
+-                                                    </span>
+-                                                    <span className="text-xs text-gray-500 truncate max-w-[200px]">{pi.partyName}</span>
+-                                                </button>
+-                                            ))}
+-                                        </div>
+-                                    )}
++                            <div className="relative max-w-md">
++                                <input
++                                    type="text"
++                                    placeholder="Search PI number or importer name to pre-fill..."
++                                    value={piSearchQuery}
++                                    onChange={(e) => { setPiSearchQuery(e.target.value); setActiveDropdown('piList'); setHighlightedIndex(-1); }}
++                                    onFocus={() => { setActiveDropdown('piList'); setHighlightedIndex(-1); }}
++                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'piList', filteredPIs)}
++                                    className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
++                                />
++                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
++                                    <SearchIcon className="h-4 w-4 text-blue-400" />
+                                 </div>
+-
+-                                {selectedPiRaw && selectedPiRaw.revisions && selectedPiRaw.revisions.length > 0 && (
+-                                    <div className="w-full sm:w-64 animate-in fade-in slide-in-from-left-2 duration-300 flex items-center gap-2 relative">
+-                                        <span className="text-xs font-semibold text-blue-700 uppercase shrink-0">Revision:</span>
+-                                        <div className="relative flex-1">
++                                {activeDropdown === 'piList' && filteredPIs.length > 0 && (
++                                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
++                                        {filteredPIs.map((pi, idx) => (
+                                             <button
++                                                key={pi._id}
+                                                 type="button"
+-                                                onClick={() => setActiveDropdown(activeDropdown === 'piRevisions' ? null : 'piRevisions')}
+-                                                className="w-full px-4 py-2 border border-blue-200 rounded-lg text-sm bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-between outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-left"
++                                                onClick={() => handlePISelect(pi)}
++                                                onMouseEnter={() => setHighlightedIndex(idx)}
++                                                className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                             >
+-                                                <span>{getRevName(formData.selectedRevisionNo || 'Original PI')}</span>
+-                                                <ChevronDownIcon className={`h-4 w-4 text-blue-400 transition-transform duration-200 ${activeDropdown === 'piRevisions' ? 'transform rotate-180' : ''}`} />
++                                                <span className="font-semibold">{pi.piNumber}</span>
++                                                <span className="text-xs text-gray-500 truncate max-w-[200px]">{pi.partyName}</span>
+                                             </button>
+-                                            {activeDropdown === 'piRevisions' && (
+-                                                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+-                                                    {selectedPiRaw.revisions.map((rev) => (
+-                                                        <button
+-                                                            key={rev.reviseNo}
+-                                                            type="button"
+-                                                            onClick={() => {
+-                                                                loadPiRevision(selectedPiRaw, rev.reviseNo);
+-                                                                setActiveDropdown(null);
+-                                                            }}
+-                                                            className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors ${
+-                                                                (formData.selectedRevisionNo || 'Original PI') === rev.reviseNo
+-                                                                    ? 'bg-blue-50 text-blue-700 font-semibold'
+-                                                                    : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+-                                                            }`}
+-                                                        >
+-                                                            <span>{getRevName(rev.reviseNo)}</span>
+-                                                        </button>
+-                                                    ))}
+-                                                </div>
+-                                            )}
+-                                        </div>
++                                        ))}
+                                     </div>
+                                 )}
+                             </div>
+@@ -882,7 +643,6 @@ function PackingList({
+                                 />
+                             </div>
+ 
+-
+                             <div className="space-y-2">
+                                 <label className="text-sm font-medium text-gray-700">PI Date</label>
+                                 <CustomDatePicker
+@@ -972,6 +732,16 @@ function PackingList({
+                             </div>
+ 
+                             <div className="space-y-2">
++                                <label className="text-sm font-semibold text-blue-700">Invoice Style</label>
++                                <select
++                                    name="invoiceStyle"
++                                    value={formData.invoiceStyle || 'Style 1 SAA'}
++                                    onChange={handleInputChange}
++                                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-gray-900"
++                                >
++                                    <option value="Style 1 SAA">Style 1 SAA</option>
++                                    <option value="Style 2 AAS">Style 2 AAS</option>
++                                </select>
+                             </div>
+ 
+                             <div className="space-y-2 relative dropdown-container" ref={bankRef}>
+@@ -1404,156 +1174,12 @@ function PackingList({
+                             </div>
+                         </div>
+ 
+-                        {/* --- Rinku-only: Demurrage & Days --- */}
+-                        {formData.trName && formData.trName.trim().toLowerCase().includes('rinku') && (
+-                            <div className="grid grid-cols-2 gap-4 p-4 bg-orange-50/60 border border-orange-200/60 rounded-xl">
+-                                <div className="space-y-2">
+-                                    <label className="text-sm font-medium text-gray-700">Demurrage</label>
+-                                    <input
+-                                        type="text"
+-                                        name="demurrage"
+-                                        value={formData.demurrage}
+-                                        onChange={handleInputChange}
+-                                        placeholder="e.g. 03"
+-                                        className="w-full px-4 py-2 bg-white/70 border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-400 outline-none transition-all"
+-                                    />
+-                                </div>
+-                                <div className="space-y-2">
+-                                    <label className="text-sm font-medium text-gray-700">Days</label>
+-                                    <input
+-                                        type="text"
+-                                        name="days"
+-                                        value={formData.days}
+-                                        onChange={handleInputChange}
+-                                        placeholder="e.g. 05"
+-                                        className="w-full px-4 py-2 bg-white/70 border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-400 outline-none transition-all"
+-                                    />
+-                                </div>
+-                            </div>
+-                        )}
+-
+                         {/* --- Products & Packaging Image Upload --- */}
+-                        <div className="space-y-6">
++                        <div className="space-y-4">
+                             <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                                 <h4 className="text-base font-bold text-gray-800 uppercase tracking-wide">Products & Packaging Details</h4>
+                             </div>
+ 
+-                            {/* --- Products List Dynamic Editor --- */}
+-                            <div className="space-y-4">
+-                                {(formData.productsList || [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '' }]).map((item, idx) => (
+-                                    <div key={idx} className="p-5 bg-white/40 backdrop-blur-md border border-gray-200/50 rounded-2xl relative space-y-4 shadow-sm hover:shadow-md transition-all duration-200">
+-                                        <div className="flex items-center justify-between border-b border-gray-200/40 pb-2">
+-                                            <div className="flex items-center gap-2">
+-                                                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">Product #{idx + 1}</span>
+-                                                <span className="text-sm font-bold text-gray-800 truncate max-w-[200px] md:max-w-md" title={item.productName}>
+-                                                    {item.productName || 'New Product Entry'}
+-                                                </span>
+-                                            </div>
+-                                            {formData.productsList && formData.productsList.length > 1 && (
+-                                                <button
+-                                                    type="button"
+-                                                    onClick={() => removeProductRow(idx)}
+-                                                    className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-all duration-200"
+-                                                    title="Remove Product"
+-                                                >
+-                                                    <TrashIcon className="w-4 h-4" />
+-                                                </button>
+-                                            )}
+-                                        </div>
+-
+-                                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+-                                            {/* Product Name */}
+-                                            <div className="md:col-span-3 space-y-1.5">
+-                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Product Name</label>
+-                                                <input
+-                                                    type="text"
+-                                                    value={item.productName}
+-                                                    onChange={(e) => handleProductChange(idx, 'productName', e.target.value)}
+-                                                    placeholder="Product Description"
+-                                                    required
+-                                                    className="w-full px-3.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+-                                                />
+-                                            </div>
+-
+-                                            {/* HS Code */}
+-                                            <div className="md:col-span-2 space-y-1.5">
+-                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">HS Code</label>
+-                                                <input
+-                                                    type="text"
+-                                                    value={item.hsCode}
+-                                                    onChange={(e) => handleProductChange(idx, 'hsCode', e.target.value)}
+-                                                    placeholder="HS Code"
+-                                                    className="w-full px-3.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+-                                                />
+-                                            </div>
+-
+-                                            {/* Quantity (KG) */}
+-                                            <div className="md:col-span-1 space-y-1.5">
+-                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider truncate block" title="PI Qty (KG)">PI Qty</label>
+-                                                <input
+-                                                    type="number"
+-                                                    value={item.quantity}
+-                                                    readOnly
+-                                                    disabled
+-                                                    placeholder="Qty"
+-                                                    className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-500 cursor-not-allowed outline-none text-center"
+-                                                />
+-                                            </div>
+-
+-                                            {/* Bag Count */}
+-                                            <div className="md:col-span-2 space-y-1.5">
+-                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Bag Count</label>
+-                                                <input
+-                                                    type="number"
+-                                                    value={item.bagCount}
+-                                                    onChange={(e) => handleProductChange(idx, 'bagCount', e.target.value)}
+-                                                    placeholder="e.g. 500"
+-                                                    className="w-full px-3.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+-                                                />
+-                                            </div>
+-
+-                                            {/* Net Weight */}
+-                                            <div className="md:col-span-2 space-y-1.5">
+-                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Net Weight (KG)</label>
+-                                                <input
+-                                                    type="number"
+-                                                    value={item.netWeight}
+-                                                    onChange={(e) => handleProductChange(idx, 'netWeight', e.target.value)}
+-                                                    placeholder="Net Wt"
+-                                                    className="w-full px-3.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+-                                                />
+-                                            </div>
+-
+-                                            {/* Gross Weight */}
+-                                            <div className="md:col-span-2 space-y-1.5">
+-                                                <label className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider truncate block" title="Gross Weight (KG)">Gross Wt (KG)*</label>
+-                                                <input
+-                                                    type="number"
+-                                                    value={item.grossWeight}
+-                                                    onChange={(e) => handleProductChange(idx, 'grossWeight', e.target.value)}
+-                                                    placeholder="Gross Wt"
+-                                                    required
+-                                                    className="w-full px-3.5 py-2 bg-indigo-50/20 border border-indigo-200 focus:border-indigo-500 rounded-lg text-[13px] font-bold text-indigo-700 placeholder-indigo-300 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+-                                                />
+-                                            </div>
+-                                        </div>
+-                                    </div>
+-                                ))}
+-
+-                                <div className="flex justify-end pt-1">
+-                                    <button
+-                                        type="button"
+-                                        onClick={addProductRow}
+-                                        className="flex items-center gap-1.5 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300 font-semibold rounded-xl text-xs transition-all shadow-sm"
+-                                    >
+-                                        <PlusIcon className="w-3.5 h-3.5" /> Add Another Product
+-                                    </button>
+-                                </div>
+-                            </div>
+-
+-                            {/* Divider between product table and packaging image upload */}
+-                            <div className="border-t border-gray-200/50 my-6"></div>
+-
+                             <div className="rounded-xl border border-gray-200 shadow-sm bg-white/50 p-4">
+                                 {formData.productsImage ? (
+                                     <div className="relative group">
+@@ -1681,7 +1307,11 @@ function PackingList({
+                                                     <button
+                                                         onClick={async () => {
+                                                             try {
++                                                                if (rec.invoiceStyle === 'Style 2 AAS') {
+                                                                     await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
++                                                                } else {
++                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
++                                                                }
+                                                             } catch (err) {
+                                                                 console.error('PDF generation failed:', err);
+                                                                 showToast('Failed to generate PDF.', 'error');
+@@ -1776,7 +1406,11 @@ function PackingList({
+                                                     <button
+                                                         onClick={async () => {
+                                                             try {
++                                                                if (rec.invoiceStyle === 'Style 2 AAS') {
+                                                                     await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
++                                                                } else {
++                                                                    await generatePLPDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
++                                                                }
+                                                             } catch (err) {
+                                                                 console.error('PDF generation failed:', err);
+                                                                 showToast('Failed to generate PDF.', 'error');

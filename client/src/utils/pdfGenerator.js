@@ -2183,21 +2183,12 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             }, {}));
 
             let currentBalance = 0;
-            const addedWhPortion = new Set();
 
             const unifiedData = [...aggregatedPurchase, ...aggregatedSale, ...aggregatedDamage]
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(item => {
                     if (item.type === 'purchase') {
-                        Object.entries(item.brands || {}).forEach(([bKey, bData]) => {
-                            const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
-                            currentBalance += bData.stockTableQty;
-                            if (!addedWhPortion.has(truckKey)) {
-                                const whPortion = bData.qty - bData.stockTableQty;
-                                currentBalance += Math.max(0, whPortion);
-                                addedWhPortion.add(truckKey);
-                            }
-                        });
+                        currentBalance += item.itemQty - (item.itemShortageQty || 0);
                     } else if (item.type === 'sale') {
                         currentBalance -= item.itemQty;
                     } else if (item.type === 'damage') {

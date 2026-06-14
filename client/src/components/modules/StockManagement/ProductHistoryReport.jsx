@@ -165,25 +165,10 @@ const ProductHistoryReport = ({
         const combined = [...purchases, ...sales, ...damages].sort((a, b) => new Date(a.date) - new Date(b.date));
 
         let currentBalance = 0;
-        // Track warehouse portion already added to balance to avoid doubling across different dates
-        const addedWhPortion = new Set();
         
         return combined.map(item => {
             if (item.type === 'purchase') {
-                // For each brand in this purchase group
-                Object.entries(item.brands || {}).forEach(([bKey, bData]) => {
-                    const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
-                    
-                    // Add the stock table remainder (unique to this record)
-                    currentBalance += bData.stockTableQty;
-                    
-                    // Add the warehouse portion only ONCE for this truck/brand
-                    if (!addedWhPortion.has(truckKey)) {
-                        const whPortion = bData.qty - bData.stockTableQty;
-                        currentBalance += Math.max(0, whPortion);
-                        addedWhPortion.add(truckKey);
-                    }
-                });
+                currentBalance += item.itemQty - (item.itemShortageQty || 0);
             } else if (item.type === 'sale') {
                 currentBalance -= item.itemQty;
             } else if (item.type === 'damage') {
