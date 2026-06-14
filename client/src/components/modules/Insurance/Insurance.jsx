@@ -3,7 +3,6 @@ import { SearchIcon, PlusIcon, EditIcon, TrashIcon, ShieldIcon, XIcon, ChevronDo
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import { getLCHistoryTimeline } from '../LCManagement/LCManagement';
 
 const Insurance = ({ onDeleteConfirm }) => {
     const [insuranceRecords, setInsuranceRecords] = useState([]);
@@ -182,29 +181,9 @@ const Insurance = ({ onDeleteConfirm }) => {
             if (!totals[co]) {
                 totals[co] = { totalPremium: 0, returnAmount: 0, lcs: [] };
             }
-
-            const timeline = getLCHistoryTimeline(lc);
-            timeline.forEach(milestone => {
-                const milestoneNetPremium = parseFloat(milestone.netPremium || 0);
-                const milestoneGrossPremium = parseFloat(milestone.grossPremium || 0);
-                const milestoneExpectedReturn = parseFloat(milestone.expectedReturnAmount || 0);
-
-                // Add to totals
-                totals[co].totalPremium += milestoneGrossPremium;
-                totals[co].returnAmount += milestoneExpectedReturn;
-
-                // Push onto the lcs array
-                totals[co].lcs.push({
-                    ...lc,
-                    openingDate: milestone.isOriginal ? lc.openingDate : milestone.amendmentDate,
-                    lcNo: milestone.isOriginal ? lc.lcNo : `${lc.lcNo} (${milestone.amendmentNo})`,
-                    grossPremium: milestoneGrossPremium,
-                    netPremium: milestoneNetPremium,
-                    expectedReturnAmount: milestoneExpectedReturn,
-                    isOriginal: milestone.isOriginal,
-                    amendmentNo: milestone.amendmentNo
-                });
-            });
+            totals[co].totalPremium += parseFloat(lc.grossPremium || 0);
+            totals[co].returnAmount += parseFloat(lc.expectedReturnAmount || 0);
+            totals[co].lcs.push(lc);
         });
         return totals;
     }, [lcRecords]);
@@ -385,6 +364,8 @@ const Insurance = ({ onDeleteConfirm }) => {
 
             {showForm && (
                 <div className="relative overflow-hidden bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl text-sm"></div>
+                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl delay-1000"></div>
 
                     <div className="flex items-center justify-between mb-6 md:mb-8 relative z-10">
                         <div className="flex items-center space-x-3">

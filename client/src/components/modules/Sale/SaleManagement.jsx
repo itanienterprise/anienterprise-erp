@@ -488,8 +488,6 @@ const SaleManagement = ({
     const [formData, setFormData] = useState({
         date: '',
         invoiceNo: '',
-        challanNo: '',
-        truckNo: '',
         customerId: '',
         companyName: '',
         customerName: '',
@@ -549,7 +547,9 @@ const SaleManagement = ({
         fetchImportersList();
         fetchPortsList();
         fetchCnfsList();
-        fetchLCRecords();
+        if (saleType === 'Border') {
+            fetchLCRecords();
+        }
     }, [saleType]); // Refetch if saleType changes
 
     const fetchLCRecords = async () => {
@@ -1319,8 +1319,6 @@ const SaleManagement = ({
         setFormData({
             date: '',
             invoiceNo: '',
-            challanNo: '',
-            truckNo: '',
             customerId: '',
             companyName: '',
             customerName: '',
@@ -2051,7 +2049,7 @@ const SaleManagement = ({
                                 <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString('en-IN')}</div>
                             </div>
                             <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
-
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
                                 <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1.5 relative z-10">Grand Total Invoice</div>
                                 <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewData.totalAmount || 0).toLocaleString('en-IN')}</div>
                             </div>
@@ -2106,11 +2104,8 @@ const SaleManagement = ({
                 if (!matches) return false;
             } else {
                 const inv = (sale.invoiceNo || '').toLowerCase();
-                const lcNo = (sale.lcNo || '').toLowerCase();
-                const challanNo = (sale.challanNo || '').toLowerCase();
-                const truckNo = (sale.truckNo || '').toLowerCase();
                 const cname = (sale.companyName || sale.customerName || '').toLowerCase();
-                if (!inv.includes(q) && !lcNo.includes(q) && !challanNo.includes(q) && !truckNo.includes(q) && !cname.includes(q)) return false;
+                if (!inv.includes(q) && !cname.includes(q)) return false;
             }
         }
         // Date range
@@ -2631,6 +2626,8 @@ const SaleManagement = ({
 
             {showForm && (
                 <div className="sale-mgmt-form-container">
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
                     <div className="sale-mgmt-form-header">
                         <h3 className="sale-mgmt-form-title">{editingId ? 'Edit Sale' : (saleType === 'Border' ? 'New Gate Pass Entry' : 'New Sale Entry')}</h3>
@@ -2649,7 +2646,7 @@ const SaleManagement = ({
                         autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-8'} gap-4 col-span-2`}>
+                        <div className={`grid grid-cols-1 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-6'} gap-4 col-span-2`}>
                             <CustomDatePicker
                                 label="Date"
                                 name="date"
@@ -2658,97 +2655,7 @@ const SaleManagement = ({
                                 compact={true}
                                 readOnly={isFieldReadOnly(originalData?.date)}
                             />
-
-                            {saleType !== 'Border' && (
-                                <>
-                                    <div className="sale-mgmt-input-group relative lc-dropdown-container">
-                                        <label className="sale-mgmt-label">LC No</label>
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                name="lcNo"
-                                                placeholder={formData.lcNo || "Search LC..."}
-                                                value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
-                                                readOnly={isFieldReadOnly(originalData?.lcNo)}
-                                                onChange={(e) => {
-                                                    if (isFieldReadOnly(originalData?.lcNo)) return;
-                                                    setLcSearch(e.target.value);
-                                                    setActiveDropdown('lcNo');
-                                                    setHighlightedIndex(-1);
-                                                    handleInputChange(e);
-                                                }}
-                                                autoComplete="off"
-                                                onFocus={() => {
-                                                    if (isFieldReadOnly(originalData?.lcNo)) return;
-                                                    setLcSearch(formData.lcNo || '');
-                                                    setActiveDropdown('lcNo');
-                                                    setHighlightedIndex(-1);
-                                                }}
-                                                onKeyDown={(e) => !isFieldReadOnly(originalData?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
-                                                className={`sale-mgmt-input pr-14 ${formData.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.lcNo) ? 'bg-gray-50' : ''}`}
-                                            />
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                {formData.lcNo && (
-                                                    <button type="button" onClick={() => handleLcSelect(null)} className="text-gray-400 hover:text-red-500">
-                                                        <XIcon className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
-                                                    className="text-gray-300 hover:text-blue-500 transition-colors"
-                                                >
-                                                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180' : ''}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        {activeDropdown === 'lcNo' && getFilteredLCs().length > 0 && (
-                                            <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                {getFilteredLCs().map((lc, idx) => (
-                                                    <button
-                                                        key={lc._id || `lc-${idx}`}
-                                                        type="button"
-                                                        onClick={() => handleLcSelect(lc)}
-                                                        onMouseEnter={() => setHighlightedIndex(idx)}
-                                                        className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                    >
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold">{lc.lcNo}</span>
-                                                            <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="sale-mgmt-input-group">
-                                        <label className="sale-mgmt-label">Challan- No</label>
-                                        <input
-                                            autoComplete="off"
-                                            type="text"
-                                            name="challanNo"
-                                            value={formData.challanNo || ''}
-                                            onChange={handleInputChange}
-                                            placeholder="Challan No"
-                                            className="sale-mgmt-input"
-                                        />
-                                    </div>
-                                    <div className="sale-mgmt-input-group">
-                                        <label className="sale-mgmt-label">Truck No</label>
-                                        <input
-                                            autoComplete="off"
-                                            type="text"
-                                            name="truckNo"
-                                            value={formData.truckNo || ''}
-                                            onChange={handleInputChange}
-                                            placeholder="Truck No"
-                                            className="sale-mgmt-input"
-                                        />
-                                    </div>
-                                </>
-                            )}
-
-                            <div className="sale-mgmt-input-group" style={{ display: 'none' }}>
+                            <div className="sale-mgmt-input-group">
                                 <label className="sale-mgmt-label">Invoice No</label>
                                 <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" />
                             </div>
@@ -3881,9 +3788,6 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
-                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('lcNo')}>
-                                            <div className="flex items-center">LC No {renderSortIcon('lcNo')}</div>
-                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
                                             <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
                                         </th>
@@ -3895,14 +3799,11 @@ const SaleManagement = ({
                                         </th>
                                         <th className="sale-mgmt-th">Product</th>
                                         <th className="sale-mgmt-th">Brand</th>
-                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('challanNo')}>
-                                            <div className="flex items-center">Challan No {renderSortIcon('challanNo')}</div>
-                                        </th>
-                                        <th className="sale-mgmt-th cursor-pointer group w-[100px] max-w-[100px] whitespace-normal" onClick={() => handleSort('truckNo')}>
-                                            <div className="flex items-center">Truck No {renderSortIcon('truckNo')}</div>
-                                        </th>
                                         <th className="sale-mgmt-th text-center font-bold">Quantity</th>
                                         <th className="sale-mgmt-th text-center font-bold">Rate</th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('discount')}>
+                                            <div className="flex items-center justify-center">Discount {renderSortIcon('discount')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('totalAmount')}>
                                             <div className="flex items-center justify-center">Total {renderSortIcon('totalAmount')}</div>
                                         </th>
@@ -3918,9 +3819,9 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
-                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan={saleType === 'Border' ? "15" : "12"} className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = expandedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -4015,9 +3916,7 @@ const SaleManagement = ({
                                                         {sale.status === 'Requested' ? (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                                {(isFullAdmin || (currentUser && sale.requestedByUsername === currentUser.username)) && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
-                                                                )}
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                                 {canApprove && (
                                                                     <>
                                                                         <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
@@ -4050,9 +3949,6 @@ const SaleManagement = ({
                                         >
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
-                                            </td>
-                                            <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
@@ -4089,13 +3985,6 @@ const SaleManagement = ({
                                                     </div>
                                                 )}
                                             </td>
-
-                                            <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.challanNo || '-'}</div>
-                                            </td>
-                                            <td className="px-3 py-4 whitespace-normal break-words w-[100px] max-w-[100px]">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.truckNo || '-'}</div>
-                                            </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 {isMultiple && !isExpanded ? (
                                                     <div className="inline-block px-3 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
@@ -4123,6 +4012,11 @@ const SaleManagement = ({
                                                         ))}
                                                     </div>
                                                 )}
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                <div className="text-[13px] font-bold text-red-600">
+                                                    {parseFloat(sale.discount || 0) > 0 ? `-৳ ${parseFloat(sale.discount).toLocaleString('en-IN')}` : '-'}
+                                                </div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-black text-gray-900">
@@ -4159,7 +4053,7 @@ const SaleManagement = ({
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                            {(isFullAdmin || (currentUser && sale.requestedByUsername === currentUser.username)) && (
+                                                            {(isFullAdmin || canUserEditSale(sale)) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                             )}
                                                             {canApprove && (
@@ -4276,7 +4170,7 @@ const SaleManagement = ({
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
-                                                            {(isFullAdmin || (currentUser && sale.requestedByUsername === currentUser.username)) && (
+                                                            {(isFullAdmin || canUserEditSale(sale)) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
                                                             )}
                                                             {canApprove && (

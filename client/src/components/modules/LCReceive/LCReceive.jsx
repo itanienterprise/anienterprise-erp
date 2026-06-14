@@ -948,41 +948,14 @@ function LCReceive({
         }
     };
 
-    function getLcActiveProducts(lc) {
-        if (!lc) return [];
-        
-        // Find the latest amendment with productsList
-        const amendments = lc.amendments || [];
-        for (let i = amendments.length - 1; i >= 0; i--) {
-            if (amendments[i].productsList && amendments[i].productsList.length > 0) {
-                return amendments[i].productsList;
-            }
-        }
-        
-        // Fall back to the LC's baseline productsList
-        if (lc.productsList && lc.productsList.length > 0) {
-            return lc.productsList;
-        }
-        
-        // Fall back to lc.productName
-        if (lc.productName) {
-            return [{ productName: lc.productName }];
-        }
-        
-        return [];
-    }
-
     const getFilteredLCs = (input) => {
         if (!input) return lcRecords;
         const lowInput = input.toLowerCase();
-        return lcRecords.filter(r => {
-            const activeProds = getLcActiveProducts(r);
-            const matchesProduct = activeProds.some(p => (p.productName || '').toLowerCase().includes(lowInput));
-            return (r.lcNo || '').toLowerCase().includes(lowInput) ||
-                (r.importerName || '').toLowerCase().includes(lowInput) ||
-                (r.productName || '').toLowerCase().includes(lowInput) ||
-                matchesProduct;
-        });
+        return lcRecords.filter(r =>
+            (r.lcNo || '').toLowerCase().includes(lowInput) ||
+            (r.importerName || '').toLowerCase().includes(lowInput) ||
+            (r.productName || '').toLowerCase().includes(lowInput)
+        );
     };
 
     const getFilteredCnFs = (input, type) => {
@@ -992,17 +965,6 @@ function LCReceive({
             (c.name || '').toLowerCase().includes(input.toLowerCase()) ||
             (c.cnfId || '').toLowerCase().includes(input.toLowerCase())
         );
-    };
-
-    // Resolve an IP product name (ipName) to the regular product name in the database.
-    // Falls back to the original name if no match is found.
-    const resolveProductName = (ipOrRegularName) => {
-        if (!ipOrRegularName) return ipOrRegularName;
-        const found = (products || []).find(p =>
-            (p.name || '').toLowerCase() === ipOrRegularName.toLowerCase() ||
-            (p.ipName || '').toLowerCase() === ipOrRegularName.toLowerCase()
-        );
-        return found ? found.name : ipOrRegularName;
     };
 
     const handleStockDropdownSelect = (field, value) => {
@@ -1017,18 +979,16 @@ function LCReceive({
                     if (selectedLc.exporterName) newData.exporter = selectedLc.exporterName;
 
                     // Also auto-fill first product if empty
-                    const activeProds = getLcActiveProducts(selectedLc);
-                    const firstProdName = resolveProductName(activeProds[0]?.productName || selectedLc.productName);
-                    if (firstProdName && prev.productEntries.length === 1 && !prev.productEntries[0].productName) {
+                    if (selectedLc.productName && prev.productEntries.length === 1 && !prev.productEntries[0].productName) {
                         const updatedProducts = [...prev.productEntries];
                         updatedProducts[0] = {
                             ...updatedProducts[0],
-                            productName: firstProdName
+                            productName: selectedLc.productName
                         };
                         // Standard logic: in single mode, auto-fill brand too
                         if (!updatedProducts[0].isMultiBrand && updatedProducts[0].brandEntries[0]) {
                             updatedProducts[0].brandEntries = [
-                                { ...updatedProducts[0].brandEntries[0], brand: firstProdName }
+                                { ...updatedProducts[0].brandEntries[0], brand: selectedLc.productName }
                             ];
                         }
                         newData.productEntries = updatedProducts;
@@ -1366,7 +1326,7 @@ function LCReceive({
 
             const formProductEntries = Object.keys(entriesByProduct).map(key => {
                 const prodEntries = entriesByProduct[key];
-                const pName = resolveProductName(prodEntries[0]?.productName || '');
+                const pName = prodEntries[0]?.productName || '';
 
                 // It is multi-brand if there are multiple entries.
                 // If there's only 1 entry, it is SINGLE mode if the brand is empty, a hyphen, OR exactly matches the product name.
@@ -1450,7 +1410,7 @@ function LCReceive({
                 originalIds: record.allIds || [record._id],
                 productEntries: [{
                     isMultiBrand: false,
-                    productName: resolveProductName(record.productName),
+                    productName: record.productName,
                     truckNo: record.truckNo,
                     brandEntries: [{
                         _id: record._id,
@@ -1539,49 +1499,9 @@ function LCReceive({
     };
 
     const getFilteredProducts = (input) => {
-        let availableProducts = products;
-
-        if (stockFormData.lcNo) {
-            const selectedLc = lcRecords.find(lc => lc.lcNo === stockFormData.lcNo);
-            if (selectedLc) {
-                const activeLcProducts = getLcActiveProducts(selectedLc);
-                if (activeLcProducts.length > 0) {
-                    const lcProductNames = activeLcProducts.map(p => (p.productName || '').trim());
-                    const lcProductNamesLower = lcProductNames.map(name => name.toLowerCase());
-                    
-                    // Match by regular product name OR by IP product name (ipName)
-                    const matchedProducts = products.filter(p => 
-                        lcProductNamesLower.includes((p.name || '').toLowerCase()) ||
-                        lcProductNamesLower.includes((p.ipName || '').toLowerCase())
-                    );
-                    
-                    // Only create temp entries for LC product names not found in DB by either name or ipName
-                    const missingProducts = lcProductNames.filter(name => 
-                        name && !matchedProducts.some(p => 
-                            (p.name || '').toLowerCase() === name.toLowerCase() ||
-                            (p.ipName || '').toLowerCase() === name.toLowerCase()
-                        )
-                    ).map(name => ({
-                        _id: `temp-${name}`,
-                        name: name,
-                        brands: []
-                    }));
-                    
-                    availableProducts = [...matchedProducts, ...missingProducts];
-                } else {
-                    availableProducts = [];
-                }
-            }
-        }
-
-        if (!input) return availableProducts;
-        // Match by regular name OR ipName so typing either shows the product
-        return availableProducts.filter(p =>
-            (p.name || '').toLowerCase().includes(input.toLowerCase()) ||
-            (p.ipName || '').toLowerCase().includes(input.toLowerCase())
-        );
+        if (!input) return products;
+        return products.filter(p => p.name.toLowerCase().includes(input.toLowerCase()));
     };
-
 
     const getFilteredBrands = (input, productName) => {
         // No product selected → no brands to show
@@ -2204,6 +2124,8 @@ function LCReceive({
             {
                 showStockForm && (
                     <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-4 md:p-8 transition-all duration-300">
+                        <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
+                        <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
                         <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
                             <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit LC Receive' : 'New LC Receive'}</h3>
@@ -2272,11 +2194,7 @@ function LCReceive({
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="font-bold">{lc.lcNo}</span>
-                                                        <span className="text-[10px] text-gray-500">
-                                                            {lc.importerName} • {
-                                                                getLcActiveProducts(lc).map(p => p.productName).filter(Boolean).join(', ') || lc.productName || 'No Product'
-                                                            }
-                                                        </span>
+                                                        <span className="text-[10px] text-gray-500">{lc.importerName} • {lc.productName}</span>
                                                     </div>
                                                 </button>
                                             ))}
@@ -3511,11 +3429,9 @@ function LCReceive({
 
                                                             {entry.entries[0]?.status === 'Requested' ? (
                                                                 <>
-                                                                    {(canEditDelete || (currentUser && entry.entries[0]?.requestedByUsername === currentUser.username)) && (
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
-                                                                            <EditIcon className="w-5 h-5" />
-                                                                        </button>
-                                                                    )}
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
+                                                                        <EditIcon className="w-5 h-5" />
+                                                                    </button>
                                                                     {canApprove && (
                                                                         <>
                                                                             <button
@@ -3663,15 +3579,13 @@ function LCReceive({
 
                                                             {entry.entries[0]?.status === 'Requested' ? (
                                                                 <>
-                                                                    {(canEditDelete || (currentUser && entry.entries[0]?.requestedByUsername === currentUser.username)) && (
-                                                                        <button
-                                                                            onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
-                                                                            className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                                            title="Edit"
-                                                                        >
-                                                                            <EditIcon className="w-4 h-4" />
-                                                                        </button>
-                                                                    )}
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
+                                                                        className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <EditIcon className="w-4 h-4" />
+                                                                    </button>
                                                                     {canApprove && (
                                                                         <>
                                                                             <button

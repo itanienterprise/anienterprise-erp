@@ -4,23 +4,14 @@ import tailwindcss from '@tailwindcss/vite'
 import legacy from '@vitejs/plugin-legacy'
 import obfuscator from 'vite-plugin-javascript-obfuscator'
 
-const removeCrossorigin = () => ({
-  name: 'remove-crossorigin',
-  enforce: 'post',
-  transformIndexHtml(html) {
-    return html.replace(/crossorigin(="[^"]*")?/g, '');
-  }
-});
-
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
     legacy({
-      targets: ['defaults', 'not IE 11', 'chrome 30', 'safari 7', 'ios 7', 'bb 10'],
+      targets: ['defaults', 'not IE 11', 'chrome 30'],
     }),
-    removeCrossorigin(),
     // TEMPORARILY DISABLED: The javascript-obfuscator is causing Docker to run out of memory (ResourceExhausted).
     // If you need obfuscation in production, you must allocate more memory (e.g., 8GB) to your Docker Desktop VM.
     /*

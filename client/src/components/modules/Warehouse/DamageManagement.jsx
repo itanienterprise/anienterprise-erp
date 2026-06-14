@@ -14,7 +14,6 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
-        lcNo: '',
         productName: '',
         brand: '',
         warehouse: '',
@@ -24,24 +23,11 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         remarks: ''
     });
 
-    const [lcRecords, setLcRecords] = useState([]);
-    const [lcSearch, setLcSearch] = useState('');
-
     useEffect(() => {
         if (fetchDamages) fetchDamages();
-
-        const fetchLCRecords = async () => {
-            try {
-                const response = await axios.get(`${API_BASE_URL}/api/lc-management`);
-                setLcRecords(Array.isArray(response.data) ? response.data : []);
-            } catch (error) {
-                console.error('Error fetching LC records:', error);
-            }
-        };
-        fetchLCRecords();
     }, []);
 
-    const [activeDropdown, setActiveDropdown] = useState(null); // 'product', 'brand', 'warehouse', 'reason', 'lcNo'
+    const [activeDropdown, setActiveDropdown] = useState(null); // 'product', 'brand', 'warehouse', 'reason'
     const [productSearch, setProductSearch] = useState('');
     const [brandSearch, setBrandSearch] = useState('');
     const [warehouseSearch, setWarehouseSearch] = useState('');
@@ -50,7 +36,6 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     const brandRef = useRef(null);
     const warehouseRef = useRef(null);
     const reasonRef = useRef(null);
-    const lcRef = useRef(null);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -58,7 +43,6 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             if (activeDropdown === 'brand' && brandRef.current && !brandRef.current.contains(event.target)) setActiveDropdown(null);
             if (activeDropdown === 'warehouse' && warehouseRef.current && !warehouseRef.current.contains(event.target)) setActiveDropdown(null);
             if (activeDropdown === 'reason' && reasonRef.current && !reasonRef.current.contains(event.target)) setActiveDropdown(null);
-            if (activeDropdown === 'lcNo' && lcRef.current && !lcRef.current.contains(event.target)) setActiveDropdown(null);
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -189,7 +173,6 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     const resetForm = () => {
         setFormData({
             date: new Date().toISOString().split('T')[0],
-            lcNo: '',
             productName: '',
             brand: '',
             warehouse: '',
@@ -198,7 +181,6 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             reason: 'Broken',
             remarks: ''
         });
-        setLcSearch('');
         setEditingId(null);
         setSubmitStatus(null);
     };
@@ -206,7 +188,6 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     const handleEdit = (damage) => {
         setFormData({
             date: damage.date ? new Date(damage.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-            lcNo: damage.lcNo || '',
             productName: damage.productName || '',
             brand: damage.brand || '',
             warehouse: damage.warehouse || '',
@@ -215,7 +196,6 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             reason: damage.reason || 'Broken',
             remarks: damage.remarks || ''
         });
-        setLcSearch(damage.lcNo || '');
         setEditingId(damage._id);
         setShowForm(true);
     };
@@ -242,8 +222,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         let filtered = damages.filter(d =>
             (d.productName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (d.warehouse || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (d.reason || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (d.lcNo || '').toLowerCase().includes(searchQuery.toLowerCase())
+            (d.reason || '').toLowerCase().includes(searchQuery.toLowerCase())
         );
         return filtered;
     }, [damages, searchQuery]);
@@ -271,7 +250,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search by product, LC No, warehouse, or reason..."
+                                placeholder="Search by product, warehouse, or reason..."
                                 className="h-10 block w-full pl-10 pr-4 bg-white/80 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -310,77 +289,6 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                 value={formData.date}
                                 onChange={handleInputChange}
                             />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">LC No</label>
-                            <div className="relative" ref={lcRef}>
-                                <div className="relative group">
-                                    <input
-                                        type="text"
-                                        placeholder="Search LC..."
-                                        className="w-full pl-4 pr-16 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm hover:border-gray-300 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none font-medium placeholder:text-gray-400"
-                                        value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
-                                        onChange={(e) => {
-                                            setLcSearch(e.target.value);
-                                            setActiveDropdown('lcNo');
-                                        }}
-                                        onFocus={() => {
-                                            setLcSearch(formData.lcNo || '');
-                                            setActiveDropdown('lcNo');
-                                        }}
-                                        autoComplete="off"
-                                    />
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                        {formData.lcNo && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setFormData({ ...formData, lcNo: '' });
-                                                    setLcSearch('');
-                                                }}
-                                                className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-red-500 transition-colors"
-                                            >
-                                                <XIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
-                                            className="text-gray-400 hover:text-blue-500 transition-colors"
-                                        >
-                                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180 text-blue-500' : ''}`} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {activeDropdown === 'lcNo' && (
-                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
-                                        <div className="overflow-y-auto py-1">
-                                            {lcRecords?.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearch.toLowerCase())).map((lc, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setFormData({ ...formData, lcNo: lc.lcNo });
-                                                        setLcSearch(lc.lcNo);
-                                                        setActiveDropdown(null);
-                                                    }}
-                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
-                                                >
-                                                    <span className={formData.lcNo === lc.lcNo ? 'text-blue-600 font-bold' : 'text-gray-700 font-medium'}>
-                                                        {lc.lcNo}
-                                                    </span>
-                                                    {formData.lcNo === lc.lcNo && <CheckIcon className="w-4 h-4 text-blue-600" />}
-                                                </button>
-                                            ))}
-                                            {lcRecords?.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearch.toLowerCase())).length === 0 && (
-                                                <div className="px-4 py-3 text-xs text-gray-400 text-center italic">No LCs found</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         </div>
 
                         <div className="space-y-2">
@@ -709,7 +617,6 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                             <thead>
                                 <tr className="bg-gray-50/80">
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Date</th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">LC No</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Product</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Brand</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Warehouse</th>
@@ -722,12 +629,11 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    Array(3).fill(0).map((_, i) => <tr key={i}><td colSpan="10" className="px-6 py-4 animate-pulse bg-gray-50"></td></tr>)
+                                    Array(3).fill(0).map((_, i) => <tr key={i}><td colSpan="9" className="px-6 py-4 animate-pulse bg-gray-50"></td></tr>)
                                 ) : displayDamages.length > 0 ? (
                                     displayDamages.map((item) => (
                                         <tr key={item._id} className="hover:bg-blue-50/30 transition-colors">
                                             <td className="px-6 py-4 text-[13px] font-medium text-gray-500 whitespace-nowrap">{formatDate(item.date)}</td>
-                                            <td className="px-6 py-4 text-[13px] font-semibold text-gray-600 whitespace-nowrap">{item.lcNo || '-'}</td>
                                             <td className="px-6 py-4 text-[13px] font-bold text-gray-900">{item.productName}</td>
                                             <td className="px-6 py-4 text-[13px] font-semibold text-gray-600">{item.brand || '-'}</td>
                                             <td className="px-6 py-4 text-[13px] font-medium text-gray-600">{item.warehouse}</td>
@@ -749,7 +655,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="10" className="px-6 py-12 text-center text-gray-400 font-medium text-sm">No damage records found.</td>
+                                        <td colSpan="9" className="px-6 py-12 text-center text-gray-400 font-medium text-sm">No damage records found.</td>
                                     </tr>
                                 )}
                             </tbody>

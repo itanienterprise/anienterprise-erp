@@ -89,7 +89,7 @@ const StockManagement = ({
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [sortConfig, setSortConfig] = useState({
         stock: { key: 'date', direction: 'desc' },
-        history: { key: 'date', direction: 'asc' }
+        history: { key: 'date', direction: 'desc' }
     });
 
     // Long Press Logic
@@ -201,8 +201,6 @@ const StockManagement = ({
             if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
             if (historyFilters.warehouse && (item.warehouse || '').trim() !== historyFilters.warehouse) return false;
-            if (historyFilters.lcNo && (item.lcNo || '').trim() !== historyFilters.lcNo) return false;
-            if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
             if (historyFilters.brand) {
                 const brandLower = historyFilters.brand.toLowerCase();
                 // Check top-level brand, entries (old), and brandEntries (LC Receive)
@@ -348,19 +346,16 @@ const StockManagement = ({
             if (!hasMatchingProduct) return false;
             if (historyFilters.startDate && sale.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && sale.date > historyFilters.endDate) return false;
-            if (historyFilters.lcNo && (sale.lcNo || '').trim() !== historyFilters.lcNo) return false;
-            if (historyFilters.port && (sale.port || '').trim() !== historyFilters.port) return false;
 
             if (searchLower) {
                 const matchesInvoice = (sale.invoiceNo || '').toLowerCase().includes(searchLower);
                 const matchesCompany = (sale.companyName || '').toLowerCase().includes(searchLower);
                 const matchesCustomer = (sale.customerName || '').toLowerCase().includes(searchLower);
                 const matchesPhone = (sale.contact || '').toLowerCase().includes(searchLower);
-                const matchesLC = (sale.lcNo || '').toLowerCase().includes(searchLower);
                 const matchesItemBrand = (sale.items || [])
                     .filter(item => (item.productName || '').trim().toLowerCase() === productName)
                     .some(item => (item.brandEntries || []).some(entry => (entry.brand || '').toLowerCase().includes(searchLower)));
-                return matchesInvoice || matchesCompany || matchesCustomer || matchesPhone || matchesItemBrand || matchesLC;
+                return matchesInvoice || matchesCompany || matchesCustomer || matchesPhone || matchesItemBrand;
             }
             return true;
         });
@@ -377,8 +372,7 @@ const StockManagement = ({
                         const matchesEnv = (sale.invoiceNo || '').toLowerCase().includes(searchLower) ||
                             (sale.companyName || '').toLowerCase().includes(searchLower) ||
                             (sale.customerName || '').toLowerCase().includes(searchLower) ||
-                            (sale.contact || '').toLowerCase().includes(searchLower) ||
-                            (sale.lcNo || '').toLowerCase().includes(searchLower);
+                            (sale.contact || '').toLowerCase().includes(searchLower);
                         const matchesBrand = (entry.brand || '').toLowerCase().includes(searchLower);
                         if (!matchesEnv && !matchesBrand) return;
                     }
@@ -1875,7 +1869,7 @@ const StockManagement = ({
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search by LC No, Product or Brand..."
+                                placeholder="Search by Product or Brand..."
                                 value={stockSearchQuery}
                                 onChange={(e) => setStockSearchQuery(e.target.value)}
                                 className="block w-full pl-10 pr-4 py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
@@ -2212,11 +2206,13 @@ const StockManagement = ({
                 </>
             )}
 
-             {/* Add Stock to Warehouse Form Card */}
-             {showAddWarehouseStockForm && (
-                 <div className="warehouse-form-container border-blue-100 mb-6">
- 
-                     <div className="warehouse-form-header">
+            {/* Add Stock to Warehouse Form Card */}
+            {showAddWarehouseStockForm && (
+                <div className="warehouse-form-container border-blue-100 mb-6">
+                    <div className="warehouse-form-bg-orb bg-blue-400/20 left-1/4 top-1/4"></div>
+                    <div className="warehouse-form-bg-orb bg-indigo-400/20 right-1/4 bottom-1/4"></div>
+
+                    <div className="warehouse-form-header">
                         <div>
                             <h3 className="warehouse-form-title">Transfer Product to Warehouse</h3>
                             <p className="text-[12px] md:text-sm text-gray-500">Record a new stock transfer or direct entry to warehouse</p>
@@ -2728,23 +2724,23 @@ const StockManagement = ({
                                 return (
                                     <div key={group.productName || gIdx} className="p-4 space-y-4 hover:bg-gray-50/50 transition-colors">
                                         <div
-                                            className="flex justify-between items-center w-full cursor-pointer select-none"
+                                            className="flex justify-between items-start w-full cursor-pointer select-none"
                                             onClick={() => toggleProductExpansion(group.productName)}
                                         >
-                                            <div className="flex flex-col gap-1.5 flex-1 min-w-0 pr-4">
+                                            <div className="flex flex-col gap-2 flex-1 min-w-0 pr-4">
                                                 <h3 className="text-xl font-black text-gray-900 leading-tight truncate">{group.productName}</h3>
-                                                {group.totalInHouseQuantity !== 0 && (
-                                                    <div className="flex items-center">
-                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[13px] font-bold border whitespace-nowrap ${group.totalInHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
-                                                            {Math.round(group.inHousePacket).toLocaleString('en-US')} BAG • {Math.round(group.inHouseQuantity).toLocaleString('en-US')} {group.unit}
-                                                        </span>
-                                                    </div>
-                                                )}
+                                                <div className="flex items-center">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : group.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {group.totalInHouseQuantity > 0 ? 'In Stock' : group.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="shrink-0">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${group.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : group.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {group.totalInHouseQuantity > 0 ? 'In Stock' : group.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
-                                                </span>
+                                            <div className="shrink-0 pt-1">
+                                                {group.totalInHouseQuantity !== 0 && (
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-base font-bold border whitespace-nowrap ${group.totalInHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
+                                                        {Math.round(group.inHousePacket).toLocaleString('en-US')} BAG • {Math.round(group.inHouseQuantity).toLocaleString('en-US')} {group.unit}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
 
@@ -2758,21 +2754,21 @@ const StockManagement = ({
                                                         const isBrandExpanded = expandedBrands === brandId;
                                                         return (
                                                             <div key={bIdx} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100 space-y-2 transition-all">
-                                                                <div className="flex justify-between items-center w-full select-none">
+                                                                <div className="flex justify-between items-start w-full select-none">
                                                                     <div className="flex flex-col gap-1.5 flex-1 min-w-0 pr-4">
                                                                         <span className="font-black text-gray-900 text-base truncate">{brand.brand || '-'}</span>
-                                                                        {brand.inHouseQuantity !== 0 && (
-                                                                            <div className="flex items-center">
-                                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border shadow-sm whitespace-nowrap ${brand.inHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
-                                                                                    {Math.round(brand.inHousePacket).toLocaleString('en-US')} BAG • {Math.round(brand.inHouseQuantity).toLocaleString('en-US')} {group.unit}
-                                                                                </span>
-                                                                            </div>
-                                                                        )}
+                                                                        <div className="flex items-center">
+                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : brand.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                                                {brand.totalInHouseQuantity > 0 ? 'In Stock' : brand.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="shrink-0">
-                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : brand.totalInHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                                            {brand.totalInHouseQuantity > 0 ? 'In Stock' : brand.totalInHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
-                                                                        </span>
+                                                                    <div className="shrink-0 pt-0.5">
+                                                                        {brand.totalInHouseQuantity !== 0 && (
+                                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-sm font-bold border shadow-sm whitespace-nowrap ${brand.totalInHouseQuantity > 0 ? 'bg-emerald-50 border-emerald-100 text-gray-900' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
+                                                                                {Math.round(brand.inHousePacket).toLocaleString('en-US')} BAG • {Math.round(brand.inHouseQuantity).toLocaleString('en-US')} {group.unit}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -2927,7 +2923,7 @@ const StockManagement = ({
                         <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
                         <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                             {/* Modal Header */}
-                            <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl gap-3 flex-shrink-0 z-50 relative">
+                            <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl gap-3 flex-shrink-0 z-10 relative">
                                 <div className="flex-shrink-0 min-w-0">
                                     <h3 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Stock History - {viewRecord.data.productName}</h3>
                                 </div>
@@ -2940,7 +2936,7 @@ const StockManagement = ({
                                         </div>
                                         <input
                                             type="text"
-                                            placeholder={historyTab === 'purchase' ? "Search by LC No, Brand, Port or Truck..." : "Search by LC No, Invoice, Company, Customer, Phone or Brand..."}
+                                            placeholder={historyTab === 'purchase' ? "Search by Product or Brand..." : "Search by Invoice, Company, Customer, Phone or Brand..."}
                                             value={historySearchQuery}
                                             onChange={(e) => setHistorySearchQuery(e.target.value)}
                                             className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
@@ -2987,7 +2983,7 @@ const StockManagement = ({
 
                                         {/* Floating Filter Panel */}
                                         {showHistoryFilterPanel && (
-                                            <div ref={historyFilterRef} className="fixed inset-x-4 top-24 lg:absolute lg:inset-auto lg:right-0 lg:mt-3 w-auto lg:w-[420px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto lg:overflow-visible max-h-[70vh]">
+                                            <div ref={historyFilterRef} className="fixed inset-x-4 top-24 lg:absolute lg:inset-auto lg:right-0 lg:mt-3 w-auto lg:w-[420px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto lg:overflow-visible max-h-[70vh]">
                                                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
                                                     <h4 className="font-bold text-gray-900">Advanced Filters</h4>
                                                     <button
@@ -3462,48 +3458,24 @@ const StockManagement = ({
                                                     <table className="w-full text-left min-w-[800px]">
                                                         <thead>
                                                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                                <th onClick={() => requestSort('history', 'date')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                    <div className="flex items-center">Date <SortIcon config={sortConfig.history} columnKey="date" /></div>
-                                                                </th>
-                                                                <th onClick={() => requestSort('history', 'lcNo')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                    <div className="flex items-center">LC No <SortIcon config={sortConfig.history} columnKey="lcNo" /></div>
-                                                                </th>
-                                                                <th onClick={() => requestSort('history', 'invoiceNo')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                    <div className="flex items-center">Invoice No <SortIcon config={sortConfig.history} columnKey="invoiceNo" /></div>
-                                                                </th>
-                                                                <th onClick={() => requestSort('history', 'companyName')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                    <div className="flex items-center">Company Name <SortIcon config={sortConfig.history} columnKey="companyName" /></div>
-                                                                </th>
-                                                                <th onClick={() => requestSort('history', isFruitHistory ? "customerName" : "itemBrand")} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                    <div className="flex items-center">{isFruitHistory ? "Customer Name" : "Brand"} <SortIcon config={sortConfig.history} columnKey={isFruitHistory ? "customerName" : "itemBrand"} /></div>
-                                                                </th>
-                                                                <th onClick={() => requestSort('history', isFruitHistory ? "contact" : "itemPacket")} className={`px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors ${!isFruitHistory ? 'text-right' : ''}`}>
-                                                                    <div className={`flex items-center ${!isFruitHistory ? 'justify-end' : ''}`}>{isFruitHistory ? "Phone" : "BAG"} <SortIcon config={sortConfig.history} columnKey={isFruitHistory ? "contact" : "itemPacket"} /></div>
-                                                                </th>
-                                                                <th onClick={() => requestSort('history', 'itemQty')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
-                                                                    <div className="flex items-center justify-end">Quantity <SortIcon config={sortConfig.history} columnKey="itemQty" /></div>
-                                                                </th>
-                                                                {isFruitHistory && (
-                                                                    <th onClick={() => requestSort('history', 'itemTruck')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
-                                                                        <div className="flex items-center justify-end">Truck <SortIcon config={sortConfig.history} columnKey="itemTruck" /></div>
-                                                                    </th>
-                                                                )}
-                                                                <th onClick={() => requestSort('history', 'itemPrice')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
-                                                                    <div className="flex items-center justify-end">Price <SortIcon config={sortConfig.history} columnKey="itemPrice" /></div>
-                                                                </th>
-                                                                <th onClick={() => requestSort('history', 'itemTotal')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
-                                                                    <div className="flex items-center justify-end">Total <SortIcon config={sortConfig.history} columnKey="itemTotal" /></div>
-                                                                </th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice No</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Company Name</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{isFruitHistory ? "Customer Name" : "Brand"}</th>
+                                                                <th className={`px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider ${!isFruitHistory ? 'text-right' : ''}`}>{isFruitHistory ? "Phone" : "BAG"}</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
+                                                                {isFruitHistory && <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Truck</th>}
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Price</th>
+                                                                <th className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Total</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-50">
                                                             {flattenedSaleHistory.length === 0 ? (
-                                                                <tr><td colSpan={isFruitHistory ? "10" : "9"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
+                                                                <tr><td colSpan={isFruitHistory ? "9" : "8"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
                                                             ) : (
                                                                 flattenedSaleHistory.map((sale, sIdx) => (
                                                                     <tr key={sIdx} className="hover:bg-blue-50/20 transition-all group border-b border-gray-50">
                                                                         <td className="px-3 py-3 text-sm text-gray-600">{formatDate(sale.date)}</td>
-                                                                        <td className="px-3 py-3 text-sm text-gray-600 font-semibold">{sale.lcNo ? sale.lcNo.slice(-4) : '-'}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-900">{sale.invoiceNo}</td>
                                                                         <td className="px-3 py-3 text-sm font-bold text-gray-800 truncate max-w-[150px]" title={sale.companyName}>{sale.companyName}</td>
                                                                         {isFruitHistory ? (
@@ -3602,10 +3574,6 @@ const StockManagement = ({
                                                                                 <div className="text-right">
                                                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isFruitHistory ? "Phone" : "BAG"}</div>
                                                                                     <div className="text-sm font-bold text-gray-900 truncate">{isFruitHistory ? (sale.contact || '-') : `${sale.itemPacket.toLocaleString('en-US')} BAG`}</div>
-                                                                                </div>
-                                                                                <div className="col-span-2 border-t border-gray-100 pt-2 mt-1">
-                                                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">LC No</div>
-                                                                                    <div className="text-sm font-bold text-gray-800">{sale.lcNo || '-'}</div>
                                                                                 </div>
                                                                             </div>
 

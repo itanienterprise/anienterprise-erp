@@ -25,7 +25,6 @@ const StockHistoryModal = ({
     stockRecords,
     salesRecords,
     warehouseData,
-    damages,
     setShowProductHistoryReport,
     setProductHistoryReportData
 }) => {
@@ -33,7 +32,7 @@ const StockHistoryModal = ({
     const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
     const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' });
     const [historyTab, setHistoryTab] = useState('purchase'); // 'purchase' or 'sale'
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ lcNo: false, port: false, brand: false });
     const initialFilterDropdownState = { lcNo: false, port: false, brand: false };
 
@@ -219,19 +218,16 @@ const StockHistoryModal = ({
             if (!hasMatchingProduct) return false;
             if (historyFilters.startDate && sale.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && sale.date > historyFilters.endDate) return false;
-            if (historyFilters.lcNo && (sale.lcNo || '').trim() !== historyFilters.lcNo) return false;
-            if (historyFilters.port && (sale.port || '').trim() !== historyFilters.port) return false;
 
             if (searchLower) {
                 const matchesInvoice = (sale.invoiceNo || '').toLowerCase().includes(searchLower);
                 const matchesCompany = (sale.companyName || '').toLowerCase().includes(searchLower);
                 const matchesCustomer = (sale.customerName || '').toLowerCase().includes(searchLower);
                 const matchesPhone = (sale.contact || '').toLowerCase().includes(searchLower);
-                const matchesLC = (sale.lcNo || '').toLowerCase().includes(searchLower);
                 const matchesItemBrand = (sale.items || [])
                     .filter(item => (item.productName || '').trim().toLowerCase() === productName)
                     .some(item => (item.brandEntries || []).some(entry => (entry.brand || '').toLowerCase().includes(searchLower)));
-                return matchesInvoice || matchesCompany || matchesCustomer || matchesPhone || matchesItemBrand || matchesLC;
+                return matchesInvoice || matchesCompany || matchesCustomer || matchesPhone || matchesItemBrand;
             }
             return true;
         });
@@ -317,28 +313,12 @@ const StockHistoryModal = ({
             });
         });
 
-        const productName = (viewRecord.productName || viewRecord.name || '').trim().toLowerCase();
-        
-        // Filter Damage History
-        const damageFlattened = (damages || []).filter(d => {
-            const pMatch = (d.productName || '').trim().toLowerCase() === productName;
-            const bMatch = !historyFilters.brand || (d.brand || '').trim().toLowerCase() === historyFilters.brand.toLowerCase();
-            return pMatch && bMatch;
-        }).map(d => ({
-            ...d,
-            itemBrand: d.brand,
-            itemQty: d.quantity,
-            itemPacket: d.packet,
-            type: 'damage'
-        }));
-
         setProductHistoryReportData({
             productName: viewRecord.productName || viewRecord.name,
             category: viewRecord.category,
             filters: historyFilters,
             purchaseHistory: purchaseFlattened,
-            saleHistory: activeSaleHistory,
-            damageHistory: damageFlattened
+            saleHistory: activeSaleHistory
         });
         setShowProductHistoryReport(true);
     };
@@ -350,7 +330,7 @@ const StockHistoryModal = ({
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
             <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                 {/* Modal Header */}
-                <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl gap-3 flex-shrink-0 z-50 relative">
+                <div className="px-4 sm:px-8 pt-2 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl gap-3 flex-shrink-0 z-10 relative">
                     <div className="flex-shrink-0 min-w-0">
                         <h3 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Stock History - {viewRecord.productName || viewRecord.name}</h3>
                     </div>
@@ -362,7 +342,7 @@ const StockHistoryModal = ({
                             </div>
                             <input
                                 type="text"
-                                placeholder={historyTab === 'purchase' ? "Search by LC No, Brand, Port or Truck..." : "Search by LC No, Invoice, Company, Customer, Phone or Brand..."}
+                                placeholder={historyTab === 'purchase' ? "Search by Product or Brand..." : "Search by Invoice, Company, Customer, Phone or Brand..."}
                                 value={historySearchQuery}
                                 onChange={(e) => setHistorySearchQuery(e.target.value)}
                                 className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
@@ -395,13 +375,8 @@ const StockHistoryModal = ({
                                 <span className="hidden sm:block text-sm font-medium">Filter</span>
                             </button>
 
-                            {/* Mobile Filter Overlay Backdrop */}
                             {showHistoryFilterPanel && (
-                                <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[55] lg:hidden" onClick={() => setShowHistoryFilterPanel(false)}></div>
-                            )}
-
-                            {showHistoryFilterPanel && (
-                                <div ref={historyFilterRef} className="fixed inset-x-4 top-24 lg:absolute lg:inset-auto lg:right-0 lg:mt-3 w-auto lg:w-[420px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto lg:overflow-visible max-h-[70vh]">
+                                <div ref={historyFilterRef} className="fixed inset-x-4 top-24 lg:absolute lg:inset-auto lg:right-0 lg:mt-3 w-auto lg:w-[420px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto lg:overflow-visible max-h-[70vh]">
                                     <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
                                         <h4 className="font-bold text-gray-900">Advanced Filters</h4>
                                         <button
@@ -749,9 +724,6 @@ const StockHistoryModal = ({
                                                     <th onClick={() => requestSort('date')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                         <div className="flex items-center">Date <SortIcon config={sortConfig} columnKey="date" /></div>
                                                     </th>
-                                                    <th onClick={() => requestSort('lcNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                        <div className="flex items-center">LC No <SortIcon config={sortConfig} columnKey="lcNo" /></div>
-                                                    </th>
                                                     <th onClick={() => requestSort('invoiceNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                         <div className="flex items-center">Invoice <SortIcon config={sortConfig} columnKey="invoiceNo" /></div>
                                                     </th>
@@ -761,31 +733,20 @@ const StockHistoryModal = ({
                                                     <th onClick={() => requestSort('customerName')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                         <div className="flex items-center">Customer <SortIcon config={sortConfig} columnKey="customerName" /></div>
                                                     </th>
-                                                    <th onClick={() => requestSort('itemBrand')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                        <div className="flex items-center">Brand <SortIcon config={sortConfig} columnKey="itemBrand" /></div>
-                                                    </th>
-                                                    <th onClick={() => requestSort('itemPacket')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                        <div className="flex items-center">BAG <SortIcon config={sortConfig} columnKey="itemPacket" /></div>
-                                                    </th>
-                                                    <th onClick={() => requestSort('itemQty')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                        <div className="flex items-center">Quantity <SortIcon config={sortConfig} columnKey="itemQty" /></div>
-                                                    </th>
-                                                    <th onClick={() => requestSort('itemPrice')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                        <div className="flex items-center">Price <SortIcon config={sortConfig} columnKey="itemPrice" /></div>
-                                                    </th>
-                                                    <th onClick={() => requestSort('itemTotal')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                        <div className="flex items-center">Total <SortIcon config={sortConfig} columnKey="itemTotal" /></div>
-                                                    </th>
+                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">BAG</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Price</th>
+                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Total</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
                                                 {history.length === 0 ? (
-                                                    <tr><td colSpan="10" className="px-6 py-12 text-center text-gray-400 font-medium italic">No sale records found</td></tr>
+                                                    <tr><td colSpan="9" className="px-6 py-12 text-center text-gray-400 font-medium italic">No sale records found</td></tr>
                                                 ) : (
                                                     history.map((item, idx) => (
                                                         <tr key={item._id || idx} className="hover:bg-gray-50/30 transition-colors border-b border-gray-50">
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{formatDate(item.date)}</td>
-                                                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-semibold">{item.lcNo ? item.lcNo.slice(-4) : '-'}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-blue-600 font-bold">{item.invoiceNo}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 font-semibold truncate max-w-[150px]" title={item.companyName}>{item.companyName}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.customerName}>{item.customerName}</td>
@@ -800,7 +761,7 @@ const StockHistoryModal = ({
                                             </tbody>
                                         </table>
                                     </div>
- 
+
                                     {/* Mobile Card View (simplified) */}
                                     <div className="md:hidden space-y-4">
                                         {history.length === 0 ? (
@@ -826,7 +787,6 @@ const StockHistoryModal = ({
                                                                 <div className="grid grid-cols-2 gap-4">
                                                                     <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Customer</span><span className="text-xs font-medium text-gray-700">{item.customerName}</span></div>
                                                                     <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Brand</span><span className="text-xs font-medium text-gray-700">{item.itemBrand}</span></div>
-                                                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block">LC No</span><span className="text-xs font-medium text-gray-700">{item.lcNo || '-'}</span></div>
                                                                 </div>
                                                                 <div className="flex justify-between items-center bg-gray-50 p-2 rounded-xl">
                                                                     <div className="text-xs text-gray-500">Qty: {Math.round(item.itemQty)} {item.unit}</div>

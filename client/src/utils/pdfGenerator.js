@@ -556,7 +556,6 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 }
             ]],
             theme: 'plain',
-            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.0,
                 cellPadding: 1.5,
@@ -1770,40 +1769,10 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
 
         y += 12;
-        // Line 4: Contact No & LC No
+        // Line 4: Contact No (Full Width)
         doc.setFont('helvetica', 'bold');
         doc.text("Contact No", margin, y);
-        doc.text(":", margin + labelWidth - 5, y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(sale.contact || "-", margin + labelWidth, y);
-        drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
-
-        if (sale.lcNo) {
-            doc.setFont('helvetica', 'bold');
-            doc.text("LC No :", rightColStart, y);
-            doc.setFont('helvetica', 'normal');
-            doc.text(sale.lcNo, rightColStart + 28, y);
-            drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
-        }
-
-        if (!isBorderSale && (sale.challanNo || sale.truckNo)) {
-            y += 12;
-            if (sale.challanNo) {
-                doc.setFont('helvetica', 'bold');
-                doc.text("Challan No", margin, y);
-                doc.text(":", margin + labelWidth - 5, y);
-                doc.setFont('helvetica', 'normal');
-                doc.text(sale.challanNo, margin + labelWidth, y);
-                drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
-            }
-            if (sale.truckNo) {
-                doc.setFont('helvetica', 'bold');
-                doc.text("Truck No :", rightColStart, y);
-                doc.setFont('helvetica', 'normal');
-                doc.text(sale.truckNo, rightColStart + 28, y);
-                drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
-            }
-        }
+        doc.line(margin + labelWidth, y + 1, pageWidth - margin, y + 1);
 
         y += 14;
 
@@ -2042,7 +2011,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 };
 
 
-export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters, damageData = []) => {
+export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters) => {
     try {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.width;
@@ -2121,49 +2090,23 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             doc.setFont('helvetica', 'normal');
             doc.text(filters.party, margin + 25, yPos);
         }
-        if (filters.lcNo) {
-            yPos += 7;
-            doc.setFont('helvetica', 'bold');
-            doc.text("LC No:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(filters.lcNo, margin + 25, yPos);
-        }
 
         let currentY = yPos + 10;
 
         if (activeTab === 'total') {
             // --- Unified History Table ---
-            // Group purchases by Date/LC/Truck to match UI grouping
             const aggregatedPurchase = Object.values(sortedPurchaseData.reduce((acc, p) => {
                 const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}`;
-                if (!acc[key]) {
-                    acc[key] = {
-                        ...p,
-                        type: 'purchase',
-                        itemQty: 0,
-                        itemInHouseQty: 0,
-                        itemShortageQty: 0,
-                        brands: {}
-                    };
-                }
-
+                if (!acc[key]) acc[key] = { ...p, type: 'purchase', itemQty: 0, itemInHouseQty: 0, itemShortageQty: 0, brandsProcessed: new Set() };
                 acc[key].itemQty += parseFloat(p.itemQty) || 0;
-                acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
 
-                const bKey = (p.itemBrand || '').trim().toLowerCase();
-                if (!acc[key].brands[bKey]) {
-                    acc[key].brands[bKey] = {
-                        qty: parseFloat(p.itemInHouseQty) || 0,
-                        stockTableQty: parseFloat(p.inHouseQuantity) || 0
-                    };
-                    acc[key].itemInHouseQty += acc[key].brands[bKey].qty;
-                } else {
-                    const additionalStock = parseFloat(p.inHouseQuantity) || 0;
-                    acc[key].brands[bKey].qty += additionalStock;
-                    acc[key].brands[bKey].stockTableQty += additionalStock;
-                    acc[key].itemInHouseQty += additionalStock;
+                const brandKey = (p.itemBrand || '').trim().toLowerCase();
+                if (!acc[key].brandsProcessed.has(brandKey)) {
+                    acc[key].itemInHouseQty += parseFloat(p.itemInHouseQty) || 0;
+                    acc[key].brandsProcessed.add(brandKey);
                 }
 
+                acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
                 return acc;
             }, {}));
 
@@ -2174,43 +2117,48 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 return acc;
             }, {}));
 
-            const sortedDamageData = [...(damageData || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
-            const aggregatedDamage = Object.values(sortedDamageData.reduce((acc, d) => {
-                const key = `${d.date}_damage_${d.brand || '-'}`;
-                if (!acc[key]) acc[key] = { ...d, type: 'damage', itemQty: 0 };
-                acc[key].itemQty += parseFloat(d.itemQty || d.quantity) || 0;
-                return acc;
-            }, {}));
-
             let currentBalance = 0;
-            const addedWhPortion = new Set();
+            const processedLCTruckBrands = new Set();
 
-            const unifiedData = [...aggregatedPurchase, ...aggregatedSale, ...aggregatedDamage]
+            const unifiedData = [...aggregatedPurchase, ...aggregatedSale]
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(item => {
                     if (item.type === 'purchase') {
-                        Object.entries(item.brands || {}).forEach(([bKey, bData]) => {
-                            const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
-                            currentBalance += bData.stockTableQty;
-                            if (!addedWhPortion.has(truckKey)) {
-                                const whPortion = bData.qty - bData.stockTableQty;
-                                currentBalance += Math.max(0, whPortion);
-                                addedWhPortion.add(truckKey);
-                            }
-                        });
-                    } else if (item.type === 'sale') {
-                        currentBalance -= item.itemQty;
-                    } else if (item.type === 'damage') {
+                        const lcKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${(item.itemBrand || '').trim()}`;
+                        if (!processedLCTruckBrands.has(lcKey)) {
+                            currentBalance += item.itemInHouseQty;
+                            processedLCTruckBrands.add(lcKey);
+                        }
+                    } else {
                         currentBalance -= item.itemQty;
                     }
                     return { ...item, runningInHouse: currentBalance };
                 });
 
-            const totalInHouseQty = summary.totalInHouseQty || 0;
+            // deduplicate In House Quantity calculation using the robust (StockTable + WhPortionOnce) logic
+            let totalInHouseQty = 0;
+            const truckBrandsSeen = new Set();
+
+            sortedPurchaseData.forEach(item => {
+                const bKey = (item.itemBrand || '').trim().toLowerCase();
+                const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
+
+                // 1. Always add the raw stock table remainder for this specific entry
+                totalInHouseQty += parseFloat(item.inHouseQuantity) || 0;
+
+                // 2. Add the shared warehouse portion ONLY once per truck/brand combination
+                if (!truckBrandsSeen.has(truckKey)) {
+                    const fullQty = parseFloat(item.itemInHouseQty) || 0;
+                    const stockQty = parseFloat(item.inHouseQuantity) || 0;
+                    const whPortion = Math.max(0, fullQty - stockQty);
+                    totalInHouseQty += whPortion;
+                    truckBrandsSeen.add(truckKey);
+                }
+            });
 
             const purchaseTotals = sortedPurchaseData.reduce((acc, item) => ({
                 qty: acc.qty + (parseFloat(item.itemQty) || 0),
-                inHouse: totalInHouseQty,
+                inHouse: totalInHouseQty, // Use the pre-calculated unique total
                 shortage: acc.shortage + (parseFloat(item.itemShortageQty) || 0)
             }), { qty: 0, inHouse: 0, shortage: 0 });
 
@@ -2218,11 +2166,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 qty: acc.qty + (parseFloat(sale.itemQty) || 0)
             }), { qty: 0 });
 
-            const damageTotals = sortedDamageData.reduce((acc, d) => ({
-                qty: acc.qty + (parseFloat(d.itemQty || d.quantity) || 0)
-            }), { qty: 0 });
-
-            const unifiedHead = [['Date', 'LC No', 'Exporter', 'Invoice', 'Party', 'Purchase', 'Sale', 'InHouse', 'Short', 'Damage']];
+            const unifiedHead = [['Date', 'LC No', 'Exporter', 'Invoice', 'Party', 'Purchase', 'Sale', 'InHouse', 'Short']];
             const unifiedBody = unifiedData.map(item => [
                 formatDate(item.date),
                 item.lcNo || '-',
@@ -2232,16 +2176,14 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-',
                 item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-',
                 `${Math.round(item.runningInHouse).toLocaleString('en-US')} kg`,
-                item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-',
-                item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'
+                item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'
             ]);
             const unifiedFoot = [[
                 { content: 'TOTAL HISTORY', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: `${Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: `${Math.round(damageTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
             ]];
 
             autoTable(doc, {
@@ -2250,21 +2192,19 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: unifiedBody,
                 foot: unifiedFoot,
                 theme: 'grid',
-                showFoot: 'lastPage',
                 styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 columnStyles: {
-                    0: { cellWidth: 18, halign: 'center' }, // Date
-                    1: { cellWidth: 22, halign: 'center' }, // LC No
-                    2: { cellWidth: 24, halign: 'left' },   // Exporter
-                    3: { cellWidth: 16, halign: 'center' }, // Invoice
-                    4: { cellWidth: 30, halign: 'left' },   // Party
-                    5: { cellWidth: 19, halign: 'right' },  // Purchase
-                    6: { cellWidth: 19, halign: 'right' },  // Sale
-                    7: { cellWidth: 19, halign: 'right' },  // InHouse
-                    8: { cellWidth: 13, halign: 'right' },  // Short
-                    9: { cellWidth: 16, halign: 'right' }   // Damage
+                    0: { cellWidth: 20, halign: 'center' }, // Date
+                    1: { cellWidth: 24, halign: 'center' }, // LC No
+                    2: { cellWidth: 26, halign: 'left' },   // Exporter (Increased)
+                    3: { cellWidth: 18, halign: 'center' }, // Invoice
+                    4: { cellWidth: 34, halign: 'left' },   // Party (Increased)
+                    5: { cellWidth: 21, halign: 'right' },  // Purchase
+                    6: { cellWidth: 21, halign: 'right' },  // Sale
+                    7: { cellWidth: 21, halign: 'right' },  // InHouse
+                    8: { cellWidth: 13, halign: 'right' }   // Short
                 },
                 margin: { left: margin, right: margin }
             });
@@ -2310,7 +2250,6 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: purchaseBody,
                 foot: purchaseFoot,
                 theme: 'grid',
-                showFoot: 'lastPage',
                 styles: { fontSize: 8.5, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
@@ -2338,10 +2277,9 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             let saleHead, saleBody, saleFoot, saleColumnStyles;
 
             if (isFruitCategory) {
-                saleHead = [['Date', 'LC No', 'Invoice', 'Company', 'Customer', 'Phone', 'Qty', 'Truck', 'Price', 'Total Price']];
+                saleHead = [['Date', 'Invoice', 'Company', 'Customer', 'Phone', 'Qty', 'Truck', 'Price', 'Total Price']];
                 saleBody = sortedSaleData.map(sale => [
                     formatDate(sale.date),
-                    sale.lcNo ? sale.lcNo.slice(-4) : '-',
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
                     sale.customerName || '-',
@@ -2352,28 +2290,26 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     `TK ${sale.itemTotal.toLocaleString('en-IN')}`
                 ]);
                 saleFoot = [[
-                    { content: 'TOTAL SALE', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: 'TOTAL SALE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: '-', colSpan: 2, styles: { halign: 'right' } },
                     { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-IN')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
-                    0: { cellWidth: 16, halign: 'center' }, // Date
-                    1: { cellWidth: 16, halign: 'center' }, // LC No
-                    2: { cellWidth: 14, halign: 'center' }, // Invoice
-                    3: { cellWidth: 22, halign: 'left' },   // Company
-                    4: { cellWidth: 22, halign: 'left' },   // Customer
-                    5: { cellWidth: 20, halign: 'left' },   // Phone
-                    6: { cellWidth: 20, halign: 'right' },  // Qty
-                    7: { cellWidth: 12, halign: 'center' }, // Truck
-                    8: { cellWidth: 20, halign: 'right' },  // Price
-                    9: { cellWidth: 34, halign: 'right' }   // Total Price
+                    0: { cellWidth: 20, halign: 'center' }, // Date (increased from 16)
+                    1: { cellWidth: 16, halign: 'center' }, // Invoice
+                    2: { cellWidth: 25, halign: 'left' },   // Company (slightly reduced from 26)
+                    3: { cellWidth: 25, halign: 'left' },   // Customer (slightly reduced from 26)
+                    4: { cellWidth: 22, halign: 'left' },   // Phone (reduced from 24)
+                    5: { cellWidth: 24, halign: 'right' },  // Qty (increased from 20)
+                    6: { cellWidth: 12, halign: 'center' }, // Truck (reduced from 16)
+                    7: { cellWidth: 20, halign: 'right' },  // Price (reduced from 22)
+                    8: { cellWidth: 26, halign: 'right' }   // Total Price (reduced from 30)
                 };
             } else {
-                saleHead = [['Date', 'LC No', 'Invoice', 'Company', 'Brand', 'Bag', 'Qty', 'Price', 'Total Price']];
+                saleHead = [['Date', 'Invoice', 'Company', 'Brand', 'Bag', 'Qty', 'Price', 'Total Price']];
                 saleBody = sortedSaleData.map(sale => [
                     formatDate(sale.date),
-                    sale.lcNo ? sale.lcNo.slice(-4) : '-',
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
                     sale.itemBrand || '-',
@@ -2383,21 +2319,20 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     `TK ${sale.itemTotal.toLocaleString('en-IN')}`
                 ]);
                 saleFoot = [[
-                    { content: 'TOTAL SALE', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: 'TOTAL SALE', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: '-', styles: { halign: 'right' } },
                     { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-IN')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
-                    0: { cellWidth: 18, halign: 'center' }, // Date
-                    1: { cellWidth: 16, halign: 'center' }, // LC No
-                    2: { cellWidth: 14, halign: 'center' }, // Invoice
-                    3: { cellWidth: 30, halign: 'left' },   // Company
-                    4: { cellWidth: 28, halign: 'left' },   // Brand
-                    5: { cellWidth: 16, halign: 'right' },  // Packet
-                    6: { cellWidth: 18, halign: 'right' },  // Qty
-                    7: { cellWidth: 22, halign: 'right' },  // Price
-                    8: { cellWidth: 34, halign: 'right' }   // Total Price
+                    0: { cellWidth: 20, halign: 'center' }, // Date
+                    1: { cellWidth: 16, halign: 'center' }, // Invoice
+                    2: { cellWidth: 36, halign: 'left' },   // Company (Increased)
+                    3: { cellWidth: 34, halign: 'left' },   // Brand
+                    4: { cellWidth: 18, halign: 'right' },  // Packet
+                    5: { cellWidth: 20, halign: 'right' },  // Qty
+                    6: { cellWidth: 22, halign: 'right' },  // Price
+                    7: { cellWidth: 30, halign: 'right' }   // Total Price
                 };
             }
 
@@ -2407,7 +2342,6 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: saleBody,
                 foot: saleFoot,
                 theme: 'grid',
-                showFoot: 'lastPage',
                 styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
@@ -2546,9 +2480,6 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 if (idx === 0) {
                     row.push({ content: (slNum++).toString(), rowSpan: flatItems.length, styles: { halign: 'center' } });
                     row.push({ content: formatDate(sale.date), rowSpan: flatItems.length, styles: { halign: 'center' } });
-                    if (saleType !== 'Border') {
-                        row.push({ content: (sale.lcNo ? sale.lcNo.slice(-4) : '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
-                    }
                     row.push({ content: (saleType === 'Border' ? (sale.lcNo || '-') : (sale.invoiceNo || '-')), rowSpan: flatItems.length, styles: { halign: 'center' } });
 
                     if (saleType === 'Border') {
@@ -2568,11 +2499,6 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
                 if (saleType !== 'Border') {
                     row.push(item.brand);
-                }
-
-                if (saleType !== 'Border' && idx === 0) {
-                    row.push({ content: (sale.challanNo || '-'), rowSpan: flatItems.length });
-                    row.push({ content: (sale.truckNo || '-'), rowSpan: flatItems.length });
                 }
 
                 row.push(parseFloat(item.quantity).toLocaleString('en-US'));
@@ -2610,10 +2536,10 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         const headRow = saleType === 'Border'
             ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
-            : [['SL', 'Date', 'LC No', 'Invoice', 'Company', 'Product', 'Brand', 'Challan No', 'Truck No', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
+            : [['SL', 'Date', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
 
         const footRow = [[
-            { content: 'GRAND TOTAL', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 6, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: saleType === 'Border' ? '-' : summary.totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
             { content: saleType === 'Border' ? totalTrucks.toLocaleString('en-US') : '', styles: { halign: 'center', fontStyle: 'bold' } },
             ...(saleType === 'Border' ? [
@@ -2632,7 +2558,6 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             body: tableRows,
             foot: footRow,
             theme: 'grid',
-            showFoot: 'lastPage',
             styles: {
                 fontSize: 9,
                 cellPadding: 1,
@@ -2659,29 +2584,26 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 4: { cellWidth: 18, noWrap: true },        // Port
                 5: { cellWidth: 26, noWrap: true },        // IND C&F
                 6: { cellWidth: 26, noWrap: true },        // BD C&F
-                7: { cellWidth: 38, noWrap: true },        // Party Name
+                7: { cellWidth: 36, noWrap: true },        // Party Name
                 8: { cellWidth: 18, overflow: 'linebreak' }, // Product (Reduced)
                 9: { cellWidth: 22, halign: 'right' },     // Qty
                 10: { cellWidth: 12, halign: 'center' },   // Truck
                 11: { cellWidth: 18, halign: 'right' },    // Price (Reduced)
                 12: { cellWidth: 24, halign: 'right' }     // Total
             } : {
-                0: { cellWidth: 8, halign: 'center' },     // SL
-                1: { cellWidth: 18, halign: 'center' },    // Date
-                2: { cellWidth: 15, halign: 'center' },    // LC No
-                3: { cellWidth: 17, halign: 'center' },    // Invoice
-                4: { cellWidth: 34 },                       // Company
-                5: { cellWidth: 24, overflow: 'linebreak' }, // Product
-                6: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand
-                7: { cellWidth: 18, overflow: 'linebreak' }, // Challan No
-                8: { cellWidth: 20, overflow: 'linebreak' }, // Truck No
-                9: { cellWidth: 17, halign: 'right' },     // Qty
-                10: { cellWidth: 14, halign: 'right' },    // Price
-                11: { cellWidth: 24, halign: 'right' },    // Total
-                12: { cellWidth: 20, halign: 'right' },    // Truck Fare
-                13: { cellWidth: 28, halign: 'right' }     // Balance
+                0: { cellWidth: 7, halign: 'center' },     // SL
+                1: { cellWidth: 20, halign: 'center' },    // Date
+                2: { cellWidth: 18, halign: 'center' },    // Invoice
+                3: { cellWidth: 50 },                       // Company (Increased)
+                4: { cellWidth: 20, overflow: 'linebreak' }, // Product (Reduced)
+                5: { cellWidth: 35, noWrap: false, overflow: 'linebreak' }, // Brand (Reduced)
+                6: { cellWidth: 20, halign: 'right' },     // Qty
+                7: { cellWidth: 12, halign: 'right' },     // Price (Reduced)
+                8: { cellWidth: 30, halign: 'right' },     // Total (Increased)
+                9: { cellWidth: 30, halign: 'right' },    // Truck Fare (Increased)
+                10: { cellWidth: 35, halign: 'right' }     // Balance (Increased)
             },
-            margin: { left: margin, right: margin }
+            margin: { left: saleType === 'Border' ? (pageWidth - 277) / 2 : (pageWidth - 277) / 2, right: margin }
         });
 
         // --- Signatures ---
@@ -3255,7 +3177,6 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 body: tableRows,
                 foot: [foot],
                 theme: 'grid',
-                showFoot: 'lastPage',
                 styles: { fontSize: 8.5, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
                 columnStyles: isParty ? {
@@ -3568,7 +3489,6 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 { content: totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
-            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.5,
                 cellPadding: 1.2,
@@ -3596,12 +3516,12 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 0: { cellWidth: 20, halign: 'center' }, // Date
                 1: { cellWidth: 28, halign: 'left' }, // LC No
                 2: { cellWidth: 36, halign: 'left' },   // Importer
-                3: { cellWidth: 38, halign: 'left' },   // Exporter
-                4: { cellWidth: 25, halign: 'left' },   // Product
-                5: { cellWidth: 22, halign: 'center' }, // Port
+                3: { cellWidth: 36, halign: 'left' },   // Exporter
+                4: { cellWidth: 30, halign: 'left' },   // Product
+                5: { cellWidth: 15, halign: 'center' }, // Port
                 6: { cellWidth: 16, halign: 'center' }, // UOM
                 7: { cellWidth: 15, halign: 'center' }, // Trucks
-                8: { cellWidth: 20, halign: 'right' },  // QTY
+                8: { cellWidth: 26, halign: 'right' },  // QTY
                 9: { cellWidth: 24, halign: 'right' },  // Commission
                 10: { cellWidth: 31, halign: 'right' }   // Total
             }
@@ -3718,7 +3638,6 @@ export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
                 { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
-            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.5,
                 cellPadding: 2,
@@ -3991,7 +3910,6 @@ export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
                 { content: totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
-            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.5,
                 cellPadding: 2,
@@ -4147,7 +4065,6 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
                 { content: lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
-            showFoot: 'lastPage',
             styles: {
                 fontSize: 8,
                 cellPadding: 1.5,
@@ -4210,145 +4127,6 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
         window.open(blobURL, '_blank');
     } catch (error) {
         console.error("PDF Generation Error:", error);
-        alert(`Failed to generate PDF: ${error.message}`);
-    }
-};
-
-export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {}) => {
-    try {
-        const doc = new jsPDF();
-        const pageWidth = doc.internal.pageSize.width;
-        const pageHeight = doc.internal.pageSize.height;
-        const margin = 10;
-
-        // --- Header ---
-        doc.setFontSize(22);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0);
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
-
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
-
-        // Separator
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
-
-        // Report Title
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text("LC BILL HISTORY REPORT", pageWidth / 2, 42, { align: 'center' });
-
-        // --- Info Row ---
-        let yPos = 55;
-        doc.setFontSize(10);
-
-        doc.setFont('helvetica', 'bold');
-        doc.text("Bank Name:", margin, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(bankName || '-', margin + 25, yPos);
-
-        if (filters.startDate || filters.endDate) {
-            yPos += 5;
-            doc.setFont('helvetica', 'bold');
-            doc.text("Date Range:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
-            const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
-            doc.text(`${start} to ${end}`, margin + 25, yPos);
-        }
-
-        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
-
-        // --- Table ---
-        const tableRows = reportData.map((row, idx) => [
-            idx + 1,
-            formatDate(row.date),
-            row.lcNo || '-',
-            row.importer || '-',
-            row.billType || '-',
-            row.marginPaid > 0 ? `Tk ${row.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-',
-            row.bankPaid > 0 ? `Tk ${row.bankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'
-        ]);
-
-        // Calculate Totals
-        const totalMarginPaid = reportData.reduce((s, r) => s + (parseFloat(r.marginPaid) || 0), 0);
-        const totalBankPaid = reportData.reduce((s, r) => s + (parseFloat(r.bankPaid) || 0), 0);
-
-        // Add Grand Total
-        tableRows.push([
-            { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-            { content: totalMarginPaid > 0 ? `Tk ${totalMarginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-            { content: totalBankPaid > 0 ? `Tk ${totalBankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
-        ]);
-
-        // Center table: total col widths = 8+20+25+40+35+35+35 = 198
-        const tableColWidths = 8 + 20 + 25 + 40 + 35 + 35 + 35;
-        const tableLeftMargin = (pageWidth - tableColWidths) / 2;
-
-        autoTable(doc, {
-            startY: yPos + 10,
-            head: [['SL', 'Date', 'LC No', 'Importer', 'Bill Type', 'Margin Paid', 'Bank Paid']],
-            body: tableRows,
-            theme: 'grid',
-            styles: {
-                fontSize: 8,
-                cellPadding: 1.5,
-                lineColor: [0, 0, 0],
-                lineWidth: 0.1,
-                textColor: [0, 0, 0]
-            },
-            headStyles: {
-                fillColor: [245, 245, 245],
-                textColor: [0, 0, 0],
-                fontStyle: 'bold',
-                halign: 'center'
-            },
-            columnStyles: {
-                0: { cellWidth: 8, halign: 'center' },   // SL
-                1: { cellWidth: 20, halign: 'center' },  // Date
-                2: { cellWidth: 25, halign: 'center' },  // LC No
-                3: { cellWidth: 40 },                    // Importer
-                4: { cellWidth: 35, halign: 'center' },  // Bill Type
-                5: { cellWidth: 35, halign: 'right' },   // Margin Paid
-                6: { cellWidth: 35, halign: 'right' }    // Bank Paid
-            },
-            margin: { left: tableLeftMargin, right: tableLeftMargin }
-        });
-
-        // --- Signatures ---
-        let finalY = doc.lastAutoTable.finalY + 30;
-        if (finalY + 20 > pageHeight) {
-            doc.addPage();
-            finalY = 30;
-        }
-
-        const sigWidth = 45;
-        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
-
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.line(margin, finalY, margin + sigWidth, finalY);
-        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
-
-        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
-        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
-
-        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
-        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
-
-        const pdfOutput = doc.output('blob');
-        const blobURL = URL.createObjectURL(pdfOutput);
-        window.open(blobURL, '_blank');
-    } catch (error) {
-        console.error("LC Bill History Report PDF Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
     }
 };

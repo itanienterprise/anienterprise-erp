@@ -11,7 +11,6 @@ const ProductManagement = ({
     stockRecords,
     warehouseData,
     salesRecords,
-    damages,
     setShowProductHistoryReport,
     setProductHistoryReportData
 }) => {
@@ -24,7 +23,6 @@ const ProductManagement = ({
         hsCode: '',
         hsCodeInd: '',
         name: '',
-        ipName: '',
         category: '',
         uom: 'kg',
         brands: [{ brand: '', quality: '', packetSize: '', purchasedPrice: '' }],
@@ -36,7 +34,6 @@ const ProductManagement = ({
             hsCode: '',
             hsCodeInd: '',
             name: '',
-            ipName: '',
             category: '',
             uom: 'kg',
             brands: [{ brand: '', quality: '', packetSize: '', purchasedPrice: '' }],
@@ -100,7 +97,6 @@ const ProductManagement = ({
             hsCode: product.hsCode || '',
             hsCodeInd: product.hsCodeInd || '',
             name: product.name || '',
-            ipName: product.ipName || '',
             category: product.category || '',
             uom: product.uom || product.unit || 'kg',
             brands: product.brands && product.brands.length > 0
@@ -176,8 +172,8 @@ const ProductManagement = ({
                             className="w-full flex flex-col gap-6"
                         >
                             {/* Row 0: Top Grid Fields */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 w-full">
-                                <div className="col-span-1 md:col-span-2">
+                            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 md:gap-6 w-full">
+                                <div className="col-span-1 md:col-span-3">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">HS Code</label>
                                     <input
                                         type="text"
@@ -188,7 +184,7 @@ const ProductManagement = ({
                                         placeholder="10-digit HS Code"
                                     />
                                 </div>
-                                <div className="col-span-1 md:col-span-2">
+                                <div className="col-span-1 md:col-span-3">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">HS Code (IND)</label>
                                     <input
                                         type="text"
@@ -199,7 +195,7 @@ const ProductManagement = ({
                                         placeholder="10-digit HS Code (IND)"
                                     />
                                 </div>
-                                <div className="col-span-2 md:col-span-1">
+                                <div className="col-span-2 md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
                                     <input
                                         type="text"
@@ -210,17 +206,7 @@ const ProductManagement = ({
                                         placeholder="Product name"
                                     />
                                 </div>
-                                <div className="col-span-2 md:col-span-1">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">IP Product Name</label>
-                                    <input
-                                        type="text"
-                                        value={productFormData.ipName}
-                                        onChange={(e) => setProductFormData(prev => ({ ...prev, ipName: e.target.value }))}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                                        placeholder="IP product name"
-                                    />
-                                </div>
-                                <div className="col-span-2 md:col-span-1">
+                                <div className="col-span-2 md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                                     <input
                                         type="text"
@@ -230,7 +216,7 @@ const ProductManagement = ({
                                         placeholder="Category"
                                     />
                                 </div>
-                                <div className="col-span-2 md:col-span-1">
+                                <div className="col-span-2 md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">UOM (Unit)</label>
                                     <select
                                         value={productFormData.uom}
@@ -364,7 +350,6 @@ const ProductManagement = ({
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">HS Code</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">HS Code (IND)</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Name</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">IP Product Name</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quality</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Packet Size</th>
@@ -380,7 +365,6 @@ const ProductManagement = ({
                                             <td className="px-6 py-4 text-sm text-gray-600 font-mono align-top">{product.hsCode || '-'}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600 font-mono align-top">{product.hsCodeInd || '-'}</td>
                                             <td className="px-6 py-4 text-sm font-medium text-gray-900 align-top">{product.name}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 align-top">{product.ipName || '-'}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
                                                 {product.brands?.map((b, i) => (
                                                     <div key={i}>{b.brand || '-'}</div>
@@ -496,12 +480,6 @@ const ProductManagement = ({
                                                         <div className="text-gray-700 text-xs font-semibold font-mono">{product.hsCodeInd || '-'}</div>
                                                     </div>
                                                 </div>
-                                                <div className="flex justify-between items-start pt-2 border-t border-gray-100 mb-2">
-                                                    <div className="">
-                                                        <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">IP Product Name</span>
-                                                        <div className="text-gray-700 text-xs font-bold">{product.ipName || '-'}</div>
-                                                    </div>
-                                                </div>
                                                 <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                                                     {product.description && (
                                                         <div className="col-span-2">
@@ -557,7 +535,6 @@ const ProductManagement = ({
                     stockRecords={stockRecords}
                     salesRecords={salesRecords}
                     warehouseData={warehouseData}
-                    damages={damages}
                     setShowProductHistoryReport={setShowProductHistoryReport}
                     setProductHistoryReportData={setProductHistoryReportData}
                 />
