@@ -12,19 +12,94 @@ import './IPManagement.css';
 const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRecords = [], onClose }) => {
     if (!ipRecord) return null;
 
-    const relatedLCs = lcRecords.filter(lc => lc.ipNo === ipRecord.ipNumber);
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '');
 
     const parseNum = (val) => {
         if (val === null || val === undefined) return 0;
         return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
     };
 
-    const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+    const getLcQtyForIpInKg = (lc, ip) => {
+        const targetProductName = (ip.productName || '').toLowerCase().trim();
+        if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+            const matchedProducts = lc.productsList.filter(p => 
+                (p.productName || '').toLowerCase().trim() === targetProductName
+            );
+            if (matchedProducts.length > 0) {
+                return matchedProducts.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
+            }
+        }
+        if ((lc.productName || '').toLowerCase().trim() === targetProductName) {
+            return parseNum(lc.quantity) * 1000;
+        }
+        return 0;
+    };
+
+    const getLcStates = (lc) => {
+        if (!lc) return [];
+        const amendments = lc.amendments || [];
+        const hasOriginal = amendments.some(a => a.amendmentNo === 'Original LC');
+
+        if (hasOriginal) {
+            return amendments.map(amnd => ({
+                ...amnd,
+                isOriginal: amnd.amendmentNo === 'Original LC'
+            }));
+        }
+
+        if (amendments.length === 0) {
+            return [{
+                amendmentNo: 'Original LC',
+                amendmentDate: lc.openingDate,
+                expiryDate: lc.expiryDate,
+                quantity: lc.quantity,
+                rate: lc.rate,
+                dollarRate: lc.dollarRate,
+                totalDollar: lc.totalDollar,
+                totalAmount: lc.totalAmount,
+                remarks: 'Original LC Details',
+                productsList: lc.productsList || [],
+                isOriginal: true
+            }];
+        }
+
+        // Synthesize "Original LC" for older records that have amendments but lack 'Original LC'
+        const states = [{
+            amendmentNo: 'Original LC',
+            amendmentDate: lc.openingDate,
+            expiryDate: lc.expiryDate || lc.openingDate,
+            quantity: amendments[0]?.quantity || lc.quantity,
+            rate: amendments[0]?.rate || lc.rate,
+            dollarRate: amendments[0]?.dollarRate || lc.dollarRate,
+            totalDollar: amendments[0]?.totalDollar || lc.totalDollar,
+            totalAmount: amendments[0]?.totalAmount || lc.totalAmount,
+            remarks: 'Original LC Details',
+            productsList: amendments[0]?.productsList || lc.productsList || [],
+            isOriginal: true
+        }];
+
+        amendments.forEach(amnd => {
+            states.push({
+                ...amnd,
+                isOriginal: false
+            });
+        });
+
+        return states;
+    };
+
+    const ipNoClean = cleanLc(ipRecord.ipNumber);
+    const relatedLCs = lcRecords.filter(lc => {
+        const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+            ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+            : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+        return lcIps.includes(ipNoClean);
+    });
 
     // Compute remaining quantity for each LC (same logic as LCManagement table)
     const computeLcRemQty = (lc) => {
         const lcNoClean = cleanLc(lc.lcNo);
-        const qtyKg = parseNum(lc.quantity) * 1000;
+        const qtyKg = getLcQtyForIpInKg(lc, ipRecord);
 
         const receiptsMapForBalance = {};
         allStockRecords
@@ -74,14 +149,14 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
     };
 
     // Calculate total quantity used and remaining for this IP
-    const totalLcQtyKg = relatedLCs.reduce((sum, lc) => sum + (parseNum(lc.quantity) * 1000), 0);
+    const totalLcQtyKg = relatedLCs.reduce((sum, lc) => sum + getLcQtyForIpInKg(lc, ipRecord), 0);
     const ipQtyKg = parseNum(ipRecord.quantity);
     const ipRemQtyKg = ipQtyKg - totalLcQtyKg;
 
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-5xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-7xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
                 {/* Header - Solid & Fixed at top */}
                 <div className="bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between z-20">
                     <div className="flex items-center gap-4">
@@ -163,50 +238,88 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {relatedLCs.length > 0 ? (
-                                    relatedLCs.map((lc, idx) => {
-                                        const lcQtyTon = parseNum(lc.quantity);
-                                        const lcQtyKg = lcQtyTon * 1000;
-                                        const lcRemQtyKg = computeLcRemQty(lc);
-                                        return (
-                                            <tr key={lc._id || idx} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-5 py-3.5 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(lc.openingDate)}</td>
-                                                <td className="px-5 py-3.5 text-sm font-medium text-red-500 whitespace-nowrap">{formatDate(lc.expiryDate)}</td>
-                                                <td className="px-5 py-3.5 text-sm font-black text-blue-600 whitespace-nowrap">{lc.lcNo || '-'}</td>
-                                                <td className="px-5 py-3.5 text-sm font-medium text-gray-800 uppercase">{lc.bankName || '-'}</td>
-                                                <td className="px-5 py-3.5 text-sm font-medium text-right text-gray-900 whitespace-nowrap">
-                                                    {lcQtyKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal uppercase">kg</span>
-                                                </td>
-                                                <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
-                                                    <span className={`font-black ${lcRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{lcRemQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal uppercase">kg</span>
-                                                </td>
-                                                <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                                                    {(() => {
-                                                        const today = new Date();
-                                                        today.setHours(0, 0, 0, 0);
-                                                        const exp = new Date(lc.expiryDate);
-                                                        exp.setHours(0, 0, 0, 0);
-                                                        const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+                                    relatedLCs.flatMap((lc, lcIdx) => {
+                                        const states = getLcStates(lc);
+                                        const productRemQtyKg = computeLcRemQty(lc);
+                                        const latestQtyKg = getLcQtyForIpInKg(lc, ipRecord);
+                                        const productConsumptionKg = latestQtyKg - productRemQtyKg;
 
-                                                        let statusText = "Active";
-                                                        let statusClass = "bg-green-50 text-green-700 border-green-100";
+                                        return states.map((state, sIdx) => {
+                                            const stateQtyKg = getLcQtyForIpInKg(state, ipRecord);
+                                            const stateRemQtyKg = Math.max(0, stateQtyKg - productConsumptionKg);
+                                            const isLastState = sIdx === states.length - 1;
+                                            const isOriginalState = state.amendmentNo === 'Original LC';
+                                            
+                                            // Calculate diff for quantity
+                                            const prevQtyKg = sIdx > 0 ? getLcQtyForIpInKg(states[sIdx - 1], ipRecord) : 0;
+                                            const diffQtyKg = stateQtyKg - prevQtyKg;
 
-                                                        if (exp < today) {
-                                                            statusText = "Expired";
-                                                            statusClass = "bg-red-50 text-red-600 border-red-100";
-                                                        } else if (diffDays <= 5) {
-                                                            statusText = "Expire Soon";
-                                                            statusClass = "bg-amber-50 text-amber-600 border-amber-100";
-                                                        }
+                                            return (
+                                                <tr key={`${lc._id || lcIdx}_${sIdx}`} className={`${isLastState ? 'hover:bg-gray-50/50' : 'bg-gray-50/20 text-gray-500'} transition-colors`}>
+                                                    <td className="px-5 py-3.5 text-sm font-medium whitespace-nowrap">{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</td>
+                                                    <td className={`px-5 py-3.5 text-sm font-medium whitespace-nowrap ${isLastState ? 'text-red-500' : 'text-red-400'}`}>{formatDate(state.expiryDate)}</td>
+                                                    <td className="px-5 py-3.5 text-sm whitespace-nowrap">
+                                                        <span className={`font-black ${isLastState ? 'text-blue-600' : 'text-blue-400'}`}>
+                                                            {lc.lcNo || '-'}
+                                                            {!isOriginalState && (
+                                                                <span className={`text-[11px] font-bold ml-1.5 ${isLastState ? 'text-amber-600' : 'text-amber-500/80'}`}>
+                                                                    ({state.amendmentNo})
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-sm font-medium uppercase">{lc.bankName || '-'}</td>
+                                                    <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
+                                                         <span className={
+                                                             sIdx > 0
+                                                                 ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
+                                                                 : (isLastState ? 'text-gray-900 font-bold' : '')
+                                                         }>
+                                                             {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
+                                                             {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
+                                                         </span>
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
+                                                        <span className={`font-black ${isLastState ? (stateRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>
+                                                            {stateRemQtyKg.toLocaleString('en-US')}
+                                                        </span> <span className="text-[10px] font-normal uppercase text-gray-400">kg</span>
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                                        {(() => {
+                                                            if (!isLastState) {
+                                                                return (
+                                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-gray-50 text-gray-400 border-gray-100">
+                                                                        Amended
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            const today = new Date();
+                                                            today.setHours(0, 0, 0, 0);
+                                                            const exp = new Date(state.expiryDate);
+                                                            exp.setHours(0, 0, 0, 0);
+                                                            const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
 
-                                                        return (
-                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusClass}`}>
-                                                                {statusText}
-                                                            </span>
-                                                        );
-                                                    })()}
-                                                </td>
-                                            </tr>
-                                        );
+                                                            let statusText = "Active";
+                                                            let statusClass = "bg-green-50 text-green-700 border-green-100";
+
+                                                            if (exp < today) {
+                                                                statusText = "Expired";
+                                                                statusClass = "bg-red-50 text-red-600 border-red-100";
+                                                            } else if (diffDays <= 5) {
+                                                                statusText = "Expire Soon";
+                                                                statusClass = "bg-amber-50 text-amber-600 border-amber-100";
+                                                            }
+
+                                                            return (
+                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusClass}`}>
+                                                                    {statusText}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        });
                                     })
                                 ) : (
                                     <tr>
@@ -220,70 +333,101 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
                     {/* Mobile Card List View */}
                     <div className="md:hidden space-y-4">
                         {relatedLCs.length > 0 ? (
-                            relatedLCs.map((lc, idx) => {
-                                const lcQtyKg = parseNum(lc.quantity) * 1000;
-                                const lcRemQtyKg = computeLcRemQty(lc);
+                            relatedLCs.flatMap((lc, lcIdx) => {
+                                const states = getLcStates(lc);
+                                const productRemQtyKg = computeLcRemQty(lc);
+                                const latestQtyKg = getLcQtyForIpInKg(lc, ipRecord);
+                                const productConsumptionKg = latestQtyKg - productRemQtyKg;
 
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                const exp = new Date(lc.expiryDate);
-                                exp.setHours(0, 0, 0, 0);
-                                const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+                                return states.map((state, sIdx) => {
+                                    const stateQtyKg = getLcQtyForIpInKg(state, ipRecord);
+                                    const stateRemQtyKg = Math.max(0, stateQtyKg - productConsumptionKg);
+                                    const isLastState = sIdx === states.length - 1;
+                                    const isOriginalState = state.amendmentNo === 'Original LC';
+                                    
+                                    const prevQtyKg = sIdx > 0 ? getLcQtyForIpInKg(states[sIdx - 1], ipRecord) : 0;
+                                    const diffQtyKg = stateQtyKg - prevQtyKg;
 
-                                let statusText = "Active";
-                                let statusClass = "bg-green-50 text-green-700 border-green-100";
-                                if (exp < today) {
-                                    statusText = "Expired";
-                                    statusClass = "bg-red-50 text-red-600 border-red-100";
-                                } else if (diffDays <= 5) {
-                                    statusText = "Expire Soon";
-                                    statusClass = "bg-amber-50 text-amber-600 border-amber-100";
-                                }
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    const exp = new Date(state.expiryDate);
+                                    exp.setHours(0, 0, 0, 0);
+                                    const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
 
-                                return (
-                                    <div key={lc._id || idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                                        {/* Card Top: LC No & Status */}
-                                        <div className="flex justify-between items-center mb-3">
-                                            <div className="flex items-center min-w-0 flex-1">
-                                                <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap">LC No.</span>
-                                                <span className="text-blue-500 font-bold mx-2">-</span>
-                                                <span className="text-sm font-black text-gray-900 tracking-tight truncate">{lc.lcNo || '-'}</span>
+                                    let statusText = "Active";
+                                    let statusClass = "bg-green-50 text-green-700 border-green-100";
+                                    if (!isLastState) {
+                                        statusText = "Amended";
+                                        statusClass = "bg-gray-50 text-gray-500 border-gray-100";
+                                    } else if (exp < today) {
+                                        statusText = "Expired";
+                                        statusClass = "bg-red-50 text-red-600 border-red-100";
+                                    } else if (diffDays <= 5) {
+                                        statusText = "Expire Soon";
+                                        statusClass = "bg-amber-50 text-amber-600 border-amber-100";
+                                    }
+
+                                    return (
+                                        <div key={`${lc._id || lcIdx}_${sIdx}`} className={`bg-white p-5 rounded-2xl border shadow-sm ${isLastState ? 'border-gray-100' : 'border-gray-100/60 bg-gray-50/10'}`}>
+                                            {/* Card Top: LC No & Status */}
+                                            <div className="flex justify-between items-center mb-3">
+                                                <div className="flex flex-col min-w-0 flex-1">
+                                                    <div className="flex items-center min-w-0">
+                                                        <span className={`w-[48px] text-[11px] font-black uppercase tracking-widest shrink-0 whitespace-nowrap ${isLastState ? 'text-blue-500' : 'text-blue-400'}`}>LC No.</span>
+                                                        <span className={`font-bold mx-2 ${isLastState ? 'text-blue-500' : 'text-blue-400'}`}>-</span>
+                                                        <span className={`text-sm font-black tracking-tight truncate ${isLastState ? 'text-gray-900' : 'text-gray-500'}`}>
+                                                            {lc.lcNo || '-'}
+                                                            {!isOriginalState && (
+                                                                <span className={`text-[11px] font-bold ml-1.5 ${isLastState ? 'text-amber-600' : 'text-amber-500/80'}`}>
+                                                                    ({state.amendmentNo})
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${statusClass}`}>
+                                                    {statusText}
+                                                </span>
                                             </div>
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${statusClass}`}>
-                                                {statusText}
-                                            </span>
+
+                                            {/* Card Details: Standardized Grid */}
+                                            <div className="space-y-1 pt-1 border-t border-gray-50 mt-1">
+                                                <div className="flex items-center pt-2">
+                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>
+                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                    <span className={`text-sm font-bold ${isLastState ? 'text-gray-700' : 'text-gray-500'}`}>{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expiry Date</span>
+                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                    <span className={`text-sm font-black ${isLastState ? 'text-red-500' : 'text-red-400'}`}>{formatDate(state.expiryDate)}</span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Bank Name</span>
+                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                    <span className={`text-sm font-bold uppercase truncate ${isLastState ? 'text-gray-800' : 'text-gray-500'}`}>{lc.bankName || '-'}</span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                     <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Quantity</span>
+                                                     <span className="text-gray-400 font-bold mx-2">-</span>
+                                                     <span className={`text-sm ${
+                                                         sIdx > 0
+                                                             ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
+                                                             : (isLastState ? 'text-gray-900 font-bold' : 'text-gray-700 font-medium')
+                                                     }`}>
+                                                         {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
+                                                         {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
+                                                     </span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <span className={`w-[100px] text-[11px] font-black uppercase tracking-widest shrink-0 ${isLastState ? 'text-blue-500' : 'text-gray-400'}`}>Rem. LC Qty</span>
+                                                    <span className={`font-bold mx-2 ${isLastState ? 'text-blue-500' : 'text-gray-400'}`}>-</span>
+                                                    <span className={`text-sm font-black ${isLastState ? (stateRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>{stateRemQtyKg.toLocaleString('en-US')} kg</span>
+                                                </div>
+                                            </div>
                                         </div>
-
-                                        {/* Card Details: Standardized Grid */}
-                                        <div className="space-y-1 pt-1 border-t border-gray-50 mt-1">
-                                            <div className="flex items-center pt-2">
-                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Opening Date</span>
-                                                <span className="text-gray-400 font-bold mx-2">-</span>
-                                                <span className="text-sm font-bold text-gray-700">{formatDate(lc.openingDate)}</span>
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Expiry Date</span>
-                                                <span className="text-gray-400 font-bold mx-2">-</span>
-                                                <span className="text-sm font-black text-red-500">{formatDate(lc.expiryDate)}</span>
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Bank Name</span>
-                                                <span className="text-gray-400 font-bold mx-2">-</span>
-                                                <span className="text-sm font-bold text-gray-800 uppercase truncate">{lc.bankName || '-'}</span>
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Quantity</span>
-                                                <span className="text-gray-400 font-bold mx-2">-</span>
-                                                <span className="text-sm font-bold text-gray-900">{lcQtyKg.toLocaleString('en-US')} kg</span>
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="w-[100px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0">Rem. LC Qty</span>
-                                                <span className="text-blue-500 font-bold mx-2">-</span>
-                                                <span className={`text-sm font-black ${lcRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{lcRemQtyKg.toLocaleString('en-US')} kg</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
+                                    );
+                                });
                             })
                         ) : (
                             <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
@@ -423,6 +567,8 @@ function IPManagement({
         productName: ''
     });
 
+    const activePorts = useMemo(() => (ports || []).filter(p => !p.isLoadingPort), [ports]);
+
     const ipImporterRef = useRef(null);
     const ipPortRef = useRef(null);
     const ipProductRef = useRef(null);
@@ -494,61 +640,213 @@ function IPManagement({
         return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
     };
 
-    // Calculate dynamic remaining quantity for each IP
+    // Calculate dynamic remaining quantity for each IP using sequential consumption.
+    // IPs with the same product share a pool of LC consumption — fill first IP completely, then next.
     const enrichedIpRecords = useMemo(() => {
-        return ipRecords.map(ip => {
-            const ipNoClean = cleanLc(ip.ipNumber);
-            const relatedLcs = lcRecords.filter(lc => cleanLc(lc.ipNo) === ipNoClean);
-            const lcNumbers = relatedLcs.map(lc => cleanLc(lc.lcNo));
+        // Helpers
+        const matchProduct = (nameA, nameB) => {
+            const cleanA = (nameA || '').toLowerCase().trim();
+            const cleanB = (nameB || '').toLowerCase().trim();
+            if (!cleanA || !cleanB) return false;
+            if (cleanA === cleanB) return true;
+            
+            const prod = products.find(p => {
+                const pName = (p.name || '').toLowerCase().trim();
+                const pIpName = (p.ipName || '').toLowerCase().trim();
+                return (pName === cleanA && pIpName === cleanB) || (pName === cleanB && pIpName === cleanA);
+            });
+            return !!prod;
+        };
 
-            // 1. LC Rem (kg) - Based on LC commitments
-            const totalLcQtyInKg = relatedLcs.reduce((sum, lc) => sum + (parseNum(lc.quantity) * 1000), 0);
-            const calculatedRemQty = (parseNum(ip.quantity) || 0) - totalLcQtyInKg;
+        const getLcProductQtyInKg = (lc, productKey) => {
+            if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+                const matched = lc.productsList.filter(p =>
+                    matchProduct(p.productName, productKey)
+                );
+                if (matched.length > 0) {
+                    return matched.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
+                }
+            }
+            if (matchProduct(lc.productName, productKey)) {
+                return parseNum(lc.quantity) * 1000;
+            }
+            return 0;
+        };
 
-            // 2. IP Balance - Based on actual consumption (LC Receive + Border Sale)
-            let totalConsumption = 0;
+        // --- Step 1: Compute LC REM per IP using sequential group consumption ---
+        const lcRemMap = {}; // ipNumber -> LC REM value
 
-            // Related Receipts (Stock)
-            const ipReceiptsMap = {};
+        // Group IPs by product name
+        const ipsByProduct = {};
+        ipRecords.forEach(ip => {
+            const productKey = (ip.productName || '').toLowerCase().trim();
+            if (!productKey) {
+                lcRemMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+                return;
+            }
+            if (!ipsByProduct[productKey]) ipsByProduct[productKey] = [];
+            ipsByProduct[productKey].push(ip);
+        });
+
+        Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
+            // Sort IPs ascending by numeric IP number: lowest consumed first
+            const sortedIps = [...ipsGroup].sort((a, b) => {
+                const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
+                const bNum = parseFloat(cleanLc(b.ipNumber)) || 0;
+                if (aNum !== bNum) return aNum - bNum;
+                return (a.ipNumber || '').localeCompare(b.ipNumber || '');
+            });
+
+            // Collect unique LCs linked to ANY IP in this group
+            const groupIpNumsClean = new Set(sortedIps.map(ip => cleanLc(ip.ipNumber)));
+            const seenLcIds = new Set();
+            const allGroupLcs = [];
+            lcRecords.forEach(lc => {
+                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                if (lcIps.some(lcIp => groupIpNumsClean.has(lcIp))) {
+                    const lcId = String(lc._id || lc.lcNo || JSON.stringify(lc));
+                    if (!seenLcIds.has(lcId)) {
+                        seenLcIds.add(lcId);
+                        allGroupLcs.push(lc);
+                    }
+                }
+            });
+
+            // Total LC qty consumed for this product across all group LCs
+            const totalLcQty = allGroupLcs.reduce(
+                (sum, lc) => sum + getLcProductQtyInKg(lc, productKey),
+                0
+            );
+
+            // Distribute sequentially: fill first IP, then next...
+            let remainingLcQty = totalLcQty;
+            sortedIps.forEach(ip => {
+                const ipQty = parseNum(ip.quantity) || 0;
+                const consumed = Math.min(remainingLcQty, ipQty);
+                lcRemMap[ip.ipNumber] = ipQty - consumed;
+                remainingLcQty = Math.max(0, remainingLcQty - consumed);
+            });
+        });
+
+        // --- Step 1b: Compute IP Balance per IP using sequential group consumption ---
+        // IP Balance = IP Qty - actual receipts (LC Receive) - border sales, distributed sequentially.
+        const ipBalanceMap = {}; // ipNumber -> IP Balance value
+
+        Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
+            // Sort IPs ascending by numeric IP number: lowest consumed first
+            const sortedIps = [...ipsGroup].sort((a, b) => {
+                const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
+                const bNum = parseFloat(cleanLc(b.ipNumber)) || 0;
+                if (aNum !== bNum) return aNum - bNum;
+                return (a.ipNumber || '').localeCompare(b.ipNumber || '');
+            });
+
+            // Collect unique LCs linked to any IP in this group
+            const groupIpNumsClean = new Set(sortedIps.map(ip => cleanLc(ip.ipNumber)));
+            const seenLcIds = new Set();
+            const allGroupLcNums = new Set();
+            lcRecords.forEach(lc => {
+                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                if (lcIps.some(lcIp => groupIpNumsClean.has(lcIp))) {
+                    const lcId = String(lc._id || lc.lcNo || JSON.stringify(lc));
+                    if (!seenLcIds.has(lcId)) {
+                        seenLcIds.add(lcId);
+                        if (lc.lcNo) allGroupLcNums.add(cleanLc(lc.lcNo));
+                    }
+                }
+            });
+
+            // Sum unique stock receipts for all group LCs matching the product name
+            const groupReceiptsMap = {};
             allStockRecords.forEach(s => {
                 const sLcClean = cleanLc(s.lcNo);
                 const status = (s.status || '').toLowerCase();
-                if (lcNumbers.includes(sLcClean) && (status === 'accepted' || status === 'in stock')) {
+                if (allGroupLcNums.has(sLcClean) && (status === 'accepted' || status === 'in stock')) {
                     const rawDate = s.date || s.receiveDate || s.createdAt || '';
                     const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
                     const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
                     const key = `${sLcClean}_${dateStr}_${groupVal}`;
                     
-                    if (!ipReceiptsMap[key]) {
-                        const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                        ipReceiptsMap[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                    } else {
-                        if (!s.totalLcQuantity) {
-                            ipReceiptsMap[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    // Filter entries matching the product name
+                    let productQty = 0;
+                    if (s.entries && s.entries.length > 0) {
+                        productQty = s.entries
+                            .filter(item => matchProduct(item.productName, productKey))
+                            .reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    } else if (matchProduct(s.productName, productKey)) {
+                        productQty = parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    }
+
+                    if (productQty > 0) {
+                        if (!groupReceiptsMap[key]) {
+                            groupReceiptsMap[key] = productQty;
+                        } else {
+                            groupReceiptsMap[key] += productQty;
                         }
                     }
                 }
             });
-            totalConsumption += Object.values(ipReceiptsMap).reduce((sum, qty) => sum + qty, 0);
+            let totalGroupConsumption = Object.values(groupReceiptsMap).reduce((sum, qty) => sum + qty, 0);
 
-            // Related Border Sales
+            // Sum unique border sales for all group LCs matching the product name
             allSalesRecords.forEach(s => {
                 const sLcClean = cleanLc(s.lcNo);
                 const status = (s.status || '').toLowerCase();
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
                 const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer));
+                if (allGroupLcNums.has(sLcClean) && status === 'accepted' && isBorder) {
+                    let productSaleQty = 0;
+                    if (s.items && s.items.length > 0) {
+                        productSaleQty = s.items
+                            .filter(item => matchProduct(item.productName, productKey))
+                            .reduce((iSum, item) => {
+                                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                return iSum + (brandSubtotal || parseNum(item.quantity));
+                            }, 0);
+                    } else if (matchProduct(s.productName, productKey)) {
+                        productSaleQty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total);
+                    }
 
-                if (lcNumbers.includes(sLcClean) && status === 'accepted' && isBorder) {
-                    const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                        return iSum + (brandSubtotal || parseNum(item.quantity));
-                    }, 0);
-                    const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
-                    totalConsumption += qty;
+                    if (productSaleQty > 0) {
+                        totalGroupConsumption += productSaleQty;
+                    }
                 }
             });
 
-            const calculatedIpBalance = (parseNum(ip.quantity) || 0) - totalConsumption;
+            // Distribute sequentially: fill first IP balance, then next...
+            let remainingConsumption = totalGroupConsumption;
+            sortedIps.forEach(ip => {
+                const ipQty = parseNum(ip.quantity) || 0;
+                const consumed = Math.min(remainingConsumption, ipQty);
+                ipBalanceMap[ip.ipNumber] = ipQty - consumed;
+                remainingConsumption = Math.max(0, remainingConsumption - consumed);
+            });
+        });
+
+        // For IPs with no product key, compute independently
+        ipRecords.forEach(ip => {
+            if (!(ip.ipNumber in ipBalanceMap)) {
+                ipBalanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+            }
+        });
+
+        // --- Step 2: Enrich each IP record with computed values ---
+        return ipRecords.map(ip => {
+            const ipNoClean = cleanLc(ip.ipNumber);
+            const relatedLcs = lcRecords.filter(lc => {
+                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                return lcIps.includes(ipNoClean);
+            });
+
+            // LC REM and IP Balance from sequential group calculations above
+            const calculatedRemQty = lcRemMap[ip.ipNumber] ?? (parseNum(ip.quantity) || 0);
+            const calculatedIpBalance = ipBalanceMap[ip.ipNumber] ?? (parseNum(ip.quantity) || 0);
 
             // Calculate automated status based on closeDate
             let computedStatus = "Active";
@@ -575,6 +873,8 @@ function IPManagement({
             };
         });
     }, [ipRecords, lcRecords, piRecords, allStockRecords, allSalesRecords]);
+
+
 
     useEffect(() => {
         if (!addNotification || !currentUser || enrichedIpRecords.length === 0) return;
@@ -686,15 +986,16 @@ function IPManagement({
             e.preventDefault();
             if (highlightedIndex >= 0 && highlightedIndex < options.length) {
                 const selected = options[highlightedIndex];
-                const value = selected.name || selected;
+                const value = selected.ipName || selected.name || selected;
 
                 if (dropdownId.startsWith('filter-')) {
                     const filterField = dropdownId.replace('filter-', '');
-                    setFilters(prev => ({ ...prev, [filterField]: value }));
+                    const actualField = filterField === 'product' ? 'productName' : filterField;
+                    setFilters(prev => ({ ...prev, [actualField]: value }));
                     setActiveDropdown(null);
                     setHighlightedIndex(-1);
                 } else if (dropdownId === 'ip-product') {
-                    // For product, value is just the name as per user request
+                    // For product, value is the ipName or name
                     setFormData(prev => ({ ...prev, productName: value }));
                     setActiveDropdown(null);
                     setHighlightedIndex(-1);
@@ -1069,7 +1370,7 @@ function IPManagement({
                                     value={filters.port}
                                     onChange={(e) => { setFilters(prev => ({ ...prev, port: e.target.value })); setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
                                     onFocus={() => { setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-port', ports.filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())), 'filter-port')}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-port', activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())), 'filter-port')}
                                     placeholder="Search Port..."
                                     autoComplete="off"
                                     className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
@@ -1085,8 +1386,8 @@ function IPManagement({
                             </div>
                             {activeDropdown === 'filter-port' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {ports.filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).length > 0 ? (
-                                        ports.filter(p => !filters.port || ports.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).map((port, idx) => (
+                                    {activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).length > 0 ? (
+                                        activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).map((port, idx) => (
                                             <button
                                                 key={port._id}
                                                 type="button"
@@ -1105,15 +1406,15 @@ function IPManagement({
                         </div>
 
                         <div className="space-y-3 relative dropdown-container" ref={filterProductRef}>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Product</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">IP Product</label>
                             <div className="relative">
                                 <input
                                     type="text"
                                     value={filters.productName}
                                     onChange={(e) => { setFilters(prev => ({ ...prev, productName: e.target.value })); setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
                                     onFocus={() => { setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-product', products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase())), 'filter-product')}
-                                    placeholder="Search Product..."
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-product', products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())), 'filter-product')}
+                                    placeholder="Search IP Product..."
                                     autoComplete="off"
                                     className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
                                 />
@@ -1128,16 +1429,16 @@ function IPManagement({
                             </div>
                             {activeDropdown === 'filter-product' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase())).length > 0 ? (
-                                        products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase())).map((p, idx) => (
+                                    {products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())).length > 0 ? (
+                                        products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())).map((p, idx) => (
                                             <button
                                                 key={p._id}
                                                 type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, productName: p.name })); setActiveDropdown(null); }}
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, productName: p.ipName || p.name })); setActiveDropdown(null); }}
                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.productName === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.productName === (p.ipName || p.name) ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                             >
-                                                {p.name}
+                                                {p.ipName || p.name}
                                             </button>
                                         ))
                                     ) : (
@@ -1162,8 +1463,6 @@ function IPManagement({
             {/* Form Section - Continuing in next message due to length */}
             {showIpForm && (
                 <div className="ip-form relative rounded-2xl bg-white/60 backdrop-blur-xl border border-white/50 shadow-2xl p-8 transition-all duration-300">
-                    <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl pointer-events-none"></div>
-                    <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl pointer-events-none"></div>
 
                     <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
                         <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit IP Record' : 'Create New IP'}</h3>
@@ -1273,7 +1572,7 @@ function IPManagement({
                         </div>
 
                         <div className="space-y-2 relative dropdown-container" ref={ipProductRef}>
-                            <label className="text-sm font-medium text-gray-700">Product Name</label>
+                            <label className="text-sm font-medium text-gray-700">IP Product Name</label>
                             <div className="relative">
                                 <input
                                     type="text"
@@ -1281,8 +1580,8 @@ function IPManagement({
                                     value={formData.productName}
                                     onChange={(e) => { handleInputChange(e); setActiveDropdown('ip-product'); setHighlightedIndex(-1); }}
                                     onFocus={() => { setActiveDropdown('ip-product'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-product', products.filter(p => !formData.productName || products.some(x => x.name === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase())), 'productName')}
-                                    placeholder="Search Product..."
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-product', products.filter(p => !formData.productName || products.some(x => (x.ipName || x.name) === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(formData.productName.toLowerCase())), 'productName')}
+                                    placeholder="Search IP Product..."
                                     autoComplete="off"
                                     required
                                     className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-10 ${formData.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
@@ -1298,16 +1597,16 @@ function IPManagement({
                             </div>
                             {activeDropdown === 'ip-product' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {products.filter(p => !formData.productName || products.some(x => x.name === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase())).length > 0 ? (
-                                        products.filter(p => !formData.productName || products.some(x => x.name === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase())).map((p, idx) => (
+                                    {products.filter(p => !formData.productName || products.some(x => (x.ipName || x.name) === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(formData.productName.toLowerCase())).length > 0 ? (
+                                        products.filter(p => !formData.productName || products.some(x => (x.ipName || x.name) === formData.productName) || p.name.toLowerCase().includes(formData.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(formData.productName.toLowerCase())).map((p, idx) => (
                                             <button
                                                 key={p._id}
                                                 type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleIpDropdownSelect('productName', p.name); }}
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleIpDropdownSelect('productName', p.ipName || p.name); }}
                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.productName === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.productName === (p.ipName || p.name) ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                             >
-                                                {p.name}
+                                                {p.ipName || p.name}
                                             </button>
                                         ))
                                     ) : (
@@ -1363,7 +1662,7 @@ function IPManagement({
                                     value={formData.port}
                                     onChange={(e) => { handleInputChange(e); setActiveDropdown('ip-port'); setHighlightedIndex(-1); }}
                                     onFocus={() => { setActiveDropdown('ip-port'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-port', ports.filter(p => !formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())), 'port')}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'ip-port', activePorts.filter(p => !formData.port || activePorts.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())), 'port')}
                                     placeholder="Search Port..."
                                     autoComplete="off"
                                     required
@@ -1380,8 +1679,8 @@ function IPManagement({
                             </div>
                             {activeDropdown === 'ip-port' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {ports.filter(p => !formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).length > 0 ? (
-                                        ports.filter(p => !formData.port || ports.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).map((port, idx) => (
+                                    {activePorts.filter(p => !formData.port || activePorts.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).length > 0 ? (
+                                        activePorts.filter(p => !formData.port || activePorts.some(x => x.name === formData.port) || p.name.toLowerCase().includes(formData.port.toLowerCase())).map((port, idx) => (
                                             <button
                                                 key={port._id}
                                                 type="button"
@@ -1545,7 +1844,7 @@ function IPManagement({
                                                 <div className="flex items-center">Port <SortIcon config={sortConfig.ip} columnKey="port" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('productName')}>
-                                                <div className="flex items-center">Product <SortIcon config={sortConfig.ip} columnKey="productName" /></div>
+                                                <div className="flex items-center">IP Product Name <SortIcon config={sortConfig.ip} columnKey="productName" /></div>
                                             </th>
                                             <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('quantity')}>
                                                 <div className="flex items-center">Quantity (kg) <SortIcon config={sortConfig.ip} columnKey="quantity" /></div>
@@ -1726,7 +2025,7 @@ function IPManagement({
                                                                 <span className="text-sm font-bold text-gray-800 truncate">{record.ipParty}</span>
                                                             </div>
                                                             <div className="flex items-center">
-                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Product</span>
+                                                                <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">IP Product</span>
                                                                 <span className="text-gray-400 font-bold mx-2">-</span>
                                                                 <span className="text-sm font-bold text-gray-900 truncate">{record.productName}</span>
                                                             </div>

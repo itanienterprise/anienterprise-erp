@@ -466,7 +466,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 const totalRowsForSubGroup = subGroup.brandDetails.length + (hasSubTotal ? 1 : 0);
                 let isFirstRowOfProduct = true;
 
-                subGroup.brandDetails.forEach((item) => {
+                subGroup.brandDetails.forEach((item, i) => {
                     const row = [];
 
                     // Group Columns: Date, LC No, Importer, BOE No, Truck, Product (Span across sub-group)
@@ -526,7 +526,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
 
         // --- Totals for Footer ---
         const totalIHQuantity = reportData.reduce((sum, item) => sum + Math.max(0, getIHQty(item)), 0);
-        // const totalIHPackets = reportData.reduce((sum, item) => sum + Math.max(0, getIHPkt(item)), 0);
+        const totalIHPackets = reportData.reduce((sum, item) => sum + Math.max(0, getIHPkt(item)), 0);
         const totalShortage = reportData.reduce((sum, item) => sum + Math.max(0, parseFloat(item.sweepedQuantity) || 0), 0);
 
         // --- Table ---
@@ -556,6 +556,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.0,
                 cellPadding: 1.5,
@@ -1498,7 +1499,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         const totalCardsWidth = (cardWidth * 2) + cardGap;
         let cardX = (pageWidth - totalCardsWidth) / 2; // Center horizontally
 
-        const drawSummaryCard = (x, y, title, pktVal, qtyVal) => {
+        const drawSummaryCard = (x, y, title, pktVal, qtyVal, isBlue = false) => {
             // Main card border and background
             doc.setDrawColor(200);
             doc.setLineWidth(0.2);
@@ -1605,8 +1606,6 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         const pageHeight = doc.internal.pageSize.height;
         const margin = 10;
         const contentWidth = pageWidth - (margin * 2);
-
-        const isBorderSale = (sale.invoiceNo || '').startsWith('BS') || sale.saleType === 'Border';
 
         // --- Calculate Previous Balance Dynamically ---
         let previousBalance = parseFloat(sale.previousBalance || 0);
@@ -1852,7 +1851,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             ];
         };
 
-        // isBorderSale is defined at the top of the function
+        const isBorderSale = (sale.invoiceNo || '').startsWith('BS');
 
         if (items.length === 0 && (sale.productId || sale.productName || sale.product)) {
             tableRows.push(prepareRow(
@@ -2043,7 +2042,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 };
 
 
-export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters) => {
+export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters, damageData = []) => {
     try {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.width;
@@ -2122,23 +2121,49 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             doc.setFont('helvetica', 'normal');
             doc.text(filters.party, margin + 25, yPos);
         }
+        if (filters.lcNo) {
+            yPos += 7;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 25, yPos);
+        }
 
         let currentY = yPos + 10;
 
         if (activeTab === 'total') {
             // --- Unified History Table ---
+            // Group purchases by Date/LC/Truck to match UI grouping
             const aggregatedPurchase = Object.values(sortedPurchaseData.reduce((acc, p) => {
                 const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}`;
-                if (!acc[key]) acc[key] = { ...p, type: 'purchase', itemQty: 0, itemInHouseQty: 0, itemShortageQty: 0, brandsProcessed: new Set() };
-                acc[key].itemQty += parseFloat(p.itemQty) || 0;
-
-                const brandKey = (p.itemBrand || '').trim().toLowerCase();
-                if (!acc[key].brandsProcessed.has(brandKey)) {
-                    acc[key].itemInHouseQty += parseFloat(p.itemInHouseQty) || 0;
-                    acc[key].brandsProcessed.add(brandKey);
+                if (!acc[key]) {
+                    acc[key] = {
+                        ...p,
+                        type: 'purchase',
+                        itemQty: 0,
+                        itemInHouseQty: 0,
+                        itemShortageQty: 0,
+                        brands: {}
+                    };
                 }
 
+                acc[key].itemQty += parseFloat(p.itemQty) || 0;
                 acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
+
+                const bKey = (p.itemBrand || '').trim().toLowerCase();
+                if (!acc[key].brands[bKey]) {
+                    acc[key].brands[bKey] = {
+                        qty: parseFloat(p.itemInHouseQty) || 0,
+                        stockTableQty: parseFloat(p.inHouseQuantity) || 0
+                    };
+                    acc[key].itemInHouseQty += acc[key].brands[bKey].qty;
+                } else {
+                    const additionalStock = parseFloat(p.inHouseQuantity) || 0;
+                    acc[key].brands[bKey].qty += additionalStock;
+                    acc[key].brands[bKey].stockTableQty += additionalStock;
+                    acc[key].itemInHouseQty += additionalStock;
+                }
+
                 return acc;
             }, {}));
 
@@ -2149,48 +2174,43 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 return acc;
             }, {}));
 
-            let currentBalance = 0;
-            const processedLCTruckBrands = new Set();
+            const sortedDamageData = [...(damageData || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const aggregatedDamage = Object.values(sortedDamageData.reduce((acc, d) => {
+                const key = `${d.date}_damage_${d.brand || '-'}`;
+                if (!acc[key]) acc[key] = { ...d, type: 'damage', itemQty: 0 };
+                acc[key].itemQty += parseFloat(d.itemQty || d.quantity) || 0;
+                return acc;
+            }, {}));
 
-            const unifiedData = [...aggregatedPurchase, ...aggregatedSale]
+            let currentBalance = 0;
+            const addedWhPortion = new Set();
+
+            const unifiedData = [...aggregatedPurchase, ...aggregatedSale, ...aggregatedDamage]
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(item => {
                     if (item.type === 'purchase') {
-                        const lcKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${(item.itemBrand || '').trim()}`;
-                        if (!processedLCTruckBrands.has(lcKey)) {
-                            currentBalance += item.itemInHouseQty;
-                            processedLCTruckBrands.add(lcKey);
-                        }
-                    } else {
+                        Object.entries(item.brands || {}).forEach(([bKey, bData]) => {
+                            const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
+                            currentBalance += bData.stockTableQty;
+                            if (!addedWhPortion.has(truckKey)) {
+                                const whPortion = bData.qty - bData.stockTableQty;
+                                currentBalance += Math.max(0, whPortion);
+                                addedWhPortion.add(truckKey);
+                            }
+                        });
+                    } else if (item.type === 'sale') {
+                        currentBalance -= item.itemQty;
+                    } else if (item.type === 'damage') {
                         currentBalance -= item.itemQty;
                     }
                     return { ...item, runningInHouse: currentBalance };
                 });
 
-            // deduplicate In House Quantity calculation using the robust (StockTable + WhPortionOnce) logic
-            let totalInHouseQty = 0;
-            const truckBrandsSeen = new Set();
-
-            sortedPurchaseData.forEach(item => {
-                const bKey = (item.itemBrand || '').trim().toLowerCase();
-                const truckKey = `${(item.lcNo || '').trim()}_${(item.itemTruck || item.truckNo || '').trim()}_${bKey}`;
-
-                // 1. Always add the raw stock table remainder for this specific entry
-                totalInHouseQty += parseFloat(item.inHouseQuantity) || 0;
-
-                // 2. Add the shared warehouse portion ONLY once per truck/brand combination
-                if (!truckBrandsSeen.has(truckKey)) {
-                    const fullQty = parseFloat(item.itemInHouseQty) || 0;
-                    const stockQty = parseFloat(item.inHouseQuantity) || 0;
-                    const whPortion = Math.max(0, fullQty - stockQty);
-                    totalInHouseQty += whPortion;
-                    truckBrandsSeen.add(truckKey);
-                }
-            });
+            const totalInHouseQty = summary.totalInHouseQty || 0;
 
             const purchaseTotals = sortedPurchaseData.reduce((acc, item) => ({
                 qty: acc.qty + (parseFloat(item.itemQty) || 0),
-                inHouse: totalInHouseQty, // Use the pre-calculated unique total
+                inHouse: totalInHouseQty,
                 shortage: acc.shortage + (parseFloat(item.itemShortageQty) || 0)
             }), { qty: 0, inHouse: 0, shortage: 0 });
 
@@ -2198,7 +2218,11 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 qty: acc.qty + (parseFloat(sale.itemQty) || 0)
             }), { qty: 0 });
 
-            const unifiedHead = [['Date', 'LC No', 'Exporter', 'Invoice', 'Party', 'Purchase', 'Sale', 'InHouse', 'Short']];
+            const damageTotals = sortedDamageData.reduce((acc, d) => ({
+                qty: acc.qty + (parseFloat(d.itemQty || d.quantity) || 0)
+            }), { qty: 0 });
+
+            const unifiedHead = [['Date', 'LC No', 'Exporter', 'Invoice', 'Party', 'Purchase', 'Sale', 'InHouse', 'Short', 'Damage']];
             const unifiedBody = unifiedData.map(item => [
                 formatDate(item.date),
                 item.lcNo || '-',
@@ -2208,14 +2232,16 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-',
                 item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-',
                 `${Math.round(item.runningInHouse).toLocaleString('en-US')} kg`,
-                item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'
+                item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-',
+                item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'
             ]);
             const unifiedFoot = [[
                 { content: 'TOTAL HISTORY', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: `${Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(damageTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
             ]];
 
             autoTable(doc, {
@@ -2224,19 +2250,21 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: unifiedBody,
                 foot: unifiedFoot,
                 theme: 'grid',
+                showFoot: 'lastPage',
                 styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 columnStyles: {
-                    0: { cellWidth: 20, halign: 'center' }, // Date
-                    1: { cellWidth: 24, halign: 'center' }, // LC No
-                    2: { cellWidth: 26, halign: 'left' },   // Exporter (Increased)
-                    3: { cellWidth: 18, halign: 'center' }, // Invoice
-                    4: { cellWidth: 34, halign: 'left' },   // Party (Increased)
-                    5: { cellWidth: 21, halign: 'right' },  // Purchase
-                    6: { cellWidth: 21, halign: 'right' },  // Sale
-                    7: { cellWidth: 21, halign: 'right' },  // InHouse
-                    8: { cellWidth: 13, halign: 'right' }   // Short
+                    0: { cellWidth: 18, halign: 'center' }, // Date
+                    1: { cellWidth: 22, halign: 'center' }, // LC No
+                    2: { cellWidth: 24, halign: 'left' },   // Exporter
+                    3: { cellWidth: 16, halign: 'center' }, // Invoice
+                    4: { cellWidth: 30, halign: 'left' },   // Party
+                    5: { cellWidth: 19, halign: 'right' },  // Purchase
+                    6: { cellWidth: 19, halign: 'right' },  // Sale
+                    7: { cellWidth: 19, halign: 'right' },  // InHouse
+                    8: { cellWidth: 13, halign: 'right' },  // Short
+                    9: { cellWidth: 16, halign: 'right' }   // Damage
                 },
                 margin: { left: margin, right: margin }
             });
@@ -2282,6 +2310,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: purchaseBody,
                 foot: purchaseFoot,
                 theme: 'grid',
+                showFoot: 'lastPage',
                 styles: { fontSize: 8.5, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
@@ -2312,7 +2341,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 saleHead = [['Date', 'LC No', 'Invoice', 'Company', 'Customer', 'Phone', 'Qty', 'Truck', 'Price', 'Total Price']];
                 saleBody = sortedSaleData.map(sale => [
                     formatDate(sale.date),
-                    sale.lcNo || '-',
+                    sale.lcNo ? sale.lcNo.slice(-4) : '-',
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
                     sale.customerName || '-',
@@ -2329,22 +2358,22 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-IN')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
-                    0: { cellWidth: 20, halign: 'center' }, // Date
-                    1: { cellWidth: 20, halign: 'center' }, // LC No
-                    2: { cellWidth: 16, halign: 'center' }, // Invoice
+                    0: { cellWidth: 16, halign: 'center' }, // Date
+                    1: { cellWidth: 16, halign: 'center' }, // LC No
+                    2: { cellWidth: 14, halign: 'center' }, // Invoice
                     3: { cellWidth: 22, halign: 'left' },   // Company
                     4: { cellWidth: 22, halign: 'left' },   // Customer
                     5: { cellWidth: 20, halign: 'left' },   // Phone
-                    6: { cellWidth: 22, halign: 'right' },  // Qty
+                    6: { cellWidth: 20, halign: 'right' },  // Qty
                     7: { cellWidth: 12, halign: 'center' }, // Truck
-                    8: { cellWidth: 18, halign: 'right' },  // Price
-                    9: { cellWidth: 24, halign: 'right' }   // Total Price
+                    8: { cellWidth: 20, halign: 'right' },  // Price
+                    9: { cellWidth: 34, halign: 'right' }   // Total Price
                 };
             } else {
                 saleHead = [['Date', 'LC No', 'Invoice', 'Company', 'Brand', 'Bag', 'Qty', 'Price', 'Total Price']];
                 saleBody = sortedSaleData.map(sale => [
                     formatDate(sale.date),
-                    sale.lcNo || '-',
+                    sale.lcNo ? sale.lcNo.slice(-4) : '-',
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
                     sale.itemBrand || '-',
@@ -2360,15 +2389,15 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-IN')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
-                    0: { cellWidth: 20, halign: 'center' }, // Date
-                    1: { cellWidth: 20, halign: 'center' }, // LC No
-                    2: { cellWidth: 16, halign: 'center' }, // Invoice
+                    0: { cellWidth: 18, halign: 'center' }, // Date
+                    1: { cellWidth: 16, halign: 'center' }, // LC No
+                    2: { cellWidth: 14, halign: 'center' }, // Invoice
                     3: { cellWidth: 30, halign: 'left' },   // Company
                     4: { cellWidth: 28, halign: 'left' },   // Brand
                     5: { cellWidth: 16, halign: 'right' },  // Packet
-                    6: { cellWidth: 20, halign: 'right' },  // Qty
-                    7: { cellWidth: 20, halign: 'right' },  // Price
-                    8: { cellWidth: 26, halign: 'right' }   // Total Price
+                    6: { cellWidth: 18, halign: 'right' },  // Qty
+                    7: { cellWidth: 22, halign: 'right' },  // Price
+                    8: { cellWidth: 34, halign: 'right' }   // Total Price
                 };
             }
 
@@ -2378,6 +2407,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 body: saleBody,
                 foot: saleFoot,
                 theme: 'grid',
+                showFoot: 'lastPage',
                 styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
                 headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
@@ -2472,10 +2502,9 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
 
-        // --- Table ---
+        // --- Table --- 
         const tableRows = [];
         let slNum = 1;
-
         const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
         sortedReportData.forEach((sale) => {
             // Create flattened list of all entries across all items
@@ -2587,14 +2616,14 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             return sum + (items.length > 0 ? truckTotal : (parseFloat(sale.truck) || 0));
         }, 0) : 0;
 
-        // const totalDiscount = reportData.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0);
+        const totalDiscount = reportData.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0);
 
         const headRow = saleType === 'Border'
             ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
             : [['SL', 'Date', 'LC No', 'Invoice', 'Company', 'Product', 'Brand', 'Challan No', 'Truck No', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
 
         const footRow = [[
-            { content: 'GRAND TOTAL', colSpan: saleType === 'Border' ? 9 : 9, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: 'GRAND TOTAL', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: saleType === 'Border' ? '-' : summary.totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
             { content: saleType === 'Border' ? totalTrucks.toLocaleString('en-US') : '', styles: { halign: 'center', fontStyle: 'bold' } },
             ...(saleType === 'Border' ? [
@@ -2613,6 +2642,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             body: tableRows,
             foot: footRow,
             theme: 'grid',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9,
                 cellPadding: 1,
@@ -2632,36 +2662,36 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 fontStyle: 'bold'
             },
             columnStyles: saleType === 'Border' ? {
-                0: { cellWidth: 8, halign: 'center' },     // SL
-                1: { cellWidth: 18, halign: 'center' },    // Date
-                2: { cellWidth: 26, halign: 'center' },    // LC No
+                0: { cellWidth: 10, halign: 'center' },     // SL
+                1: { cellWidth: 20, halign: 'center' },    // Date
+                2: { cellWidth: 25, halign: 'center' },    // LC No (Reduced)
                 3: { cellWidth: 30, noWrap: true },        // Importer
-                4: { cellWidth: 16, noWrap: true },        // Port
+                4: { cellWidth: 18, noWrap: true },        // Port
                 5: { cellWidth: 26, noWrap: true },        // IND C&F
                 6: { cellWidth: 26, noWrap: true },        // BD C&F
-                7: { cellWidth: 35, noWrap: true },        // Party Name
-                8: { cellWidth: 18, overflow: 'linebreak' }, // Product
-                9: { cellWidth: 20, halign: 'right' },     // Qty
-                10: { cellWidth: 10, halign: 'center' },   // Truck
-                11: { cellWidth: 16, halign: 'right' },    // Price
-                12: { cellWidth: 28, halign: 'right' }     // Total
+                7: { cellWidth: 38, noWrap: true },        // Party Name
+                8: { cellWidth: 18, overflow: 'linebreak' }, // Product (Reduced)
+                9: { cellWidth: 22, halign: 'right' },     // Qty
+                10: { cellWidth: 12, halign: 'center' },   // Truck
+                11: { cellWidth: 18, halign: 'right' },    // Price (Reduced)
+                12: { cellWidth: 24, halign: 'right' }     // Total
             } : {
-                0: { cellWidth: 9, halign: 'center' },     // SL
+                0: { cellWidth: 8, halign: 'center' },     // SL
                 1: { cellWidth: 18, halign: 'center' },    // Date
-                2: { cellWidth: 13, halign: 'center' },    // LC No
-                3: { cellWidth: 15, halign: 'center' },    // Invoice
-                4: { cellWidth: 36 },                       // Company
-                5: { cellWidth: 22, overflow: 'linebreak' }, // Product
-                6: { cellWidth: 28, noWrap: false, overflow: 'linebreak' }, // Brand
-                7: { cellWidth: 15, overflow: 'linebreak' }, // Challan No
-                8: { cellWidth: 16, overflow: 'linebreak' }, // Truck No
-                9: { cellWidth: 20, halign: 'right' },     // Qty
-                10: { cellWidth: 13, halign: 'right' },    // Price
-                11: { cellWidth: 25, halign: 'right' },    // Total
-                12: { cellWidth: 25, halign: 'right' },    // Truck Fare
+                2: { cellWidth: 15, halign: 'center' },    // LC No
+                3: { cellWidth: 17, halign: 'center' },    // Invoice
+                4: { cellWidth: 34 },                       // Company
+                5: { cellWidth: 24, overflow: 'linebreak' }, // Product
+                6: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand
+                7: { cellWidth: 18, overflow: 'linebreak' }, // Challan No
+                8: { cellWidth: 20, overflow: 'linebreak' }, // Truck No
+                9: { cellWidth: 17, halign: 'right' },     // Qty
+                10: { cellWidth: 14, halign: 'right' },    // Price
+                11: { cellWidth: 24, halign: 'right' },    // Total
+                12: { cellWidth: 20, halign: 'right' },    // Truck Fare
                 13: { cellWidth: 28, halign: 'right' }     // Balance
             },
-            margin: { left: (pageWidth - 277) / 2, right: (pageWidth - 277) / 2 }
+            margin: { left: margin, right: margin }
         });
 
         // --- Signatures ---
@@ -3235,6 +3265,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 body: tableRows,
                 foot: [foot],
                 theme: 'grid',
+                showFoot: 'lastPage',
                 styles: { fontSize: 8.5, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
                 columnStyles: isParty ? {
@@ -3515,7 +3546,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
 
         // --- Data Preparation ---
         const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
-        const tableRows = sortedReportData.map((row) => [
+        const tableRows = sortedReportData.map((row, index) => [
             formatDate(row.date),
             row.lcNo || '-',
             row.importer || '-',
@@ -3547,6 +3578,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 { content: totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.5,
                 cellPadding: 1.2,
@@ -3574,12 +3606,12 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 0: { cellWidth: 20, halign: 'center' }, // Date
                 1: { cellWidth: 28, halign: 'left' }, // LC No
                 2: { cellWidth: 36, halign: 'left' },   // Importer
-                3: { cellWidth: 36, halign: 'left' },   // Exporter
-                4: { cellWidth: 30, halign: 'left' },   // Product
-                5: { cellWidth: 15, halign: 'center' }, // Port
+                3: { cellWidth: 38, halign: 'left' },   // Exporter
+                4: { cellWidth: 25, halign: 'left' },   // Product
+                5: { cellWidth: 22, halign: 'center' }, // Port
                 6: { cellWidth: 16, halign: 'center' }, // UOM
                 7: { cellWidth: 15, halign: 'center' }, // Trucks
-                8: { cellWidth: 26, halign: 'right' },  // QTY
+                8: { cellWidth: 20, halign: 'right' },  // QTY
                 9: { cellWidth: 24, halign: 'right' },  // Commission
                 10: { cellWidth: 31, halign: 'right' }   // Total
             }
@@ -3696,6 +3728,7 @@ export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
                 { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.5,
                 cellPadding: 2,
@@ -3968,6 +4001,7 @@ export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
                 { content: totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 9.5,
                 cellPadding: 2,
@@ -4123,6 +4157,7 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
                 { content: lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
+            showFoot: 'lastPage',
             styles: {
                 fontSize: 8,
                 cellPadding: 1.5,
@@ -4185,6 +4220,145 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
         window.open(blobURL, '_blank');
     } catch (error) {
         console.error("PDF Generation Error:", error);
+        alert(`Failed to generate PDF: ${error.message}`);
+    }
+};
+
+export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {}) => {
+    try {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text("LC BILL HISTORY REPORT", pageWidth / 2, 42, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 55;
+        doc.setFontSize(10);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Bank Name:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(bankName || '-', margin + 25, yPos);
+
+        if (filters.startDate || filters.endDate) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
+            const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
+            doc.text(`${start} to ${end}`, margin + 25, yPos);
+        }
+
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+
+        // --- Table ---
+        const tableRows = reportData.map((row, idx) => [
+            idx + 1,
+            formatDate(row.date),
+            row.lcNo || '-',
+            row.importer || '-',
+            row.billType || '-',
+            row.marginPaid > 0 ? `Tk ${row.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-',
+            row.bankPaid > 0 ? `Tk ${row.bankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'
+        ]);
+
+        // Calculate Totals
+        const totalMarginPaid = reportData.reduce((s, r) => s + (parseFloat(r.marginPaid) || 0), 0);
+        const totalBankPaid = reportData.reduce((s, r) => s + (parseFloat(r.bankPaid) || 0), 0);
+
+        // Add Grand Total
+        tableRows.push([
+            { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: totalMarginPaid > 0 ? `Tk ${totalMarginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: totalBankPaid > 0 ? `Tk ${totalBankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+        ]);
+
+        // Center table: total col widths = 8+20+25+40+35+35+35 = 198
+        const tableColWidths = 8 + 20 + 25 + 40 + 35 + 35 + 35;
+        const tableLeftMargin = (pageWidth - tableColWidths) / 2;
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: [['SL', 'Date', 'LC No', 'Importer', 'Bill Type', 'Margin Paid', 'Bank Paid']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 8,
+                cellPadding: 1.5,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0]
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: 8, halign: 'center' },   // SL
+                1: { cellWidth: 20, halign: 'center' },  // Date
+                2: { cellWidth: 25, halign: 'center' },  // LC No
+                3: { cellWidth: 40 },                    // Importer
+                4: { cellWidth: 35, halign: 'center' },  // Bill Type
+                5: { cellWidth: 35, halign: 'right' },   // Margin Paid
+                6: { cellWidth: 35, halign: 'right' }    // Bank Paid
+            },
+            margin: { left: tableLeftMargin, right: tableLeftMargin }
+        });
+
+        // --- Signatures ---
+        let finalY = doc.lastAutoTable.finalY + 30;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 30;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("LC Bill History Report PDF Error:", error);
         alert(`Failed to generate PDF: ${error.message}`);
     }
 };
