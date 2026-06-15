@@ -3211,87 +3211,151 @@ const SaleManagement = ({
                                     )}
                                 </div>
                             )}
+                            {/* Border Field: Company Name & Contact (relocated after Port) */}
+                            {saleType === 'Border' && (
+                                <>
+                                    {/* Company Name Select */}
+                                    <div className="sale-mgmt-input-group relative company-dropdown-container">
+                                        <label className="sale-mgmt-label">Company Name</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder={formData.companyName || "Search company..."}
+                                                value={companyNameSearch}
+                                                readOnly={isFieldReadOnly(originalData?.companyName)}
+                                                onChange={(e) => {
+                                                    if (isFieldReadOnly(originalData?.companyName)) return;
+                                                    setCompanyNameSearch(e.target.value);
+                                                    setActiveDropdown('companyName');
+                                                    setHighlightedIndex(-1);
+                                                    setFormData(prev => ({ ...prev, companyName: e.target.value }));
+                                                }}
+                                                autoComplete="off"
+                                                onFocus={() => {
+                                                    if (isFieldReadOnly(originalData?.companyName)) return;
+                                                    setCompanyNameSearch(formData.companyName || '');
+                                                    setActiveDropdown('companyName');
+                                                    setHighlightedIndex(-1);
+                                                }}
+                                                onKeyDown={(e) => !isFieldReadOnly(originalData?.companyName) && handleDropdownKeyDown(e, 'companyName', getFilteredCompanies(), handleCompanyNameSelect)}
+                                                className={`sale-mgmt-input pr-14 ${formData.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.companyName) ? 'bg-gray-50' : ''}`}
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                {formData.companyName && (
+                                                    <button type="button" onClick={() => handleCompanyNameSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                        <XIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveDropdown(activeDropdown === 'companyName' ? null : 'companyName')}
+                                                    className="text-gray-300 hover:text-blue-500 transition-colors"
+                                                >
+                                                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'companyName' ? 'rotate-180' : ''}`} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {activeDropdown === 'companyName' && getFilteredCompanies().length > 0 && (
+                                            <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                {getFilteredCompanies().map((c, idx) => (
+                                                    <button
+                                                        key={c._id}
+                                                        type="button"
+                                                        onClick={() => handleCompanyNameSelect(c)}
+                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                        className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.customerId === c._id ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        {c.companyName} ({c.customerName})
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="sale-mgmt-input-group">
+                                        <label className="sale-mgmt-label">Contact</label>
+                                        <input autoComplete="off" type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                    </div>
+                                </>
+                            )}
 
                         </div>
 
                         {/* Second row: Company Name, Customer, Contact, Address */}
-                        <div className={`grid grid-cols-1 gap-4 col-span-2 ${saleType === 'Border' ? 'md:grid-cols-2' : 'md:grid-cols-4'}`}>
+                        {saleType !== 'Border' && (
+                            <div className="grid grid-cols-1 gap-4 col-span-2 md:grid-cols-4">
 
-                            {/* Company Name Select */}
-                            <div className="sale-mgmt-input-group relative company-dropdown-container">
-                                <label className="sale-mgmt-label">Company Name</label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        placeholder={formData.companyName || "Search company..."}
-                                        value={companyNameSearch}
-                                        readOnly={isFieldReadOnly(originalData?.companyName)}
-                                        onChange={(e) => {
-                                            if (isFieldReadOnly(originalData?.companyName)) return;
-                                            setCompanyNameSearch(e.target.value);
-                                            setActiveDropdown('companyName');
-                                            setHighlightedIndex(-1);
-                                            setFormData(prev => ({ ...prev, companyName: e.target.value }));
-                                        }}
-                                        autoComplete="off"
-                                        onFocus={() => {
-                                            if (isFieldReadOnly(originalData?.companyName)) return;
-                                            setCompanyNameSearch(formData.companyName || '');
-                                            setActiveDropdown('companyName');
-                                            setHighlightedIndex(-1);
-                                        }}
-                                        onKeyDown={(e) => !isFieldReadOnly(originalData?.companyName) && handleDropdownKeyDown(e, 'companyName', getFilteredCompanies(), handleCompanyNameSelect)}
-                                        className={`sale-mgmt-input pr-14 ${formData.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.companyName) ? 'bg-gray-50' : ''}`}
-                                    />
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                        {formData.companyName && (
-                                            <button type="button" onClick={() => handleCompanyNameSelect(null)} className="text-gray-400 hover:text-red-500">
-                                                <XIcon className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveDropdown(activeDropdown === 'companyName' ? null : 'companyName')}
-                                            className="text-gray-300 hover:text-blue-500 transition-colors"
-                                        >
-                                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'companyName' ? 'rotate-180' : ''}`} />
-                                        </button>
-                                    </div>
-                                </div>
-                                {activeDropdown === 'companyName' && getFilteredCompanies().length > 0 && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                        {getFilteredCompanies().map((c, idx) => (
+                                {/* Company Name Select */}
+                                <div className="sale-mgmt-input-group relative company-dropdown-container">
+                                    <label className="sale-mgmt-label">Company Name</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            placeholder={formData.companyName || "Search company..."}
+                                            value={companyNameSearch}
+                                            readOnly={isFieldReadOnly(originalData?.companyName)}
+                                            onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.companyName)) return;
+                                                setCompanyNameSearch(e.target.value);
+                                                setActiveDropdown('companyName');
+                                                setHighlightedIndex(-1);
+                                                setFormData(prev => ({ ...prev, companyName: e.target.value }));
+                                            }}
+                                            autoComplete="off"
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.companyName)) return;
+                                                setCompanyNameSearch(formData.companyName || '');
+                                                setActiveDropdown('companyName');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.companyName) && handleDropdownKeyDown(e, 'companyName', getFilteredCompanies(), handleCompanyNameSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.companyName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.companyName) ? 'bg-gray-50' : ''}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.companyName && (
+                                                <button type="button" onClick={() => handleCompanyNameSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
                                             <button
-                                                key={c._id}
                                                 type="button"
-                                                onClick={() => handleCompanyNameSelect(c)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.customerId === c._id ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                onClick={() => setActiveDropdown(activeDropdown === 'companyName' ? null : 'companyName')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
                                             >
-                                                {c.companyName} ({c.customerName})
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'companyName' ? 'rotate-180' : ''}`} />
                                             </button>
-                                        ))}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                            {saleType !== 'Border' && (
+                                    {activeDropdown === 'companyName' && getFilteredCompanies().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredCompanies().map((c, idx) => (
+                                                <button
+                                                    key={c._id}
+                                                    type="button"
+                                                    onClick={() => handleCompanyNameSelect(c)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.customerId === c._id ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {c.companyName} ({c.customerName})
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Customer</label>
                                     <input autoComplete="off" type="text" name="customerName" value={formData.customerName} readOnly placeholder="Customer" className="sale-mgmt-input sale-mgmt-input-readonly" />
                                 </div>
-                            )}
-                            <div className="sale-mgmt-input-group">
-                                <label className="sale-mgmt-label">Contact</label>
-                                <input autoComplete="off" type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
-                            </div>
-                            {saleType !== 'Border' && (
+                                <div className="sale-mgmt-input-group">
+                                    <label className="sale-mgmt-label">Contact</label>
+                                    <input autoComplete="off" type="text" name="contact" value={formData.contact} readOnly placeholder="Contact" className="sale-mgmt-input sale-mgmt-input-readonly" />
+                                </div>
                                 <div className="sale-mgmt-input-group">
                                     <label className="sale-mgmt-label">Address</label>
                                     <input autoComplete="off" type="text" name="address" value={formData.address} readOnly placeholder="Address" className="sale-mgmt-input sale-mgmt-input-readonly" />
                                 </div>
-                            )}
 
-                        </div>
+                            </div>
+                        )}
 
                         {/* Dummy spacer div to maintain col-span-2 for Border commissions row */}
                         {/* Border Field: Commissions Row */}
