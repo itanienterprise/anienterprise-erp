@@ -1787,7 +1787,8 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
         }
 
-        if (!isBorderSale && (sale.challanNo || sale.truckNo)) {
+        const isPartySale = cType.includes("party") || sale.isParty;
+        if (!isBorderSale && isPartySale && (sale.challanNo || sale.truckNo)) {
             y += 12;
             if (sale.challanNo) {
                 doc.setFont('helvetica', 'bold');
