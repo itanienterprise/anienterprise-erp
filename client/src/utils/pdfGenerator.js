@@ -1601,6 +1601,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
 
 export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
     try {
+        const isBorderSale = (sale.invoiceNo || '').startsWith('BS');
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
@@ -1850,8 +1851,6 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                 parseFloat(total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             ];
         };
-
-        const isBorderSale = (sale.invoiceNo || '').startsWith('BS');
 
         if (items.length === 0 && (sale.productId || sale.productName || sale.product)) {
             tableRows.push(prepareRow(
