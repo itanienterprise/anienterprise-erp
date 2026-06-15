@@ -31,8 +31,82 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     };
     const [formData, setFormData] = useState(initialFormData);
 
+    const getBillValue = () => {
+        if (!formData.lcNo) return '';
+        const selectedLc = lcs.find(l => l.lcNo === formData.lcNo);
+        if (!selectedLc) return '';
+
+        if (formData.expenseHead === 'Margin Bill') {
+            const isAdj = !!selectedLc.enableValueQtyAdjustment;
+            const origMarginBill = isAdj && selectedLc.adjustedTotalAmount !== undefined
+                ? (parseFloat(selectedLc.marginBill) || parseFloat(selectedLc.adjustedTotalAmount) || 0)
+                : (parseFloat(selectedLc.marginBill) || parseFloat(selectedLc.totalAmount) || 0);
+
+            const amendments = Array.isArray(selectedLc.amendments) ? selectedLc.amendments : [];
+            const amndMarginBillTotal = amendments.reduce((sum, amnd) => {
+                if (amnd.amendmentNo === 'Original LC') return sum;
+                return sum + (parseFloat(amnd.amendmentMarginBill) || 0);
+            }, 0);
+
+            const totalMarginBill = origMarginBill + amndMarginBillTotal;
+
+            // Compute paid margin bill
+            const origMarginPaid = isAdj && selectedLc.adjustedTotalAmount !== undefined
+                ? (parseFloat(selectedLc.marginPaid) || (origMarginBill * ((parseFloat(selectedLc.bankMargin) || 0) / 100)))
+                : (parseFloat(selectedLc.marginPaid) || (origMarginBill * ((parseFloat(selectedLc.bankMargin) || 0) / 100)));
+
+            const amndMarginPaidTotal = amendments.reduce((sum, amnd) => {
+                if (amnd.amendmentNo === 'Original LC') return sum;
+                const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                const amndMargin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (parseFloat(selectedLc.bankMargin) || 0);
+                const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (amndMarginBill * (amndMargin / 100));
+                return sum + amndMarginPaid;
+            }, 0);
+
+            // Fetch any payments from expenses (type !== bill)
+            const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+            const lcNoClean = cleanLc(selectedLc.lcNo);
+            const marginExpPaid = expenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'Margin Bill' && e.type !== 'bill' && (!isEditMode || e._id !== editingId))
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            const totalMarginPaid = origMarginPaid + amndMarginPaidTotal + marginExpPaid;
+            const unpaidMarginBill = Math.max(0, totalMarginBill - totalMarginPaid);
+            return `৳${unpaidMarginBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        }
+
+        if (formData.expenseHead === 'Bank Charges') {
+            const isNewBilling = selectedLc.marginPaid !== undefined || selectedLc.marginBill !== undefined;
+            const origBankBill = isNewBilling 
+                ? (parseFloat(selectedLc.bankBill) || 0) 
+                : (parseFloat(selectedLc.totalBankBill || selectedLc.bankBill) || 0);
+
+            const amendments = Array.isArray(selectedLc.amendments) ? selectedLc.amendments : [];
+            const amndBankBillTotal = amendments.reduce((sum, amnd) => {
+                if (amnd.amendmentNo === 'Original LC') return sum;
+                const amndBankBill = parseFloat(amnd.amendmentBankBill) || parseFloat(amnd.totalAmendmentBankBill) || parseFloat(amnd.amendmentBill) || 0;
+                return sum + amndBankBill;
+            }, 0);
+
+            const totalBankBill = origBankBill + amndBankBillTotal;
+
+            // Fetch any payments from expenses (type !== bill)
+            const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+            const lcNoClean = cleanLc(selectedLc.lcNo);
+            const bankChargePaid = expenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'Bank Charges' && e.type !== 'bill' && (!isEditMode || e._id !== editingId))
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            const unpaidBankBill = Math.max(0, totalBankBill - bankChargePaid);
+            return `৳${unpaidBankBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        }
+
+        return '';
+    };
+
     const expenseHeads = [
         "Bank Charges",
+        "Margin Bill",
         "Customs Duty",
         "C&F Commission",
         "Port Demurrage",
@@ -446,17 +520,29 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                 )}
                             </div>
 
-                            {formData.expenseHead === 'Bank Charges' && (
-                                <div className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
-                                    <label className="text-sm font-semibold text-gray-600 ml-1">Bank Name</label>
-                                    <input
-                                        type="text"
-                                        value={formData.bankName}
-                                        readOnly
-                                        className="w-full px-4 py-2.5 bg-gray-50/80 border border-gray-200/60 rounded-xl outline-none transition-all font-semibold text-gray-500 cursor-not-allowed"
-                                        placeholder="Auto-filled from LC"
-                                    />
-                                </div>
+                            {(formData.expenseHead === 'Bank Charges' || formData.expenseHead === 'Margin Bill') && (
+                                <>
+                                    <div className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Bank Name</label>
+                                        <input
+                                            type="text"
+                                            value={formData.bankName}
+                                            readOnly
+                                            className="w-full px-4 py-2.5 bg-gray-50/80 border border-gray-200/60 rounded-xl outline-none transition-all font-semibold text-gray-500 cursor-not-allowed"
+                                            placeholder="Auto-filled from LC"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Unpaid Value</label>
+                                        <input
+                                            type="text"
+                                            value={getBillValue()}
+                                            readOnly
+                                            className="w-full px-4 py-2.5 bg-gray-50/80 border border-gray-200/60 rounded-xl outline-none transition-all font-bold text-gray-500 cursor-not-allowed"
+                                            placeholder="Auto-filled from LC"
+                                        />
+                                    </div>
+                                </>
                             )}
 
                             {formData.expenseHead === 'C&F Commission' && (

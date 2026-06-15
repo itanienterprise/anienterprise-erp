@@ -322,8 +322,91 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         });
     }, [data, activeMilestone]);
 
+    const adj = useMemo(() => {
+        const totalQtyTons = data.productsList && data.productsList.length > 0
+            ? data.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+            : (parseFloat(data.quantity) || 0);
+        const openingQtyKg = totalQtyTons * 1000;
+        const openingValue = parseFloat(data.totalAmount) || 0;
+
+        // Calculate receipts
+        const receiptsMapForBalance = {};
+        allStockRecords
+            .filter(s => {
+                const recordLcNoClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+            })
+            .forEach(s => {
+                const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                const key = `${dateStr}_${groupVal}`;
+
+                if (!receiptsMapForBalance[key]) {
+                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                } else {
+                    if (!s.totalLcQuantity) {
+                        receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    }
+                }
+            });
+        const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
+
+        const borderSaleQtyKg = allSalesRecords
+            .filter(s => {
+                const recordLcNoClean = cleanLc(s.lcNo);
+                const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                const isBorder = sTypeLow.includes('border') ||
+                    (s.invoiceNo || '').startsWith('BS') ||
+                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
+                    (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+                const status = (s.status || '').toLowerCase();
+                return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+            })
+            .reduce((sum, s) => {
+                const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                    return iSum + (brandSubtotal || parseNum(item.quantity));
+                }, 0);
+                return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
+            }, 0);
+
+        const totalReceivedQtyKg = receivedQtyKg + borderSaleQtyKg;
+        const rawBalanceKg = openingQtyKg - totalReceivedQtyKg;
+
+        let adjustmentQtyKg = 0;
+        if (rawBalanceKg < 0) {
+            const excessQtyKg = -rawBalanceKg;
+            const maxAdjustmentKg = openingQtyKg * 0.10;
+            adjustmentQtyKg = Math.min(excessQtyKg, maxAdjustmentKg);
+        }
+
+        const isEnabled = !!data.enableValueQtyAdjustment;
+        const actualAdjustmentQtyKg = isEnabled ? adjustmentQtyKg : 0;
+        const adjustedQtyKg = openingQtyKg + actualAdjustmentQtyKg;
+        
+        const adjustedTotalAmount = isEnabled && openingQtyKg > 0
+            ? openingValue + (actualAdjustmentQtyKg * (openingValue / openingQtyKg))
+            : openingValue;
+
+        const addedValue = adjustedTotalAmount - openingValue;
+
+        return {
+            openingQtyKg,
+            openingValue,
+            actualAdjustmentQtyKg,
+            adjustedQtyKg,
+            adjustedTotalAmount,
+            addedValue,
+            isEnabled
+        };
+    }, [data, allStockRecords, allSalesRecords, lcNoClean]);
+
     const totalLcQtyTons = products.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
     const totalLcQtyKg = totalLcQtyTons * 1000;
+    const displayTotalLcQtyKg = data.enableValueQtyAdjustment ? adj.adjustedQtyKg : totalLcQtyKg;
     const consumedQtyKg = consumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0);
     const remQtyKg = totalLcQtyKg - consumedQtyKg;
     // truckNo is a numeric count per entry — sum all values instead of counting unique strings
@@ -956,20 +1039,42 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-left">
-                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
-                                            <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
-                                                <ShieldIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                    {data.enableValueQtyAdjustment ? (
+                                        <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-left">
+                                            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                                <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
+                                                    <PlusIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                                </div>
+                                                <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Value & Qty Added</span>
                                             </div>
-                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rem. Quantity</span>
+                                            <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                                                <div className="flex items-baseline gap-0.5 md:gap-1">
+                                                    <span className="text-lg md:text-2xl font-black text-emerald-600">
+                                                        +{adj.actualAdjustmentQtyKg.toLocaleString('en-US')}
+                                                    </span>
+                                                    <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                                </div>
+                                                <span className="text-sm md:text-base font-black text-gray-850 shrink-0">
+                                                    +৳{adj.addedValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex items-baseline gap-0.5 md:gap-1">
-                                            <span className={`text-lg md:text-2xl font-black ${remQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                                {remQtyKg.toLocaleString('en-US')}
-                                            </span>
-                                            <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                    ) : (
+                                        <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-left">
+                                            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                                <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
+                                                    <ShieldIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                                </div>
+                                                <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rem. Quantity</span>
+                                            </div>
+                                            <div className="flex items-baseline gap-0.5 md:gap-1">
+                                                <span className={`text-lg md:text-2xl font-black ${remQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                                    {remQtyKg.toLocaleString('en-US')}
+                                                </span>
+                                                <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-gray-200 group text-left">
                                         <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
@@ -4318,6 +4423,133 @@ const LCManagement = ({ addNotification, currentUser }) => {
         setShowForm(false);
     };
 
+    const getAdjustedLcValues = (record) => {
+        const totalQtyTons = record.productsList && record.productsList.length > 0
+            ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+            : (parseFloat(record.quantity) || 0);
+        const openingQtyKg = totalQtyTons * 1000;
+        const openingValue = parseFloat(record.totalAmount) || 0;
+
+        const parseNum = (val) => {
+            if (val === null || val === undefined) return 0;
+            return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+        };
+        const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+        const lcNoClean = cleanLc(record.lcNo);
+
+        const receiptsMapForBalance = {};
+        allStockRecords
+            .filter(s => {
+                const recordLcNoClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+            })
+            .forEach(s => {
+                const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                const key = `${dateStr}_${groupVal}`;
+
+                if (!receiptsMapForBalance[key]) {
+                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                } else {
+                    if (!s.totalLcQuantity) {
+                        receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    }
+                }
+            });
+        const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
+
+        const borderSaleQtyKg = allSalesRecords
+            .filter(s => {
+                const recordLcNoClean = cleanLc(s.lcNo);
+                const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                const isBorder = sTypeLow.includes('border') ||
+                    (s.invoiceNo || '').startsWith('BS') ||
+                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
+                    (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+                const status = (s.status || '').toLowerCase();
+                return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+            })
+            .reduce((sum, s) => {
+                const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                    return iSum + (brandSubtotal || parseNum(item.quantity));
+                }, 0);
+                return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
+            }, 0);
+
+        const totalReceivedQtyKg = receivedQtyKg + borderSaleQtyKg;
+        const rawBalanceKg = openingQtyKg - totalReceivedQtyKg;
+
+        let adjustmentQtyKg = 0;
+        if (rawBalanceKg < 0) {
+            const excessQtyKg = -rawBalanceKg;
+            const maxAdjustmentKg = openingQtyKg * 0.10;
+            adjustmentQtyKg = Math.min(excessQtyKg, maxAdjustmentKg);
+        }
+
+        const isEnabled = !!record.enableValueQtyAdjustment;
+        const actualAdjustmentQtyKg = isEnabled ? adjustmentQtyKg : 0;
+
+        const adjustedQtyKg = openingQtyKg + actualAdjustmentQtyKg;
+        const adjustedQtyTons = adjustedQtyKg / 1000;
+        
+        const adjustedTotalAmount = isEnabled && openingQtyKg > 0
+            ? openingValue + (actualAdjustmentQtyKg * (openingValue / openingQtyKg))
+            : openingValue;
+
+        const combinedRemKg = adjustedQtyKg - totalReceivedQtyKg;
+
+        return {
+            openingQtyKg,
+            openingValue,
+            receivedQtyKg,
+            borderSaleQtyKg,
+            totalReceivedQtyKg,
+            rawBalanceKg,
+            adjustmentQtyKg,
+            actualAdjustmentQtyKg,
+            adjustedQtyKg,
+            adjustedQtyTons,
+            adjustedTotalAmount,
+            combinedRemKg,
+            isEnabled
+        };
+    };
+
+    const handleToggleValueQtyAdjustment = async (record, isEnabled) => {
+        try {
+            const adj = getAdjustedLcValues({ ...record, enableValueQtyAdjustment: isEnabled });
+            const updatedRecord = {
+                ...record,
+                enableValueQtyAdjustment: isEnabled,
+                adjustedQuantity: adj.adjustedQtyTons,
+                adjustedTotalAmount: adj.adjustedTotalAmount
+            };
+            
+            const tempState = {
+                ...updatedRecord,
+                totalAmount: adj.adjustedTotalAmount
+            };
+            const bills = calculateBankBills(tempState);
+            updatedRecord.marginBill = bills.marginBill;
+            updatedRecord.marginPaid = bills.marginPaid;
+            updatedRecord.bankBill = bills.bankBill;
+            updatedRecord.totalBankBill = bills.totalBankBill;
+            
+            const response = await axios.put(`${API_BASE_URL}/api/lc-management/${record._id}`, updatedRecord);
+            if (response.data) {
+                addNotification?.('LC Adjustment updated successfully', 'success');
+                await fetchInitialData();
+            }
+        } catch (error) {
+            console.error("Failed to toggle adjustment:", error);
+            addNotification?.('Failed to update adjustment setting.', 'error');
+        }
+    };
+
     const filteredRecords = lcRecords.filter(record => {
         const query = searchQuery.toLowerCase();
         const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
@@ -6437,13 +6669,14 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 return sum + qty;
                                             }, 0);
 
-                                        const combinedRemKg = qtyKg - (receivedQtyKg + borderSaleQtyKg);
+                                        const adj = getAdjustedLcValues(record);
+                                        const combinedRemKg = adj.combinedRemKg;
 
                                         // Calculate Rem G.P
                                         const totalGpQtyKg = gpRecords
                                             .filter(gp => String(gp.lcNumber || '').replace(/\D/g, '') === lcNoClean)
                                             .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
-                                        const remGpKg = Math.max(0, qtyKg - totalGpQtyKg);
+                                        const remGpKg = Math.max(0, adj.adjustedQtyKg - totalGpQtyKg);
 
                                         return (
                                             <React.Fragment key={record._id}>
@@ -6451,11 +6684,19 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <td className="px-3 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
                                                     <td className="px-3 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
                                                     <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">
-                                                        <div className="flex flex-col">
+                                                        <div className="flex flex-col gap-0.5">
                                                             <span>{record.lcNo}</span>
                                                             {record.amendments?.length > 0 && (
-                                                                <span className="self-start mt-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                <span className="self-start px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
                                                                     {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                                </span>
+                                                            )}
+                                                            {record.enableValueQtyAdjustment && (
+                                                                <span className="self-start px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                    {(() => {
+                                                                        const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                        return `${addedPercent.toFixed(2)}% added`;
+                                                                    })()}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -6466,9 +6707,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
                                                     <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[120px]" title={displayProducts}>{displayProducts}</td>
                                                     <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
-                                                        <span className="font-bold text-gray-900">{qtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                        <span className="font-bold text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                     </td>
-                                                    <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{parseFloat(record.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                                    <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{adj.adjustedTotalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                                                     <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
                                                         <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
                                                             {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
@@ -6537,6 +6778,41 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <tr className="bg-gray-50/40">
                                                         <td colSpan="14" className="px-6 py-4 border-b border-gray-100">
                                                             <div className="flex flex-col gap-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-inner animate-in fade-in duration-300">
+                                                                {/* Radio Button for Enable Value and Quantity */}
+                                                                {record.piNo && record.quantity && record.totalAmount && (
+                                                                    <div className="flex items-center gap-4 py-1.5 px-3 bg-blue-50/50 rounded-xl border border-blue-100/30 self-start">
+                                                                        <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Adjust Quantity & Value:</span>
+                                                                        <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-gray-700">
+                                                                            <input
+                                                                                type="radio"
+                                                                                name={`adjust-${record._id}`}
+                                                                                checked={!!record.enableValueQtyAdjustment}
+                                                                                onChange={() => handleToggleValueQtyAdjustment(record, true)}
+                                                                                className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
+                                                                            />
+                                                                            Enable
+                                                                        </label>
+                                                                        <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-gray-700">
+                                                                            <input
+                                                                                type="radio"
+                                                                                name={`adjust-${record._id}`}
+                                                                                checked={!record.enableValueQtyAdjustment}
+                                                                                onChange={() => handleToggleValueQtyAdjustment(record, false)}
+                                                                                className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
+                                                                            />
+                                                                            Disable
+                                                                        </label>
+                                                                        {record.enableValueQtyAdjustment && (
+                                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                                {(() => {
+                                                                                    const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                                    return `${addedPercent.toFixed(2)}% added`;
+                                                                                })()}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
                                                                 {/* New LC Bill Charges */}
                                                                 <div className="space-y-3">
                                                                     <h4 className="text-sm font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-2 flex items-center justify-between">
@@ -6618,7 +6894,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                                             {record.marginPaid !== undefined && record.marginPaid !== ''
                                                                                                 ? `৳${parseFloat(record.marginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
                                                                                                 : (() => {
-                                                                                                    const totalAmount = parseFloat(record.totalAmount) || 0;
+                                                                                                    const totalAmount = adj.adjustedTotalAmount;
                                                                                                     const margin = parseFloat(record.bankMargin) || 0;
                                                                                                     const mp = totalAmount * (margin / 100);
                                                                                                     return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
@@ -6889,13 +7165,14 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                         return sum + qty;
                                     }, 0);
 
-                                const combinedRemKg = qtyKg - (receivedQtyKg + borderSaleQtyKg);
+                                const adj = getAdjustedLcValues(record);
+                                const combinedRemKg = adj.combinedRemKg;
 
                                 // Calculate Rem G.P
                                 const totalGpQtyKg = gpRecords
                                     .filter(gp => String(gp.lcNumber || '').replace(/\D/g, '') === lcNoClean)
                                     .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
-                                const remGpKg = Math.max(0, qtyKg - totalGpQtyKg);
+                                const remGpKg = Math.max(0, adj.adjustedQtyKg - totalGpQtyKg);
 
                                 const totalExpense = lcExpenses
                                     .filter(exp => exp.lcNo === record.lcNo)
@@ -6917,11 +7194,19 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             <div className="flex items-center gap-3 flex-1 min-w-0">
                                                 {/* Main Info Column */}
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
                                                         <span className="text-sm font-black text-gray-955 font-sans tracking-tight">{record.lcNo}</span>
                                                         {record.amendments?.length > 0 && (
                                                             <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-150/40 rounded text-[9px] font-extrabold uppercase tracking-wide">
                                                                 {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                            </span>
+                                                        )}
+                                                        {record.enableValueQtyAdjustment && (
+                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-150/40 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                {(() => {
+                                                                    const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                    return `${addedPercent.toFixed(2)}% added`;
+                                                                })()}
                                                             </span>
                                                         )}
                                                     </div>
@@ -6950,10 +7235,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC NO</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <span className="font-black text-gray-950 font-sans text-[11px]">{record.lcNo}</span>
+                                                        <span className="font-black text-gray-955 font-sans text-[11px]">{record.lcNo}</span>
                                                         {record.amendments?.length > 0 && (
                                                             <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide leading-none">
                                                                 {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                            </span>
+                                                        )}
+                                                        {record.enableValueQtyAdjustment && (
+                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide leading-none">
+                                                                {(() => {
+                                                                    const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                    return `${addedPercent.toFixed(2)}% added`;
+                                                                })()}
                                                             </span>
                                                         )}
                                                     </div>
@@ -6995,12 +7288,12 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <div className="text-[11px]">
-                                                        <span className="font-bold text-gray-900">{qtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal ml-0.5">Kg</span>
+                                                        <span className="font-bold text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal ml-0.5">Kg</span>
                                                     </div>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Value</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-black text-gray-955 text-[11px]">৳{parseFloat(record.totalAmount || 0).toLocaleString('en-IN')}</span>
+                                                    <span className="font-black text-gray-955 text-[11px]">৳{adj.adjustedTotalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
 
                                                     {/* Divider */}
                                                     <div className="col-span-3 h-[1px] bg-gray-200/60 my-1"></div>
@@ -7027,11 +7320,47 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 {/* Expanded details (LC Bill and Amendment Bill Charges) */}
                                                 {isExpanded && (
                                                     <div className="mt-4 border-t border-gray-100 pt-4 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                                        {/* Radio Button for Enable Value and Quantity (Mobile) */}
+                                                        {record.piNo && record.quantity && record.totalAmount && (
+                                                            <div className="flex items-center gap-3 py-1 px-2.5 bg-blue-50/50 rounded-xl border border-blue-100/30 flex-wrap">
+                                                                <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Adjust Qty & Val:</span>
+                                                                <label className="inline-flex items-center gap-1 cursor-pointer text-[11px] font-bold text-gray-700">
+                                                                    <input
+                                                                        type="radio"
+                                                                        name={`adjust-mobile-${record._id}`}
+                                                                        checked={!!record.enableValueQtyAdjustment}
+                                                                        onChange={() => handleToggleValueQtyAdjustment(record, true)}
+                                                                        className="w-3 h-3 text-blue-600 focus:ring-blue-500"
+                                                                    />
+                                                                    Enable
+                                                                </label>
+                                                                <label className="inline-flex items-center gap-1 cursor-pointer text-[11px] font-bold text-gray-700">
+                                                                    <input
+                                                                        type="radio"
+                                                                        name={`adjust-mobile-${record._id}`}
+                                                                        checked={!record.enableValueQtyAdjustment}
+                                                                        onChange={() => handleToggleValueQtyAdjustment(record, false)}
+                                                                        className="w-3 h-3 text-blue-600 focus:ring-blue-500"
+                                                                    />
+                                                                    Disable
+                                                                </label>
+                                                                {record.enableValueQtyAdjustment && (
+                                                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                        {(() => {
+                                                                            const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                            return `${addedPercent.toFixed(2)}% added`;
+                                                                        })()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+
                                                         {/* New LC Bill Charges */}
                                                         <div className="space-y-2">
                                                             <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-1.5 flex items-center justify-between">
                                                                 <span>New LC Bill Charges</span>
                                                             </h4>
+
                                                             <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-left">
                                                                 {(() => {
                                                                     const isRecordLcBillActive = record.lcBillEnabled !== undefined
@@ -7095,7 +7424,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                                     {record.marginPaid !== undefined && record.marginPaid !== ''
                                                                                         ? `৳${parseFloat(record.marginPaid).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
                                                                                         : (() => {
-                                                                                            const totalAmount = parseFloat(record.totalAmount) || 0;
+                                                                                            const totalAmount = adj.adjustedTotalAmount;
                                                                                             const margin = parseFloat(record.bankMargin) || 0;
                                                                                             const mp = totalAmount * (margin / 100);
                                                                                             return mp > 0 ? `৳${mp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
