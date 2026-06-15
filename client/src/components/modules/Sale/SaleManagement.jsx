@@ -4077,7 +4077,7 @@ const SaleManagement = ({
                                         </th>
                                         <th className="sale-mgmt-th text-center font-bold">Quantity</th>
                                         <th className="sale-mgmt-th text-center font-bold">Rate</th>
-                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('discount')}>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('discount')} style={{ display: 'none' }}>
                                             <div className="flex items-center justify-center">Discount {renderSortIcon('discount')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('totalAmount')}>
@@ -4308,7 +4308,7 @@ const SaleManagement = ({
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                            <td className="px-3 py-4 whitespace-nowrap text-center" style={{ display: 'none' }}>
                                                 <div className="text-[13px] font-bold text-red-600">
                                                     {parseFloat(sale.discount || 0) > 0 ? `-৳ ${parseFloat(sale.discount).toLocaleString('en-IN')}` : '-'}
                                                 </div>
