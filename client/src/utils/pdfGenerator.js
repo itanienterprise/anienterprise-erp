@@ -4295,7 +4295,7 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
 
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['SL', 'Date', 'LC No', 'Importer', 'Bill Type', 'Margin Paid', 'Bank Paid']],
+            head: [['SL', 'Date', 'LC No', 'Importer', 'Bill Type', 'Margin Paid', 'Bank Charge']],
             body: tableRows,
             theme: 'grid',
             styles: {
@@ -4318,7 +4318,7 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
                 3: { cellWidth: 40 },                    // Importer
                 4: { cellWidth: 35, halign: 'center' },  // Bill Type
                 5: { cellWidth: 35, halign: 'right' },   // Margin Paid
-                6: { cellWidth: 35, halign: 'right' }    // Bank Paid
+                6: { cellWidth: 35, halign: 'right' }    // Bank Charge
             },
             margin: { left: tableLeftMargin, right: tableLeftMargin }
         });

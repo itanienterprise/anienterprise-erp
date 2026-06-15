@@ -198,13 +198,47 @@ const Bank = ({ onDeleteConfirm }) => {
                     .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'Margin Bill' && e.type !== 'bill')
                     .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
 
-                // Get all registered custom bills for this LC from expenses
-                const customBills = expenses.filter(e => cleanLc(e.lcNo) === lcNoClean && e.type === 'bill');
+                // Get all registered custom bills for this LC from expenses (only bank charges and margin bills)
+                const customBills = expenses.filter(e => cleanLc(e.lcNo) === lcNoClean && e.type === 'bill' && (e.expenseHead === 'Bank Charges' || e.expenseHead === 'Margin Bill'));
                 // Sort custom bills by date ascending
                 customBills.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-                // Pre-calculate how much of marginExpPaid is consumed by custom Margin Bill bills
+                // --- Pre-calculate Margin Paid distribution ---
                 let remainingMarginPaid = marginExpPaid;
+
+                // 1. Original Margin Bill
+                const isAdj = !!lc.enableValueQtyAdjustment;
+                const origMarginBill = isAdj && lc.adjustedTotalAmount !== undefined
+                    ? (parseFloat(lc.marginBill) || parseFloat(lc.adjustedTotalAmount) || 0)
+                    : (parseFloat(lc.marginBill) || parseFloat(lc.totalAmount) || 0);
+                const origMarginPaidBase = isAdj && lc.adjustedTotalAmount !== undefined
+                    ? (parseFloat(lc.marginPaid) || (origMarginBill * ((parseFloat(lc.bankMargin) || 0) / 100)))
+                    : (parseFloat(lc.marginPaid) || (origMarginBill * ((parseFloat(lc.bankMargin) || 0) / 100)));
+
+                const origMarginPaidExp = Math.min(remainingMarginPaid, Math.max(0, origMarginBill - origMarginPaidBase));
+                remainingMarginPaid -= origMarginPaidExp;
+                const origMarginPaid = origMarginPaidBase + origMarginPaidExp;
+
+                // 2. Amendment Margin Bills
+                const amndMarginPaidList = [];
+                amendments.forEach((amnd, idx) => {
+                    if (amnd.amendmentNo === 'Original LC') {
+                        amndMarginPaidList.push(0);
+                        return;
+                    }
+                    const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                    const amndMargin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (parseFloat(lc.bankMargin) || 0);
+                    const amndMarginPaidBase = parseFloat(amnd.amendmentMarginPaid) || (amndMarginBill * (amndMargin / 100));
+
+                    const amndMarginPaidExp = Math.min(remainingMarginPaid, Math.max(0, amndMarginBill - amndMarginPaidBase));
+                    remainingMarginPaid -= amndMarginPaidExp;
+                    amndMarginPaidList.push(amndMarginPaidBase + amndMarginPaidExp);
+                });
+
+                // Before custom margin bills loop, get the remaining margin paid for custom bills
+                const remMarginPaid = remainingMarginPaid;
+
+                // 3. Custom Margin bills
                 customBills
                     .filter(b => b.expenseHead === 'Margin Bill')
                     .forEach(bill => {
@@ -212,13 +246,18 @@ const Bank = ({ onDeleteConfirm }) => {
                         const paid = Math.min(remainingMarginPaid, billAmt);
                         remainingMarginPaid -= paid;
                     });
+
+                // Any leftover margin paid is residual and goes to the Opening LC row
                 const openingMarginExpPaid = remainingMarginPaid;
 
                 // --- Pre-calculate Bank Paid distribution ---
                 let remainingBankPaid = bankChargePaid;
 
                 // 1. Original Bank Bill
-                const origBankBill = parseFloat(lc.bankBill) || 0;
+                const isNewBilling = lc.marginPaid !== undefined || lc.marginBill !== undefined;
+                const origBankBill = isNewBilling
+                    ? (parseFloat(lc.bankBill) || 0)
+                    : (parseFloat(lc.totalBankBill || lc.bankBill) || 0);
                 const origBankPaid = Math.min(remainingBankPaid, origBankBill);
                 remainingBankPaid -= origBankPaid;
 
@@ -229,7 +268,10 @@ const Bank = ({ onDeleteConfirm }) => {
                         amndBankPaidList.push(0);
                         return;
                     }
-                    const amndBankBill = parseFloat(amnd.amendmentBankBill) || parseFloat(amnd.totalAmendmentBankBill) || parseFloat(amnd.amendmentBill) || 0;
+                    const isAmndNewBilling = amnd.amendmentMarginPaid !== undefined || amnd.amendmentMarginBill !== undefined;
+                    const amndBankBill = isAmndNewBilling
+                        ? (parseFloat(amnd.amendmentBankBill) || 0)
+                        : (parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill || amnd.amendmentBankBill) || 0);
                     const amndBankPaid = Math.min(remainingBankPaid, amndBankBill);
                     remainingBankPaid -= amndBankPaid;
                     amndBankPaidList.push(amndBankPaid);
@@ -251,14 +293,6 @@ const Bank = ({ onDeleteConfirm }) => {
                 const remBankPaid = bankChargePaid - origBankPaid - amndBankPaidList.reduce((s, v) => s + v, 0);
 
                 // --- Original LC row ---
-                const isAdj = !!lc.enableValueQtyAdjustment;
-                const origMarginBill = isAdj && lc.adjustedTotalAmount !== undefined
-                    ? (parseFloat(lc.marginBill) || parseFloat(lc.adjustedTotalAmount) || 0)
-                    : (parseFloat(lc.marginBill) || parseFloat(lc.totalAmount) || 0);
-                const origMarginPaid = isAdj && lc.adjustedTotalAmount !== undefined
-                    ? (parseFloat(lc.marginPaid) || (origMarginBill * ((parseFloat(lc.bankMargin) || 0) / 100)))
-                    : (parseFloat(lc.marginPaid) || (origMarginBill * ((parseFloat(lc.bankMargin) || 0) / 100)));
-
                 rows.push({
                     date: lc.openingDate || lc.createdAt,
                     lcNo: lc.lcNo,
@@ -274,9 +308,11 @@ const Bank = ({ onDeleteConfirm }) => {
                 amendments.forEach((amnd, idx) => {
                     if (amnd.amendmentNo === 'Original LC') return;
                     const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
-                    const amndMargin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (parseFloat(lc.bankMargin) || 0);
-                    const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (amndMarginBill * (amndMargin / 100));
-                    const amndBankBill = parseFloat(amnd.amendmentBankBill) || parseFloat(amnd.totalAmendmentBankBill) || parseFloat(amnd.amendmentBill) || 0;
+                    const amndMarginPaid = amndMarginPaidList[idx] || 0;
+                    const isAmndNewBilling = amnd.amendmentMarginPaid !== undefined || amnd.amendmentMarginBill !== undefined;
+                    const amndBankBill = isAmndNewBilling
+                        ? (parseFloat(amnd.amendmentBankBill) || 0)
+                        : (parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill || amnd.amendmentBankBill) || 0);
                     const amndBankPaid = amndBankPaidList[idx] || 0;
 
                     rows.push({
@@ -304,7 +340,7 @@ const Bank = ({ onDeleteConfirm }) => {
                 const remainingPaymentsByHead = {
                     ...paymentsByHead,
                     'Bank Charges': remBankPaid,
-                    'Margin Bill': marginExpPaid
+                    'Margin Bill': remMarginPaid
                 };
 
                 customBills.forEach(bill => {
@@ -1767,7 +1803,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                                     className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
                                                 >
                                                     <div className="flex items-center justify-end gap-1">
-                                                        Bank Paid
+                                                        Bank Charge
                                                         {historySortConfig.key === 'bankPaid' && (
                                                             historySortConfig.direction === 'asc' 
                                                                 ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />

@@ -32,11 +32,18 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     const [formData, setFormData] = useState(initialFormData);
 
     const getBillValue = () => {
-        if (!formData.lcNo) return '';
+        if (!formData.lcNo || !formData.expenseHead) return '';
         const selectedLc = lcs.find(l => l.lcNo === formData.lcNo);
         if (!selectedLc) return '';
 
-        if (formData.expenseHead === 'Margin Bill') {
+        const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+        const lcNoClean = cleanLc(selectedLc.lcNo);
+        const head = formData.expenseHead;
+
+        let totalBill = 0;
+        let totalPaid = 0;
+
+        if (head === 'Margin Bill') {
             const isAdj = !!selectedLc.enableValueQtyAdjustment;
             const origMarginBill = isAdj && selectedLc.adjustedTotalAmount !== undefined
                 ? (parseFloat(selectedLc.marginBill) || parseFloat(selectedLc.adjustedTotalAmount) || 0)
@@ -48,7 +55,12 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                 return sum + (parseFloat(amnd.amendmentMarginBill) || 0);
             }, 0);
 
-            const totalMarginBill = origMarginBill + amndMarginBillTotal;
+            // Fetch any custom registered bills (type === 'bill')
+            const customMarginBills = expenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'Margin Bill' && e.type === 'bill')
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            totalBill = origMarginBill + amndMarginBillTotal + customMarginBills;
 
             // Compute paid margin bill
             const origMarginPaid = isAdj && selectedLc.adjustedTotalAmount !== undefined
@@ -64,18 +76,12 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
             }, 0);
 
             // Fetch any payments from expenses (type !== bill)
-            const cleanLc = (val) => String(val || '').replace(/\D/g, '');
-            const lcNoClean = cleanLc(selectedLc.lcNo);
             const marginExpPaid = expenses
                 .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'Margin Bill' && e.type !== 'bill' && (!isEditMode || e._id !== editingId))
                 .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
 
-            const totalMarginPaid = origMarginPaid + amndMarginPaidTotal + marginExpPaid;
-            const unpaidMarginBill = Math.max(0, totalMarginBill - totalMarginPaid);
-            return `৳${unpaidMarginBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-        }
-
-        if (formData.expenseHead === 'Bank Charges') {
+            totalPaid = origMarginPaid + amndMarginPaidTotal + marginExpPaid;
+        } else if (head === 'Bank Charges') {
             const isNewBilling = selectedLc.marginPaid !== undefined || selectedLc.marginBill !== undefined;
             const origBankBill = isNewBilling 
                 ? (parseFloat(selectedLc.bankBill) || 0) 
@@ -84,24 +90,103 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
             const amendments = Array.isArray(selectedLc.amendments) ? selectedLc.amendments : [];
             const amndBankBillTotal = amendments.reduce((sum, amnd) => {
                 if (amnd.amendmentNo === 'Original LC') return sum;
-                const amndBankBill = parseFloat(amnd.amendmentBankBill) || parseFloat(amnd.totalAmendmentBankBill) || parseFloat(amnd.amendmentBill) || 0;
+                const isAmndNewBilling = amnd.amendmentMarginPaid !== undefined || amnd.amendmentMarginBill !== undefined;
+                const amndBankBill = isAmndNewBilling
+                    ? (parseFloat(amnd.amendmentBankBill) || 0)
+                    : (parseFloat(amnd.totalAmendmentBankBill || amnd.amendmentBill || amnd.amendmentBankBill) || 0);
                 return sum + amndBankBill;
             }, 0);
 
-            const totalBankBill = origBankBill + amndBankBillTotal;
+            // Fetch any custom registered bills (type === 'bill')
+            const customBankBills = expenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'Bank Charges' && e.type === 'bill')
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            totalBill = origBankBill + amndBankBillTotal + customBankBills;
 
             // Fetch any payments from expenses (type !== bill)
-            const cleanLc = (val) => String(val || '').replace(/\D/g, '');
-            const lcNoClean = cleanLc(selectedLc.lcNo);
             const bankChargePaid = expenses
                 .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'Bank Charges' && e.type !== 'bill' && (!isEditMode || e._id !== editingId))
                 .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
 
-            const unpaidBankBill = Math.max(0, totalBankBill - bankChargePaid);
-            return `৳${unpaidBankBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+            totalPaid = bankChargePaid;
+        } else if (head === 'C&F Commission') {
+            // Find all stock arrivals for this LC with C&F info
+            const cnfArrivals = stocks.filter(s => {
+                const recordLcNoClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock') && s.bdCnF;
+            });
+
+            const cnfAgentClean = String(formData.cnfAgent || '').toLowerCase().trim();
+            const filteredArrivals = cnfAgentClean 
+                ? cnfArrivals.filter(s => s.bdCnF.toLowerCase().trim() === cnfAgentClean)
+                : cnfArrivals;
+
+            const amndCnfBillTotal = filteredArrivals.reduce((sum, s) => sum + (parseFloat(s.bdCnFCost) || 0), 0);
+
+            // Fetch any custom registered bills (type === 'bill')
+            const customCnfBills = expenses
+                .filter(e => {
+                    const matchesLc = cleanLc(e.lcNo) === lcNoClean;
+                    const matchesHead = e.expenseHead === 'C&F Commission';
+                    const matchesAgent = !cnfAgentClean || String(e.cnfAgent || '').toLowerCase().trim() === cnfAgentClean;
+                    return matchesLc && matchesHead && e.type === 'bill' && matchesAgent;
+                })
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            totalBill = amndCnfBillTotal + customCnfBills;
+
+            // Fetch C&F payments from expenses
+            const cnfExpPaid = expenses
+                .filter(e => {
+                    const matchesLc = cleanLc(e.lcNo) === lcNoClean;
+                    const matchesHead = e.expenseHead === 'C&F Commission';
+                    const matchesAgent = !cnfAgentClean || String(e.cnfAgent || '').toLowerCase().trim() === cnfAgentClean;
+                    return matchesLc && matchesHead && e.type !== 'bill' && matchesAgent && (!isEditMode || e._id !== editingId);
+                })
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            totalPaid = cnfExpPaid;
+        } else if (head.toLowerCase().includes('insurance')) {
+            const insBillAmt = parseFloat(selectedLc.grossPremium || selectedLc.netPremium) || 0;
+
+            // Fetch any custom registered bills (type === 'bill')
+            const customInsBills = expenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead.toLowerCase().includes('insurance') && e.type === 'bill')
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            totalBill = insBillAmt + customInsBills;
+
+            // Fetch paid amount from insurancePayments
+            const insPaidAmt = insurancePayments
+                .filter(p => cleanLc(p.lcNo) === lcNoClean && p.type !== 'Return Collection')
+                .reduce((sum, p) => sum + (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0), 0);
+
+            // Fetch any payments from expenses (type !== bill)
+            const insExpPaid = expenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead.toLowerCase().includes('insurance') && e.type !== 'bill' && (!isEditMode || e._id !== editingId))
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            totalPaid = insPaidAmt + insExpPaid;
+        } else {
+            // For any other expense head, the bills are custom registered bills (type === 'bill')
+            const customBills = expenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead.toLowerCase().trim() === head.toLowerCase().trim() && e.type === 'bill')
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            totalBill = customBills;
+
+            // Payments are custom registered payments (type !== 'bill')
+            const customPayments = expenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead.toLowerCase().trim() === head.toLowerCase().trim() && e.type !== 'bill' && (!isEditMode || e._id !== editingId))
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+            totalPaid = customPayments;
         }
 
-        return '';
+        const unpaidVal = Math.max(0, totalBill - totalPaid);
+        return `৳${unpaidVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
     };
 
     const expenseHeads = [
@@ -115,12 +200,16 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     ];
 
     const [bdCnfs, setBdCnfs] = useState([]);
+    const [stocks, setStocks] = useState([]);
+    const [insurancePayments, setInsurancePayments] = useState([]);
     const cnfAgentRef = React.useRef(null);
 
     useEffect(() => {
         fetchExpenses();
         fetchLCs();
         fetchCnfs();
+        fetchStocks();
+        fetchInsurancePayments();
     }, [refreshKey]);
 
     useEffect(() => {
@@ -194,6 +283,24 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         }
     };
 
+    const fetchStocks = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/stock`);
+            setStocks(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching Stocks:', error);
+        }
+    };
+
+    const fetchInsurancePayments = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/insurance-payments`);
+            setInsurancePayments(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching Insurance Payments:', error);
+        }
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -252,6 +359,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     };
 
     const filteredExpenses = expenses.filter(exp => {
+        if (exp.type === 'bill') return false;
         const query = searchQuery.toLowerCase();
         return (
             (exp.lcNo || '').toLowerCase().includes(query) ||
@@ -521,28 +629,16 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                             </div>
 
                             {(formData.expenseHead === 'Bank Charges' || formData.expenseHead === 'Margin Bill') && (
-                                <>
-                                    <div className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
-                                        <label className="text-sm font-semibold text-gray-600 ml-1">Bank Name</label>
-                                        <input
-                                            type="text"
-                                            value={formData.bankName}
-                                            readOnly
-                                            className="w-full px-4 py-2.5 bg-gray-50/80 border border-gray-200/60 rounded-xl outline-none transition-all font-semibold text-gray-500 cursor-not-allowed"
-                                            placeholder="Auto-filled from LC"
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
-                                        <label className="text-sm font-semibold text-gray-600 ml-1">Unpaid Value</label>
-                                        <input
-                                            type="text"
-                                            value={getBillValue()}
-                                            readOnly
-                                            className="w-full px-4 py-2.5 bg-gray-50/80 border border-gray-200/60 rounded-xl outline-none transition-all font-bold text-gray-500 cursor-not-allowed"
-                                            placeholder="Auto-filled from LC"
-                                        />
-                                    </div>
-                                </>
+                                <div className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Bank Name</label>
+                                    <input
+                                        type="text"
+                                        value={formData.bankName}
+                                        readOnly
+                                        className="w-full px-4 py-2.5 bg-gray-50/80 border border-gray-200/60 rounded-xl outline-none transition-all font-semibold text-gray-500 cursor-not-allowed"
+                                        placeholder="Auto-filled from LC"
+                                    />
+                                </div>
                             )}
 
                             {formData.expenseHead === 'C&F Commission' && (
@@ -596,6 +692,19 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {formData.expenseHead && formData.lcNo && (
+                                <div className="space-y-1.5 text-left animate-in fade-in zoom-in duration-300">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Unpaid Value</label>
+                                    <input
+                                        type="text"
+                                        value={getBillValue()}
+                                        readOnly
+                                        className="w-full px-4 py-2.5 bg-gray-50/80 border border-gray-200/60 rounded-xl outline-none transition-all font-bold text-gray-500 cursor-not-allowed"
+                                        placeholder="Auto-filled from LC"
+                                    />
                                 </div>
                             )}
 

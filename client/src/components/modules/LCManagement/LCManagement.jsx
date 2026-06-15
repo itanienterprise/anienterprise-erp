@@ -442,14 +442,22 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         .filter(e => e.lcNo === data.lcNo && e.expenseHead === 'Margin Bill' && e.type !== 'bill')
         .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 
+    let remainingMarginPaid = totalMarginPayments;
+    let lastMarginBillIdx = -1;
+
     // 1. Margin Bill (Original)
     const marginBillAmt = parseFloat(data.marginBill) || parseFloat(data.totalAmount) || 0;
     if (marginBillAmt > 0) {
-        const marginPaidAmt = (parseFloat(data.marginPaid) || (() => {
+        const origMarginPaidBase = parseFloat(data.marginPaid) || (() => {
             const total = parseFloat(data.totalAmount) || 0;
             const margin = parseFloat(data.bankMargin) || 0;
             return total * (margin / 100);
-        })()) + totalMarginPayments;
+        })();
+
+        const paidForOrig = Math.min(remainingMarginPaid, Math.max(0, marginBillAmt - origMarginPaidBase));
+        remainingMarginPaid -= paidForOrig;
+
+        const marginPaidAmt = origMarginPaidBase + paidForOrig;
 
         let marginStatus = "Unpaid";
         if (marginPaidAmt >= marginBillAmt) {
@@ -467,6 +475,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             billBalance: Math.max(0, marginBillAmt - marginPaidAmt),
             status: marginStatus
         });
+        lastMarginBillIdx = bills.length - 1;
     }
 
     // 2. Bank Bill (Original)
@@ -503,10 +512,15 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             // Push Amendment Margin Bill
             const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
             if (amndMarginBill > 0) {
-                const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                const amndMarginPaidBase = parseFloat(amnd.amendmentMarginPaid) || (() => {
                     const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
                     return amndMarginBill * (margin / 100);
                 })();
+
+                const paidForAmnd = Math.min(remainingMarginPaid, Math.max(0, amndMarginBill - amndMarginPaidBase));
+                remainingMarginPaid -= paidForAmnd;
+
+                const amndMarginPaid = amndMarginPaidBase + paidForAmnd;
 
                 let amndMarginStatus = "Unpaid";
                 if (amndMarginPaid >= amndMarginBill) {
@@ -524,6 +538,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                     billBalance: Math.max(0, amndMarginBill - amndMarginPaid),
                     status: amndMarginStatus
                 });
+                lastMarginBillIdx = bills.length - 1;
             }
 
             // Push Amendment Bank Bill
@@ -552,6 +567,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 lastBankBillIdx = bills.length - 1;
             }
         });
+    }
+
+    // If there is excess margin paid, attribute to last margin charges bill row
+    if (remainingMarginPaid > 0 && lastMarginBillIdx !== -1) {
+        bills[lastMarginBillIdx].paidBill += remainingMarginPaid;
+        bills[lastMarginBillIdx].billBalance = Math.max(0, bills[lastMarginBillIdx].totalBill - bills[lastMarginBillIdx].paidBill);
+        bills[lastMarginBillIdx].status = bills[lastMarginBillIdx].paidBill >= bills[lastMarginBillIdx].totalBill ? "Paid" : "Partial Paid";
+        remainingMarginPaid = 0;
     }
 
     // If there is excess bank charges paid, attribute to last bank charges bill row
@@ -638,36 +661,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         lastCnfBillIdxMap[cleanAgent] = bills.length - 1;
     });
 
-    // If there is excess C&F paid, attribute to last C&F bill row
-    Object.keys(cnfAgentPaidRemaining).forEach(agentKey => {
-        const remaining = cnfAgentPaidRemaining[agentKey];
-        if (remaining > 0) {
-            const lastIdx = lastCnfBillIdxMap[agentKey];
-            if (lastIdx !== undefined) {
-                bills[lastIdx].paidBill += remaining;
-                bills[lastIdx].billBalance = Math.max(0, bills[lastIdx].totalBill - bills[lastIdx].paidBill);
-                bills[lastIdx].status = "Paid";
-                cnfAgentPaidRemaining[agentKey] = 0;
-            }
-        }
-    });
-
-    // If there are C&F agents with payments but no stock records, push them
-    Object.keys(cnfAgentPaidMap).forEach(agentKey => {
-        if (!processedCnfAgents.has(agentKey)) {
-            const firstExp = lcExpenses.find(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'C&F Commission' && e.cnfAgent && e.cnfAgent.toLowerCase().trim() === agentKey);
-            const totalPaid = cnfAgentPaidMap[agentKey];
-            bills.push({
-                date: firstExp ? firstExp.date : (data.openingDate || data.createdAt),
-                billHead: "C&F Bill",
-                name: firstExp ? firstExp.cnfAgent : agentKey.toUpperCase(),
-                totalBill: 0,
-                paidBill: totalPaid,
-                billBalance: 0,
-                status: "Paid"
-            });
-        }
-    });
+    const lastCnfCustomBillIdxMap = {};
 
     // Separate bills and payments (expenses)
     const registeredBills = lcExpenses.filter(e => cleanLc(e.lcNo) === lcNoClean && e.type === 'bill');
@@ -711,11 +705,21 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     registeredBills.forEach((bill) => {
         const head = bill.expenseHead || 'Other';
         const billAmt = parseFloat(bill.amount) || 0;
-        const remainingPaid = billPaymentsRemaining[head] || 0;
-        const paid = Math.min(remainingPaid, billAmt);
 
-        if (billPaymentsRemaining[head] !== undefined) {
-            billPaymentsRemaining[head] -= paid;
+        let paid = 0;
+        if (head === 'C&F Commission') {
+            const cleanAgent = String(bill.cnfAgent || '').toLowerCase().trim();
+            const remainingPaid = cnfAgentPaidRemaining[cleanAgent] || 0;
+            paid = Math.min(remainingPaid, billAmt);
+            if (cnfAgentPaidRemaining[cleanAgent] !== undefined) {
+                cnfAgentPaidRemaining[cleanAgent] -= paid;
+            }
+        } else {
+            const remainingPaid = billPaymentsRemaining[head] || 0;
+            paid = Math.min(remainingPaid, billAmt);
+            if (billPaymentsRemaining[head] !== undefined) {
+                billPaymentsRemaining[head] -= paid;
+            }
         }
 
         let billStatus = "Unpaid";
@@ -733,6 +737,52 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         });
 
         lastBillIdxByHead[head] = billRows.length - 1;
+        if (head === 'C&F Commission') {
+            const cleanAgent = String(bill.cnfAgent || '').toLowerCase().trim();
+            lastCnfCustomBillIdxMap[cleanAgent] = billRows.length - 1;
+        }
+    });
+
+    // If there is excess C&F paid, attribute to last custom bill row first, then last stock bill row
+    Object.keys(cnfAgentPaidRemaining).forEach(agentKey => {
+        let remaining = cnfAgentPaidRemaining[agentKey];
+        if (remaining > 0) {
+            const lastCustomIdx = lastCnfCustomBillIdxMap[agentKey];
+            if (lastCustomIdx !== undefined) {
+                billRows[lastCustomIdx].paidBill += remaining;
+                billRows[lastCustomIdx].billBalance = Math.max(0, billRows[lastCustomIdx].totalBill - billRows[lastCustomIdx].paidBill);
+                billRows[lastCustomIdx].status = billRows[lastCustomIdx].paidBill >= billRows[lastCustomIdx].totalBill ? "Paid" : "Partial Paid";
+                remaining = 0;
+                cnfAgentPaidRemaining[agentKey] = 0;
+            }
+        }
+        if (remaining > 0) {
+            const lastStockIdx = lastCnfBillIdxMap[agentKey];
+            if (lastStockIdx !== undefined) {
+                bills[lastStockIdx].paidBill += remaining;
+                bills[lastStockIdx].billBalance = Math.max(0, bills[lastStockIdx].totalBill - bills[lastStockIdx].paidBill);
+                bills[lastStockIdx].status = "Paid";
+                remaining = 0;
+                cnfAgentPaidRemaining[agentKey] = 0;
+            }
+        }
+    });
+
+    // If there are C&F agents with payments but no stock records and no custom bills, push them as fallback C&F Bill rows
+    Object.keys(cnfAgentPaidMap).forEach(agentKey => {
+        const remainingPaid = cnfAgentPaidRemaining[agentKey];
+        if (remainingPaid > 0 && !processedCnfAgents.has(agentKey) && lastCnfCustomBillIdxMap[agentKey] === undefined) {
+            const firstExp = lcExpenses.find(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'C&F Commission' && e.cnfAgent && e.cnfAgent.toLowerCase().trim() === agentKey);
+            bills.push({
+                date: firstExp ? firstExp.date : (data.openingDate || data.createdAt),
+                billHead: "C&F Bill",
+                name: firstExp ? firstExp.cnfAgent : agentKey.toUpperCase(),
+                totalBill: 0,
+                paidBill: remainingPaid,
+                billBalance: 0,
+                status: "Paid"
+            });
+        }
     });
 
     // If there are excess payments remaining for a head, add to the last bill row of that head
@@ -1530,7 +1580,17 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
                                                 {(() => {
-                                                    const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
+                                                    const filtered = [
+                                                        ...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill'),
+                                                        ...insurancePayments.filter(p => p.lcNo === data.lcNo && p.type !== 'Return Collection').map(p => ({
+                                                            _id: p._id,
+                                                            date: p.date,
+                                                            expenseHead: 'Insurance Premium',
+                                                            name: p.companyName || 'Insurance',
+                                                            amount: (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0),
+                                                            remarks: p.remarks || 'Premium Payment'
+                                                        }))
+                                                    ];
 
                                                     // Check if original Margin is Paid
                                                     const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
@@ -1597,7 +1657,17 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     <td colSpan="3" className="px-3 md:px-6 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Expense:</td>
                                                     <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right text-rose-600">
                                                         {(() => {
-                                                            const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
+                                                            const filtered = [
+                                                         ...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill'),
+                                                         ...insurancePayments.filter(p => p.lcNo === data.lcNo && p.type !== 'Return Collection').map(p => ({
+                                                             _id: p._id,
+                                                             date: p.date,
+                                                             expenseHead: 'Insurance Premium',
+                                                             name: p.companyName || 'Insurance',
+                                                             amount: (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0),
+                                                             remarks: p.remarks || 'Premium Payment'
+                                                         }))
+                                                     ];
                                                             const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
                                                                 const total = parseFloat(data.totalAmount) || 0;
                                                                 const margin = parseFloat(data.bankMargin) || 0;
@@ -1627,7 +1697,17 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     {/* Mobile View */}
                                     <div className="md:hidden">
                                         {(() => {
-                                            const filtered = [...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill')];
+                                            const filtered = [
+                                                ...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill'),
+                                                ...insurancePayments.filter(p => p.lcNo === data.lcNo && p.type !== 'Return Collection').map(p => ({
+                                                    _id: p._id,
+                                                    date: p.date,
+                                                    expenseHead: 'Insurance Premium',
+                                                    name: p.companyName || 'Insurance',
+                                                    amount: (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0),
+                                                    remarks: p.remarks || 'Premium Payment'
+                                                }))
+                                            ];
 
                                             // Check if original Margin is Paid
                                             const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
@@ -3106,8 +3186,46 @@ const LCManagement = ({ addNotification, currentUser }) => {
     });
     const [gpRecords, setGpRecords] = useState([]);
     const [lcExpenses, setLcExpenses] = useState([]);
+    const [insurancePayments, setInsurancePayments] = useState([]);
     const [expandedLcKey, setExpandedLcKey] = useState(null);
     const [expandedCardKey, setExpandedCardKey] = useState(null);
+    const getLcTotalPaidExpense = (record) => {
+        // 1. Paid LC expenses (excluding bills)
+        const paidExpenses = lcExpenses
+            .filter(exp => exp.lcNo === record.lcNo && exp.type !== 'bill')
+            .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+
+        // 2. Paid insurance premiums
+        const paidInsurance = insurancePayments
+            .filter(p => p.lcNo === record.lcNo && p.type !== 'Return Collection')
+            .reduce((sum, p) => sum + (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0), 0);
+
+        // 3. Margin paid (original)
+        const marginPaidAmt = parseFloat(record.marginPaid) || (() => {
+            const total = parseFloat(record.totalAmount) || 0;
+            const margin = parseFloat(record.bankMargin) || 0;
+            return total * (margin / 100);
+        })();
+
+        let total = paidExpenses + paidInsurance + marginPaidAmt;
+
+        // 4. Margin paid (amendments)
+        if (record.amendments && record.amendments.length > 0) {
+            record.amendments.forEach((amnd) => {
+                if (amnd.amendmentNo === 'Original LC') return;
+                const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (record.bankMargin !== undefined ? parseFloat(record.bankMargin) : 0);
+                const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                    const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                    return amndMarginBill * (margin / 100);
+                })();
+                if (amndMarginPaid > 0) {
+                    total += amndMarginPaid;
+                }
+            });
+        }
+
+        return total;
+    };
 
     const informativeQuantities = useMemo(() => {
         const selectedPi = piRecordsRaw.find(pi => pi.piNumber === formData.piNo);
@@ -3377,7 +3495,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const fetchInitialData = async () => {
         setIsLoading(true);
         try {
-            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes] = await Promise.all([
+            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/importers`),
@@ -3390,10 +3508,12 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 axios.get(`${API_BASE_URL}/api/sales`),
                 axios.get(`${API_BASE_URL}/api/lc-gp`),
                 axios.get(`${API_BASE_URL}/api/lc-expenses`),
-                axios.get(`${API_BASE_URL}/api/ports`)
+                axios.get(`${API_BASE_URL}/api/ports`),
+                axios.get(`${API_BASE_URL}/api/insurance-payments`)
             ]);
             setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
             setLcExpenses(Array.isArray(expenseRes.data) ? expenseRes.data : []);
+            setInsurancePayments(Array.isArray(insPayRes.data) ? insPayRes.data : []);
 
             const freshLcRecords = Array.isArray(lcRes.data) ? lcRes.data : [];
             setLcRecords(freshLcRecords);
@@ -6722,9 +6842,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     </td>
                                                     <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
                                                         {(() => {
-                                                            const totalExpense = lcExpenses
-                                                                .filter(exp => exp.lcNo === record.lcNo)
-                                                                .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+                                                            const totalExpense = getLcTotalPaidExpense(record);
                                                             return (
                                                                 <span className={`font-black ${totalExpense > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
                                                                     {totalExpense > 0 ? `৳${totalExpense.toLocaleString('en-IN')}` : '—'}
@@ -7174,9 +7292,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
                                 const remGpKg = Math.max(0, adj.adjustedQtyKg - totalGpQtyKg);
 
-                                const totalExpense = lcExpenses
-                                    .filter(exp => exp.lcNo === record.lcNo)
-                                    .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+                                const totalExpense = getLcTotalPaidExpense(record);
 
                                 const isCardExpanded = expandedCardKey === record._id;
                                 const isExpanded = expandedLcKey === record._id;

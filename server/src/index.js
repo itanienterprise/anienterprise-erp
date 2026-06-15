@@ -335,8 +335,15 @@ apiRouter.post('/api/cnf-payments', async (req, res) => {
 
 apiRouter.delete('/api/cnf-payments/:id', adminOnly, async (req, res) => {
   try {
-    const deletedRecord = await CnFPayment.findByIdAndDelete(req.params.id);
-    if (!deletedRecord) return res.status(404).json({ message: 'Payment record not found' });
+    const record = await CnFPayment.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: 'Payment record not found' });
+
+    const decData = decryptData(record.data);
+    if (decData && decData.lcExpenseId) {
+      await LCExpense.findByIdAndDelete(decData.lcExpenseId);
+    }
+
+    await CnFPayment.findByIdAndDelete(req.params.id);
     res.json({ message: 'Payment record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -345,9 +352,27 @@ apiRouter.delete('/api/cnf-payments/:id', adminOnly, async (req, res) => {
 
 apiRouter.put('/api/cnf-payments/:id', adminOnly, async (req, res) => {
   try {
+    const record = await CnFPayment.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: 'Payment record not found' });
+
+    const decData = decryptData(record.data);
+    if (decData && decData.lcExpenseId) {
+      const expense = await LCExpense.findById(decData.lcExpenseId);
+      if (expense) {
+        const decExpense = decryptData(expense.data);
+        const updatedExpenseBody = {
+          ...decExpense,
+          amount: parseFloat(req.body.amount) || 0,
+          date: req.body.date || decExpense.date,
+          remarks: req.body.remarks || decExpense.remarks
+        };
+        const encExpenseData = encryptData(updatedExpenseBody);
+        await LCExpense.findByIdAndUpdate(decData.lcExpenseId, { data: encExpenseData });
+      }
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedRecord = await CnFPayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
-    if (!updatedRecord) return res.status(404).json({ message: 'Payment record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -1169,6 +1194,39 @@ apiRouter.post('/api/lc-expenses', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const newRecord = new LCExpense({ data: encryptedData });
     const savedRecord = await newRecord.save();
+
+    // Sync to cnf-payments if head is C&F Commission and it is a payment (not a bill)
+    if (req.body.expenseHead === 'C&F Commission' && req.body.type !== 'bill') {
+      try {
+        const cnfs = await CnF.find();
+        const targetName = String(req.body.cnfAgent || '').toLowerCase().trim();
+        const matchedCnf = cnfs.map(c => {
+          const d = decryptData(c.data);
+          return { ...d, _id: c._id };
+        }).find(c => String(c.name || '').toLowerCase().trim() === targetName);
+
+        if (matchedCnf) {
+          const paymentBody = {
+            cnfId: matchedCnf._id.toString(),
+            cnfName: matchedCnf.name,
+            cnfType: matchedCnf.type,
+            date: req.body.date || new Date().toISOString().split('T')[0],
+            method: 'Other',
+            amount: parseFloat(req.body.amount) || 0,
+            discount: 0,
+            reference: req.body.lcNo || '',
+            remarks: req.body.remarks || 'Paid from LC Expense',
+            lcExpenseId: savedRecord._id.toString()
+          };
+          const encPayData = encryptData(paymentBody);
+          const newPayRecord = new CnFPayment({ data: encPayData });
+          await newPayRecord.save();
+        }
+      } catch (syncErr) {
+        console.error('Error syncing C&F Payment on LCExpense POST:', syncErr);
+      }
+    }
+
     res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -1180,6 +1238,73 @@ apiRouter.put('/api/lc-expenses/:id', async (req, res) => {
     const encryptedData = encryptData(req.body);
     const updatedRecord = await LCExpense.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'LC Expense record not found' });
+
+    // Sync C&F Payment on LCExpense PUT
+    try {
+      const cnfPayments = await CnFPayment.find();
+      const existingPay = cnfPayments.map(p => {
+        const d = decryptData(p.data);
+        return { ...d, _id: p._id };
+      }).find(p => p.lcExpenseId === req.params.id);
+
+      const isCnfCommPayment = req.body.expenseHead === 'C&F Commission' && req.body.type !== 'bill';
+
+      if (existingPay) {
+        if (isCnfCommPayment) {
+          const cnfs = await CnF.find();
+          const targetName = String(req.body.cnfAgent || '').toLowerCase().trim();
+          const matchedCnf = cnfs.map(c => {
+            const d = decryptData(c.data);
+            return { ...d, _id: c._id };
+          }).find(c => String(c.name || '').toLowerCase().trim() === targetName);
+
+          const paymentBody = {
+            cnfId: matchedCnf ? matchedCnf._id.toString() : existingPay.cnfId,
+            cnfName: matchedCnf ? matchedCnf.name : existingPay.cnfName,
+            cnfType: matchedCnf ? matchedCnf.type : existingPay.cnfType,
+            date: req.body.date || new Date().toISOString().split('T')[0],
+            method: 'Other',
+            amount: parseFloat(req.body.amount) || 0,
+            discount: 0,
+            reference: req.body.lcNo || '',
+            remarks: req.body.remarks || 'Paid from LC Expense',
+            lcExpenseId: req.params.id
+          };
+          const encPayData = encryptData(paymentBody);
+          await CnFPayment.findByIdAndUpdate(existingPay._id, { data: encPayData });
+        } else {
+          await CnFPayment.findByIdAndDelete(existingPay._id);
+        }
+      } else if (isCnfCommPayment) {
+        const cnfs = await CnF.find();
+        const targetName = String(req.body.cnfAgent || '').toLowerCase().trim();
+        const matchedCnf = cnfs.map(c => {
+          const d = decryptData(c.data);
+          return { ...d, _id: c._id };
+        }).find(c => String(c.name || '').toLowerCase().trim() === targetName);
+
+        if (matchedCnf) {
+          const paymentBody = {
+            cnfId: matchedCnf._id.toString(),
+            cnfName: matchedCnf.name,
+            cnfType: matchedCnf.type,
+            date: req.body.date || new Date().toISOString().split('T')[0],
+            method: 'Other',
+            amount: parseFloat(req.body.amount) || 0,
+            discount: 0,
+            reference: req.body.lcNo || '',
+            remarks: req.body.remarks || 'Paid from LC Expense',
+            lcExpenseId: req.params.id
+          };
+          const encPayData = encryptData(paymentBody);
+          const newPayRecord = new CnFPayment({ data: encPayData });
+          await newPayRecord.save();
+        }
+      }
+    } catch (syncErr) {
+      console.error('Error syncing C&F Payment on LCExpense PUT:', syncErr);
+    }
+
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -1190,6 +1315,22 @@ apiRouter.delete('/api/lc-expenses/:id', async (req, res) => {
   try {
     const deletedRecord = await LCExpense.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'LC Expense record not found' });
+
+    // Sync delete associated CnFPayment
+    try {
+      const cnfPayments = await CnFPayment.find();
+      const existingPay = cnfPayments.map(p => {
+        const d = decryptData(p.data);
+        return { ...d, _id: p._id };
+      }).find(p => p.lcExpenseId === req.params.id);
+
+      if (existingPay) {
+        await CnFPayment.findByIdAndDelete(existingPay._id);
+      }
+    } catch (syncErr) {
+      console.error('Error deleting C&F Payment on LCExpense DELETE:', syncErr);
+    }
+
     res.json({ message: 'LC Expense record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

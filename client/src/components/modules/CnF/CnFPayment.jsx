@@ -195,7 +195,7 @@ const CnFPayment = () => {
                 // 4. Earned from LC Expenses
                 const expenseEarned = allExpenses.reduce((acc, exp) => {
                     const expCnF = (exp.cnfAgent || '').toLowerCase().trim();
-                    if (expCnF === targetName) {
+                    if (expCnF === targetName && exp.type === 'bill') {
                         return acc + (parseFloat(exp.amount) || 0);
                     }
                     return acc;
