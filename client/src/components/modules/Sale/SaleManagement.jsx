@@ -4031,7 +4031,7 @@ const SaleManagement = ({
                                     const items = sale.items && sale.items.length > 0
                                         ? sale.items.flatMap(item =>
                                             (item.brandEntries || []).length > 0
-                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName }))
+                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: item.lcNo }))
                                                 : [{ ...item, productName: item.productName }]
                                         )
                                         : [{
@@ -4317,7 +4317,7 @@ const SaleManagement = ({
                             const items = sale.items && sale.items.length > 0
                                 ? sale.items.flatMap(item =>
                                     (item.brandEntries || []).length > 0
-                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName }))
+                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: item.lcNo }))
                                         : [{ ...item, productName: item.productName }]
                                 )
                                 : [{
