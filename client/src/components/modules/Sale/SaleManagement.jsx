@@ -1055,58 +1055,64 @@ const SaleManagement = ({
         setFormData(prev => {
             const newItems = [...prev.items];
             const product = { ...newItems[productIdx] };
-            const brandEntries = [...product.brandEntries];
-            const entry = { ...brandEntries[entryIdx], [name]: value };
 
-            // Synchronize brand and brandName for consistency
-            if (name === 'brandName') {
-                entry.brand = value;
-            } else if (name === 'brand') {
-                entry.brandName = value;
-            }
-
-            if (prev.saleType === 'Border') {
-                // Border Sale: Total depends on selected UOM (QTY or Truck)
-                if (name === 'truck' || name === 'quantity' || name === 'bag' || name === 'unitPrice' || name === 'uom') {
-                    const activeUOM = name === 'uom' ? value : entry.uom;
-                    const bSize = parseFloat(String(entry.bagSize || '').replace(/[^0-9.]/g, '')) || 0;
-
-                    if (name === 'quantity' && bSize > 0) {
-                        entry.bag = (parseFloat(value) / bSize).toFixed(2);
-                    } else if (name === 'bag' && bSize > 0) {
-                        entry.quantity = (parseFloat(value) * bSize).toFixed(2);
-                    }
-
-                    const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
-                    const truck = parseFloat(name === 'truck' ? value : entry.truck) || 0;
-                    const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
-
-                    if (activeUOM === 'QTY') {
-                        entry.totalAmount = (qty * price).toFixed(2);
-                    } else {
-                        // Default to Truck
-                        entry.totalAmount = (truck * price).toFixed(2);
-                    }
-                }
+            if (entryIdx === null || entryIdx === undefined) {
+                product[name] = value;
             } else {
-                // General Sale: Total = Quantity * Price
-                if (name === 'quantity' || name === 'bag' || name === 'unitPrice') {
-                    const bSize = parseFloat(String(entry.bagSize || '').replace(/[^0-9.]/g, '')) || 0;
+                const brandEntries = [...product.brandEntries];
+                const entry = { ...brandEntries[entryIdx], [name]: value };
 
-                    if (name === 'quantity' && bSize > 0) {
-                        entry.bag = (parseFloat(value) / bSize).toFixed(2);
-                    } else if (name === 'bag' && bSize > 0) {
-                        entry.quantity = (parseFloat(value) * bSize).toFixed(2);
-                    }
-
-                    const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
-                    const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
-                    entry.totalAmount = (qty * price).toFixed(2);
+                // Synchronize brand and brandName for consistency
+                if (name === 'brandName') {
+                    entry.brand = value;
+                } else if (name === 'brand') {
+                    entry.brandName = value;
                 }
+
+                if (prev.saleType === 'Border') {
+                    // Border Sale: Total depends on selected UOM (QTY or Truck)
+                    if (name === 'truck' || name === 'quantity' || name === 'bag' || name === 'unitPrice' || name === 'uom') {
+                        const activeUOM = name === 'uom' ? value : entry.uom;
+                        const bSize = parseFloat(String(entry.bagSize || '').replace(/[^0-9.]/g, '')) || 0;
+
+                        if (name === 'quantity' && bSize > 0) {
+                            entry.bag = (parseFloat(value) / bSize).toFixed(2);
+                        } else if (name === 'bag' && bSize > 0) {
+                            entry.quantity = (parseFloat(value) * bSize).toFixed(2);
+                        }
+
+                        const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
+                        const truck = parseFloat(name === 'truck' ? value : entry.truck) || 0;
+                        const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
+
+                        if (activeUOM === 'QTY') {
+                            entry.totalAmount = (qty * price).toFixed(2);
+                        } else {
+                            // Default to Truck
+                            entry.totalAmount = (truck * price).toFixed(2);
+                        }
+                    }
+                } else {
+                    // General Sale: Total = Quantity * Price
+                    if (name === 'quantity' || name === 'bag' || name === 'unitPrice') {
+                        const bSize = parseFloat(String(entry.bagSize || '').replace(/[^0-9.]/g, '')) || 0;
+
+                        if (name === 'quantity' && bSize > 0) {
+                            entry.bag = (parseFloat(value) / bSize).toFixed(2);
+                        } else if (name === 'bag' && bSize > 0) {
+                            entry.quantity = (parseFloat(value) * bSize).toFixed(2);
+                        }
+
+                        const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
+                        const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
+                        entry.totalAmount = (qty * price).toFixed(2);
+                    }
+                }
+
+                brandEntries[entryIdx] = entry;
+                product.brandEntries = brandEntries;
             }
 
-            brandEntries[entryIdx] = entry;
-            product.brandEntries = brandEntries;
             newItems[productIdx] = product;
 
             // Recalculate invoice totals and C&F commissions
@@ -1972,9 +1978,13 @@ const SaleManagement = ({
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             setHighlightedIndex(prev => Math.max(prev - 1, 0));
-        } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+        } else if (e.key === 'Enter') {
             e.preventDefault();
-            onSelect(filteredOptions[highlightedIndex]);
+            if (highlightedIndex >= 0 && filteredOptions && filteredOptions[highlightedIndex]) {
+                onSelect(filteredOptions[highlightedIndex]);
+            } else {
+                setActiveDropdown(null);
+            }
         } else if (e.key === 'Escape') {
             setActiveDropdown(null);
         }
