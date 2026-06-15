@@ -52,8 +52,8 @@ const SaleManagement = ({
     const [_customerSearch, setCustomerSearch] = useState('');
     const [expandedRows, setExpandedRows] = useState([]);
     const [showSaleFilterPanel, setShowSaleFilterPanel] = useState(false);
-    const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', indCnfSearch: '', bdCnfSearch: '' });
-    const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice', 'port', 'product', 'indCnf', 'bdCnf'
+    const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
+    const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice', 'port', 'product', 'brand', 'indCnf', 'bdCnf'
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [companyNameSearch, setCompanyNameSearch] = useState('');
@@ -426,6 +426,7 @@ const SaleManagement = ({
     const saleBdCnfFilterRef = useRef(null);
     const saleFromDateFilterRef = useRef(null);
     const saleToDateFilterRef = useRef(null);
+    const saleBrandFilterRef = useRef(null);
     const lcRef = useRef(null);
 
     const toggleRowExpansion = (saleId) => {
@@ -460,6 +461,7 @@ const SaleManagement = ({
                 const inInvoice = saleInvoiceFilterRef.current?.contains(event.target);
                 const inPort = salePortFilterRef.current?.contains(event.target);
                 const inProduct = saleProductFilterRef.current?.contains(event.target);
+                const inBrand = saleBrandFilterRef.current?.contains(event.target);
                 const inIndCnf = saleIndCnfFilterRef.current?.contains(event.target);
                 const inBdCnf = saleBdCnfFilterRef.current?.contains(event.target);
                 const inFromDate = saleFromDateFilterRef.current?.contains(event.target);
@@ -471,6 +473,7 @@ const SaleManagement = ({
                     (activeFilterDropdown === 'invoice' && !inInvoice) ||
                     (activeFilterDropdown === 'port' && !inPort) ||
                     (activeFilterDropdown === 'product' && !inProduct) ||
+                    (activeFilterDropdown === 'brand' && !inBrand) ||
                     (activeFilterDropdown === 'indCnf' && !inIndCnf) ||
                     (activeFilterDropdown === 'bdCnf' && !inBdCnf) ||
                     (activeFilterDropdown === 'from' && !inFromDate) ||
@@ -584,6 +587,7 @@ const SaleManagement = ({
                 invoiceNo: '',
                 port: '',
                 productName: '',
+                brand: '',
                 indCnf: '',
                 bdCnf: ''
             });
@@ -1671,6 +1675,21 @@ const SaleManagement = ({
         );
     };
 
+    const getBrandsForSelectedProduct = () => {
+        if (!saleFilters.productName) return [];
+        const selectedProduct = products.find(p => p.name === saleFilters.productName);
+        if (!selectedProduct) return [];
+
+        const brandsSet = new Set();
+        if (selectedProduct.brand) brandsSet.add(selectedProduct.brand);
+        if (selectedProduct.brands && Array.isArray(selectedProduct.brands)) {
+            selectedProduct.brands.forEach(b => {
+                if (b.brand) brandsSet.add(b.brand);
+            });
+        }
+        return [...brandsSet].filter(Boolean).sort();
+    };
+
     const getFilteredBrands = () => {
         // Only show brands if a product is selected
         if (activeItemIndex === null) return [];
@@ -2216,6 +2235,17 @@ const SaleManagement = ({
             );
             if (!hasProduct) return false;
         }
+        // Brand filter
+        if (saleFilters.brand) {
+            const hasBrand = (sale.items || []).some(item => {
+                const legacyBrandMatch = (item.brand || '').toLowerCase().includes(saleFilters.brand.toLowerCase());
+                const brandEntriesMatch = (item.brandEntries || []).some(be =>
+                    (be.brand || be.brandName || '').toLowerCase().includes(saleFilters.brand.toLowerCase())
+                );
+                return legacyBrandMatch || brandEntriesMatch;
+            });
+            if (!hasBrand) return false;
+        }
         // IND C&F
         if (saleFilters.indCnf) {
             const ic = (sale.indianCnF || '').toLowerCase();
@@ -2316,8 +2346,8 @@ const SaleManagement = ({
                                             <button
                                                 onMouseDown={(e) => {
                                                     e.preventDefault();
-                                                    setSaleFilters({ startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', indCnf: '', bdCnf: '' });
-                                                    setSaleFilterSearch({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', indCnfSearch: '', bdCnfSearch: '' });
+                                                    setSaleFilters({ startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
+                                                    setSaleFilterSearch({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
                                                     setActiveFilterDropdown(null);
                                                 }}
                                                 className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest transition-colors"
@@ -2612,7 +2642,7 @@ const SaleManagement = ({
                                                             value={saleFilterSearch.productSearch}
                                                             onChange={(e) => {
                                                                 setSaleFilterSearch(prev => ({ ...prev, productSearch: e.target.value }));
-                                                                setSaleFilters(prev => ({ ...prev, productName: e.target.value }));
+                                                                setSaleFilters(prev => ({ ...prev, productName: e.target.value, brand: '' }));
                                                                 setActiveFilterDropdown('product');
                                                             }}
                                                             onFocus={() => setActiveFilterDropdown('product')}
@@ -2621,7 +2651,7 @@ const SaleManagement = ({
                                                         />
                                                         <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                                             {saleFilters.productName && (
-                                                                <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, productName: '' })); setSaleFilterSearch(prev => ({ ...prev, productSearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, productName: '', brand: '' })); setSaleFilterSearch(prev => ({ ...prev, productSearch: '', brandSearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
                                                                     <XIcon className="w-4 h-4" />
                                                                 </button>
                                                             )}
@@ -2635,8 +2665,54 @@ const SaleManagement = ({
                                                         return filtered.length > 0 ? (
                                                             <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                                 {filtered.map(p => (
-                                                                    <button key={p} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, productName: p })); setSaleFilterSearch(prev => ({ ...prev, productSearch: p })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                    <button key={p} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, productName: p, brand: '' })); setSaleFilterSearch(prev => ({ ...prev, productSearch: p, brandSearch: '' })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
                                                                         {p}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+
+                                                {/* Common Brand Filter */}
+                                                <div className="space-y-1.5 relative" ref={saleBrandFilterRef}>
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">BRAND</label>
+                                                    <div className="relative">
+                                                        <input autoComplete="off"
+                                                            type="text"
+                                                            value={saleFilterSearch.brandSearch || ''}
+                                                            onChange={(e) => {
+                                                                if (!saleFilters.productName) return;
+                                                                setSaleFilterSearch(prev => ({ ...prev, brandSearch: e.target.value }));
+                                                                setSaleFilters(prev => ({ ...prev, brand: e.target.value }));
+                                                                setActiveFilterDropdown('brand');
+                                                            }}
+                                                            onFocus={() => {
+                                                                if (saleFilters.productName) {
+                                                                    setActiveFilterDropdown('brand');
+                                                                }
+                                                            }}
+                                                            disabled={!saleFilters.productName}
+                                                            placeholder={!saleFilters.productName ? 'Select product first' : (saleFilters.brand || 'Search brand...')}
+                                                            className={`w-full px-4 py-2 rounded-xl text-sm focus:ring-2 outline-none transition-all shadow-sm pr-14 ${!saleFilters.productName ? 'bg-gray-50 border border-gray-100 text-gray-400 cursor-not-allowed' : `bg-white border border-gray-100 hover:border-gray-200 focus:ring-blue-500/10 focus:border-blue-500 ${saleFilters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}`}
+                                                        />
+                                                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                            {saleFilters.brand && (
+                                                                <button onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, brand: '' })); setSaleFilterSearch(prev => ({ ...prev, brandSearch: '' })); setActiveFilterDropdown(null); }} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                    <XIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                        </div>
+                                                    </div>
+                                                    {activeFilterDropdown === 'brand' && saleFilters.productName && (() => {
+                                                        const brands = getBrandsForSelectedProduct();
+                                                        const filtered = brands.filter(b => b.toLowerCase().includes((saleFilterSearch.brandSearch || '').toLowerCase()));
+                                                        return filtered.length > 0 ? (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                {filtered.map(b => (
+                                                                    <button key={b} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, brand: b })); setSaleFilterSearch(prev => ({ ...prev, brandSearch: b })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                        {b}
                                                                     </button>
                                                                 ))}
                                                             </div>
