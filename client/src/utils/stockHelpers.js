@@ -521,12 +521,12 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         if (brandList.length === 0) return null;
 
-        const openingQty = brandList.reduce((sum, b) => sum + b.openingQuantity, 0);
-        const inHouseQty = brandList.reduce((sum, b) => sum + b.inHouseQuantity, 0);
+        const openingQty = brandList.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
+        const inHouseQty = brandList.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
         const saleQty = brandList.reduce((sum, b) => sum + b.saleQuantity, 0);
         const damageQty = brandList.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
-        const openingPkt = brandList.reduce((sum, b) => sum + b.openingPacket, 0);
-        const inHousePkt = brandList.reduce((sum, b) => sum + b.inHousePacket, 0);
+        const openingPkt = brandList.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
+        const inHousePkt = brandList.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
         const salePkt = brandList.reduce((sum, b) => sum + b.salePacket, 0);
         const damagePkt = brandList.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
 
@@ -557,19 +557,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     displayRecords.forEach(group => {
         group.brandList.forEach(b => {
-            tOpeningQty += b.openingQuantity;
+            tOpeningQty += Math.max(0, b.openingQuantity);
             tSaleQty += b.saleQuantity;
-            tInHouseQty += b.inHouseQuantity;
+            tInHouseQty += Math.max(0, b.inHouseQuantity);
             tShortageQty += b.sweepedQuantity;
             tDamageQty += (b.damageQuantity || 0);
 
-            const op = calculatePktRemainder(b.openingQuantity, b.packetSize);
+            const op = calculatePktRemainder(Math.max(0, b.openingQuantity), b.packetSize);
             tOpeningPkt.whole += op.whole; tOpeningPkt.remainder += op.remainder;
 
             const sl = calculatePktRemainder(b.saleQuantity, b.packetSize);
             tSalePkt.whole += sl.whole; tSalePkt.remainder += sl.remainder;
 
-            const ih = calculatePktRemainder(b.inHouseQuantity, b.packetSize);
+            const ih = calculatePktRemainder(Math.max(0, b.inHouseQuantity), b.packetSize);
             tInHousePkt.whole += ih.whole; tInHousePkt.remainder += ih.remainder;
         });
     });
