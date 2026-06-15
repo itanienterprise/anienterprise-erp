@@ -3233,7 +3233,7 @@ function LCReceive({
                                                 {renderSortIcon('indianCnF')}
                                             </div>
                                         </th>
-                                        <th
+                                        {/* <th
                                             className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
                                             onClick={() => handleSort('indCnFCost')}
                                         >
@@ -3241,7 +3241,7 @@ function LCReceive({
                                                 Cost
                                                 {renderSortIcon('indCnFCost')}
                                             </div>
-                                        </th>
+                                        </th> */}
                                         <th
                                             className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
                                             onClick={() => handleSort('bdCnF')}
@@ -3251,7 +3251,7 @@ function LCReceive({
                                                 {renderSortIcon('bdCnF')}
                                             </div>
                                         </th>
-                                        <th
+                                        {/* <th
                                             className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
                                             onClick={() => handleSort('bdCnFCost')}
                                         >
@@ -3259,7 +3259,7 @@ function LCReceive({
                                                 Cost
                                                 {renderSortIcon('bdCnFCost')}
                                             </div>
-                                        </th>
+                                        </th> */}
                                         <th
                                             className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
                                             onClick={() => handleSort('billOfEntry')}
@@ -3302,20 +3302,13 @@ function LCReceive({
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredRecords.length === 0 ? (
                                         <tr>
-                                            <td colSpan="14" className="px-6 py-12 text-center text-gray-400 bg-white/50">
+                                            <td colSpan={isSelectionMode ? 13 : 12} className="px-6 py-12 text-center text-gray-400 bg-white/50">
                                                 <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                                 <p>No LC receive records found</p>
                                             </td>
                                         </tr>
                                     ) : (
-                                        // Grouping logic is complex (see App.jsx), recreating simplify logic here or reuse grouped records
-                                        // For this extraction, I'll iterate directly or implement the grouping if needed.
-                                        // App.jsx implements grouping within the map. I'll stick to a simpler rendering for now or copy the grouping logic.
-                                        // IMPORTANT: The original code Groups by Date+LC+Port.
-                                        // I will simplify for now to render row-by-row or recreate the reduce logic:
-
                                         Object.values(filteredRecords.reduce((acc, item) => {
-                                            // Lines 2753-2818 in App.jsx
                                             const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
 
                                             if (!acc[groupedKey]) {
@@ -3398,13 +3391,13 @@ function LCReceive({
                                                     <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{entry.importer || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.exporter || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                                    {/* <td className="px-6 py-4 text-sm text-gray-600">
                                                         {!isNaN(parseFloat(entry.indCnFCost)) && entry.indCnFCost !== '' ? `৳${parseFloat(entry.indCnFCost).toLocaleString('en-IN')}` : '-'}
-                                                    </td>
+                                                    </td> */}
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                                    {/* <td className="px-6 py-4 text-sm text-gray-600">
                                                         {!isNaN(parseFloat(entry.bdCnFCost)) && entry.bdCnFCost !== '' ? `৳${parseFloat(entry.bdCnFCost).toLocaleString('en-IN')}` : '-'}
-                                                    </td>
+                                                    </td> */}
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 align-top">
                                                         {uniqueEntries.map((item, idx) => (
