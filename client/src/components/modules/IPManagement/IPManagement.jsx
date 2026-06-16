@@ -575,6 +575,8 @@ function IPManagement({
     const filterPortRef = useRef(null);
     const filterImporterRef = useRef(null);
     const filterProductRef = useRef(null);
+    const filterPanelRef = useRef(null);
+    const filterButtonRef = useRef(null);
     const ipStatusRef = useRef(null);
 
     useEffect(() => {
@@ -590,6 +592,22 @@ function IPManagement({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                showFilters &&
+                filterPanelRef.current &&
+                !filterPanelRef.current.contains(event.target) &&
+                filterButtonRef.current &&
+                !filterButtonRef.current.contains(event.target)
+            ) {
+                setShowFilters(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showFilters]);
 
     const fetchIpRecords = async () => {
         setIsLoading(true);
@@ -1252,13 +1270,209 @@ function IPManagement({
                         />
                     </div>
 
-                    <div className="w-full md:w-1/4 flex justify-end z-10 gap-2 sm:gap-3">
-                        <button
-                            onClick={() => setShowFilters(!showFilters)}
-                            className={`flex-1 md:flex-none px-4 py-2 ${showFilters ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : 'bg-white text-gray-600 border border-gray-200'} font-medium rounded-xl shadow-sm transition-all flex items-center justify-center hover:bg-gray-50 border`}
-                        >
-                            <FunnelIcon className="w-4 h-4 sm:mr-2" /> <span className="hidden sm:inline">{showFilters ? 'Hide Filters' : 'Filter'}</span>
-                        </button>
+                    <div className="w-full md:w-1/4 flex justify-end z-50 gap-2 sm:gap-3">
+                        <div className="relative flex-1 md:flex-none">
+                            <button
+                                ref={filterButtonRef}
+                                onClick={() => setShowFilters(!showFilters)}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showFilters || Object.values(filters).some(v => v !== '' && v !== 'all') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                <FunnelIcon className={`w-4 h-4 ${(showFilters || Object.values(filters).some(v => v !== '' && v !== 'all')) ? 'text-white' : 'text-gray-400'}`} />
+                                <span className="text-sm font-medium">Filter</span>
+                            </button>
+
+                            {/* Floating Filter Panel */}
+                            {showFilters && (
+                                <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200 text-left">
+                                    <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
+                                        <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                resetFilters();
+                                                setShowFilters(false);
+                                            }}
+                                            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                                        >
+                                            RESET ALL
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-5">
+                                        {/* Quick Range */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                    <button
+                                                        key={range}
+                                                        type="button"
+                                                        onClick={() => setFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${filters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                    >
+                                                        {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Date Range Row */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <CustomDatePicker
+                                                label="From Date"
+                                                value={filters.startDate}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
+                                                name="startDate"
+                                                compact={true}
+                                            />
+                                            <CustomDatePicker
+                                                label="To Date"
+                                                value={filters.endDate}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
+                                                name="endDate"
+                                                compact={true}
+                                                rightAlign={true}
+                                            />
+                                        </div>
+
+                                        {/* Port & Product Row */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* Port Filter */}
+                                            <div className="space-y-1.5 relative dropdown-container" ref={filterPortRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filters.port}
+                                                        onChange={(e) => { setFilters(prev => ({ ...prev, port: e.target.value })); setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
+                                                        onFocus={() => { setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
+                                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-port', activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())), 'filter-port')}
+                                                        placeholder="Search Port..."
+                                                        autoComplete="off"
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10"
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                        {filters.port && (
+                                                            <button type="button" onClick={() => setFilters(prev => ({ ...prev, port: '' }))} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {activeDropdown === 'filter-port' && (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
+                                                        {activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).length > 0 ? (
+                                                            activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).map((port, idx) => (
+                                                                <button
+                                                                    key={port._id}
+                                                                    type="button"
+                                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, port: port.name })); setActiveDropdown(null); }}
+                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium ${filters.port === port.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    {port.name}
+                                                                </button>
+                                                            ))
+                                                        ) : (
+                                                            <div className="px-4 py-2 text-sm text-gray-500">No ports found</div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Product Filter */}
+                                            <div className="space-y-1.5 relative dropdown-container" ref={filterProductRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filters.productName}
+                                                        onChange={(e) => { setFilters(prev => ({ ...prev, productName: e.target.value })); setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
+                                                        onFocus={() => { setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
+                                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-product', products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())), 'filter-product')}
+                                                        placeholder="Search Product..."
+                                                        autoComplete="off"
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10"
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                        {filters.productName && (
+                                                            <button type="button" onClick={() => setFilters(prev => ({ ...prev, productName: '' }))} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {activeDropdown === 'filter-product' && (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
+                                                        {products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())).length > 0 ? (
+                                                            products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())).map((p, idx) => (
+                                                                <button
+                                                                    key={p._id}
+                                                                    type="button"
+                                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, productName: p.ipName || p.name })); setActiveDropdown(null); }}
+                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium ${filters.productName === (p.ipName || p.name) ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                >
+                                                                    {p.ipName || p.name}
+                                                                </button>
+                                                            ))
+                                                        ) : (
+                                                            <div className="px-4 py-2 text-sm text-gray-500">No products found</div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Importer Filter */}
+                                        <div className="space-y-1.5 relative dropdown-container" ref={filterImporterRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Importer</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filters.importer}
+                                                    onChange={(e) => { setFilters(prev => ({ ...prev, importer: e.target.value })); setActiveDropdown('filter-importer'); setHighlightedIndex(-1); }}
+                                                    onFocus={() => { setActiveDropdown('filter-importer'); setHighlightedIndex(-1); }}
+                                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-importer', importers.filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())), 'filter-importer')}
+                                                    placeholder="Search Importer..."
+                                                    autoComplete="off"
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10"
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                    {filters.importer && (
+                                                        <button type="button" onClick={() => setFilters(prev => ({ ...prev, importer: '' }))} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {activeDropdown === 'filter-importer' && (
+                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
+                                                    {importers.filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())).length > 0 ? (
+                                                        importers.filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())).map((imp, idx) => (
+                                                            <button
+                                                                key={imp._id}
+                                                                type="button"
+                                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, importer: imp.name })); setActiveDropdown(null); }}
+                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium ${filters.importer === imp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                            >
+                                                                {imp.name}
+                                                            </button>
+                                                        ))
+                                                    ) : (
+                                                        <div className="px-4 py-2 text-sm text-gray-500">No importers found</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         {canManage && (
                             <button
                                 onClick={() => setShowIpForm(!showIpForm)}
@@ -1267,195 +1481,6 @@ function IPManagement({
                                 <span className="mr-1.5 font-bold text-lg leading-none">+</span> New IP
                             </button>
                         )}
-                    </div>
-                </div>
-            )}
-
-            {/* Filters Section - Truncated for brevity, keeping the structure */}
-            {showFilters && (
-                <div className="ip-filters relative rounded-2xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl p-6 transition-all duration-300 animate-in slide-in-from-top-4">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
-                        {/* Quick Range */}
-                        <div className="space-y-3">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Quick Range</label>
-                            <div className="flex flex-wrap gap-2">
-                                {['all', 'weekly', 'monthly', 'yearly'].map(range => (
-                                    <button
-                                        key={range}
-                                        onClick={() => setFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${filters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                    >
-                                        {range.charAt(0).toUpperCase() + range.slice(1)}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Date Range */}
-                        <div className="space-y-3">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Date Range</label>
-                            <div className="flex items-center space-x-2">
-                                <div className="flex-1 min-w-0">
-                                    <CustomDatePicker
-                                        value={filters.startDate}
-                                        onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
-                                        name="startDate"
-                                        placeholder="From"
-                                        compact={true}
-                                    />
-                                </div>
-                                <span className="text-gray-400">to</span>
-                                <div className="flex-1 min-w-0">
-                                    <CustomDatePicker
-                                        value={filters.endDate}
-                                        onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
-                                        name="endDate"
-                                        placeholder="To"
-                                        compact={true}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Importer Filter - Simplified */}
-                        <div className="space-y-3 relative dropdown-container" ref={filterImporterRef}>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Importer</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    value={filters.importer}
-                                    onChange={(e) => { setFilters(prev => ({ ...prev, importer: e.target.value })); setActiveDropdown('filter-importer'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('filter-importer'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-importer', importers.filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())), 'filter-importer')}
-                                    placeholder="Search Importer..."
-                                    autoComplete="off"
-                                    className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
-                                />
-                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                    {filters.importer && (
-                                        <button type="button" onClick={() => setFilters(prev => ({ ...prev, importer: '' }))} className="text-gray-400 hover:text-gray-600">
-                                            <XIcon className="w-3 h-3" />
-                                        </button>
-                                    )}
-                                    <SearchIcon className="w-3 h-3 text-gray-300 pointer-events-none" />
-                                </div>
-                            </div>
-                            {activeDropdown === 'filter-importer' && (
-                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {importers.filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())).length > 0 ? (
-                                        importers.filter(imp => !filters.importer || importers.some(x => x.name === filters.importer) || imp.name.toLowerCase().includes(filters.importer.toLowerCase())).map((imp, idx) => (
-                                            <button
-                                                key={imp._id}
-                                                type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, importer: imp.name })); setActiveDropdown(null); }}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.importer === imp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {imp.name}
-                                            </button>
-                                        ))
-                                    ) : (
-                                        <div className="px-3 py-1.5 text-[11px] text-gray-500">No importers found</div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Port Filter - Simplified */}
-                        <div className="space-y-3 relative dropdown-container" ref={filterPortRef}>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Port</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    value={filters.port}
-                                    onChange={(e) => { setFilters(prev => ({ ...prev, port: e.target.value })); setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('filter-port'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-port', activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())), 'filter-port')}
-                                    placeholder="Search Port..."
-                                    autoComplete="off"
-                                    className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
-                                />
-                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                    {filters.port && (
-                                        <button type="button" onClick={() => setFilters(prev => ({ ...prev, port: '' }))} className="text-gray-400 hover:text-gray-600">
-                                            <XIcon className="w-3 h-3" />
-                                        </button>
-                                    )}
-                                    <SearchIcon className="w-3 h-3 text-gray-300 pointer-events-none" />
-                                </div>
-                            </div>
-                            {activeDropdown === 'filter-port' && (
-                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).length > 0 ? (
-                                        activePorts.filter(p => !filters.port || activePorts.some(x => x.name === filters.port) || p.name.toLowerCase().includes(filters.port.toLowerCase())).map((port, idx) => (
-                                            <button
-                                                key={port._id}
-                                                type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, port: port.name })); setActiveDropdown(null); }}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.port === port.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {port.name}
-                                            </button>
-                                        ))
-                                    ) : (
-                                        <div className="px-3 py-1.5 text-[11px] text-gray-500">No ports found</div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="space-y-3 relative dropdown-container" ref={filterProductRef}>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">IP Product</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    value={filters.productName}
-                                    onChange={(e) => { setFilters(prev => ({ ...prev, productName: e.target.value })); setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
-                                    onFocus={() => { setActiveDropdown('filter-product'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'filter-product', products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())), 'filter-product')}
-                                    placeholder="Search IP Product..."
-                                    autoComplete="off"
-                                    className="w-full px-3 py-2 text-xs bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-8"
-                                />
-                                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                                    {filters.productName && (
-                                        <button type="button" onClick={() => setFilters(prev => ({ ...prev, productName: '' }))} className="text-gray-400 hover:text-gray-600">
-                                            <XIcon className="w-3 h-3" />
-                                        </button>
-                                    )}
-                                    <SearchIcon className="w-3 h-3 text-gray-300 pointer-events-none" />
-                                </div>
-                            </div>
-                            {activeDropdown === 'filter-product' && (
-                                <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in zoom-in duration-200">
-                                    {products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())).length > 0 ? (
-                                        products.filter(p => !filters.productName || p.name.toLowerCase().includes(filters.productName.toLowerCase()) || (p.ipName || '').toLowerCase().includes(filters.productName.toLowerCase())).map((p, idx) => (
-                                            <button
-                                                key={p._id}
-                                                type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setFilters(prev => ({ ...prev, productName: p.ipName || p.name })); setActiveDropdown(null); }}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors font-medium ${filters.productName === (p.ipName || p.name) ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {p.ipName || p.name}
-                                            </button>
-                                        ))
-                                    ) : (
-                                        <div className="px-3 py-1.5 text-[11px] text-gray-500">No products found</div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end mt-6 pt-4 border-t border-gray-100">
-                        <button
-                            onClick={resetFilters}
-                            className="flex items-center text-xs font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest"
-                        >
-                            <XIcon className="w-3 h-3 mr-1" /> Clear Filters
-                        </button>
                     </div>
                 </div>
             )}

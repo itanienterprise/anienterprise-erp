@@ -153,6 +153,39 @@ function PI({
     const invoiceStyleRef = useRef(null);
     const revisePiRef = useRef(null);
 
+    const initialFilterDropdownState = {
+        port: false,
+        product: false,
+        importer: false,
+        exporter: false
+    };
+
+    const initialPiFilterState = {
+        startDate: '',
+        endDate: '',
+        port: '',
+        productName: '',
+        importerName: '',
+        exporterName: ''
+    };
+
+    const [piFilters, setPiFilters] = useState(initialPiFilterState);
+    const [showPiFilterPanel, setShowPiFilterPanel] = useState(false);
+    const [filterSearchInputs, setFilterSearchInputs] = useState({
+        portSearch: '',
+        productSearch: '',
+        importerSearch: '',
+        exporterSearch: ''
+    });
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
+
+    const piFilterPanelRef = useRef(null);
+    const piFilterButtonRef = useRef(null);
+    const portFilterRef = useRef(null);
+    const productFilterRef = useRef(null);
+    const importerFilterRef = useRef(null);
+    const exporterFilterRef = useRef(null);
+
     useEffect(() => {
         fetchRecords();
         fetchMetaData('preCarriage', setPreCarriages);
@@ -172,6 +205,88 @@ function PI({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
+
+    // Click-outside detection for PI filter panel
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                showPiFilterPanel &&
+                piFilterPanelRef.current &&
+                !piFilterPanelRef.current.contains(event.target) &&
+                piFilterButtonRef.current &&
+                !piFilterButtonRef.current.contains(event.target)
+            ) {
+                setShowPiFilterPanel(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showPiFilterPanel]);
+
+    // Click-outside detection for filter dropdowns
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            const openKey = Object.keys(filterDropdownOpen).find(key => filterDropdownOpen[key]);
+            if (!openKey) return;
+
+            let refsToCheck = [];
+            if (openKey === 'port') {
+                refsToCheck = [portFilterRef];
+            } else if (openKey === 'exporter') {
+                refsToCheck = [exporterFilterRef];
+            } else if (openKey === 'importer') {
+                refsToCheck = [importerFilterRef];
+            } else if (openKey === 'product') {
+                refsToCheck = [productFilterRef];
+            }
+
+            const isOutside = refsToCheck.every(ref => !ref.current || !ref.current.contains(event.target));
+            if (isOutside) {
+                setFilterDropdownOpen(initialFilterDropdownState);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [filterDropdownOpen]);
+
+    const getFilteredOptions = (type) => {
+        let options = [];
+        let search = '';
+
+        switch (type) {
+            case 'piFilterPort':
+                options = [...new Set(records.flatMap(r => [r.port, r.portOfDischarge, r.portOfLoading]).map(p => (p || '').trim()).filter(Boolean))].sort();
+                search = filterSearchInputs.portSearch;
+                break;
+            case 'piFilterExporter':
+                options = [...new Set(records.map(r => (r.exporterName || '').trim()).filter(Boolean))].sort();
+                search = filterSearchInputs.exporterSearch;
+                break;
+            case 'piFilterImporter':
+                options = [...new Set(records.map(r => (r.partyName || '').trim()).filter(Boolean))].sort();
+                search = filterSearchInputs.importerSearch;
+                break;
+            case 'piFilterProduct':
+                const prods = [];
+                records.forEach(r => {
+                    if (r.productName) prods.push(r.productName.trim());
+                    if (r.productsList) {
+                        r.productsList.forEach(p => {
+                            if (p.productName) prods.push(p.productName.trim());
+                        });
+                    }
+                });
+                options = [...new Set(prods)].sort();
+                search = filterSearchInputs.productSearch;
+                break;
+            default:
+                return [];
+        }
+
+        return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+    };
 
     const fetchMetaData = async (category, setter) => {
         try {
@@ -1658,14 +1773,38 @@ function PI({
     };
 
     const filteredRecords = records.filter(record => {
+        // Search Query Filter
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
                 (record.productsList && record.productsList.some(p => (p.productName || '').toLowerCase().includes(query)));
-            return (record.piNumber || '').toLowerCase().includes(query) ||
+            const matchesSearch = (record.piNumber || '').toLowerCase().includes(query) ||
                 (record.partyName || '').toLowerCase().includes(query) ||
                 matchesProduct;
+            if (!matchesSearch) return false;
         }
+
+        // Advanced Filters
+        if (piFilters.startDate && record.date && record.date < piFilters.startDate) return false;
+        if (piFilters.endDate && record.date && record.date > piFilters.endDate) return false;
+        
+        if (piFilters.port) {
+            const filterPort = piFilters.port.trim().toLowerCase();
+            const recordPort = (record.port || '').trim().toLowerCase();
+            const recordDischarge = (record.portOfDischarge || '').trim().toLowerCase();
+            const recordLoading = (record.portOfLoading || '').trim().toLowerCase();
+            if (recordPort !== filterPort && recordDischarge !== filterPort && recordLoading !== filterPort) return false;
+        }
+
+        if (piFilters.importerName && (record.partyName || '').trim().toLowerCase() !== piFilters.importerName.toLowerCase()) return false;
+        if (piFilters.exporterName && (record.exporterName || '').trim().toLowerCase() !== piFilters.exporterName.toLowerCase()) return false;
+
+        if (piFilters.productName) {
+            const matchesFilterProduct = (record.productName || '').trim().toLowerCase() === piFilters.productName.toLowerCase() ||
+                (record.productsList && record.productsList.some(p => (p.productName || '').trim().toLowerCase() === piFilters.productName.toLowerCase()));
+            if (!matchesFilterProduct) return false;
+        }
+
         return true;
     });
 
@@ -1753,22 +1892,232 @@ function PI({
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                {!showForm && !showReviseForm && canManage && (
-                    <div className="w-full md:w-auto flex flex-row justify-end gap-2 sm:gap-3 z-10">
-                        <button
-                            onClick={() => setShowReviseForm(true)}
-                            className="flex-1 md:flex-none px-4 py-2 border border-blue-200 bg-blue-50/10 hover:bg-blue-50/50 text-blue-600 font-bold rounded-xl transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap text-sm h-[40px]"
-                        >
-                            <FileTextIcon className="w-4 h-4 mr-1.5 text-blue-500" />
-                            <span>PI Revise</span>
-                        </button>
-                        <button
-                            onClick={() => setShowForm(true)}
-                            className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
-                        >
-                            <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
-                        </button>
+                {!showForm && !showReviseForm && (
+                    <div className="w-full md:w-auto flex flex-row justify-end gap-2 sm:gap-3 z-[60]">
+                        {/* Filter Button & Panel */}
+                        <div className="relative">
+                            <button
+                                ref={piFilterButtonRef}
+                                onClick={() => setShowPiFilterPanel(!showPiFilterPanel)}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPiFilterPanel || Object.values(piFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                <FunnelIcon className={`w-4 h-4 ${(showPiFilterPanel || (piFilters && Object.values(piFilters).some(v => v !== ''))) ? 'text-white' : 'text-gray-400'}`} />
+                                <span className="text-sm font-medium">Filter</span>
+                            </button>
+
+                            {/* Floating Filter Panel */}
+                            {showPiFilterPanel && piFilters && (
+                                <div ref={piFilterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200 text-left">
+                                    <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
+                                        <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setPiFilters(initialPiFilterState);
+                                                setFilterSearchInputs({
+                                                    portSearch: '',
+                                                    exporterSearch: '',
+                                                    importerSearch: '',
+                                                    productSearch: ''
+                                                });
+                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                setShowPiFilterPanel(false);
+                                            }}
+                                            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                                        >
+                                            RESET ALL
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-5">
+                                        {/* Date Range Row */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <CustomDatePicker
+                                                label="From Date"
+                                                value={piFilters.startDate}
+                                                onChange={(e) => setPiFilters({ ...piFilters, startDate: e.target.value })}
+                                                compact={true}
+                                            />
+                                            <CustomDatePicker
+                                                label="To Date"
+                                                value={piFilters.endDate}
+                                                onChange={(e) => setPiFilters({ ...piFilters, endDate: e.target.value })}
+                                                compact={true}
+                                                rightAlign={true}
+                                            />
+                                        </div>
+
+                                        {/* Port & Product Row */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* Port Filter */}
+                                            <div className="space-y-1.5 relative" ref={portFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.portSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
+                                                        placeholder={piFilters.port || "Search Port..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${piFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {piFilters.port && (
+                                                            <button type="button" onClick={() => { setPiFilters({ ...piFilters, port: '' }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.port && (() => {
+                                                    const filtered = getFilteredOptions('piFilterPort') || [];
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(opt => (
+                                                                <button key={opt} type="button" onClick={() => { setPiFilters({ ...piFilters, port: opt }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            {/* Product Filter */}
+                                            <div className="space-y-1.5 relative" ref={productFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.productSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
+                                                        placeholder={piFilters.productName || "Search Product..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${piFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {piFilters.productName && (
+                                                            <button type="button" onClick={() => { setPiFilters({ ...piFilters, productName: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.product && (() => {
+                                                    const filtered = getFilteredOptions('piFilterProduct') || [];
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(opt => (
+                                                                <button key={opt} type="button" onClick={() => { setPiFilters({ ...piFilters, productName: opt }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+                                        </div>
+
+                                        {/* Importer Filter */}
+                                        <div className="space-y-1.5 relative" ref={importerFilterRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Importer</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filterSearchInputs.importerSearch}
+                                                    onChange={(e) => {
+                                                        setFilterSearchInputs({ ...filterSearchInputs, importerSearch: e.target.value });
+                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, importer: true });
+                                                    }}
+                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, importer: true })}
+                                                    placeholder={piFilters.importerName || "Search Importer..."}
+                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${piFilters.importerName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {piFilters.importerName && (
+                                                        <button type="button" onClick={() => { setPiFilters({ ...piFilters, importerName: '' }); setFilterSearchInputs({ ...filterSearchInputs, importerSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {filterDropdownOpen.importer && (() => {
+                                                const filtered = getFilteredOptions('piFilterImporter') || [];
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {filtered.map(opt => (
+                                                            <button key={opt} type="button" onClick={() => { setPiFilters({ ...piFilters, importerName: opt }); setFilterSearchInputs({ ...filterSearchInputs, importerSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+
+                                        {/* Exporter Filter */}
+                                        <div className="space-y-1.5 relative" ref={exporterFilterRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Exporter</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filterSearchInputs.exporterSearch}
+                                                    onChange={(e) => {
+                                                        setFilterSearchInputs({ ...filterSearchInputs, exporterSearch: e.target.value });
+                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, exporter: true });
+                                                    }}
+                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, exporter: true })}
+                                                    placeholder={piFilters.exporterName || "Search Exporter..."}
+                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${piFilters.exporterName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {piFilters.exporterName && (
+                                                        <button type="button" onClick={() => { setPiFilters({ ...piFilters, exporterName: '' }); setFilterSearchInputs({ ...filterSearchInputs, exporterSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {filterDropdownOpen.exporter && (() => {
+                                                const filtered = getFilteredOptions('piFilterExporter') || [];
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {filtered.map(opt => (
+                                                            <button key={opt} type="button" onClick={() => { setPiFilters({ ...piFilters, exporterName: opt }); setFilterSearchInputs({ ...filterSearchInputs, exporterSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {canManage && (
+                            <>
+                                <button
+                                    onClick={() => setShowReviseForm(true)}
+                                    className="flex-1 md:flex-none px-4 py-2 border border-blue-200 bg-blue-50/10 hover:bg-blue-50/50 text-blue-600 font-bold rounded-xl transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap text-sm h-[40px]"
+                                >
+                                    <FileTextIcon className="w-4 h-4 mr-1.5 text-blue-500" />
+                                    <span>PI Revise</span>
+                                </button>
+                                <button
+                                    onClick={() => setShowForm(true)}
+                                    className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
+                                >
+                                    <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
+                                </button>
+                            </>
+                        )}
                     </div>
+                ) || (
+                    <div className="hidden md:block md:flex-1"></div>
                 )}
             </div>
 

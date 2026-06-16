@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
-import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon } from '../../Icons';
+import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon, FunnelIcon } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
@@ -19,6 +19,31 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const lcRef = React.useRef(null);
     const expenseHeadRef = React.useRef(null);
+
+    const initialFilterDropdownState = {
+        lcNo: false,
+        expenseHead: false
+    };
+
+    const initialExpenseFilterState = {
+        startDate: '',
+        endDate: '',
+        lcNo: '',
+        expenseHead: ''
+    };
+
+    const [expenseFilters, setExpenseFilters] = useState(initialExpenseFilterState);
+    const [showExpenseFilterPanel, setShowExpenseFilterPanel] = useState(false);
+    const [filterSearchInputs, setFilterSearchInputs] = useState({
+        lcSearch: '',
+        expenseHeadSearch: ''
+    });
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
+
+    const expenseFilterPanelRef = React.useRef(null);
+    const expenseFilterButtonRef = React.useRef(null);
+    const lcFilterRef = React.useRef(null);
+    const expenseHeadFilterRef = React.useRef(null);
 
     const initialFormData = {
         date: '',
@@ -224,6 +249,67 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Click-outside detection for expense filter panel
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                showExpenseFilterPanel &&
+                expenseFilterPanelRef.current &&
+                !expenseFilterPanelRef.current.contains(event.target) &&
+                expenseFilterButtonRef.current &&
+                !expenseFilterButtonRef.current.contains(event.target)
+            ) {
+                setShowExpenseFilterPanel(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showExpenseFilterPanel]);
+
+    // Click-outside detection for filter dropdowns
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            const openKey = Object.keys(filterDropdownOpen).find(key => filterDropdownOpen[key]);
+            if (!openKey) return;
+
+            let refsToCheck = [];
+            if (openKey === 'lcNo') {
+                refsToCheck = [lcFilterRef];
+            } else if (openKey === 'expenseHead') {
+                refsToCheck = [expenseHeadFilterRef];
+            }
+
+            const isOutside = refsToCheck.every(ref => !ref.current || !ref.current.contains(event.target));
+            if (isOutside) {
+                setFilterDropdownOpen(initialFilterDropdownState);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [filterDropdownOpen]);
+
+    const getFilteredOptions = (type) => {
+        let options = [];
+        let search = '';
+
+        switch (type) {
+            case 'expenseFilterLc':
+                options = [...new Set(expenses.map(e => (e.lcNo || '').trim()).filter(Boolean))].sort();
+                search = filterSearchInputs.lcSearch;
+                break;
+            case 'expenseFilterHead':
+                options = [...new Set(expenses.map(e => (e.expenseHead || '').trim()).filter(Boolean))].sort();
+                search = filterSearchInputs.expenseHeadSearch;
+                break;
+            default:
+                return [];
+        }
+
+        return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+    };
+
     const handleDropdownKeyDown = (e, list, field) => {
         if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -360,11 +446,23 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
 
     const filteredExpenses = expenses.filter(exp => {
         if (exp.type === 'bill') return false;
-        const query = searchQuery.toLowerCase();
-        return (
-            (exp.lcNo || '').toLowerCase().includes(query) ||
-            (exp.expenseHead || '').toLowerCase().includes(query)
-        );
+
+        // Search Query Filter
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            const matchesSearch = (exp.lcNo || '').toLowerCase().includes(query) ||
+                (exp.expenseHead || '').toLowerCase().includes(query);
+            if (!matchesSearch) return false;
+        }
+
+        // Advanced Filters
+        if (expenseFilters.startDate && exp.date && exp.date < expenseFilters.startDate) return false;
+        if (expenseFilters.endDate && exp.date && exp.date > expenseFilters.endDate) return false;
+
+        if (expenseFilters.lcNo && (exp.lcNo || '').trim().toLowerCase() !== expenseFilters.lcNo.toLowerCase()) return false;
+        if (expenseFilters.expenseHead && (exp.expenseHead || '').trim().toLowerCase() !== expenseFilters.expenseHead.toLowerCase()) return false;
+
+        return true;
     });
 
     const totalAmount = filteredExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
@@ -395,10 +493,137 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                 )}
 
                 {!showAddModal && (
-                    <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
+                    <div className="w-full md:w-auto flex flex-row justify-end gap-2 sm:gap-3 z-[60]">
+                        {/* Filter Button & Panel */}
+                        <div className="relative">
+                            <button
+                                ref={expenseFilterButtonRef}
+                                onClick={() => setShowExpenseFilterPanel(!showExpenseFilterPanel)}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showExpenseFilterPanel || Object.values(expenseFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                <FunnelIcon className={`w-4 h-4 ${(showExpenseFilterPanel || (expenseFilters && Object.values(expenseFilters).some(v => v !== ''))) ? 'text-white' : 'text-gray-400'}`} />
+                                <span className="text-sm font-medium">Filter</span>
+                            </button>
+
+                            {/* Floating Filter Panel */}
+                            {showExpenseFilterPanel && expenseFilters && (
+                                <div ref={expenseFilterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[400px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200 text-left">
+                                    <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
+                                        <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setExpenseFilters(initialExpenseFilterState);
+                                                setFilterSearchInputs({
+                                                    lcSearch: '',
+                                                    expenseHeadSearch: ''
+                                                });
+                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                setShowExpenseFilterPanel(false);
+                                            }}
+                                            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                                        >
+                                            RESET ALL
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-5">
+                                        {/* Date Range Row */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <CustomDatePicker
+                                                label="From Date"
+                                                value={expenseFilters.startDate}
+                                                onChange={(e) => setExpenseFilters({ ...expenseFilters, startDate: e.target.value })}
+                                                compact={true}
+                                            />
+                                            <CustomDatePicker
+                                                label="To Date"
+                                                value={expenseFilters.endDate}
+                                                onChange={(e) => setExpenseFilters({ ...expenseFilters, endDate: e.target.value })}
+                                                compact={true}
+                                                rightAlign={true}
+                                            />
+                                        </div>
+
+                                        {/* LC No Filter */}
+                                        <div className="space-y-1.5 relative" ref={lcFilterRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filterSearchInputs.lcSearch}
+                                                    onChange={(e) => {
+                                                        setFilterSearchInputs({ ...filterSearchInputs, lcSearch: e.target.value });
+                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
+                                                    }}
+                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
+                                                    placeholder={expenseFilters.lcNo || "Search LC No..."}
+                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${expenseFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {expenseFilters.lcNo && (
+                                                        <button type="button" onClick={() => { setExpenseFilters({ ...expenseFilters, lcNo: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {filterDropdownOpen.lcNo && (() => {
+                                                const filtered = getFilteredOptions('expenseFilterLc') || [];
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {filtered.map(opt => (
+                                                            <button key={opt} type="button" onClick={() => { setExpenseFilters({ ...expenseFilters, lcNo: opt }); setFilterSearchInputs({ ...filterSearchInputs, lcSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium">{opt}</button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+
+                                        {/* Expense Head Filter */}
+                                        <div className="space-y-1.5 relative" ref={expenseHeadFilterRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Expense Head</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filterSearchInputs.expenseHeadSearch}
+                                                    onChange={(e) => {
+                                                        setFilterSearchInputs({ ...filterSearchInputs, expenseHeadSearch: e.target.value });
+                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, expenseHead: true });
+                                                    }}
+                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, expenseHead: true })}
+                                                    placeholder={expenseFilters.expenseHead || "Search Expense Head..."}
+                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${expenseFilters.expenseHead ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {expenseFilters.expenseHead && (
+                                                        <button type="button" onClick={() => { setExpenseFilters({ ...expenseFilters, expenseHead: '' }); setFilterSearchInputs({ ...filterSearchInputs, expenseHeadSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {filterDropdownOpen.expenseHead && (() => {
+                                                const filtered = getFilteredOptions('expenseFilterHead') || [];
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {filtered.map(opt => (
+                                                            <button key={opt} type="button" onClick={() => { setExpenseFilters({ ...expenseFilters, expenseHead: opt }); setFilterSearchInputs({ ...filterSearchInputs, expenseHeadSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium">{opt}</button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <button
                             onClick={() => setShowAddModal(true)}
-                            className="w-full md:w-auto px-6 py-2.5 md:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap"
+                            className="w-full md:w-auto px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" />
                             <span>Add Expense</span>

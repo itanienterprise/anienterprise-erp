@@ -77,6 +77,39 @@ function PackingList({
     // Auto-population dropdown state
     const [piSearchQuery, setPiSearchQuery] = useState('');
 
+    const initialFilterDropdownState = {
+        port: false,
+        product: false,
+        importer: false,
+        exporter: false
+    };
+
+    const initialPlFilterState = {
+        startDate: '',
+        endDate: '',
+        port: '',
+        productName: '',
+        importerName: '',
+        exporterName: ''
+    };
+
+    const [plFilters, setPlFilters] = useState(initialPlFilterState);
+    const [showPlFilterPanel, setShowPlFilterPanel] = useState(false);
+    const [filterSearchInputs, setFilterSearchInputs] = useState({
+        portSearch: '',
+        productSearch: '',
+        importerSearch: '',
+        exporterSearch: ''
+    });
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
+
+    const plFilterPanelRef = useRef(null);
+    const plFilterButtonRef = useRef(null);
+    const portFilterRef = useRef(null);
+    const productFilterRef = useRef(null);
+    const importerFilterRef = useRef(null);
+    const exporterFilterRef = useRef(null);
+
     const toastTimerRef = useRef(null);
     const piDropdownRef = useRef(null);
     const importerRef = useRef(null);
@@ -160,6 +193,88 @@ function PackingList({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
+
+    // Click-outside detection for PL filter panel
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                showPlFilterPanel &&
+                plFilterPanelRef.current &&
+                !plFilterPanelRef.current.contains(event.target) &&
+                plFilterButtonRef.current &&
+                !plFilterButtonRef.current.contains(event.target)
+            ) {
+                setShowPlFilterPanel(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showPlFilterPanel]);
+
+    // Click-outside detection for filter dropdowns
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            const openKey = Object.keys(filterDropdownOpen).find(key => filterDropdownOpen[key]);
+            if (!openKey) return;
+
+            let refsToCheck = [];
+            if (openKey === 'port') {
+                refsToCheck = [portFilterRef];
+            } else if (openKey === 'exporter') {
+                refsToCheck = [exporterFilterRef];
+            } else if (openKey === 'importer') {
+                refsToCheck = [importerFilterRef];
+            } else if (openKey === 'product') {
+                refsToCheck = [productFilterRef];
+            }
+
+            const isOutside = refsToCheck.every(ref => !ref.current || !ref.current.contains(event.target));
+            if (isOutside) {
+                setFilterDropdownOpen(initialFilterDropdownState);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [filterDropdownOpen]);
+
+    const getFilteredOptions = (type) => {
+        let options = [];
+        let search = '';
+
+        switch (type) {
+            case 'plFilterPort':
+                options = [...new Set(records.flatMap(r => [r.port, r.portOfDischarge, r.portOfLoading]).map(p => (p || '').trim()).filter(Boolean))].sort();
+                search = filterSearchInputs.portSearch;
+                break;
+            case 'plFilterExporter':
+                options = [...new Set(records.map(r => (r.exporterName || '').trim()).filter(Boolean))].sort();
+                search = filterSearchInputs.exporterSearch;
+                break;
+            case 'plFilterImporter':
+                options = [...new Set(records.map(r => (r.partyName || '').trim()).filter(Boolean))].sort();
+                search = filterSearchInputs.importerSearch;
+                break;
+            case 'plFilterProduct':
+                const prods = [];
+                records.forEach(r => {
+                    if (r.productName) prods.push(r.productName.trim());
+                    if (r.productsList) {
+                        r.productsList.forEach(p => {
+                            if (p.productName) prods.push(p.productName.trim());
+                        });
+                    }
+                });
+                options = [...new Set(prods)].sort();
+                search = filterSearchInputs.productSearch;
+                break;
+            default:
+                return [];
+        }
+
+        return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+    };
 
     const fetchTrSetups = async () => {
         try {
@@ -619,12 +734,36 @@ function PackingList({
     };
 
     const filteredRecords = records.filter(record => {
+        // Search Query Filter
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
-            return (record.packingListNumber || '').toLowerCase().includes(query) ||
+            const matchesSearch = (record.packingListNumber || '').toLowerCase().includes(query) ||
                 (record.partyName || '').toLowerCase().includes(query) ||
                 (record.piNumber || '').toLowerCase().includes(query);
+            if (!matchesSearch) return false;
         }
+
+        // Advanced Filters
+        if (plFilters.startDate && record.date && record.date < plFilters.startDate) return false;
+        if (plFilters.endDate && record.date && record.date > plFilters.endDate) return false;
+
+        if (plFilters.port) {
+            const filterPort = plFilters.port.trim().toLowerCase();
+            const recordPort = (record.port || '').trim().toLowerCase();
+            const recordDischarge = (record.portOfDischarge || '').trim().toLowerCase();
+            const recordLoading = (record.portOfLoading || '').trim().toLowerCase();
+            if (recordPort !== filterPort && recordDischarge !== filterPort && recordLoading !== filterPort) return false;
+        }
+
+        if (plFilters.importerName && (record.partyName || '').trim().toLowerCase() !== plFilters.importerName.toLowerCase()) return false;
+        if (plFilters.exporterName && (record.exporterName || '').trim().toLowerCase() !== plFilters.exporterName.toLowerCase()) return false;
+
+        if (plFilters.productName) {
+            const matchesFilterProduct = (record.productName || '').trim().toLowerCase() === plFilters.productName.toLowerCase() ||
+                (record.productsList && record.productsList.some(p => (p.productName || '').trim().toLowerCase() === plFilters.productName.toLowerCase()));
+            if (!matchesFilterProduct) return false;
+        }
+
         return true;
     });
 
@@ -735,11 +874,215 @@ function PackingList({
                         />
                     </div>
 
-                    <div className="w-full md:w-1/4 flex justify-end z-10 gap-2 sm:gap-3">
+                    <div className="w-full md:w-auto flex flex-row justify-end gap-2 sm:gap-3 z-[60]">
+                        {/* Filter Button & Panel */}
+                        <div className="relative">
+                            <button
+                                ref={plFilterButtonRef}
+                                onClick={() => setShowPlFilterPanel(!showPlFilterPanel)}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPlFilterPanel || Object.values(plFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                <FunnelIcon className={`w-4 h-4 ${(showPlFilterPanel || (plFilters && Object.values(plFilters).some(v => v !== ''))) ? 'text-white' : 'text-gray-400'}`} />
+                                <span className="text-sm font-medium">Filter</span>
+                            </button>
+
+                            {/* Floating Filter Panel */}
+                            {showPlFilterPanel && plFilters && (
+                                <div ref={plFilterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200 text-left">
+                                    <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
+                                        <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setPlFilters(initialPlFilterState);
+                                                setFilterSearchInputs({
+                                                    portSearch: '',
+                                                    exporterSearch: '',
+                                                    importerSearch: '',
+                                                    productSearch: ''
+                                                });
+                                                setFilterDropdownOpen(initialFilterDropdownState);
+                                                setShowPlFilterPanel(false);
+                                            }}
+                                            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                                        >
+                                            RESET ALL
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-5">
+                                        {/* Date Range Row */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <CustomDatePicker
+                                                label="From Date"
+                                                value={plFilters.startDate}
+                                                onChange={(e) => setPlFilters({ ...plFilters, startDate: e.target.value })}
+                                                compact={true}
+                                            />
+                                            <CustomDatePicker
+                                                label="To Date"
+                                                value={plFilters.endDate}
+                                                onChange={(e) => setPlFilters({ ...plFilters, endDate: e.target.value })}
+                                                compact={true}
+                                                rightAlign={true}
+                                            />
+                                        </div>
+
+                                        {/* Port & Product Row */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* Port Filter */}
+                                            <div className="space-y-1.5 relative" ref={portFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Port</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.portSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, portSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, port: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, port: true })}
+                                                        placeholder={plFilters.port || "Search Port..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${plFilters.port ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {plFilters.port && (
+                                                            <button type="button" onClick={() => { setPlFilters({ ...plFilters, port: '' }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.port && (() => {
+                                                    const filtered = getFilteredOptions('plFilterPort') || [];
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(opt => (
+                                                                <button key={opt} type="button" onClick={() => { setPlFilters({ ...plFilters, port: opt }); setFilterSearchInputs({ ...filterSearchInputs, portSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            {/* Product Filter */}
+                                            <div className="space-y-1.5 relative" ref={productFilterRef}>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearchInputs.productSearch}
+                                                        onChange={(e) => {
+                                                            setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
+                                                            setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
+                                                        }}
+                                                        onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
+                                                        placeholder={plFilters.productName || "Search Product..."}
+                                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${plFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                    />
+                                                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {plFilters.productName && (
+                                                            <button type="button" onClick={() => { setPlFilters({ ...plFilters, productName: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                {filterDropdownOpen.product && (() => {
+                                                    const filtered = getFilteredOptions('plFilterProduct') || [];
+                                                    return filtered.length > 0 ? (
+                                                        <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                            {filtered.map(opt => (
+                                                                <button key={opt} type="button" onClick={() => { setPlFilters({ ...plFilters, productName: opt }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+                                        </div>
+
+                                        {/* Importer Filter */}
+                                        <div className="space-y-1.5 relative" ref={importerFilterRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Importer</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filterSearchInputs.importerSearch}
+                                                    onChange={(e) => {
+                                                        setFilterSearchInputs({ ...filterSearchInputs, importerSearch: e.target.value });
+                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, importer: true });
+                                                    }}
+                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, importer: true })}
+                                                    placeholder={plFilters.importerName || "Search Importer..."}
+                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${plFilters.importerName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {plFilters.importerName && (
+                                                        <button type="button" onClick={() => { setPlFilters({ ...plFilters, importerName: '' }); setFilterSearchInputs({ ...filterSearchInputs, importerSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {filterDropdownOpen.importer && (() => {
+                                                const filtered = getFilteredOptions('plFilterImporter') || [];
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {filtered.map(opt => (
+                                                            <button key={opt} type="button" onClick={() => { setPlFilters({ ...plFilters, importerName: opt }); setFilterSearchInputs({ ...filterSearchInputs, importerSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+
+                                        {/* Exporter Filter */}
+                                        <div className="space-y-1.5 relative" ref={exporterFilterRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Exporter</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filterSearchInputs.exporterSearch}
+                                                    onChange={(e) => {
+                                                        setFilterSearchInputs({ ...filterSearchInputs, exporterSearch: e.target.value });
+                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, exporter: true });
+                                                    }}
+                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, exporter: true })}
+                                                    placeholder={plFilters.exporterName || "Search Exporter..."}
+                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${plFilters.exporterName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {plFilters.exporterName && (
+                                                        <button type="button" onClick={() => { setPlFilters({ ...plFilters, exporterName: '' }); setFilterSearchInputs({ ...filterSearchInputs, exporterSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {filterDropdownOpen.exporter && (() => {
+                                                const filtered = getFilteredOptions('plFilterExporter') || [];
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {filtered.map(opt => (
+                                                            <button key={opt} type="button" onClick={() => { setPlFilters({ ...plFilters, exporterName: opt }); setFilterSearchInputs({ ...filterSearchInputs, exporterSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {canManage && (
                             <button
                                 onClick={() => { setShowForm(true); resetForm(); }}
-                                className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
+                                className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
                             >
                                 <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New
                             </button>
