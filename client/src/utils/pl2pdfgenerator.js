@@ -137,8 +137,12 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         }
 
         if (isPiRevised) {
-            addWrapped(`PRICE AS PER PROFORMA INVOICE: ${cleanPiNumber} Date:${formatDate(pi?.date || '')}`);
-            addWrapped(`& REVISED PI NO: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`);
+            if (record.lcAmendment) {
+                addWrapped(`PRICE AS PER PROFORMA INVOICE: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`);
+            } else {
+                addWrapped(`PRICE AS PER PROFORMA INVOICE: ${cleanPiNumber} Date:${formatDate(pi?.date || '')}`);
+                addWrapped(`& REVISED PI NO: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`);
+            }
         } else {
             addWrapped(`PRICE AS PER PROFORMA INVOICE: ${piNo || record.piNumber || ''} Date:${piDate || formatDate(record.piDate)}`);
         }
@@ -278,18 +282,27 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         }
 
         if (isPiRevised) {
-            drawLine([
-                { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
-                { text: cleanPiNumber, bold: true },
-                { text: " Date:", bold: true },
-                { text: formatDate(pi?.date || ''), bold: true }
-            ]);
-            drawLine([
-                { text: "& REVISED PI NO: ", bold: true },
-                { text: record.piNumber || '', bold: true },
-                { text: " Date:", bold: true },
-                { text: formatDate(record.piDate), bold: true }
-            ]);
+            if (record.lcAmendment) {
+                drawLine([
+                    { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
+                    { text: record.piNumber || '', bold: true },
+                    { text: " Date:", bold: true },
+                    { text: formatDate(record.piDate), bold: true }
+                ]);
+            } else {
+                drawLine([
+                    { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },
+                    { text: cleanPiNumber, bold: true },
+                    { text: " Date:", bold: true },
+                    { text: formatDate(pi?.date || ''), bold: true }
+                ]);
+                drawLine([
+                    { text: "& REVISED PI NO: ", bold: true },
+                    { text: record.piNumber || '', bold: true },
+                    { text: " Date:", bold: true },
+                    { text: formatDate(record.piDate), bold: true }
+                ]);
+            }
         } else {
             drawLine([
                 { text: "PRICE AS PER PROFORMA INVOICE: ", bold: true },

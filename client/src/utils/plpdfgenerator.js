@@ -334,7 +334,11 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
 
             let piDisplayStr = `PROFORMA INVOICE: ${piNo} Date:${piDate}`;
             if (isPiRevised) {
-                piDisplayStr = `PROFORMA INVOICE: ${cleanPiNumber} Date:${formatDate(pi?.date || '')} & REVISED PI NO: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`;
+                if (record.lcAmendment) {
+                    piDisplayStr = `PROFORMA INVOICE: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`;
+                } else {
+                    piDisplayStr = `PROFORMA INVOICE: ${cleanPiNumber} Date:${formatDate(pi?.date || '')} & REVISED PI NO: ${record.piNumber || ''} Date:${formatDate(record.piDate)}`;
+                }
             }
 
             descParts.push(`IMPORTEDAGAINEST IRC NO-${irc}`);
