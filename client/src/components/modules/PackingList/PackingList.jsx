@@ -148,7 +148,7 @@ function PackingList({
         lcDate: '',
         buyerOrderNo: '',
         buyerOrderDate: '',
-        productsList: [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
+        productsList: [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
         productsImage: '',
         partySignature: '',
         exporterSignature: '',
@@ -362,6 +362,7 @@ function PackingList({
                         hsCode: p.hsCode || '',
                         quantity: String(displayQty),
                         bagCount: '',
+                        packingType: rawPi.packingType || '',
                         netWeight: String(displayQty),
                         grossWeight: '',
                         rate: p.rate || '',
@@ -382,6 +383,7 @@ function PackingList({
                         hsCode: p.hsCode || '',
                         quantity: p.quantity || '',
                         bagCount: '',
+                        packingType: rawPi.packingType || '',
                         netWeight: p.quantity || '',
                         grossWeight: '',
                         rate: p.rate || '',
@@ -399,6 +401,7 @@ function PackingList({
                 hsCode: p.hsCode || '',
                 quantity: p.quantity || '',
                 bagCount: '',
+                packingType: rawPi.packingType || '',
                 netWeight: p.quantity || '',
                 grossWeight: '',
                 rate: p.rate || '',
@@ -409,7 +412,7 @@ function PackingList({
         }
 
         if (mappedProducts.length === 0) {
-            mappedProducts = [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }];
+            mappedProducts = [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }];
         }
 
         setFormData(prev => ({
@@ -494,7 +497,7 @@ function PackingList({
     const addProductRow = () => {
         setFormData(prev => ({
             ...prev,
-            productsList: [...prev.productsList, { productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '' }]
+            productsList: [...prev.productsList, { productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '' }]
         }));
     };
 
@@ -530,7 +533,7 @@ function PackingList({
             lcDate: '',
             buyerOrderNo: '',
             buyerOrderDate: '',
-            productsList: [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
+            productsList: [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
             productsImage: '',
             partySignature: '',
             exporterSignature: '',
@@ -650,6 +653,7 @@ function PackingList({
                     hsCode: p.hsCode || '',
                     quantity: p.quantity || '',
                     bagCount: p.bagCount || '',
+                    packingType: p.packingType || '',
                     netWeight: p.netWeight || '',
                     grossWeight: p.grossWeight || '',
                     rate: p.rate || '',
@@ -657,7 +661,7 @@ function PackingList({
                     freight: p.freight || '',
                     totalFreight: p.totalFreight || ''
                 }))
-                : [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
+                : [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
             productsImage: record.productsImage || '',
             partySignature: record.partySignature || '',
             exporterSignature: record.exporterSignature || '',
@@ -1783,7 +1787,7 @@ function PackingList({
 
                             {/* --- Products List Dynamic Editor --- */}
                             <div className="space-y-4">
-                                {(formData.productsList || [{ productName: '', hsCode: '', quantity: '', bagCount: '', netWeight: '', grossWeight: '' }]).map((item, idx) => (
+                                {(formData.productsList || [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '' }]).map((item, idx) => (
                                     <div key={idx} className="p-5 bg-white/40 backdrop-blur-md border border-gray-200/50 rounded-2xl relative space-y-4 shadow-sm hover:shadow-md transition-all duration-200">
                                         <div className="flex items-center justify-between border-b border-gray-200/40 pb-2">
                                             <div className="flex items-center gap-2">
@@ -1806,7 +1810,7 @@ function PackingList({
 
                                         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                                             {/* Product Name */}
-                                            <div className="md:col-span-3 space-y-1.5">
+                                            <div className="md:col-span-2 space-y-1.5">
                                                 <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Product Name</label>
                                                 <input
                                                     type="text"
@@ -1844,13 +1848,25 @@ function PackingList({
                                             </div>
 
                                             {/* Bag Count */}
-                                            <div className="md:col-span-2 space-y-1.5">
-                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Bag Count</label>
+                                            <div className="md:col-span-1 space-y-1.5">
+                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block truncate" title="Bag Count">Bag Count</label>
                                                 <input
                                                     type="number"
                                                     value={item.bagCount}
                                                     onChange={(e) => handleProductChange(idx, 'bagCount', e.target.value)}
-                                                    placeholder="e.g. 500"
+                                                    placeholder="500"
+                                                    className="w-full px-2.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-center"
+                                                />
+                                            </div>
+
+                                            {/* Packing Type */}
+                                            <div className="md:col-span-2 space-y-1.5">
+                                                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block truncate" title="Packing Type">Packing Type</label>
+                                                <input
+                                                    type="text"
+                                                    value={item.packingType || ''}
+                                                    onChange={(e) => handleProductChange(idx, 'packingType', e.target.value)}
+                                                    placeholder="e.g. PP Bag"
                                                     className="w-full px-3.5 py-2 bg-white/80 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                 />
                                             </div>

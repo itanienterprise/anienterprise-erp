@@ -309,11 +309,26 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
             const bagsText = `${totalBags.toLocaleString('en-US')}`;
             doc.text(bagsText, pX, pY, { align: 'center', charSpace: -0.15 });
 
-            const rawBagType = String(record?.packingType || '').trim().toUpperCase();
-            const bagTypes = rawBagType
-                .split(',')
-                .map(t => t.trim())
-                .filter(Boolean);
+            let bagTypes = [];
+            if (Array.isArray(record?.productsList) && record.productsList.length > 0) {
+                record.productsList.forEach(prod => {
+                    if (prod.packingType) {
+                        prod.packingType.split(',').forEach(t => {
+                            const trimmed = t.trim().toUpperCase();
+                            if (trimmed && !bagTypes.includes(trimmed)) {
+                                bagTypes.push(trimmed);
+                            }
+                        });
+                    }
+                });
+            }
+            if (bagTypes.length === 0) {
+                const rawBagType = String(record?.packingType || '').trim().toUpperCase();
+                bagTypes = rawBagType
+                    .split(',')
+                    .map(t => t.trim())
+                    .filter(Boolean);
+            }
 
             let currentPackY = pY + pLS;
             if (bagTypes.length > 0) {
