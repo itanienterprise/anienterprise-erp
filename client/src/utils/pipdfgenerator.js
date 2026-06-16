@@ -237,16 +237,20 @@ export const generatePIPDF = (record) => {
         termsText = termsText.split('\n')
             .filter(line => !line.trim().toLowerCase().startsWith('packing:'))
             .join('\n');
-    } else if (record.packingType) {
-        const formattedPacking = record.packingType.split(',').map(s => s.trim()).join(' / ');
+    } else {
+        let hasPackingLine = false;
         termsText = termsText.split('\n')
             .map(line => {
                 if (line.trim().toLowerCase().startsWith('packing:')) {
-                    return `Packing: ${formattedPacking}`;
+                    hasPackingLine = true;
+                    return `Packing: Export Standard`;
                 }
                 return line;
             })
             .join('\n');
+        if (!hasPackingLine) {
+            termsText += `\nPacking: Export Standard`;
+        }
     }
     // Split at AGAINST so the delivery clause always occupies exactly one line
     // (compressed via charSpace if needed) and the rest wraps normally below.
@@ -450,11 +454,7 @@ export const generatePIPDF = (record) => {
     }
     extraDescParts.push(bankLine);
     if (showPacking) {
-        if (record.packingType) {
-            extraDescParts.push(`EXPORT STANDARD PACKING: ${record.packingType.split(',').map(s => s.trim().toUpperCase()).join(' / ')}`);
-        } else {
-            extraDescParts.push("EXPORT STANDARD PACKING");
-        }
+        extraDescParts.push("Export Standard Packing");
     }
     const extraDescText = (extraDescParts.join("\n") + "\n" + (record.descriptionGoods || defaultDescLines)).trim();
 

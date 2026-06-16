@@ -172,16 +172,20 @@ export const generatePI2PDF = (record) => {
         termsText = termsText.split('\n')
             .filter(line => !line.trim().toLowerCase().startsWith('packing:'))
             .join('\n');
-    } else if (record.packingType) {
-        const formattedPacking = record.packingType.split(',').map(s => s.trim()).join(' / ');
+    } else {
+        let hasPackingLine = false;
         termsText = termsText.split('\n')
             .map(line => {
                 if (line.trim().toLowerCase().startsWith('packing:')) {
-                    return `Packing: ${formattedPacking}`;
+                    hasPackingLine = true;
+                    return `Packing: Export Standard`;
                 }
                 return line;
             })
             .join('\n');
+        if (!hasPackingLine) {
+            termsText += `\nPacking: Export Standard`;
+        }
     }
     // Collapse soft newlines so words like "AGAINST" are not orphaned on their own line.
     const termsTextFormatted = termsText.replace(/ ?\n(?!Packing:)/gi, ' ');
@@ -371,11 +375,7 @@ export const generatePI2PDF = (record) => {
         descParts.push(`COUNTRY OF ORIGIN ${(record.countryOrigin || 'INDIA').toUpperCase()}`);
     }
     if (showPacking) {
-        if (record.packingType) {
-            descParts.push(`EXPORT STANDARD PACKING: ${record.packingType.split(',').map(s => s.trim().toUpperCase()).join(' / ')}`);
-        } else {
-            descParts.push('EXPORT STANDARD PACKING');
-        }
+        descParts.push('Export Standard Packing');
     }
     if (record.indianBank) {
         descParts.push(`ADVISING BANK MUST BE THROUGH: ${record.indianBank}`);
