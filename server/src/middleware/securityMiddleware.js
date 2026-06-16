@@ -15,10 +15,16 @@ const securityMiddleware = (req, res, next) => {
     }
 
     // 2. Prevent Replay Attacks (e.g., 5-minute window)
-    const now = Date.now();
-    const requestTime = parseInt(timestamp);
-    if (isNaN(requestTime) || Math.abs(now - requestTime) > 5 * 60 * 1000) {
-        return res.status(403).json({ message: 'Request expired or invalid timestamp' });
+    // Relaxed for legacy BlackBerry devices due to carrier time synchronization issues
+    const userAgent = req.headers['user-agent'] || '';
+    const isLegacyDevice = /BlackBerry|BB10/i.test(userAgent);
+
+    if (!isLegacyDevice) {
+        const now = Date.now();
+        const requestTime = parseInt(timestamp);
+        if (isNaN(requestTime) || Math.abs(now - requestTime) > 5 * 60 * 1000) {
+            return res.status(403).json({ message: 'Request expired or invalid timestamp' });
+        }
     }
 
     // 3. Handle Encrypted Body

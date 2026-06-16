@@ -319,6 +319,18 @@ function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Detect touch-only devices (e.g. BB Passport) — works with any browser (Firefox, Chrome, native)
+  // Desktop has a fine pointer (mouse); touch-only devices have a coarse pointer (finger)
+  const isTouchOnlyDevice = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
+  // Add .touch-device class to <html> for CSS gradient fallbacks on BB Passport
+  useEffect(() => {
+    if (isTouchOnlyDevice) {
+      document.documentElement.classList.add('touch-device');
+    }
+    return () => { document.documentElement.classList.remove('touch-device'); };
+  }, [isTouchOnlyDevice]);
+
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
     if (sidebarOpen) {
@@ -1641,11 +1653,12 @@ function App() {
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-gray-900/50 z-[1050] md:hidden animate-in fade-in duration-300 no-print"
+          style={{backgroundColor: isTouchOnlyDevice ? 'rgba(17,24,39,0.5)' : ''}}
           onClick={() => setSidebarOpen(false)}
         />
       )}
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[1100] w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out overflow-x-hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
+      <aside className={`fixed inset-y-0 left-0 z-[1100] w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out overflow-x-hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`} style={isTouchOnlyDevice ? {transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)'} : {}}>
         <div className="p-4 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center">
             <button
@@ -2058,18 +2071,18 @@ function App() {
         {/* Header */}
         <header className="relative z-[1000] flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-200 shadow-sm print:hidden">
           <div className="flex items-center">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`${isTouchOnlyDevice ? '' : 'md:hidden'} p-2 rounded-md text-gray-600 hover:bg-gray-100`}>
               <MenuIcon className="w-6 h-6" />
             </button>
-            <div className="hidden md:block ml-0">
+            <div className={`${isTouchOnlyDevice ? 'hidden' : 'hidden md:block'} ml-0`}>
               <h1 className="text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
                 ANI Enterprise ERP
               </h1>
             </div>
           </div>
           {/* Centered title on mobile only */}
-          <div className="absolute left-0 right-0 flex justify-center pointer-events-none md:hidden">
-            <h1 className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
+          <div className={`absolute left-0 right-0 flex justify-center pointer-events-none ${isTouchOnlyDevice ? '' : 'md:hidden'}`}>
+            <h1 className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight" style={{color: '#2563eb'}}>
               ANI Enterprise ERP
             </h1>
           </div>
