@@ -153,8 +153,35 @@ const CustomDatePicker = ({
                         >
                             <ChevronLeftIcon className="w-5 h-5" />
                         </button>
-                        <div className="date-picker-month-year">
-                            {months[viewDate.getMonth()]} {viewDate.getFullYear()}
+                        <div className="date-picker-month-year flex items-center gap-1">
+                            <select
+                                value={viewDate.getMonth()}
+                                onChange={(e) => {
+                                    setViewDate(new Date(viewDate.getFullYear(), parseInt(e.target.value), 1));
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="date-picker-select"
+                            >
+                                {months.map((m, idx) => (
+                                    <option key={m} value={idx}>{m}</option>
+                                ))}
+                            </select>
+                            <select
+                                value={viewDate.getFullYear()}
+                                onChange={(e) => {
+                                    setViewDate(new Date(parseInt(e.target.value), viewDate.getMonth(), 1));
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="date-picker-select"
+                            >
+                                {(() => {
+                                    const currentYear = new Date().getFullYear();
+                                    const yearsList = Array.from({ length: 60 }, (_, i) => currentYear - 40 + i);
+                                    return yearsList.map(y => (
+                                        <option key={y} value={y}>{y}</option>
+                                    ));
+                                })()}
+                            </select>
                         </div>
                         <button
                             type="button"
