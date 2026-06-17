@@ -102,13 +102,27 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         const coverNote = lc?.marineCoverNote || '';
         const cnDate = lc?.marineCNDate ? formatDate(lc.marineCNDate) : '';
         const insuranceCo = lc?.insuranceCo || 'CONTINENTAL INSURANCE LIMITED';
-        const amnd = record.lcAmendment ? ` & ${record.lcAmendment}` : '';
+        const amnd = record.lcAmendment ? `& ${record.lcAmendment}` : '';
         let coverNoteAmnd = amnd;
         if (record.lcAmendment && lc?.amendments?.length > 0) {
-            const matchedAmnd = lc.amendments[lc.amendments.length - 1];
+            const cleanLcAmendment = record.lcAmendment.toUpperCase();
+            let matchedAmnd = lc.amendments.find(a => {
+                const aNo = (a.amendmentNo || '').toUpperCase();
+                return aNo && (cleanLcAmendment.includes(aNo) || aNo.includes(cleanLcAmendment));
+            });
+            if (!matchedAmnd) {
+                matchedAmnd = lc.amendments[lc.amendments.length - 1];
+            }
             if (matchedAmnd && matchedAmnd.addnNo) {
-                const dateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
-                coverNoteAmnd = ` & ADDN NO: ${matchedAmnd.addnNo}${dateMatch ? ` DATE: ${dateMatch[1]}` : ''}`;
+                let amndDate = matchedAmnd.addnDate || matchedAmnd.amendmentDate;
+                let amndDateStr = amndDate ? formatDate(amndDate) : '';
+                if (!amndDateStr) {
+                    const dateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
+                    if (dateMatch) {
+                        amndDateStr = dateMatch[1];
+                    }
+                }
+                coverNoteAmnd = `& ADDN NO: ${matchedAmnd.addnNo}${amndDateStr ? `, DATE. ${amndDateStr}` : ''}`;
             }
         }
         const piNo = pi?.piNumber || '';
@@ -128,8 +142,9 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         addWrapped(`IMPORTED AGAINST IRC NO-${irc}`);
 
         if (maxWidth > 0) {
-            addWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${coverNoteAmnd}`);
-            addWrapped(`OF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.`);
+            const cnDatePart = cnDate ? `, DATED.${cnDate}` : '';
+            const amndPart = coverNoteAmnd ? `. ${coverNoteAmnd}` : '';
+            addWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}${cnDatePart}${amndPart} OF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.`);
             curY += lineSpacing;
             addWrapped('WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE PACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND');
         } else {
@@ -211,13 +226,27 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         const coverNote = lc?.marineCoverNote || '';
         const cnDate = lc?.marineCNDate ? formatDate(lc.marineCNDate) : '';
         const insuranceCo = lc?.insuranceCo || 'CONTINENTAL INSURANCE LIMITED';
-        const amnd = record.lcAmendment ? ` & ${record.lcAmendment}` : '';
+        const amnd = record.lcAmendment ? `& ${record.lcAmendment}` : '';
         let coverNoteAmnd = amnd;
         if (record.lcAmendment && lc?.amendments?.length > 0) {
-            const matchedAmnd = lc.amendments[lc.amendments.length - 1];
+            const cleanLcAmendment = record.lcAmendment.toUpperCase();
+            let matchedAmnd = lc.amendments.find(a => {
+                const aNo = (a.amendmentNo || '').toUpperCase();
+                return aNo && (cleanLcAmendment.includes(aNo) || aNo.includes(cleanLcAmendment));
+            });
+            if (!matchedAmnd) {
+                matchedAmnd = lc.amendments[lc.amendments.length - 1];
+            }
             if (matchedAmnd && matchedAmnd.addnNo) {
-                const dateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
-                coverNoteAmnd = ` & ADDN NO: ${matchedAmnd.addnNo}${dateMatch ? ` DATE: ${dateMatch[1]}` : ''}`;
+                let amndDate = matchedAmnd.addnDate || matchedAmnd.amendmentDate;
+                let amndDateStr = amndDate ? formatDate(amndDate) : '';
+                if (!amndDateStr) {
+                    const dateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
+                    if (dateMatch) {
+                        amndDateStr = dateMatch[1];
+                    }
+                }
+                coverNoteAmnd = `& ADDN NO: ${matchedAmnd.addnNo}${amndDateStr ? `, DATE. ${amndDateStr}` : ''}`;
             }
         }
         const piNo = pi?.piNumber || '';
@@ -259,16 +288,16 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         ]);
 
         if (maxWidth > 0) {
-            drawWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}, DATED.${cnDate}${coverNoteAmnd}`);
-            drawWrapped(`OF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.`);
+            const cnDatePart = cnDate ? `, DATED.${cnDate}` : '';
+            const amndPart = coverNoteAmnd ? `. ${coverNoteAmnd}` : '';
+            drawWrapped(`UNDER INSURANCE COVER NOTE NO: ${coverNote}${cnDatePart}${amndPart} OF ${insuranceCo}, BOGURA BRANCH, BOGURA, BANGLADESH.`);
             curY += lineSpacing;
             drawWrapped('WE CERTIFY THAT THE COUNTRY OF ORIGIN IS MARKED IN ALL THE PACKETS/BAGS. WE DO THAT THE GOODS ARE SHIPED STRICTLY IN ACCORDANCE WITH THE SPECIFICATION HERE BY CERTIFY QUANTITY AND', false);
         } else {
+            const cnDatePart = cnDate ? `, DATED.${cnDate}` : '';
+            const amndPart = coverNoteAmnd ? `. ${coverNoteAmnd}` : '';
             drawLine([
-                { text: "UNDER INSURANCE COVER NOTE NO: ", bold: true },
-                { text: coverNote, bold: true },
-                { text: ", DATED.", bold: true },
-                { text: cnDate + coverNoteAmnd, bold: true }
+                { text: `UNDER INSURANCE COVER NOTE NO: ${coverNote}${cnDatePart}${amndPart}`, bold: true }
             ]);
             drawLine([
                 { text: "OF " },
@@ -1175,11 +1204,24 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     let trAmendmentLine = '';
     if (record.lcAmendment) {
         if (lc?.amendments?.length > 0) {
-            const matchedAmnd = lc.amendments[lc.amendments.length - 1];
+            const cleanLcAmendment = record.lcAmendment.toUpperCase();
+            let matchedAmnd = lc.amendments.find(a => {
+                const aNo = (a.amendmentNo || '').toUpperCase();
+                return aNo && (cleanLcAmendment.includes(aNo) || aNo.includes(cleanLcAmendment));
+            });
+            if (!matchedAmnd) {
+                matchedAmnd = lc.amendments[lc.amendments.length - 1];
+            }
             if (matchedAmnd && matchedAmnd.addnNo) {
-                const dateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
-                const amndDate = dateMatch ? dateMatch[1] : '';
-                trCoverNote += ` & ADDN NO: ${matchedAmnd.addnNo}${amndDate ? ` DATE: ${amndDate}` : ''}`;
+                let amndDate = matchedAmnd.addnDate || matchedAmnd.amendmentDate;
+                let amndDateStr = amndDate ? formatDate(amndDate) : '';
+                if (!amndDateStr) {
+                    const dateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
+                    if (dateMatch) {
+                        amndDateStr = dateMatch[1];
+                    }
+                }
+                trCoverNote += ` & ADDN NO: ${matchedAmnd.addnNo}${amndDateStr ? `, DATE. ${amndDateStr}` : ''}`;
             }
         }
         
