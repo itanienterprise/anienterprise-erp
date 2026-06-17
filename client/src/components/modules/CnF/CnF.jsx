@@ -1981,8 +1981,6 @@ const CnF = ({
                 <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setEditRecord(null)}></div>
                     <div className="cnf-form-container w-full max-w-xl">
-                        <div className="cnf-form-bg-orb cnf-form-bg-orb-1"></div>
-                        <div className="cnf-form-bg-orb cnf-form-bg-orb-2"></div>
 
                         <div className="cnf-form-header">
                             <h3 className="cnf-form-title">Edit History Record</h3>
@@ -2018,8 +2016,6 @@ const CnF = ({
                 <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setIsBulkEditModalOpen(false)}></div>
                     <div className="cnf-form-container w-full max-w-xl">
-                        <div className="cnf-form-bg-orb cnf-form-bg-orb-1"></div>
-                        <div className="cnf-form-bg-orb cnf-form-bg-orb-2"></div>
 
                         <div className="cnf-form-header">
                             <h3 className="cnf-form-title">Bulk Edit History</h3>

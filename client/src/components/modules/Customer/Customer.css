@@ -16,7 +16,7 @@
     overflow: hidden;
 }
 
-.customer-form-bg-orb {
+.customer-form-bg-orb { display: none !important;
     position: absolute;
     width: 16rem;
     height: 16rem;
@@ -25,13 +25,13 @@
     pointer-events: none;
 }
 
-.customer-form-bg-orb-1 {
+.customer-form-bg-orb-1 { display: none !important;
     top: -6rem;
     right: -6rem;
     background: rgba(96, 165, 250, 0.1);
 }
 
-.customer-form-bg-orb-2 {
+.customer-form-bg-orb-2 { display: none !important;
     bottom: -6rem;
     left: -6rem;
     background: rgba(129, 140, 248, 0.1);

@@ -416,8 +416,6 @@ const LCGatePass = ({ currentUser, addNotification }) => {
             {/* In-Line Registration Form */}
             {showForm && (
                 <div className="lc-form-container relative overflow-hidden bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl p-5 md:p-8 animate-in slide-in-from-top-4 duration-300">
-                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
-                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl"></div>
 
                     <div className="flex items-center justify-between mb-6 md:mb-8 relative z-10">
                         <div>

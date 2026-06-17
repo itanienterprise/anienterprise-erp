@@ -253,8 +253,6 @@ const Importer = ({
 
             {showForm && (
                 <div className="importer-form-container">
-                    <div className="importer-form-bg-orb importer-form-bg-orb-1"></div>
-                    <div className="importer-form-bg-orb importer-form-bg-orb-2"></div>
 
                     <div className="importer-form-header">
                         <h3 className="importer-form-title">{editingId ? 'Edit Importer' : 'New Importer Registration'}</h3>

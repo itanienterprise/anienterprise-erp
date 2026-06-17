@@ -301,8 +301,6 @@ const Exporter = ({
 
             {showForm && (
                 <div className="exporter-form-container">
-                    <div className="exporter-form-bg-orb exporter-form-bg-orb-1"></div>
-                    <div className="exporter-form-bg-orb exporter-form-bg-orb-2"></div>
                     <div className="exporter-form-header">
                         <h3 className="exporter-form-title">{editingId ? 'Edit Exporter' : 'New Exporter Registration'}</h3>
                         <button onClick={() => { setShowForm(false); resetForm(); }} className="exporter-form-close">
@@ -828,7 +826,6 @@ const Exporter = ({
                                                     {/* Grand Total Card (Full Width) */}
                                                     <div className="col-span-full bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-5 shadow-lg shadow-gray-200 flex items-center justify-between overflow-hidden relative group">
                                                         {/* Decorative Elements */}
-                                                        <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all duration-500"></div>
                                                         
                                                         <div className="flex items-center gap-4 relative z-10">
                                                             <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm border border-white/10">
