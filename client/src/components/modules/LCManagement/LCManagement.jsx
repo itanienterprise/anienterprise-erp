@@ -4,7 +4,7 @@ import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
     LCManagerIcon, ShieldIcon, BuildingIcon, GlobeIcon,
     DollarSignIcon, CalendarIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, FileTextIcon, CheckIcon,
-    FunnelIcon, PDFIcon
+    FunnelIcon, PDFIcon, BarChartIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
@@ -5298,7 +5298,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             onClick={generatePDFReport}
                             className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all h-[40px] shadow-sm transform active:scale-95 md:hover:scale-105"
                         >
-                            <PDFIcon className="w-4 h-4 text-rose-500" />
+                            <BarChartIcon className="w-4 h-4 text-gray-400" />
                             <span className="text-sm font-medium">Report</span>
                         </button>
 
