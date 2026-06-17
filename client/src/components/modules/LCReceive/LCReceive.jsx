@@ -948,6 +948,63 @@ function LCReceive({
         }
     };
 
+    const resolveProductName = (name) => {
+        if (!name) return '';
+        if (!products || !Array.isArray(products)) return name;
+
+        const normalize = (str) => {
+            if (!str) return '';
+            let s = str.trim().toLowerCase();
+            if (s.endsWith('s')) {
+                s = s.slice(0, -1);
+            }
+            return s;
+        };
+
+        const target = normalize(name);
+        if (!target) return name;
+
+        // Try exact match first
+        const lowerName = name.trim().toLowerCase();
+        let found = products.find(p => 
+            (p.name || '').trim().toLowerCase() === lowerName || 
+            (p.ipName || '').trim().toLowerCase() === lowerName
+        );
+
+        if (found) return found.name;
+
+        // Try normalized match (ignoring plural 's')
+        found = products.find(p => 
+            normalize(p.name) === target || 
+            normalize(p.ipName) === target
+        );
+
+        return found ? found.name : name;
+    };
+
+    // Automatically resolve IP product names to actual product names in the form when products list updates
+    useEffect(() => {
+        if (products && products.length > 0 && stockFormData?.productEntries) {
+            let changed = false;
+            const updatedProducts = stockFormData.productEntries.map(p => {
+                if (p.productName) {
+                    const resolved = resolveProductName(p.productName);
+                    if (resolved !== p.productName) {
+                        changed = true;
+                        return { ...p, productName: resolved };
+                    }
+                }
+                return p;
+            });
+            if (changed) {
+                setStockFormData(prev => ({
+                    ...prev,
+                    productEntries: updatedProducts
+                }));
+            }
+        }
+    }, [products, stockFormData?.productEntries, setStockFormData]);
+
     const getFilteredLCs = (input) => {
         if (!input) return lcRecords;
         const lowInput = input.toLowerCase();
@@ -981,14 +1038,15 @@ function LCReceive({
                     // Also auto-fill first product if empty
                     if (selectedLc.productName && prev.productEntries.length === 1 && !prev.productEntries[0].productName) {
                         const updatedProducts = [...prev.productEntries];
+                        const resolvedName = resolveProductName(selectedLc.productName);
                         updatedProducts[0] = {
                             ...updatedProducts[0],
-                            productName: selectedLc.productName
+                            productName: resolvedName
                         };
                         // Standard logic: in single mode, auto-fill brand too
                         if (!updatedProducts[0].isMultiBrand && updatedProducts[0].brandEntries[0]) {
                             updatedProducts[0].brandEntries = [
-                                { ...updatedProducts[0].brandEntries[0], brand: selectedLc.productName }
+                                { ...updatedProducts[0].brandEntries[0], brand: resolvedName }
                             ];
                         }
                         newData.productEntries = updatedProducts;
@@ -1343,7 +1401,7 @@ function LCReceive({
 
                 return {
                     isMultiBrand: isMulti,
-                    productName: pName,
+                    productName: resolveProductName(pName),
                     truckNo: prodEntries[0]?.truckNo || '',
                     brandEntries: prodEntries.map(e => ({
                         _id: e._id,
@@ -1410,7 +1468,7 @@ function LCReceive({
                 originalIds: record.allIds || [record._id],
                 productEntries: [{
                     isMultiBrand: false,
-                    productName: record.productName,
+                    productName: resolveProductName(record.productName),
                     truckNo: record.truckNo,
                     brandEntries: [{
                         _id: record._id,
@@ -1500,7 +1558,11 @@ function LCReceive({
 
     const getFilteredProducts = (input) => {
         if (!input) return products;
-        return products.filter(p => p.name.toLowerCase().includes(input.toLowerCase()));
+        const lowInput = input.toLowerCase();
+        return products.filter(p => 
+            p.name.toLowerCase().includes(lowInput) ||
+            (p.ipName || '').toLowerCase().includes(lowInput)
+        );
     };
 
     const getFilteredBrands = (input, productName) => {

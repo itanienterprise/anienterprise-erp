@@ -22,6 +22,7 @@ const ProductManagement = ({
     const [productFormData, setProductFormData] = useState({
         hsCode: '',
         hsCodeInd: '',
+        ipName: '',
         name: '',
         category: '',
         uom: 'kg',
@@ -33,6 +34,7 @@ const ProductManagement = ({
         setProductFormData({
             hsCode: '',
             hsCodeInd: '',
+            ipName: '',
             name: '',
             category: '',
             uom: 'kg',
@@ -96,6 +98,7 @@ const ProductManagement = ({
         setProductFormData({
             hsCode: product.hsCode || '',
             hsCodeInd: product.hsCodeInd || '',
+            ipName: product.ipName || '',
             name: product.name || '',
             category: product.category || '',
             uom: product.uom || product.unit || 'kg',
@@ -195,7 +198,17 @@ const ProductManagement = ({
                                         placeholder="10-digit HS Code (IND)"
                                     />
                                 </div>
-                                <div className="col-span-2 md:col-span-2">
+                                <div className="col-span-2 md:col-span-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">IP Product Name</label>
+                                    <input
+                                        type="text"
+                                        value={productFormData.ipName}
+                                        onChange={(e) => setProductFormData(prev => ({ ...prev, ipName: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                        placeholder="IP Product name"
+                                    />
+                                </div>
+                                <div className="col-span-2 md:col-span-3">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
                                     <input
                                         type="text"
@@ -206,7 +219,7 @@ const ProductManagement = ({
                                         placeholder="Product name"
                                     />
                                 </div>
-                                <div className="col-span-2 md:col-span-2">
+                                <div className="col-span-2 md:col-span-3">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                                     <input
                                         type="text"
@@ -216,7 +229,7 @@ const ProductManagement = ({
                                         placeholder="Category"
                                     />
                                 </div>
-                                <div className="col-span-2 md:col-span-2">
+                                <div className="col-span-2 md:col-span-3">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">UOM (Unit)</label>
                                     <select
                                         value={productFormData.uom}
@@ -349,6 +362,7 @@ const ProductManagement = ({
                                     <tr className="bg-gray-50 border-b border-gray-100">
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">HS Code</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">HS Code (IND)</th>
+                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">IP Product Name</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Name</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quality</th>
@@ -364,6 +378,7 @@ const ProductManagement = ({
                                         <tr key={product._id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4 text-sm text-gray-600 font-mono align-top">{product.hsCode || '-'}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600 font-mono align-top">{product.hsCodeInd || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 align-top">{product.ipName || '-'}</td>
                                             <td className="px-6 py-4 text-sm font-medium text-gray-900 align-top">{product.name}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600 leading-relaxed align-top">
                                                 {product.brands?.map((b, i) => (
@@ -423,7 +438,7 @@ const ProductManagement = ({
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between w-full pr-2">
                                                     <div className="flex items-center gap-2 overflow-hidden mr-2">
-                                                        <div className="text-sm font-bold text-gray-900 truncate"> {product.name}</div>
+                                                        <div className="text-sm font-bold text-gray-900 truncate"> {product.ipName ? `${product.ipName} / ${product.name}` : product.name}</div>
                                                         {!isExpanded && product.hsCode && (
                                                             <span className="text-sm font-bold text-gray-900 shrink-0 uppercase tracking-tighter"> | HS CODE:  {product.hsCode}</span>
                                                         )}
@@ -480,6 +495,12 @@ const ProductManagement = ({
                                                         <div className="text-gray-700 text-xs font-semibold font-mono">{product.hsCodeInd || '-'}</div>
                                                     </div>
                                                 </div>
+                                                {product.ipName && (
+                                                    <div className="mb-4">
+                                                        <span className="block text-gray-400 uppercase font-black tracking-widest text-[9px] mb-0.5">IP Product Name</span>
+                                                        <div className="text-gray-700 text-xs font-semibold">{product.ipName}</div>
+                                                    </div>
+                                                )}
                                                 <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                                                     {product.description && (
                                                         <div className="col-span-2">

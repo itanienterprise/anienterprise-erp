@@ -506,7 +506,42 @@ function App() {
 
   const lcReceiveRecords = useMemo(() => {
     const searchLower = lcSearchQuery.toLowerCase().trim();
-    return allStockRecords.filter(item => {
+
+    const resolveProductName = (name) => {
+      if (!name) return '';
+      if (!products || !Array.isArray(products)) return name;
+
+      const normalize = (str) => {
+        if (!str) return '';
+        let s = str.trim().toLowerCase();
+        if (s.endsWith('s')) {
+          s = s.slice(0, -1);
+        }
+        return s;
+      };
+
+      const target = normalize(name);
+      if (!target) return name;
+
+      // Try exact match first
+      const lowerName = name.trim().toLowerCase();
+      let found = products.find(p => 
+        (p.name || '').trim().toLowerCase() === lowerName || 
+        (p.ipName || '').trim().toLowerCase() === lowerName
+      );
+
+      if (found) return found.name;
+
+      // Try normalized match (ignoring plural 's')
+      found = products.find(p => 
+        normalize(p.name) === target || 
+        normalize(p.ipName) === target
+      );
+
+      return found ? found.name : name;
+    };
+
+    const filtered = allStockRecords.filter(item => {
       // Apply Advanced Filters
       if (lcFilters.startDate && item.date < lcFilters.startDate) return false;
       if (lcFilters.endDate && item.date > lcFilters.endDate) return false;
@@ -536,7 +571,25 @@ function App() {
 
       return matchesLcNo || matchesPort || matchesWarehouse || matchesImporter || matchesExporter || matchesBillOfEntry || matchesTruck || matchesProduct || matchesBrand;
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [stockRecords, lcSearchQuery, lcFilters]);
+
+    // Map each record to resolve its product name
+    return filtered.map(item => {
+      if (item.entries && Array.isArray(item.entries)) {
+        return {
+          ...item,
+          productName: resolveProductName(item.productName),
+          entries: item.entries.map(e => ({
+            ...e,
+            productName: resolveProductName(e.productName)
+          }))
+        };
+      }
+      return {
+        ...item,
+        productName: resolveProductName(item.productName)
+      };
+    });
+  }, [stockRecords, lcSearchQuery, lcFilters, products]);
 
   const lcReceiveSummary = useMemo(() => {
     const totalPackets = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.packet) || 0), 0);
