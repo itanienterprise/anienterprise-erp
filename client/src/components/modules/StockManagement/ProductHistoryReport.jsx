@@ -211,7 +211,7 @@ const ProductHistoryReport = ({
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-0 md:p-4 print:p-0 print:bg-white print:backdrop-none">
-            <div className="bg-white w-full max-w-5xl h-full md:max-h-[90vh] overflow-hidden md:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
+            <div className="bg-white w-full max-w-7xl h-full md:max-h-[90vh] overflow-hidden md:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar */}
                 <div className="flex flex-col px-4 md:px-8 py-3 md:py-4 border-b border-gray-100 print:hidden gap-4 flex-shrink-0">
                     {/* Row 1: Title and Action Buttons */}
