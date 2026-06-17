@@ -437,6 +437,7 @@ const SaleManagement = ({
 
     const hasActiveFilters = Object.entries(saleFilters).some(([key, val]) => {
         if (key === 'quickRange') return val !== 'all' && val !== 'custom' && val !== '';
+        if (key === 'selectedMonth' || key === 'selectedYear') return false;
         return val !== '';
     });
 
@@ -585,6 +586,8 @@ const SaleManagement = ({
         if (setSaleFilters) {
             setSaleFilters({
                 quickRange: 'monthly',
+                selectedMonth: new Date().getMonth() + 1,
+                selectedYear: new Date().getFullYear(),
                 startDate: '',
                 endDate: '',
                 companyName: '',
@@ -2218,12 +2221,30 @@ const SaleManagement = ({
             if (sale.date > saleFilters.endDate) return false;
         }
         // Quick range filtering
-        if (saleFilters.quickRange && saleFilters.quickRange !== 'all') {
+        if (saleFilters.quickRange && saleFilters.quickRange !== 'all' && saleFilters.quickRange !== 'custom') {
             const now = new Date();
             const recordDate = new Date(sale.date);
-            if (saleFilters.quickRange === 'weekly' && (now - recordDate) > 7 * 24 * 60 * 60 * 1000) return false;
-            if (saleFilters.quickRange === 'monthly' && (now - recordDate) > 30 * 24 * 60 * 60 * 1000) return false;
-            if (saleFilters.quickRange === 'yearly' && (now - recordDate) > 365 * 24 * 60 * 60 * 1000) return false;
+            if (saleFilters.quickRange === 'weekly') {
+                // Running week: Monday to Sunday of current week
+                const dayOfWeek = now.getDay(); // 0=Sun,1=Mon,...,6=Sat
+                const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() + diffToMonday);
+                weekStart.setHours(0, 0, 0, 0);
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                weekEnd.setHours(23, 59, 59, 999);
+                if (recordDate < weekStart || recordDate > weekEnd) return false;
+            }
+            if (saleFilters.quickRange === 'monthly') {
+                const month = saleFilters.selectedMonth || (now.getMonth() + 1);
+                const year = saleFilters.selectedYear || now.getFullYear();
+                if (recordDate.getMonth() + 1 !== month || recordDate.getFullYear() !== year) return false;
+            }
+            if (saleFilters.quickRange === 'yearly') {
+                const year = saleFilters.selectedYear || now.getFullYear();
+                if (recordDate.getFullYear() !== year) return false;
+            }
         }
         // Company
         if (saleFilters.companyName) {
@@ -2341,6 +2362,7 @@ const SaleManagement = ({
                                     <span className="flex items-center justify-center w-4 h-4 text-[10px] font-black bg-white text-blue-600 rounded-full ml-1">
                                         {Object.entries(saleFilters).filter(([key, val]) => {
                                             if (key === 'quickRange') return val !== 'all' && val !== 'custom' && val !== '';
+                                            if (key === 'selectedMonth' || key === 'selectedYear') return false;
                                             return val !== '';
                                         }).length}
                                     </span>
@@ -2361,7 +2383,7 @@ const SaleManagement = ({
                                             <button
                                                 onMouseDown={(e) => {
                                                     e.preventDefault();
-                                                    setSaleFilters({ quickRange: 'monthly', startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
+                                                    setSaleFilters({ quickRange: 'monthly', selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
                                                     setSaleFilterSearch({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
                                                     setActiveFilterDropdown(null);
                                                 }}
@@ -2373,7 +2395,7 @@ const SaleManagement = ({
 
                                         <div className="space-y-5">
                                             {/* Quick Range */}
-                                            <div className="space-y-1.5 text-center">
+                                            <div className="space-y-2 text-center">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
                                                 <div className="flex flex-wrap justify-center gap-2">
                                                     {['all', 'weekly', 'monthly', 'yearly'].map(range => (
@@ -2387,6 +2409,43 @@ const SaleManagement = ({
                                                         </button>
                                                     ))}
                                                 </div>
+                                                {/* Month dropdown for monthly */}
+                                                {saleFilters.quickRange === 'monthly' && (
+                                                    <div className="flex items-center justify-center gap-2 mt-1">
+                                                        <select
+                                                            value={saleFilters.selectedMonth || new Date().getMonth() + 1}
+                                                            onChange={(e) => setSaleFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
+                                                            className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                        >
+                                                            {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                                                                <option key={i+1} value={i+1}>{m}</option>
+                                                            ))}
+                                                        </select>
+                                                        <select
+                                                            value={saleFilters.selectedYear || new Date().getFullYear()}
+                                                            onChange={(e) => setSaleFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                            className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                        >
+                                                            {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                                <option key={y} value={y}>{y}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                                {/* Year dropdown for yearly */}
+                                                {saleFilters.quickRange === 'yearly' && (
+                                                    <div className="flex items-center justify-center gap-2 mt-1">
+                                                        <select
+                                                            value={saleFilters.selectedYear || new Date().getFullYear()}
+                                                            onChange={(e) => setSaleFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                            className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                        >
+                                                            {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                                <option key={y} value={y}>{y}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Date Range Row */}

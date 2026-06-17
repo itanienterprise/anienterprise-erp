@@ -560,6 +560,8 @@ function IPManagement({
 
     const [filters, setFilters] = useState({
         quickRange: 'all',
+        selectedMonth: new Date().getMonth() + 1,
+        selectedYear: new Date().getFullYear(),
         startDate: '',
         endDate: '',
         port: '',
@@ -1206,6 +1208,8 @@ function IPManagement({
     const resetFilters = () => {
         setFilters({
             quickRange: 'all',
+            selectedMonth: new Date().getMonth() + 1,
+            selectedYear: new Date().getFullYear(),
             startDate: '',
             endDate: '',
             port: '',
@@ -1241,9 +1245,27 @@ function IPManagement({
         if (filters.quickRange !== 'all' && filters.quickRange !== 'custom') {
             const now = new Date();
             const recordDate = new Date(record.openingDate);
-            if (filters.quickRange === 'weekly' && (now - recordDate) > 7 * 24 * 60 * 60 * 1000) return false;
-            if (filters.quickRange === 'monthly' && (now - recordDate) > 30 * 24 * 60 * 60 * 1000) return false;
-            if (filters.quickRange === 'yearly' && (now - recordDate) > 365 * 24 * 60 * 60 * 1000) return false;
+            if (filters.quickRange === 'weekly') {
+                // Running week: Monday to Sunday of current week
+                const dayOfWeek = now.getDay();
+                const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() + diffToMonday);
+                weekStart.setHours(0, 0, 0, 0);
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                weekEnd.setHours(23, 59, 59, 999);
+                if (recordDate < weekStart || recordDate > weekEnd) return false;
+            }
+            if (filters.quickRange === 'monthly') {
+                const month = filters.selectedMonth || (now.getMonth() + 1);
+                const year = filters.selectedYear || now.getFullYear();
+                if (recordDate.getMonth() + 1 !== month || recordDate.getFullYear() !== year) return false;
+            }
+            if (filters.quickRange === 'yearly') {
+                const year = filters.selectedYear || now.getFullYear();
+                if (recordDate.getFullYear() !== year) return false;
+            }
         }
 
         return true;
@@ -1300,7 +1322,7 @@ function IPManagement({
 
                                     <div className="space-y-5">
                                         {/* Quick Range */}
-                                        <div className="space-y-1.5 text-center">
+                                        <div className="space-y-2 text-center">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
                                             <div className="flex flex-wrap justify-center gap-2">
                                                 {['all', 'weekly', 'monthly', 'yearly'].map(range => (
@@ -1314,6 +1336,43 @@ function IPManagement({
                                                     </button>
                                                 ))}
                                             </div>
+                                            {/* Month dropdown for monthly */}
+                                            {filters.quickRange === 'monthly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={filters.selectedMonth || new Date().getMonth() + 1}
+                                                        onChange={(e) => setFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                                                            <option key={i+1} value={i+1}>{m}</option>
+                                                        ))}
+                                                    </select>
+                                                    <select
+                                                        value={filters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                            {/* Year dropdown for yearly */}
+                                            {filters.quickRange === 'yearly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={filters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Date Range Row */}
