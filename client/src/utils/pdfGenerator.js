@@ -4353,3 +4353,203 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
         alert(`Failed to generate PDF: ${error.message}`);
     }
 };
+
+export const generateLCManagementReportPDF = (reportData, totals, searchQuery = '', filters = {}) => {
+    try {
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // Header info
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+
+        // Separator line
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 40, pageWidth - margin, 40);
+
+        // Report Title Box
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("LC MANAGEMENT REPORT", pageWidth / 2, 42, { align: 'center' });
+
+        // Info row
+        // Info row
+        let yPos = 55;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        const currentDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.text(`Printed on: ${currentDateStr}`, pageWidth - margin, yPos, { align: 'right' });
+
+        // Date Range
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
+        doc.text(`${start} to ${end}`, margin + 25, yPos);
+
+        // Search Query
+        if (searchQuery) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Search:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`"${searchQuery}"`, margin + 25, yPos);
+        }
+
+        // Importer
+        if (filters.importerName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Importer:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.importerName, margin + 25, yPos);
+        }
+
+        // Exporter
+        if (filters.exporterName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Exporter:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.exporterName, margin + 25, yPos);
+        }
+
+        // Port
+        if (filters.port) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Port:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.port, margin + 25, yPos);
+        }
+
+        // Product
+        if (filters.productName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Product:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.productName, margin + 25, yPos);
+        }
+
+        // Data Preparation
+        const tableHeaders = [
+            ['Date', 'Expire Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Port', 'Product', 'Quantity', 'Total Value', 'LC Balance', 'Expense']
+        ];
+
+        const tableRows = reportData.map(record => [
+            formatDate(record.openingDate),
+            formatDate(record.expiryDate),
+            record.lcNo || '-',
+            record.importerName || '-',
+            record.exporterName || '-',
+            record.bankName || '-',
+            record.port || '-',
+            record.product || '-',
+            `${Math.round(record.qty).toLocaleString('en-US')} Kg`,
+            `Tk ${Math.round(record.val).toLocaleString('en-US')}`,
+            `${Math.round(record.bal).toLocaleString('en-US')} Kg`,
+            record.exp > 0 ? `Tk ${Math.round(record.exp).toLocaleString('en-US')}` : '—'
+        ]);
+
+        const footerRow = [
+            { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `${Math.round(totals.totalQty).toLocaleString('en-US')} Kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `Tk ${Math.round(totals.totalVal).toLocaleString('en-US')}`, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `${Math.round(totals.totalBal).toLocaleString('en-US')} Kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.totalExp > 0 ? `Tk ${Math.round(totals.totalExp).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } }
+        ];
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: tableHeaders,
+            body: tableRows,
+            foot: [footerRow],
+            theme: 'grid',
+            styles: {
+                fontSize: 8.5,
+                cellPadding: 1.5,
+                textColor: [0, 0, 0],
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.1
+            },
+            footStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 18, halign: 'center' }, // Date
+                1: { cellWidth: 18, halign: 'center' }, // Expire Date
+                2: { cellWidth: 23, halign: 'center', fontStyle: 'bold' }, // LC No
+                3: { cellWidth: 30, halign: 'left' }, // Importer
+                4: { cellWidth: 30, halign: 'left' }, // Exporter
+                5: { cellWidth: 30, halign: 'left' }, // Bank
+                6: { cellWidth: 20, halign: 'center' }, // Port
+                7: { cellWidth: 22, halign: 'left' }, // Product
+                8: { cellWidth: 22, halign: 'right' }, // Qty
+                9: { cellWidth: 28, halign: 'right' }, // Val
+                10: { cellWidth: 22, halign: 'right' }, // Bal
+                11: { cellWidth: 24, halign: 'right' } // Exp
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // Signatures at the end
+        let finalY = doc.lastAutoTable.finalY + 15;
+        if (finalY + 25 > pageHeight) {
+            doc.addPage();
+            finalY = 20;
+        }
+
+        const sigWidth = 45;
+        const sigY = finalY + 15;
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.setLineDashPattern([1, 1], 0);
+
+        // Left signature
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.setFontSize(7.5);
+        doc.setTextColor(0);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        // Right signature
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("LC Management Report PDF Error:", error);
+        alert(`Failed to generate PDF: ${error.message}`);
+    }
+};

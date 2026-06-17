@@ -4,10 +4,11 @@ import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
     LCManagerIcon, ShieldIcon, BuildingIcon, GlobeIcon,
     DollarSignIcon, CalendarIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, FileTextIcon, CheckIcon,
-    FunnelIcon
+    FunnelIcon, PDFIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
+import { generateLCManagementReportPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const gridColsClassMap = {
@@ -20,6 +21,25 @@ const gridColsClassMap = {
     7: 'md:grid-cols-7',
     8: 'md:grid-cols-8',
     9: 'md:grid-cols-9'
+};
+
+const getExpiryColorClass = (expiryDateStr) => {
+    if (!expiryDateStr) return 'text-gray-900';
+    const expiry = new Date(expiryDateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
+    
+    const diffTime = expiry.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+        return 'text-red-600 font-bold'; // Red (expired)
+    } else if (diffDays <= 15) {
+        return 'text-amber-500 font-bold'; // Orange/Amber (within 15 days)
+    } else {
+        return 'text-emerald-600 font-bold'; // Green (enough time)
+    }
 };
 
 const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage, onRefresh }) => {
@@ -1909,8 +1929,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{formatDate(data.openingDate)}</p>
                                         </div>
                                         <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-red-500">Expiry Date</span>
-                                            <p className="text-sm font-bold text-red-500 font-mono tracking-tight">{formatDate(activeMilestone.expiryDate || data.expiryDate)}</p>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expiry Date</span>
+                                            <p className={`text-sm font-bold font-mono tracking-tight ${getExpiryColorClass(activeMilestone.expiryDate || data.expiryDate)}`}>{formatDate(activeMilestone.expiryDate || data.expiryDate)}</p>
                                         </div>
                                         <div className="space-y-1 col-span-2">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
@@ -3144,6 +3164,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         product: false
     };
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
+    const [sortConfig, setSortConfig] = useState({ key: 'openingDate', direction: 'desc' });
 
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
@@ -3294,9 +3315,92 @@ const LCManagement = ({ addNotification, currentUser }) => {
         return uniqueOptions.filter(opt => opt.toLowerCase().includes(q));
     };
 
+    const sentNotificationsRef = useRef(new Set());
+
     useEffect(() => {
         fetchInitialData();
     }, []);
+
+    useEffect(() => {
+        if (!addNotification || !currentUser || lcRecords.length === 0) return;
+
+        // Managers and Data Entry can trigger notifications to avoid redundancy
+        const isAuthorized = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+        if (!isAuthorized && currentUser?.username !== 'admin') return;
+
+        const targetRoles = ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Data Entry'];
+        let hasTriggeredUpdate = false;
+
+        lcRecords.forEach(record => {
+            if (!record.expiryDate) return;
+
+            const expiry = new Date(record.expiryDate);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            expiry.setHours(0, 0, 0, 0);
+
+            const diffTime = expiry.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            const hasSentExpireSoon = record.notificationSent?.expireSoon;
+            const hasSentExpired = record.notificationSent?.expired;
+
+            const expireSoonKey = `${record.lcNo}_expireSoon`;
+            const expiredKey = `${record.lcNo}_expired`;
+
+            if (diffDays >= 0 && diffDays <= 15) {
+                if (!hasSentExpireSoon && !sentNotificationsRef.current.has(expireSoonKey)) {
+                    sentNotificationsRef.current.add(expireSoonKey);
+
+                    addNotification(
+                        'LC Expiring Soon',
+                        `LC No: ${record.lcNo} (${record.importerName || ''}) is expiring soon on ${formatDate(record.expiryDate)}.`,
+                        targetRoles,
+                        [],
+                        true
+                    );
+
+                    // Mark as sent in DB
+                    const updatedRecord = {
+                        ...record,
+                        notificationSent: { ...(record.notificationSent || {}), expireSoon: true }
+                    };
+                    const { _id, createdAt, updatedAt, __v, ...dataToSave } = updatedRecord;
+                    axios.put(`${API_BASE_URL}/api/lc-management/${_id}`, dataToSave).catch(err => {
+                        console.error('Error updating LC notification flag:', err);
+                    });
+                    hasTriggeredUpdate = true;
+                }
+            } else if (diffDays < 0) {
+                if (!hasSentExpired && !sentNotificationsRef.current.has(expiredKey)) {
+                    sentNotificationsRef.current.add(expiredKey);
+
+                    addNotification(
+                        'LC Expired',
+                        `LC No: ${record.lcNo} (${record.importerName || ''}) has expired on ${formatDate(record.expiryDate)}.`,
+                        targetRoles,
+                        [],
+                        true
+                    );
+
+                    // Mark as sent in DB
+                    const updatedRecord = {
+                        ...record,
+                        notificationSent: { ...(record.notificationSent || {}), expired: true }
+                    };
+                    const { _id, createdAt, updatedAt, __v, ...dataToSave } = updatedRecord;
+                    axios.put(`${API_BASE_URL}/api/lc-management/${_id}`, dataToSave).catch(err => {
+                        console.error('Error updating LC notification flag:', err);
+                    });
+                    hasTriggeredUpdate = true;
+                }
+            }
+        });
+
+        if (hasTriggeredUpdate) {
+            setTimeout(fetchInitialData, 1000);
+        }
+    }, [lcRecords, addNotification, currentUser]);
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -4817,6 +4921,135 @@ const LCManagement = ({ addNotification, currentUser }) => {
         return true;
     });
 
+    const requestSort = (key) => {
+        let direction = 'desc';
+        if (sortConfig.key === key && sortConfig.direction === 'desc') {
+            direction = 'asc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortValue = (record, key) => {
+        switch (key) {
+            case 'openingDate':
+                return record.openingDate ? new Date(record.openingDate).getTime() : 0;
+            case 'expiryDate':
+                return record.expiryDate ? new Date(record.expiryDate).getTime() : 0;
+            case 'lcNo':
+                return record.lcNo || '';
+            case 'importerName':
+                return record.importerName || '';
+            case 'exporterName':
+                return record.exporterName || '';
+            case 'bankName':
+                return record.bankName || '';
+            case 'port': {
+                const linkedPi = record.piNo ? piRecordsRaw.find(p => p.piNumber === record.piNo) : null;
+                return record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '';
+            }
+            case 'productName':
+                if (record.productsList && record.productsList.length > 0) {
+                    return record.productsList.map(p => p.productName).filter(Boolean).join(', ');
+                }
+                return record.productName || '';
+            case 'adjustedQtyKg':
+                return getAdjustedLcValues(record).adjustedQtyKg || 0;
+            case 'adjustedTotalAmount':
+                return getAdjustedLcValues(record).adjustedTotalAmount || 0;
+            case 'combinedRemKg':
+                return getAdjustedLcValues(record).combinedRemKg || 0;
+            case 'totalExpense':
+                return getLcTotalPaidExpense(record) || 0;
+            default:
+                return '';
+        }
+    };
+
+    const sortedRecords = useMemo(() => {
+        const sortableRecords = [...filteredRecords];
+        if (sortConfig.key) {
+            sortableRecords.sort((a, b) => {
+                const aValue = getSortValue(a, sortConfig.key);
+                const bValue = getSortValue(b, sortConfig.key);
+
+                if (typeof aValue === 'number' && typeof bValue === 'number') {
+                    return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+                }
+
+                const aString = String(aValue).toLowerCase();
+                const bString = String(bValue).toLowerCase();
+
+                if (aString < bString) {
+                    return sortConfig.direction === 'asc' ? -1 : 1;
+                }
+                if (aString > bString) {
+                    return sortConfig.direction === 'asc' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableRecords;
+    }, [filteredRecords, sortConfig, allStockRecords, allSalesRecords, gpRecords, lcExpenses, insurancePayments, piRecordsRaw]);
+
+    const renderSortHeader = (label, key, alignClass = '') => {
+        const isSorted = sortConfig.key === key;
+        return (
+            <th
+                onClick={() => requestSort(key)}
+                className={`px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap cursor-pointer select-none hover:text-gray-700 transition-colors group/th ${alignClass}`}
+            >
+                <div className={`flex items-center gap-1.5 ${alignClass.includes('text-right') ? 'justify-end' : alignClass.includes('text-center') ? 'justify-center' : 'justify-start'}`}>
+                    <span>{label}</span>
+                    <span className="inline-flex">
+                        {isSorted ? (
+                            sortConfig.direction === 'asc' ? (
+                                <ChevronUpIcon className="w-3.5 h-3.5 text-blue-600" />
+                            ) : (
+                                <ChevronDownIcon className="w-3.5 h-3.5 text-blue-600" />
+                            )
+                        ) : (
+                            <ChevronDownIcon className="w-3.5 h-3.5 text-gray-300 opacity-0 group-hover/th:opacity-100 transition-opacity" />
+                        )}
+                    </span>
+                </div>
+            </th>
+        );
+    };
+
+    const generatePDFReport = () => {
+        const reportData = sortedRecords.map(record => {
+            const adj = getAdjustedLcValues(record);
+            const displayProducts = record.productsList && record.productsList.length > 0
+                ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                : record.productName || '-';
+            const linkedPi = record.piNo ? piRecordsRaw.find(p => p.piNumber === record.piNo) : null;
+            const displayPort = record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '-';
+            const totalExpense = getLcTotalPaidExpense(record);
+            
+            return {
+                openingDate: record.openingDate,
+                expiryDate: record.expiryDate,
+                lcNo: record.lcNo,
+                importerName: record.importerName,
+                exporterName: record.exporterName,
+                bankName: record.bankName,
+                port: displayPort,
+                product: displayProducts,
+                qty: adj.adjustedQtyKg,
+                val: adj.adjustedTotalAmount,
+                bal: adj.combinedRemKg,
+                exp: totalExpense
+            };
+        });
+
+        const totalQty = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedQtyKg || 0), 0);
+        const totalVal = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedTotalAmount || 0), 0);
+        const totalBal = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).combinedRemKg || 0), 0);
+        const totalExp = sortedRecords.reduce((sum, r) => sum + (getLcTotalPaidExpense(r) || 0), 0);
+
+        generateLCManagementReportPDF(reportData, { totalQty, totalVal, totalBal, totalExp }, searchQuery, lcFilters);
+    };
+
     const amendmentDisplayProducts = selectedPiForAmendment
         ? mapPiProductsToLc(selectedPiForAmendment)
         : (selectedLcForAmendment?.productsList && selectedLcForAmendment.productsList.length > 0
@@ -5060,6 +5293,14 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 </div>
                             )}
                         </div>
+
+                        <button
+                            onClick={generatePDFReport}
+                            className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all h-[40px] shadow-sm transform active:scale-95 md:hover:scale-105"
+                        >
+                            <PDFIcon className="w-4 h-4 text-rose-500" />
+                            <span className="text-sm font-medium">Report</span>
+                        </button>
 
                         {canManage && (
                             <>
@@ -7029,18 +7270,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Expire Date</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC No</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Importer</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Exporter</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Bank</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Port</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Quantity (Kg)</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total Value (৳)</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">LC Balance</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Expense</th>
+                                    {renderSortHeader('Date', 'openingDate')}
+                                    {renderSortHeader('Expire Date', 'expiryDate')}
+                                    {renderSortHeader('LC No', 'lcNo')}
+                                    {renderSortHeader('Importer', 'importerName')}
+                                    {renderSortHeader('Exporter', 'exporterName')}
+                                    {renderSortHeader('Bank', 'bankName')}
+                                    {renderSortHeader('Port', 'port')}
+                                    {renderSortHeader('Product', 'productName')}
+                                    {renderSortHeader('Quantity (Kg)', 'adjustedQtyKg', 'text-right')}
+                                    {renderSortHeader('Total Value (৳)', 'adjustedTotalAmount', 'text-right')}
+                                    {renderSortHeader('LC Balance', 'combinedRemKg', 'text-right')}
+                                    {renderSortHeader('Expense', 'totalExpense', 'text-right')}
                                     <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
                                 </tr>
                             </thead>
@@ -7054,8 +7295,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             </div>
                                         </td>
                                     </tr>
-                                ) : filteredRecords.length > 0 ? (
-                                    filteredRecords.map((record) => {
+                                ) : sortedRecords.length > 0 ? (
+                                    sortedRecords.map((record) => {
                                         // Helper for sanitized numeric parsing
                                         const parseNum = (val) => {
                                             if (val === null || val === undefined) return 0;
@@ -7145,7 +7386,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             <React.Fragment key={record._id}>
                                                 <tr className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
                                                     <td className="px-3 py-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
-                                                    <td className="px-3 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">{formatDate(record.expiryDate)}</td>
+                                                    <td className={`px-3 py-4 text-sm font-bold whitespace-nowrap ${getExpiryColorClass(record.expiryDate)}`}>{formatDate(record.expiryDate)}</td>
                                                     <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">
                                                         <div className="flex flex-col gap-0.5">
                                                             <span>{record.lcNo}</span>
@@ -7669,8 +7910,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     </div>
                                 </div>
                             ))
-                        ) : filteredRecords.length > 0 ? (
-                            filteredRecords.map((record) => {
+                        ) : sortedRecords.length > 0 ? (
+                            sortedRecords.map((record) => {
                                 // Helper for sanitized numeric parsing
                                 const parseNum = (val) => {
                                     if (val === null || val === undefined) return 0;
@@ -7835,7 +8076,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
                                                     <span className="text-[10px] font-bold text-gray-400 tracking-wider">Expiry Date</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-semibold text-gray-850 font-mono text-[11px]">{formatDate(record.expiryDate)}</span>
+                                                    <span className={`font-semibold font-mono text-[11px] ${getExpiryColorClass(record.expiryDate)}`}>{formatDate(record.expiryDate)}</span>
 
                                                     {/* Divider */}
                                                     <div className="col-span-3 h-[1px] bg-gray-200/60 my-1"></div>
