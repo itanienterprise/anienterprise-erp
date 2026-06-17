@@ -7040,7 +7040,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Quantity (Kg)</th>
                                     <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Total Value (৳)</th>
                                     <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">LC Balance</th>
-                                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem G.P</th>
                                     <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Expense</th>
                                     <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
                                 </tr>
@@ -7048,7 +7047,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan="14" className="px-6 py-12 text-center text-sm text-gray-500">
+                                        <td colSpan="13" className="px-6 py-12 text-center text-sm text-gray-500">
                                             <div className="flex flex-col items-center gap-2">
                                                 <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                                                 <span className="font-medium text-gray-400">Loading records...</span>
@@ -7169,7 +7168,19 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[120px]" title={record.exporterName}>{record.exporterName}</td>
                                                     <td className="px-3 py-4 text-sm text-gray-600 font-medium whitespace-nowrap truncate max-w-[120px]" title={record.bankName}>{record.bankName}</td>
                                                     <td className="px-3 py-4 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
-                                                    <td className="px-3 py-4 text-sm font-bold text-gray-900 whitespace-nowrap truncate max-w-[120px]" title={displayProducts}>{displayProducts}</td>
+                                                    <td className="px-3 py-4 text-sm font-bold text-gray-900 max-w-[120px]">
+                                                         {record.productsList && record.productsList.length > 0 ? (
+                                                             <div className="flex flex-col gap-0.5">
+                                                                 {record.productsList.map((p, idx) => (
+                                                                     <div key={idx} className="truncate whitespace-nowrap" title={p.productName}>
+                                                                         {p.productName}
+                                                                     </div>
+                                                                 ))}
+                                                             </div>
+                                                         ) : (
+                                                             <span className="truncate whitespace-nowrap block">{record.productName || '-'}</span>
+                                                         )}
+                                                     </td>
                                                     <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
                                                         <span className="font-bold text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                     </td>
@@ -7177,11 +7188,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
                                                         <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
                                                             {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
-                                                        <span className={`font-black ${remGpKg <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                                                            {remGpKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
                                                         </span>
                                                     </td>
                                                     <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
@@ -7238,7 +7244,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 {/* Expandable Sub-row containing Charges Breakdown */}
                                                 {expandedLcKey === record._id && (
                                                     <tr className="bg-gray-50/40">
-                                                        <td colSpan="14" className="px-6 py-4 border-b border-gray-100">
+                                                        <td colSpan="13" className="px-6 py-4 border-b border-gray-100">
                                                             <div className="flex flex-col gap-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-inner animate-in fade-in duration-300">
                                                                 {/* Radio Button for Enable Value and Quantity */}
                                                                 {record.piNo && record.quantity && record.totalAmount && (
@@ -7521,7 +7527,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan="14" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
+                                        <td colSpan="13" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
                                             No LC records found
                                         </td>
                                     </tr>
@@ -7563,10 +7569,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 // Dynamic fallback for Port if empty in LC record
                                 const linkedPi = record.piNo ? piRecordsRaw.find(p => p.piNumber === record.piNo) : null;
                                 const displayPort = record.port || (linkedPi && (linkedPi.port || linkedPi.portOfDischarge || linkedPi.portOfLoading)) || '-';
-
-                                const displayProducts = record.productsList && record.productsList.length > 0
-                                    ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
-                                    : record.productName || '-';
 
                                 // Unit conversion for display (Data is in Tons, Table shows Kg)
                                 const totalQtyTons = record.productsList && record.productsList.length > 0
@@ -7670,8 +7672,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <p className="text-xs font-semibold text-gray-500 truncate mt-0.5" title={displayProducts}>
-                                                        {displayProducts}
+                                                    <p className="text-xs font-semibold text-gray-500 truncate mt-0.5">
+                                                        {record.productsList && record.productsList.length > 0
+                                                            ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                                            : record.productName || '-'}
                                                     </p>
                                                 </div>
                                                 {/* Date Info Column */}
@@ -7743,7 +7747,19 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-bold text-gray-900 break-words text-[11px]">{displayProducts}</span>
+                                                    <div className="font-bold text-gray-900 break-words text-[11px]">
+                                                         {record.productsList && record.productsList.length > 0 ? (
+                                                             <div className="flex flex-col gap-0.5">
+                                                                 {record.productsList.map((p, idx) => (
+                                                                     <div key={idx} className="break-words">
+                                                                         {p.productName}
+                                                                     </div>
+                                                                 ))}
+                                                             </div>
+                                                         ) : (
+                                                             <span className="break-words block">{record.productName || '-'}</span>
+                                                         )}
+                                                     </div>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
@@ -7762,12 +7778,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <span className={`font-black text-[11px] ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
                                                         {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium ml-0.5">Kg</span>
-                                                    </span>
-
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rem G.P</span>
-                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className={`font-black text-[11px] ${remGpKg <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                                                        {remGpKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-medium ml-0.5">Kg</span>
                                                     </span>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expense</span>
