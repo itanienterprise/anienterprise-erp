@@ -7281,6 +7281,120 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                     </div>
                                                                 )}
 
+                                                                {/* Product Details Section */}
+                                                                {(() => {
+                                                                    const productsToBreakdown = record.productsList && record.productsList.length > 0
+                                                                        ? record.productsList
+                                                                        : [{
+                                                                            productName: record.productName || '-',
+                                                                            quantity: record.quantity || 0,
+                                                                            rate: record.rate || 0,
+                                                                            freight: record.freight || 0,
+                                                                            totalDollar: record.totalDollar || 0
+                                                                        }];
+                                                                    const totalOpeningQtyTons = productsToBreakdown.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+                                                                    const totalOpeningQtyKg = totalOpeningQtyTons * 1000;
+
+                                                                    return (
+                                                                        <div className="space-y-3">
+                                                                            <h4 className="text-sm font-black text-emerald-600 uppercase tracking-widest border-b border-emerald-50 pb-2">
+                                                                                <span>Product Details</span>
+                                                                            </h4>
+                                                                            <div className="overflow-x-auto border border-gray-100 rounded-xl bg-gray-50/20 shadow-sm">
+                                                                                <table className="w-full text-left border-collapse text-sm">
+                                                                                    <thead>
+                                                                                        <tr className="bg-gray-50/50 border-b border-gray-100/80">
+                                                                                            <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Product Name</th>
+                                                                                            <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-right text-[11px]">Quantity (Kg)</th>
+                                                                                            <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-right text-[11px]">Value (৳)</th>
+                                                                                            <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-right text-[11px]">LC Balance (Kg)</th>
+                                                                                        </tr>
+                                                                                    </thead>
+                                                                                    <tbody className="divide-y divide-gray-100/50 bg-white">
+                                                                                        {productsToBreakdown.map((p, idx) => {
+                                                                                            const pOpeningQtyKg = (parseFloat(p.quantity) || 0) * 1000;
+                                                                                            const pAdjustmentQtyKg = totalOpeningQtyKg > 0 ? (adj.actualAdjustmentQtyKg * (pOpeningQtyKg / totalOpeningQtyKg)) : 0;
+                                                                                            const pAdjustedQtyKg = pOpeningQtyKg + pAdjustmentQtyKg;
+                                                                                            const pAdjustedValueBdt = totalOpeningQtyKg > 0 ? (adj.adjustedTotalAmount * (pOpeningQtyKg / totalOpeningQtyKg)) : adj.adjustedTotalAmount;
+
+                                                                                            const pReceiptsMap = {};
+                                                                                            allStockRecords
+                                                                                                .filter(s => {
+                                                                                                    const recordLcNoClean = String(s.lcNo || '').replace(/\D/g, '');
+                                                                                                    const status = (s.status || '').toLowerCase();
+                                                                                                    const matchesLc = recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+                                                                                                    const matchesProduct = String(s.productName || '').toLowerCase().trim() === String(p.productName || '').toLowerCase().trim();
+                                                                                                    return matchesLc && matchesProduct;
+                                                                                                })
+                                                                                                .forEach(s => {
+                                                                                                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                                                                                                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                                                                                                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                                                                                                    const key = `${dateStr}_${groupVal}`;
+
+                                                                                                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + (parseFloat(item.inHouseQuantity || item.quantity) || 0), 0);
+                                                                                                    const qty = parseFloat(s.totalLcQuantity) || itemSubtotal || parseFloat(s.inHouseQuantity) || parseFloat(s.quantity) || 0;
+
+                                                                                                    if (!pReceiptsMap[key]) {
+                                                                                                        pReceiptsMap[key] = qty;
+                                                                                                    } else {
+                                                                                                        if (!s.totalLcQuantity) {
+                                                                                                            pReceiptsMap[key] += qty;
+                                                                                                        }
+                                                                                                    }
+                                                                                                });
+                                                                                            const pReceivedQtyKg = Object.values(pReceiptsMap).reduce((sum, qty) => sum + qty, 0);
+
+                                                                                            const pBorderSaleQtyKg = allSalesRecords
+                                                                                                .filter(s => {
+                                                                                                    const recordLcNoClean = String(s.lcNo || '').replace(/\D/g, '');
+                                                                                                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                                                                                    const isBorder = sTypeLow.includes('border') ||
+                                                                                                        (s.invoiceNo || '').startsWith('BS') ||
+                                                                                                        (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
+                                                                                                        (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+                                                                                                    const status = (s.status || '').toLowerCase();
+                                                                                                    return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+                                                                                                })
+                                                                                                .reduce((sum, s) => {
+                                                                                                    const matchingItemsQty = (s.items || [])
+                                                                                                        .filter(item => String(item.productName || '').toLowerCase().trim() === String(p.productName || '').toLowerCase().trim())
+                                                                                                        .reduce((iSum, item) => {
+                                                                                                            const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + (parseFloat(b.quantity) || 0), 0);
+                                                                                                            return iSum + (brandSubtotal || parseFloat(item.quantity) || 0);
+                                                                                                        }, 0);
+                                                                                                    
+                                                                                                    const rootProductMatches = String(s.productName || '').toLowerCase().trim() === String(p.productName || '').toLowerCase().trim();
+                                                                                                    const rootQty = rootProductMatches ? (parseFloat(s.currentTotalQty) || parseFloat(s.totalQuantity) || parseFloat(s.totalQty) || parseFloat(s.qty) || parseFloat(s.quantity) || parseFloat(s.total) || 0) : 0;
+                                                                                                    
+                                                                                                    return sum + (matchingItemsQty || rootQty);
+                                                                                                }, 0);
+
+                                                                                            const pCombinedRemKg = pAdjustedQtyKg - (pReceivedQtyKg + pBorderSaleQtyKg);
+
+                                                                                            return (
+                                                                                                <tr key={idx} className="hover:bg-gray-50/30">
+                                                                                                    <td className="px-4 py-3 font-bold text-gray-800">{p.productName || '-'}</td>
+                                                                                                    <td className="px-4 py-3 text-right font-semibold text-gray-700">{pAdjustedQtyKg.toLocaleString('en-US')} Kg</td>
+                                                                                                    <td className="px-4 py-3 text-right font-bold text-gray-900">৳{pAdjustedValueBdt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                                                                                                    <td className={`px-4 py-3 text-right font-black ${pCombinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{pCombinedRemKg.toLocaleString('en-IN')} Kg</td>
+                                                                                                </tr>
+                                                                                            );
+                                                                                        })}
+                                                                                        {/* Total Row */}
+                                                                                        <tr className="bg-gray-50/50 font-black border-t border-gray-200">
+                                                                                            <td className="px-4 py-3 font-bold text-gray-850 uppercase tracking-wider text-[11px]">Total</td>
+                                                                                            <td className="px-4 py-3 text-right font-black text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')} Kg</td>
+                                                                                            <td className="px-4 py-3 text-right font-black text-gray-900">৳{adj.adjustedTotalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                                                                                            <td className={`px-4 py-3 text-right font-black ${adj.combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{adj.combinedRemKg.toLocaleString('en-IN')} Kg</td>
+                                                                                        </tr>
+                                                                                    </tbody>
+                                                                                </table>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })()}
+
                                                                 {/* New LC Bill Charges */}
                                                                 <div className="space-y-3">
                                                                     <h4 className="text-sm font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-2 flex items-center justify-between">
