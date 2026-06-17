@@ -1300,9 +1300,9 @@ function IPManagement({
 
                                     <div className="space-y-5">
                                         {/* Quick Range */}
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-1.5 text-center">
                                             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
-                                            <div className="flex flex-wrap gap-2">
+                                            <div className="flex flex-wrap justify-center gap-2">
                                                 {['all', 'weekly', 'monthly', 'yearly'].map(range => (
                                                     <button
                                                         key={range}

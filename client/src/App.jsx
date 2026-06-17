@@ -483,7 +483,7 @@ function App() {
   const [showLcReport, setShowLcReport] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [filteredSalesForReport, setFilteredSalesForReport] = useState([]);
-  const [saleFilters, setSaleFilters] = useState({ startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
+  const [saleFilters, setSaleFilters] = useState({ quickRange: 'monthly', startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
   const [products, setProducts] = useState([]);
   const [damages, setDamages] = useState([]);
 

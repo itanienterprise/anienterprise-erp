@@ -435,7 +435,10 @@ const SaleManagement = ({
         );
     };
 
-    const hasActiveFilters = Object.values(saleFilters).some(v => v !== '');
+    const hasActiveFilters = Object.entries(saleFilters).some(([key, val]) => {
+        if (key === 'quickRange') return val !== 'all' && val !== 'custom' && val !== '';
+        return val !== '';
+    });
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -581,6 +584,7 @@ const SaleManagement = ({
     useEffect(() => {
         if (setSaleFilters) {
             setSaleFilters({
+                quickRange: 'monthly',
                 startDate: '',
                 endDate: '',
                 companyName: '',
@@ -2213,6 +2217,14 @@ const SaleManagement = ({
         if (saleFilters.endDate && sale.date) {
             if (sale.date > saleFilters.endDate) return false;
         }
+        // Quick range filtering
+        if (saleFilters.quickRange && saleFilters.quickRange !== 'all') {
+            const now = new Date();
+            const recordDate = new Date(sale.date);
+            if (saleFilters.quickRange === 'weekly' && (now - recordDate) > 7 * 24 * 60 * 60 * 1000) return false;
+            if (saleFilters.quickRange === 'monthly' && (now - recordDate) > 30 * 24 * 60 * 60 * 1000) return false;
+            if (saleFilters.quickRange === 'yearly' && (now - recordDate) > 365 * 24 * 60 * 60 * 1000) return false;
+        }
         // Company
         if (saleFilters.companyName) {
             const c = (sale.companyName || sale.customerName || '').toLowerCase();
@@ -2327,7 +2339,10 @@ const SaleManagement = ({
                                 <span>Filter</span>
                                 {hasActiveFilters && (
                                     <span className="flex items-center justify-center w-4 h-4 text-[10px] font-black bg-white text-blue-600 rounded-full ml-1">
-                                        {Object.values(saleFilters).filter(v => v !== '').length}
+                                        {Object.entries(saleFilters).filter(([key, val]) => {
+                                            if (key === 'quickRange') return val !== 'all' && val !== 'custom' && val !== '';
+                                            return val !== '';
+                                        }).length}
                                     </span>
                                 )}
                             </button>
@@ -2346,7 +2361,7 @@ const SaleManagement = ({
                                             <button
                                                 onMouseDown={(e) => {
                                                     e.preventDefault();
-                                                    setSaleFilters({ startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
+                                                    setSaleFilters({ quickRange: 'monthly', startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
                                                     setSaleFilterSearch({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
                                                     setActiveFilterDropdown(null);
                                                 }}
@@ -2357,13 +2372,30 @@ const SaleManagement = ({
                                         </div>
 
                                         <div className="space-y-5">
+                                            {/* Quick Range */}
+                                            <div className="space-y-1.5 text-center">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
+                                                <div className="flex flex-wrap justify-center gap-2">
+                                                    {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                        <button
+                                                            key={range}
+                                                            type="button"
+                                                            onClick={() => setSaleFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${saleFilters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                        >
+                                                            {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
                                             {/* Date Range Row */}
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div ref={saleFromDateFilterRef}>
                                                     <CustomDatePicker
                                                         label="From Date"
                                                         value={saleFilters.startDate}
-                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
                                                         compact={true}
                                                         isOpen={activeFilterDropdown === 'from'}
                                                         onToggle={(val) => setActiveFilterDropdown(val ? 'from' : null)}
@@ -2373,7 +2405,7 @@ const SaleManagement = ({
                                                     <CustomDatePicker
                                                         label="To Date"
                                                         value={saleFilters.endDate}
-                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
                                                         compact={true}
                                                         rightAlign={true}
                                                         isOpen={activeFilterDropdown === 'to'}
