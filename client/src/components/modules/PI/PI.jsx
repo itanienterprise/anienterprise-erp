@@ -381,6 +381,9 @@ function PI({
             ipsByProduct[productKey].push(ip);
         });
 
+        // Initialize lcRemainingConsumptionMap for each LC
+        const lcRemainingConsumptionMap = {};
+
         Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
             // Sort IPs ascending by numeric IP number: lowest consumed first
             const sortedIps = [...ipsGroup].sort((a, b) => {
@@ -390,87 +393,102 @@ function PI({
                 return (a.ipNumber || '').localeCompare(b.ipNumber || '');
             });
 
-            // Collect unique LCs linked to ANY IP in this group
-            const groupIpNumsClean = new Set(sortedIps.map(ip => cleanLc(ip.ipNumber)));
-            const seenLcIds = new Set();
-            const allGroupLcNums = new Set();
+            // Initialize total consumption for each LC under this product key
             lcRecords.forEach(lc => {
-                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
-                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
-                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
-                if (lcIps.some(lcIp => groupIpNumsClean.has(lcIp))) {
-                    const lcId = String(lc._id || lc.lcNo || JSON.stringify(lc));
-                    if (!seenLcIds.has(lcId)) {
-                        seenLcIds.add(lcId);
-                        if (lc.lcNo) allGroupLcNums.add(cleanLc(lc.lcNo));
-                    }
+                const lcId = lc.lcNo || String(lc._id);
+                if (!lcRemainingConsumptionMap[lcId]) lcRemainingConsumptionMap[lcId] = {};
+
+                const lcNoClean = cleanLc(lc.lcNo);
+                if (!lcNoClean) {
+                    lcRemainingConsumptionMap[lcId][productKey] = 0;
+                    return;
                 }
-            });
 
-            // Sum unique stock receipts for all group LCs matching the product name
-            const groupReceiptsMap = {};
-            allStockRecords.forEach(s => {
-                const sLcClean = cleanLc(s.lcNo);
-                const status = (s.status || '').toLowerCase();
-                if (allGroupLcNums.has(sLcClean) && (status === 'accepted' || status === 'in stock')) {
-                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                    const key = `${sLcClean}_${dateStr}_${groupVal}`;
+                // Sum unique stock receipts for this LC matching the product name
+                const groupReceiptsMap = {};
+                allStockRecords.forEach(s => {
+                    const sLcClean = cleanLc(s.lcNo);
+                    const status = (s.status || '').toLowerCase();
+                    if (sLcClean === lcNoClean && (status === 'accepted' || status === 'in stock')) {
+                        const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                        const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                        const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                        const key = `${sLcClean}_${dateStr}_${groupVal}`;
 
-                    // Filter entries matching the product name
-                    let productQty = 0;
-                    if (s.entries && s.entries.length > 0) {
-                        productQty = s.entries
-                            .filter(item => matchProduct(item.productName, productKey))
-                            .reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                    } else if (matchProduct(s.productName, productKey)) {
-                        productQty = parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                    }
+                        // Filter entries matching the product name
+                        let productQty = 0;
+                        if (s.entries && s.entries.length > 0) {
+                            productQty = s.entries
+                                .filter(item => matchProduct(item.productName, productKey))
+                                .reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                        } else if (matchProduct(s.productName, productKey)) {
+                            productQty = parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                        }
 
-                    if (productQty > 0) {
-                        if (!groupReceiptsMap[key]) {
-                            groupReceiptsMap[key] = productQty;
-                        } else {
-                            groupReceiptsMap[key] += productQty;
+                        if (productQty > 0) {
+                            if (!groupReceiptsMap[key]) {
+                                groupReceiptsMap[key] = productQty;
+                            } else {
+                                groupReceiptsMap[key] += productQty;
+                            }
                         }
                     }
-                }
-            });
-            let totalGroupConsumption = Object.values(groupReceiptsMap).reduce((sum, qty) => sum + qty, 0);
+                });
+                let totalConsumption = Object.values(groupReceiptsMap).reduce((sum, qty) => sum + qty, 0);
 
-            // Sum unique border sales for all group LCs matching the product name
-            allSalesRecords.forEach(s => {
-                const sLcClean = cleanLc(s.lcNo);
-                const status = (s.status || '').toLowerCase();
-                const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer));
-                if (allGroupLcNums.has(sLcClean) && status === 'accepted' && isBorder) {
-                    let productSaleQty = 0;
-                    if (s.items && s.items.length > 0) {
-                        productSaleQty = s.items
-                            .filter(item => matchProduct(item.productName, productKey))
-                            .reduce((iSum, item) => {
-                                const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                                return iSum + (brandSubtotal || parseNum(item.quantity));
-                            }, 0);
-                    } else if (matchProduct(s.productName, productKey)) {
-                        productSaleQty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total);
+                // Sum unique border sales for this LC matching the product name
+                allSalesRecords.forEach(s => {
+                    const sLcClean = cleanLc(s.lcNo);
+                    const status = (s.status || '').toLowerCase();
+                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                    const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer));
+                    if (sLcClean === lcNoClean && status === 'accepted' && isBorder) {
+                        let productSaleQty = 0;
+                        if (s.items && s.items.length > 0) {
+                            productSaleQty = s.items
+                                .filter(item => matchProduct(item.productName, productKey))
+                                .reduce((iSum, item) => {
+                                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                                    return iSum + (brandSubtotal || parseNum(item.quantity));
+                                }, 0);
+                        } else if (matchProduct(s.productName, productKey)) {
+                            productSaleQty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total);
+                        }
+
+                        if (productSaleQty > 0) {
+                            totalConsumption += productSaleQty;
+                        }
                     }
+                });
 
-                    if (productSaleQty > 0) {
-                        totalGroupConsumption += productSaleQty;
-                    }
-                }
+                lcRemainingConsumptionMap[lcId][productKey] = totalConsumption;
             });
 
-            // Distribute sequentially: fill first IP, then next...
-            let remainingConsumption = totalGroupConsumption;
+            // Distribute sequentially: fill first IP balance, then next... but ONLY from LCs linked to the specific IP
             sortedIps.forEach(ip => {
                 const ipQty = parseNum(ip.quantity) || 0;
-                const consumed = Math.min(remainingConsumption, ipQty);
+                const ipNoClean = cleanLc(ip.ipNumber);
+
+                // Find LCs linked to this IP
+                const relatedLcsForIp = lcRecords.filter(lc => {
+                    const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                        ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                        : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                    return lcIps.includes(ipNoClean);
+                });
+
+                let consumed = 0;
+                relatedLcsForIp.forEach(lc => {
+                    const lcId = lc.lcNo || String(lc._id);
+                    const available = lcRemainingConsumptionMap[lcId]?.[productKey] || 0;
+                    const toConsume = Math.min(available, ipQty - consumed);
+                    consumed += toConsume;
+                    if (lcRemainingConsumptionMap[lcId]) {
+                        lcRemainingConsumptionMap[lcId][productKey] = Math.max(0, available - toConsume);
+                    }
+                });
+
                 balanceMap[ip.ipNumber] = ipQty - consumed;
-                remainingConsumption = Math.max(0, remainingConsumption - consumed);
             });
         });
 
@@ -529,6 +547,13 @@ function PI({
             ipsByProduct[productKey].push(ip);
         });
 
+        // Initialize lcRemainingQtyMap for each LC
+        const lcRemainingQtyMap = {};
+        lcRecords.forEach(lc => {
+            const lcId = lc.lcNo || String(lc._id);
+            lcRemainingQtyMap[lcId] = {};
+        });
+
         Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
             // Sort IPs ascending by numeric IP number so first IP is consumed first
             const sortedIps = [...ipsGroup].sort((a, b) => {
@@ -538,36 +563,37 @@ function PI({
                 return (a.ipNumber || '').localeCompare(b.ipNumber || '');
             });
 
-            // Collect unique LCs linked to ANY IP in this product group
-            const groupIpNumsClean = new Set(sortedIps.map(ip => cleanLc(ip.ipNumber)));
-            const seenLcIds = new Set();
-            const allGroupLcs = [];
+            // Populate initial LC remaining quantities for this product key
             lcRecords.forEach(lc => {
-                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
-                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
-                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
-                if (lcIps.some(lcIp => groupIpNumsClean.has(lcIp))) {
-                    const lcId = String(lc._id || lc.lcNo || JSON.stringify(lc));
-                    if (!seenLcIds.has(lcId)) {
-                        seenLcIds.add(lcId);
-                        allGroupLcs.push(lc);
-                    }
-                }
+                const lcId = lc.lcNo || String(lc._id);
+                lcRemainingQtyMap[lcId][productKey] = getLcProductQtyInKg(lc, productKey);
             });
 
-            // Total LC quantity consumed for this product across all group LCs
-            const totalLcQty = allGroupLcs.reduce(
-                (sum, lc) => sum + getLcProductQtyInKg(lc, productKey),
-                0
-            );
-
-            // Distribute sequentially: fill first IP, then next, then next...
-            let remainingLcQty = totalLcQty;
+            // Distribute sequentially, but ONLY from LCs that are linked to the specific IP
             sortedIps.forEach(ip => {
                 const ipQty = parseNum(ip.quantity) || 0;
-                const consumed = Math.min(remainingLcQty, ipQty);
+                const ipNoClean = cleanLc(ip.ipNumber);
+
+                // Find LCs linked to this IP
+                const relatedLcsForIp = lcRecords.filter(lc => {
+                    const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                        ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
+                        : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
+                    return lcIps.includes(ipNoClean);
+                });
+
+                let consumed = 0;
+                relatedLcsForIp.forEach(lc => {
+                    const lcId = lc.lcNo || String(lc._id);
+                    const available = lcRemainingQtyMap[lcId]?.[productKey] || 0;
+                    const toConsume = Math.min(available, ipQty - consumed);
+                    consumed += toConsume;
+                    if (lcRemainingQtyMap[lcId]) {
+                        lcRemainingQtyMap[lcId][productKey] = Math.max(0, available - toConsume);
+                    }
+                });
+
                 balanceMap[ip.ipNumber] = ipQty - consumed;
-                remainingLcQty = Math.max(0, remainingLcQty - consumed);
             });
         });
 
