@@ -194,13 +194,13 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         if (showSafta) {
             const ipNumberVal = record.ipNumber || pi?.ipNumber || '';
             const ipNumbersList = ipNumberVal.split(',').map(s => s.trim()).filter(Boolean);
-            
+
             let filteredIpNumbersList = ipNumbersList;
             if (isPiRevised && pi?.revisions?.length > 0) {
                 const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
                 const originalProducts = originalRev?.productsList || [];
                 const changedProducts = [];
-                
+
                 (pi.productsList || []).forEach(p => {
                     const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
                     const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
@@ -209,7 +209,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                         changedProducts.push(p.productName?.trim().toLowerCase());
                     }
                 });
-                
+
                 if (changedProducts.length > 0) {
                     const matchedIps = ipNumbersList.filter(ipNo => {
                         const ipRec = ipRecords.find(i => i.ipNumber === ipNo);
@@ -375,13 +375,13 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         if (showSafta) {
             const ipNumberVal = record.ipNumber || pi?.ipNumber || '';
             const ipNumbersList = ipNumberVal.split(',').map(s => s.trim()).filter(Boolean);
-            
+
             let filteredIpNumbersList = ipNumbersList;
             if (isPiRevised && pi?.revisions?.length > 0) {
                 const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
                 const originalProducts = originalRev?.productsList || [];
                 const changedProducts = [];
-                
+
                 (pi.productsList || []).forEach(p => {
                     const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
                     const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
@@ -390,7 +390,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                         changedProducts.push(p.productName?.trim().toLowerCase());
                     }
                 });
-                
+
                 if (changedProducts.length > 0) {
                     const matchedIps = ipNumbersList.filter(ipNo => {
                         const ipRec = ipRecords.find(i => i.ipNumber === ipNo);
@@ -451,27 +451,27 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     const productsList = (record.productsList && record.productsList.length > 0 ? record.productsList : []).map(prod => {
         const piProd = pi?.productsList?.find(p => p.productName?.toLowerCase() === prod.productName?.toLowerCase());
-        
+
         let qty = prod.quantity;
         let amt = prod.amount;
         let totFrt = prod.totalFreight;
-        
+
         if (isPiRevised && pi?.revisions?.length > 0) {
             const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
             const originalProducts = originalRev?.productsList || [];
             const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === prod.productName?.trim().toLowerCase());
-            
+
             const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
             const revQty = piProd ? (parseFloat(piProd.quantity) || 0) : 0;
             const diffQty = revQty - origQty;
-            
+
             if (diffQty > 0) {
                 qty = String(diffQty);
                 amt = String((diffQty * (parseFloat(prod.rate || piProd?.rate || 0))).toFixed(2));
                 totFrt = String((diffQty * (parseFloat(prod.freight || piProd?.freight || 0))).toFixed(2));
             }
         }
-        
+
         return {
             ...prod,
             quantity: qty,
@@ -515,7 +515,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const exporterNameY = isPiRevised ? y + 13 : y + 12;
     doc.text(nameLines, margin + leftColWidth / 2, exporterNameY, { align: 'center' });
 
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     let exporterInfo = record.exporterAddress || '';
     exporterInfo = formatExporterAddressOneLine(exporterInfo);
@@ -1215,13 +1215,13 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const trBin = importer?.bin || '';
     const trPiNo = isPiRevised ? (record.piNumber || '') : (pi?.piNumber || record.piNumber || '');
     const trPiDate = isPiRevised ? formatDate(record.piDate) : (pi?.date ? formatDate(pi.date) : (record.piDate ? formatDate(record.piDate) : ''));
-    
+
     const cnDateStr = lc?.marineCNDate ? formatDate(lc.marineCNDate) : '';
     let trCoverNote = lc?.marineCoverNote || '';
     if (trCoverNote && cnDateStr) {
         trCoverNote = `${trCoverNote} DATED.${cnDateStr}`;
     }
-    
+
     let trAmendmentLine = '';
     if (record.lcAmendment) {
         if (lc?.amendments?.length > 0) {
@@ -1245,7 +1245,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 trCoverNote += ` & ADDN NO: ${matchedAmnd.addnNo}${amndDateStr ? `, DATE. ${amndDateStr}` : ''}`;
             }
         }
-        
+
         const amndNoMatch = record.lcAmendment.match(/AMENDMENT\s*NO-?\s*([^\s]+)/i);
         const amndDateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
         const amndNo = amndNoMatch ? amndNoMatch[1] : '';
