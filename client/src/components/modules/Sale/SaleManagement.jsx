@@ -50,7 +50,7 @@ const SaleManagement = ({
     const [submitStatus, setSubmitStatus] = useState(null);
     const [viewData, setViewData] = useState(null);
     const [_customerSearch, setCustomerSearch] = useState('');
-    const [expandedRows, setExpandedRows] = useState([]);
+    const [collapsedRows, setCollapsedRows] = useState([]);
     const [showSaleFilterPanel, setShowSaleFilterPanel] = useState(false);
     const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
     const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice', 'port', 'product', 'brand', 'indCnf', 'bdCnf'
@@ -430,7 +430,7 @@ const SaleManagement = ({
     const lcRef = useRef(null);
 
     const toggleRowExpansion = (saleId) => {
-        setExpandedRows(prev =>
+        setCollapsedRows(prev =>
             prev.includes(saleId) ? prev.filter(id => id !== saleId) : [...prev, saleId]
         );
     };
@@ -4252,7 +4252,7 @@ const SaleManagement = ({
                                 ) : getFilteredData().length === 0 ? (
                                     <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
-                                    const isExpanded = expandedRows.includes(sale._id);
+                                    const isExpanded = !collapsedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
                                         ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
                                         : false;
@@ -4538,7 +4538,7 @@ const SaleManagement = ({
                                 No sales records found
                             </div>
                         ) : getFilteredData().map((sale) => {
-                            const isExpanded = expandedRows.includes(sale._id);
+                            const isExpanded = !collapsedRows.includes(sale._id);
                             const isMultiple = (sale.items && sale.items.length > 0)
                                 ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
                                 : false;
