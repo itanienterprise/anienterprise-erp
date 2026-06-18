@@ -555,7 +555,8 @@ function IPManagement({
         port: '',
         status: 'Active',
         ipAttachment: '',
-        ipAttachmentName: ''
+        ipAttachmentName: '',
+        isExtended: false
     });
 
     const [filters, setFilters] = useState({
@@ -904,10 +905,25 @@ function IPManagement({
                 closeDate.setHours(0, 0, 0, 0);
                 const diffDays = Math.ceil((closeDate - today) / (1000 * 60 * 60 * 24));
 
+                let isExtended = ip.isExtended;
+                if (!isExtended && ip.openingDate) {
+                    const openDate = new Date(ip.openingDate);
+                    const closeDateObj = new Date(ip.closeDate);
+                    if (!isNaN(openDate.getTime()) && !isNaN(closeDateObj.getTime())) {
+                        const diffMs = closeDateObj.getTime() - openDate.getTime();
+                        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                        if (diffDays > 121) {
+                            isExtended = true;
+                        }
+                    }
+                }
+
                 if (closeDate < today) {
                     computedStatus = "Expired";
                 } else if (diffDays <= 5) {
                     computedStatus = "Expire Soon";
+                } else if (isExtended) {
+                    computedStatus = "Extended";
                 }
             }
 
@@ -1009,6 +1025,25 @@ function IPManagement({
                     const closeDate = new Date(openDate);
                     closeDate.setDate(closeDate.getDate() + 121);
                     newData.closeDate = closeDate.toISOString().split('T')[0];
+                    newData.isExtended = false;
+                }
+            }
+
+            if (name === 'closeDate') {
+                if (newData.openingDate && value) {
+                    const openDate = new Date(newData.openingDate);
+                    const closeDateObj = new Date(value);
+                    if (!isNaN(openDate.getTime()) && !isNaN(closeDateObj.getTime())) {
+                        const diffMs = closeDateObj.getTime() - openDate.getTime();
+                        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                        if (diffDays > 121) {
+                            newData.isExtended = true;
+                        } else {
+                            newData.isExtended = false;
+                        }
+                    }
+                } else {
+                    newData.isExtended = true;
                 }
             }
 
@@ -1116,7 +1151,8 @@ function IPManagement({
             port: '',
             status: 'Active',
             ipAttachment: '',
-            ipAttachmentName: ''
+            ipAttachmentName: '',
+            isExtended: false
         });
         setEditingId(null);
         setSubmitStatus(null);
@@ -1179,7 +1215,8 @@ function IPManagement({
             quantity: record.quantity || '',
             port: record.port || '',
             ipAttachment: record.ipAttachment || '',
-            ipAttachmentName: record.ipAttachmentName || ''
+            ipAttachmentName: record.ipAttachmentName || '',
+            isExtended: record.isExtended || false
         });
         setEditingId(record._id);
         setShowIpForm(true);
@@ -2017,6 +2054,7 @@ function IPManagement({
                                                 <td className="px-3 py-3">
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                         record.computedStatus === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' :
+                                                            record.computedStatus === 'Extended' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                                                             'bg-amber-50 text-amber-700 border-amber-100'
                                                         }`}>
                                                         {record.computedStatus}
@@ -2101,6 +2139,7 @@ function IPManagement({
                                                     </div>
                                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                         record.computedStatus === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' :
+                                                            record.computedStatus === 'Extended' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                                                             'bg-amber-50 text-amber-700 border-amber-100'
                                                         }`}>
                                                         {record.computedStatus}
