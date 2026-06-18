@@ -4255,14 +4255,35 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
         doc.setFont('helvetica', 'normal');
         doc.text(bankName || '-', margin + 25, yPos);
 
-        if (filters.startDate || filters.endDate) {
+        let dateRangeStr = '';
+        if (filters.quickRange && filters.quickRange !== 'all') {
+            if (filters.quickRange === 'weekly') {
+                dateRangeStr = 'Weekly (Current Week)';
+            } else if (filters.quickRange === 'monthly') {
+                const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const monthName = months[(filters.selectedMonth || new Date().getMonth() + 1) - 1];
+                const year = filters.selectedYear || new Date().getFullYear();
+                dateRangeStr = `${monthName} ${year}`;
+            } else if (filters.quickRange === 'yearly') {
+                const year = filters.selectedYear || new Date().getFullYear();
+                dateRangeStr = `Year: ${year}`;
+            } else if (filters.quickRange === 'custom') {
+                const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
+                const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
+                dateRangeStr = `${start} to ${end}`;
+            }
+        } else if (filters.startDate || filters.endDate) {
+            const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
+            const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
+            dateRangeStr = `${start} to ${end}`;
+        }
+
+        if (dateRangeStr) {
             yPos += 5;
             doc.setFont('helvetica', 'bold');
             doc.text("Date Range:", margin, yPos);
             doc.setFont('helvetica', 'normal');
-            const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
-            const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
-            doc.text(`${start} to ${end}`, margin + 25, yPos);
+            doc.text(dateRangeStr, margin + 25, yPos);
         }
 
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
@@ -4316,10 +4337,10 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
                 0: { cellWidth: 8, halign: 'center' },   // SL
                 1: { cellWidth: 20, halign: 'center' },  // Date
                 2: { cellWidth: 25, halign: 'center' },  // LC No
-                3: { cellWidth: 40 },                    // Importer
+                3: { cellWidth: 46 },                    // Importer
                 4: { cellWidth: 35, halign: 'center' },  // Bill Type
-                5: { cellWidth: 35, halign: 'right' },   // Margin Paid
-                6: { cellWidth: 35, halign: 'right' }    // Bank Charge
+                5: { cellWidth: 32, halign: 'right' },   // Margin Paid
+                6: { cellWidth: 32, halign: 'right' }    // Bank Charge
             },
             margin: { left: tableLeftMargin, right: tableLeftMargin }
         });

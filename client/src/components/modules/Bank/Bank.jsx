@@ -31,6 +31,9 @@ const Bank = ({ onDeleteConfirm }) => {
     const [lcBillHistoryLoading, setLcBillHistoryLoading] = useState(false);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [historyFilters, setHistoryFilters] = useState({
+        quickRange: 'all',
+        selectedMonth: new Date().getMonth() + 1,
+        selectedYear: new Date().getFullYear(),
         startDate: '',
         endDate: '',
         billType: '',
@@ -147,6 +150,9 @@ const Bank = ({ onDeleteConfirm }) => {
         setLcBillHistoryRows([]);
         setHistorySearchQuery('');
         setHistoryFilters({
+            quickRange: 'all',
+            selectedMonth: new Date().getMonth() + 1,
+            selectedYear: new Date().getFullYear(),
             startDate: '',
             endDate: '',
             billType: '',
@@ -388,6 +394,11 @@ const Bank = ({ onDeleteConfirm }) => {
 
     const filteredLcBillHistoryRows = useMemo(() => {
         const filtered = lcBillHistoryRows.filter(row => {
+            // Filter out empty rows (where both marginPaid and bankPaid are <= 0)
+            if ((row.marginPaid || 0) <= 0 && (row.bankPaid || 0) <= 0) {
+                return false;
+            }
+
             // Search Query Filter
             if (historySearchQuery) {
                 const query = historySearchQuery.toLowerCase().trim();
@@ -398,24 +409,60 @@ const Bank = ({ onDeleteConfirm }) => {
                 if (!matchesSearch) return false;
             }
 
-            // Date Filters
+            // Date Filters & Quick Range
+            let isDateMatch = true;
             if (row.date) {
                 try {
+                    const rowDate = new Date(row.date);
                     const rowDateStr = typeof row.date === 'string'
                         ? (row.date.includes('T') ? row.date.split('T')[0] : row.date)
-                        : new Date(row.date).toISOString().split('T')[0];
+                        : rowDate.toISOString().split('T')[0];
+
                     if (historyFilters.startDate && rowDateStr < historyFilters.startDate) {
-                        return false;
+                        isDateMatch = false;
                     }
                     if (historyFilters.endDate && rowDateStr > historyFilters.endDate) {
-                        return false;
+                        isDateMatch = false;
+                    }
+
+                    // Quick range filtering
+                    if (historyFilters.quickRange && historyFilters.quickRange !== 'all' && historyFilters.quickRange !== 'custom') {
+                        const now = new Date();
+                        if (historyFilters.quickRange === 'weekly') {
+                            const dayOfWeek = now.getDay();
+                            const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                            const weekStart = new Date(now);
+                            weekStart.setDate(now.getDate() + diffToMonday);
+                            weekStart.setHours(0, 0, 0, 0);
+                            const weekEnd = new Date(weekStart);
+                            weekEnd.setDate(weekStart.getDate() + 6);
+                            weekEnd.setHours(23, 59, 59, 999);
+                            if (rowDate < weekStart || rowDate > weekEnd) {
+                                isDateMatch = false;
+                            }
+                        }
+                        if (historyFilters.quickRange === 'monthly') {
+                            const month = historyFilters.selectedMonth || (now.getMonth() + 1);
+                            const year = historyFilters.selectedYear || now.getFullYear();
+                            if (rowDate.getMonth() + 1 !== month || rowDate.getFullYear() !== year) {
+                                isDateMatch = false;
+                            }
+                        }
+                        if (historyFilters.quickRange === 'yearly') {
+                            const year = historyFilters.selectedYear || now.getFullYear();
+                            if (rowDate.getFullYear() !== year) {
+                                isDateMatch = false;
+                            }
+                        }
                     }
                 } catch (e) {
                     console.error("Error parsing date:", e);
                 }
-            } else if (historyFilters.startDate || historyFilters.endDate) {
-                return false;
+            } else if (historyFilters.startDate || historyFilters.endDate || (historyFilters.quickRange && historyFilters.quickRange !== 'all')) {
+                isDateMatch = false;
             }
+
+            if (!isDateMatch) return false;
 
             // Bill Type Filter
             if (historyFilters.billType) {
@@ -1451,7 +1498,13 @@ const Bank = ({ onDeleteConfirm }) => {
                                         ref={historyFilterButtonRef}
                                         onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
                                         className={`flex items-center justify-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full border transition-all shadow-sm ${
-                                            showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
+                                            showHistoryFilterPanel || 
+                                            historyFilters.quickRange !== 'all' || 
+                                            historyFilters.startDate !== '' || 
+                                            historyFilters.endDate !== '' || 
+                                            historyFilters.billType !== '' || 
+                                            historyFilters.lcNo !== '' || 
+                                            historyFilters.importer !== ''
                                                 ? 'bg-blue-50 border-blue-200 text-blue-600'
                                                 : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
                                         }`}
@@ -1469,7 +1522,16 @@ const Bank = ({ onDeleteConfirm }) => {
                                                 <h4 className="text-lg font-bold text-gray-800">Filter History</h4>
                                                 <button
                                                     onClick={() => {
-                                                        setHistoryFilters({ startDate: '', endDate: '', billType: '', lcNo: '', importer: '' });
+                                                        setHistoryFilters({ 
+                                                            quickRange: 'all', 
+                                                            selectedMonth: new Date().getMonth() + 1, 
+                                                            selectedYear: new Date().getFullYear(),
+                                                            startDate: '', 
+                                                            endDate: '', 
+                                                            billType: '', 
+                                                            lcNo: '', 
+                                                            importer: '' 
+                                                        });
                                                         setHistoryFilterSearchInputs({
                                                             billTypeSearch: '',
                                                             lcNoSearch: '',
@@ -1483,19 +1545,73 @@ const Bank = ({ onDeleteConfirm }) => {
                                             </div>
 
                                             <div className="space-y-4">
+                                                {/* Quick Range */}
+                                                <div className="space-y-2 text-center">
+                                                    <label className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
+                                                    <div className="flex flex-wrap justify-center gap-2">
+                                                        {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                            <button
+                                                                key={range}
+                                                                type="button"
+                                                                onClick={() => setHistoryFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
+                                                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${historyFilters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                            >
+                                                                {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    {/* Month dropdown for monthly */}
+                                                    {historyFilters.quickRange === 'monthly' && (
+                                                        <div className="flex items-center justify-center gap-2 mt-1">
+                                                            <select
+                                                                value={historyFilters.selectedMonth || new Date().getMonth() + 1}
+                                                                onChange={(e) => setHistoryFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
+                                                                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                            >
+                                                                {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                                                                    <option key={i+1} value={i+1}>{m}</option>
+                                                                ))}
+                                                            </select>
+                                                            <select
+                                                                value={historyFilters.selectedYear || new Date().getFullYear()}
+                                                                onChange={(e) => setHistoryFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                            >
+                                                                {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                                    <option key={y} value={y}>{y}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    )}
+                                                    {/* Year dropdown for yearly */}
+                                                    {historyFilters.quickRange === 'yearly' && (
+                                                        <div className="flex items-center justify-center gap-2 mt-1">
+                                                            <select
+                                                                value={historyFilters.selectedYear || new Date().getFullYear()}
+                                                                onChange={(e) => setHistoryFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                            >
+                                                                {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                                    <option key={y} value={y}>{y}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    )}
+                                                </div>
+
                                                 {/* Date range */}
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                     <CustomDatePicker
                                                         label="START DATE"
                                                         value={historyFilters.startDate}
-                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
                                                         compact={true}
                                                         labelClassName="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider"
                                                     />
                                                     <CustomDatePicker
                                                         label="END DATE"
                                                         value={historyFilters.endDate}
-                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
                                                         compact={true}
                                                         rightAlign={true}
                                                         labelClassName="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider"
