@@ -99,12 +99,11 @@ export const generatePI2PDF = (record) => {
     let exporterInfo = record.exporterAddress || '';
     const exporterPhone = record.exporterContact || '';
     const exporterEmail = record.exporterEmail || '';
-    const expContactParts = [];
-    if (exporterPhone) expContactParts.push(`Phone: ${exporterPhone}`);
-    if (exporterEmail) expContactParts.push(`Email: ${exporterEmail}`);
-    const expContactLine = expContactParts.join(', ');
-    if (expContactLine) {
-        exporterInfo = exporterInfo.trim() + `\n${expContactLine}`;
+    if (exporterPhone) {
+        exporterInfo = exporterInfo.trim() + `\nPhone: ${exporterPhone}`;
+    }
+    if (exporterEmail) {
+        exporterInfo = exporterInfo.trim() + `\nEmail: ${exporterEmail}`;
     }
     // Render exporter address: compress each logical line via charSpace to fit on one line.
     const exporterColWidth = leftColWidth - 10;
@@ -243,12 +242,11 @@ export const generatePI2PDF = (record) => {
     let impInfo = record.partyAddress || '';
     const phone = record.partyContact || '';
     const email = record.partyEmail || '';
-    const contactParts = [];
-    if (phone) contactParts.push(`Phone: ${phone}`);
-    if (email) contactParts.push(`Email: ${email}`);
-    const contactLine = contactParts.join(', ');
-    if (contactLine) {
-        impInfo = impInfo.trim() + `\n${contactLine}`;
+    if (phone) {
+        impInfo = impInfo.trim() + `\nPhone: ${phone}`;
+    }
+    if (email) {
+        impInfo = impInfo.trim() + `\nEmail: ${email}`;
     }
     doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
 

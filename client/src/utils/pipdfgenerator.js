@@ -132,12 +132,11 @@ export const generatePIPDF = (record) => {
     let exporterInfo = record.exporterAddress || '';
     const exporterPhone = record.exporterContact || '';
     const exporterEmail = record.exporterEmail || '';
-    const expContactParts = [];
-    if (exporterPhone) expContactParts.push(`Phone: ${exporterPhone}`);
-    if (exporterEmail) expContactParts.push(`Email: ${exporterEmail}`);
-    const expContactLine = expContactParts.join(', ');
-    if (expContactLine) {
-        exporterInfo = exporterInfo.trim() + `\n${expContactLine}`;
+    if (exporterPhone) {
+        exporterInfo = exporterInfo.trim() + `\nPhone: ${exporterPhone}`;
+    }
+    if (exporterEmail) {
+        exporterInfo = exporterInfo.trim() + `\nEmail: ${exporterEmail}`;
     }
 
     // Render exporter address: each logical line (split by \n) is compressed
@@ -302,12 +301,11 @@ export const generatePIPDF = (record) => {
     importerInfo = importerInfo.trim();
     const phone = record.partyContact || '';
     const email = record.partyEmail || '';
-    const contactParts = [];
-    if (phone) contactParts.push(`Phone: ${phone}`);
-    if (email) contactParts.push(`Email: ${email}`);
-    const contactLine = contactParts.join(', ');
-    if (contactLine) {
-        importerInfo = importerInfo + `\n${contactLine}`;
+    if (phone) {
+        importerInfo = importerInfo + `\nPhone: ${phone}`;
+    }
+    if (email) {
+        importerInfo = importerInfo + `\nEmail: ${email}`;
     }
 
     const partyLines = doc.splitTextToSize(importerInfo.trim(), leftColWidth - 10);

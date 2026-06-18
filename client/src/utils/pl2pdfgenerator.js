@@ -45,6 +45,28 @@ const fitFontSizeOneLine = (doc, text, maxWidth, maxSize = 9, minSize = 4.5, fon
     return minSize;
 };
 
+const formatExporterAddressOneLine = (addressStr) => {
+    if (!addressStr) return '';
+    const lines = addressStr.split('\n').map(l => l.trim()).filter(Boolean);
+    const cinKeywords = ['cin:', 'cin ', 'gst:', 'gstin:', 'tin:', 'bin:', 'pan:', 'pan '];
+    const addressLines = [];
+    const taxLines = [];
+    lines.forEach(line => {
+        const lower = line.toLowerCase();
+        if (cinKeywords.some(kw => lower.includes(kw))) {
+            taxLines.push(line);
+        } else {
+            addressLines.push(line);
+        }
+    });
+    const singleAddressLine = addressLines.join(' ').replace(/\s+/g, ' ').trim();
+    const resultLines = [];
+    if (singleAddressLine) resultLines.push(singleAddressLine);
+    taxLines.forEach(line => resultLines.push(line));
+    return resultLines.join('\n');
+};
+
+
 export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], importers = [], exporters = [], banks = [], ipRecords = [], trSetups = []) => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -493,20 +515,20 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const exporterNameY = isPiRevised ? y + 13 : y + 12;
     doc.text(nameLines, margin + leftColWidth / 2, exporterNameY, { align: 'center' });
 
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     let exporterInfo = record.exporterAddress || '';
+    exporterInfo = formatExporterAddressOneLine(exporterInfo);
     const exporter = exporters?.find(e => e.name === (record.exporterName || pi?.exporterName));
     const exporterPhone = record.exporterContact || exporter?.phone || '';
     const exporterEmail = record.exporterEmail || exporter?.email || '';
-    const expContactParts = [];
-    if (exporterPhone) expContactParts.push(`Phone: ${exporterPhone}`);
-    if (exporterEmail) expContactParts.push(`Email: ${exporterEmail}`);
-    const expContactLine = expContactParts.join(', ');
-    if (expContactLine) {
-        exporterInfo = exporterInfo.trim() + `\n${expContactLine}`;
+    if (exporterPhone) {
+        exporterInfo = exporterInfo.trim() + `\nPhone: ${exporterPhone}`;
     }
-    const exporterAddressY = isPiRevised ? y + 19 : y + 17;
+    if (exporterEmail) {
+        exporterInfo = exporterInfo.trim() + `\nEmail: ${exporterEmail}`;
+    }
+    const exporterAddressY = isPiRevised ? y + 17 : y + 15.5;
     doc.text(doc.splitTextToSize(exporterInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, exporterAddressY, { align: 'center' });
 
     // Right: Invoice Info
@@ -603,12 +625,11 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     let impInfo = record.partyAddress || '';
     const phone = record.partyContact || importer?.phone || '';
     const email = record.partyEmail || importer?.email || '';
-    const contactParts = [];
-    if (phone) contactParts.push(`Phone: ${phone}`);
-    if (email) contactParts.push(`Email: ${email}`);
-    const contactLine = contactParts.join(', ');
-    if (contactLine) {
-        impInfo = impInfo.trim() + `\n${contactLine}`;
+    if (phone) {
+        impInfo = impInfo.trim() + `\nPhone: ${phone}`;
+    }
+    if (email) {
+        impInfo = impInfo.trim() + `\nEmail: ${email}`;
     }
     doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
 
