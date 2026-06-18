@@ -104,9 +104,9 @@ function PI({
         invoiceStyle: 'Style 1 SAA',
         port: '',
         placeOfReceipt: '',
-        portOfLoading: '',
+        portOfLoading: 'ANY PLACE OF INDIA',
         portOfDischarge: '',
-        indianBank: '',
+        indianBank: 'ICICI Bank',
         buyerOrderNo: '',
         buyerOrderDate: '',
         otherReferences: '',
@@ -655,6 +655,10 @@ function PI({
                 if (updated.termsDeliveryPayment) {
                     updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/CPT\s+([^,]+),/i, `CPT ${value.toUpperCase()},`);
                 }
+                const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === value.toLowerCase().trim());
+                if (matchedPort) {
+                    updated.placeOfReceipt = matchedPort.placeOfReceipt || '';
+                }
             }
 
             return updated;
@@ -952,13 +956,24 @@ function PI({
                             updated.productsList = [...currentProducts, newProduct];
                         }
 
-                        // Auto-fill party info from the first selected IP
+                        // Auto-fill party info and port info from the first selected IP
                         if (currentIpNumbers.length === 1) {
                             updated.partyName = ip.ipParty || '';
                             const importer = importers.find(i => i.name === ip.ipParty);
                             if (importer) {
                                 updated.partyAddress = importer.address || '';
                                 updated.partyContact = importer.phone || '';
+                            }
+                            if (ip.port) {
+                                updated.portOfDischarge = ip.port;
+                                updated.port = ip.port;
+                                if (updated.termsDeliveryPayment) {
+                                    updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/CPT\s+([^,]+),/i, `CPT ${ip.port.toUpperCase()},`);
+                                }
+                                const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === ip.port.toLowerCase().trim());
+                                if (matchedPort) {
+                                    updated.placeOfReceipt = matchedPort.placeOfReceipt || '';
+                                }
                             }
                         }
                     }
@@ -1032,6 +1047,10 @@ function PI({
                 updated.port = value;
                 if (updated.termsDeliveryPayment) {
                     updated.termsDeliveryPayment = updated.termsDeliveryPayment.replace(/CPT\s+([^,]+),/i, `CPT ${value.toUpperCase()},`);
+                }
+                const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === value.toLowerCase().trim());
+                if (matchedPort) {
+                    updated.placeOfReceipt = matchedPort.placeOfReceipt || '';
                 }
             }
 
@@ -1250,9 +1269,9 @@ function PI({
             productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }],
             port: '',
             placeOfReceipt: '',
-            portOfLoading: '',
+            portOfLoading: 'ANY PLACE OF INDIA',
             portOfDischarge: '',
-            indianBank: '',
+            indianBank: 'ICICI Bank',
             buyerOrderNo: '',
             buyerOrderDate: '',
             otherReferences: '',
