@@ -88,6 +88,7 @@ const CnF = ({
         productName: ''
     });
     const historyFilterButtonRef = useRef(null);
+    const historyFilterButtonMobileRef = useRef(null);
     const historyFilterPanelRef = useRef(null);
     const [historyFilterSearchInputs, setHistoryFilterSearchInputs] = useState({ lcNo: '', product: '' });
     const [historyFilterDropdownOpen, setHistoryFilterDropdownOpen] = useState({ lcNo: false, product: false });
@@ -108,14 +109,14 @@ const CnF = ({
 
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (showHistoryFilterPanel && historyFilterPanelRef.current && !historyFilterPanelRef.current.contains(event.target) && !historyFilterButtonRef.current?.contains(event.target)) {
+            if (showHistoryFilterPanel && historyFilterPanelRef.current && !historyFilterPanelRef.current.contains(event.target) && !historyFilterButtonRef.current?.contains(event.target) && !historyFilterButtonMobileRef.current?.contains(event.target)) {
                 setShowHistoryFilterPanel(false);
             }
-            if (historyFilterDropdownOpen.lcNo && lcNoFilterRef.current && !lcNoFilterRef.current.contains(event.target)) {
-                setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: false }));
+            if (lcNoFilterRef.current && !lcNoFilterRef.current.contains(event.target)) {
+                setHistoryFilterDropdownOpen(prev => prev.lcNo ? { ...prev, lcNo: false } : prev);
             }
-            if (historyFilterDropdownOpen.product && productFilterSearchRef.current && !productFilterSearchRef.current.contains(event.target)) {
-                setHistoryFilterDropdownOpen(prev => ({ ...prev, product: false }));
+            if (productFilterSearchRef.current && !productFilterSearchRef.current.contains(event.target)) {
+                setHistoryFilterDropdownOpen(prev => prev.product ? { ...prev, product: false } : prev);
             }
         };
         const handleEscape = (e) => {
@@ -130,7 +131,7 @@ const CnF = ({
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('keydown', handleEscape);
         };
-    }, [showHistoryFilterPanel]);
+    }, [showHistoryFilterPanel, historyFilterDropdownOpen]);
 
     useEffect(() => {
         if (viewData) {
@@ -1297,7 +1298,9 @@ const CnF = ({
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-3">
-                                                        <span className={`cnf-status-badge ${cnf.status === 'Active' ? 'active' : 'inactive'} shrink-0 text-[10px] py-0.5 px-2`}>{cnf.status}</span>
+                                                        <span className="bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2.5 py-0.5 text-xs font-black shrink-0">
+                                                            {(cnf.totalBalance || 0).toLocaleString('en-IN')} Tk
+                                                        </span>
                                                         <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}>
                                                             {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
                                                         </div>
@@ -1335,17 +1338,24 @@ const CnF = ({
             })()}
 
             {viewData && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[1600px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
-                            <div className="flex-1 text-left">
-                                <h2 className="text-xl font-bold text-gray-900">{viewData.name}</h2>
-                                <p className="text-xs text-gray-500 mt-1">ID: {viewData.cnfId}</p>
+                            <div className="flex-1 text-left w-full flex items-center justify-between md:block pr-12 md:pr-0">
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-900">{viewData.name}</h2>
+                                    <p className="text-xs text-gray-500 mt-1">ID: {viewData.cnfId}</p>
+                                </div>
+                                {/* Mobile Close Button */}
+                                <button onClick={() => setViewData(null)} className="md:hidden p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
+                                    <XIcon className="w-5 h-5" />
+                                </button>
                             </div>
                             {/* Search bar - centered */}
-                            <div className="flex-1 flex flex-col items-center gap-3">
-                                <div className="w-full max-w-sm relative">
+                            <div className="flex-1 flex flex-col items-center gap-3 w-full">
+                                {/* Desktop Search Input */}
+                                <div className="hidden md:block w-full max-w-sm relative">
                                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                     <input
                                         type="text"
@@ -1355,46 +1365,78 @@ const CnF = ({
                                         className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
                                     />
                                 </div>
-                                <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => setHistoryViewMode('earnings')}
-                                            className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'earnings'
-                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            Earnings
-                                        </button>
-                                        <button
-                                            onClick={() => setHistoryViewMode('expense')}
-                                            className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'expense'
-                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            LC Expense
-                                        </button>
-                                        <button
-                                            onClick={() => setHistoryViewMode('payments')}
-                                            className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'payments'
-                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            Payment History
-                                        </button>
-                                        <button
-                                            onClick={() => setHistoryViewMode('all')}
-                                            className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'all'
-                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            All
-                                        </button>
+
+                                {/* Mobile Search & Action Bar */}
+                                <div className="md:hidden w-full flex items-center gap-2 px-1">
+                                    <div className="relative flex-1">
+                                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                        <input
+                                            type="text"
+                                            placeholder={historyViewMode === 'earnings' ? "Search history..." : "Search payments..."}
+                                            value={historySearchQuery}
+                                            onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                            className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
+                                        />
                                     </div>
+                                    <button
+                                        ref={historyFilterButtonMobileRef}
+                                        onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
+                                        className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all border ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                            : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
+                                            }`}
+                                    >
+                                        <FunnelIcon className="w-4 h-4 text-gray-400" />
+                                    </button>
+                                    <button
+                                        onClick={handlePrintHistory}
+                                        className="w-9 h-9 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30"
+                                    >
+                                        <PrinterIcon className="w-4 h-4 text-gray-400" />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center gap-2 max-w-full overflow-x-auto hide-scrollbar shrink-0 px-1 py-0.5">
+                                    <button
+                                        onClick={() => { setHistoryViewMode('earnings'); setExpandedHistoryIdx(null); }}
+                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'earnings'
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        Earnings
+                                    </button>
+                                    <button
+                                        onClick={() => { setHistoryViewMode('expense'); setExpandedHistoryIdx(null); }}
+                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'expense'
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        LC Expense
+                                    </button>
+                                    <button
+                                        onClick={() => { setHistoryViewMode('payments'); setExpandedHistoryIdx(null); }}
+                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'payments'
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        Payment History
+                                    </button>
+                                    <button
+                                        onClick={() => { setHistoryViewMode('all'); setExpandedHistoryIdx(null); }}
+                                        className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${historyViewMode === 'all'
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        All
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex-1 flex items-center justify-end gap-2">
+                            {/* Desktop Actions Column */}
+                            <div className="hidden md:flex flex-1 items-center justify-end gap-2">
                                 <div className="relative">
                                     <button
                                         ref={historyFilterButtonRef}
@@ -1406,129 +1448,6 @@ const CnF = ({
                                     >
                                         <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
                                     </button>
-
-                                    {/* History Filter Panel */}
-                                    {showHistoryFilterPanel && (
-                                        <div ref={historyFilterPanelRef} className="absolute top-full right-0 mt-2 w-72 md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200">
-                                            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
-                                                <h4 className="font-bold text-gray-900 text-sm">Advanced Filter</h4>
-                                                <button
-                                                    onClick={() => {
-                                                        setHistoryFilters({ startDate: '', endDate: '', lcNo: '', productName: '' });
-                                                        setHistoryFilterSearchInputs({ lcNo: '', product: '' });
-                                                    }}
-                                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
-                                                >
-                                                    Reset
-                                                </button>
-                                            </div>
-
-                                            <div className="space-y-4">
-                                                <div className="space-y-2">
-                                                    <CustomDatePicker
-                                                        label="From Date"
-                                                        value={historyFilters.startDate}
-                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                                                        compact={true}
-                                                    />
-                                                    <CustomDatePicker
-                                                        label="To Date"
-                                                        value={historyFilters.endDate}
-                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                                                        compact={true}
-                                                    />
-                                                </div>
-
-                                                <div className="space-y-3 pt-2">
-                                                    {/* LC No Dropdown */}
-                                                    <div className="space-y-1.5 relative" ref={lcNoFilterRef}>
-                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC NUMBER</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={historyFilterSearchInputs.lcNo}
-                                                                onChange={(e) => {
-                                                                    setHistoryFilterSearchInputs(prev => ({ ...prev, lcNo: e.target.value }));
-                                                                    setHistoryFilters(prev => ({ ...prev, lcNo: e.target.value }));
-                                                                    setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true, product: false }));
-                                                                }}
-                                                                onFocus={() => setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true, product: false }))}
-                                                                placeholder={historyFilters.lcNo || "Select LC No..."}
-                                                                className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
-                                                            />
-                                                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                                                        </div>
-                                                        {historyFilterDropdownOpen.lcNo && (() => {
-                                                            const options = getUniqueHistoryOptions('lcNo');
-                                                            const filtered = options.filter(opt => opt.toLowerCase().includes(historyFilterSearchInputs.lcNo.toLowerCase()));
-                                                            return filtered.length > 0 ? (
-                                                                <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                                    {filtered.map(opt => (
-                                                                        <button
-                                                                            key={opt}
-                                                                            onClick={() => {
-                                                                                setHistoryFilters(prev => ({ ...prev, lcNo: opt }));
-                                                                                setHistoryFilterSearchInputs(prev => ({ ...prev, lcNo: '' }));
-                                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: false }));
-                                                                            }}
-                                                                            className="w-full px-4 py-1.5 text-left text-xs hover:bg-blue-50 transition-colors"
-                                                                        >
-                                                                            {opt}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-
-                                                    {/* Product Dropdown */}
-                                                    <div className="space-y-1.5 relative" ref={productFilterSearchRef}>
-                                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">PRODUCT</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={historyFilterSearchInputs.product}
-                                                                onChange={(e) => {
-                                                                    setHistoryFilterSearchInputs(prev => ({ ...prev, product: e.target.value }));
-                                                                    setHistoryFilters(prev => ({ ...prev, productName: e.target.value }));
-                                                                    setHistoryFilterDropdownOpen(prev => ({ ...prev, product: true, lcNo: false }));
-                                                                }}
-                                                                onFocus={() => setHistoryFilterDropdownOpen(prev => ({ ...prev, product: true, lcNo: false }))}
-                                                                placeholder={historyFilters.productName || "Select Product..."}
-                                                                className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
-                                                            />
-                                                            <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                                                        </div>
-                                                        {historyFilterDropdownOpen.product && (() => {
-                                                            const options = getUniqueHistoryOptions('product');
-                                                            const filtered = options.filter(opt => opt.toLowerCase().includes(historyFilterSearchInputs.product.toLowerCase()));
-                                                            return filtered.length > 0 ? (
-                                                                <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                                    {filtered.map(opt => (
-                                                                        <button
-                                                                            key={opt}
-                                                                            onClick={() => {
-                                                                                setHistoryFilters(prev => ({ ...prev, productName: opt }));
-                                                                                setHistoryFilterSearchInputs(prev => ({ ...prev, product: '' }));
-                                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, product: false }));
-                                                                            }}
-                                                                            className="w-full px-4 py-1.5 text-left text-xs hover:bg-blue-50 transition-colors"
-                                                                        >
-                                                                            {opt}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-                                                </div>
-
-                                                <button onClick={() => setShowHistoryFilterPanel(false)} className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all shadow-lg active:scale-[0.98]">
-                                                    APPLY FILTERS
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
 
                                 <button
@@ -1540,7 +1459,7 @@ const CnF = ({
                                 </button>
 
                                 {isHistorySelectionMode && (
-                                    <button onClick={() => setIsBulkEditModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-blue-600 bg-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-all shadow shadow-blue-500/30 text-sm font-medium">
+                                    <button onClick={() => setIsBulkEditModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-blue-600 bg-blue-600 text-white hover:bg-blue-700 hover:border-blue-700 transition-all shadow shadow-blue-500/30 text-sm font-medium whitespace-nowrap">
                                         Bulk Edit ({selectedHistoryIds.size})
                                     </button>
                                 )}
@@ -1548,82 +1467,215 @@ const CnF = ({
                                     <XIcon className="w-5 h-5" />
                                 </button>
                             </div>
+
+                            {/* History Filter Panel */}
+                            {showHistoryFilterPanel && (
+                                <>
+                                    {/* Mobile Backdrop */}
+                                    <div 
+                                        className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[2005] md:hidden"
+                                        onClick={() => setShowHistoryFilterPanel(false)}
+                                    />
+                                    <div 
+                                        ref={historyFilterPanelRef} 
+                                        className="fixed inset-x-4 top-24 md:absolute md:top-full md:left-auto md:right-8 md:mt-2 w-auto md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200"
+                                    >
+                                        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                                            <h4 className="font-bold text-gray-900 text-sm">Advanced Filter</h4>
+                                            <button
+                                                onClick={() => {
+                                                    setHistoryFilters({ startDate: '', endDate: '', lcNo: '', productName: '' });
+                                                    setHistoryFilterSearchInputs({ lcNo: '', product: '' });
+                                                }}
+                                                className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                                            >
+                                                Reset
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-4 text-left">
+                                            <div className="space-y-2">
+                                                <CustomDatePicker
+                                                    label="From Date"
+                                                    value={historyFilters.startDate}
+                                                    onChange={(e) => setHistoryFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                    compact={true}
+                                                />
+                                                <CustomDatePicker
+                                                    label="To Date"
+                                                    value={historyFilters.endDate}
+                                                    onChange={(e) => setHistoryFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                    compact={true}
+                                                />
+                                            </div>
+
+                                            <div className="space-y-3 pt-2">
+                                                {/* LC No Dropdown */}
+                                                <div className="space-y-1.5 relative" ref={lcNoFilterRef}>
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC NUMBER</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={historyFilterSearchInputs.lcNo}
+                                                            onChange={(e) => {
+                                                                setHistoryFilterSearchInputs(prev => ({ ...prev, lcNo: e.target.value }));
+                                                                setHistoryFilters(prev => ({ ...prev, lcNo: e.target.value }));
+                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true, product: false }));
+                                                            }}
+                                                            onFocus={() => setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true, product: false }))}
+                                                            placeholder={historyFilters.lcNo || "Select LC No..."}
+                                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
+                                                        />
+                                                        <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                                    </div>
+                                                    {historyFilterDropdownOpen.lcNo && (() => {
+                                                        const options = getUniqueHistoryOptions('lcNo');
+                                                        const filtered = options.filter(opt => opt.toLowerCase().includes(historyFilterSearchInputs.lcNo.toLowerCase()));
+                                                        return filtered.length > 0 ? (
+                                                            <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
+                                                                {filtered.map(opt => (
+                                                                    <button
+                                                                        key={opt}
+                                                                        onClick={() => {
+                                                                            setHistoryFilters(prev => ({ ...prev, lcNo: opt }));
+                                                                            setHistoryFilterSearchInputs(prev => ({ ...prev, lcNo: '' }));
+                                                                            setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: false }));
+                                                                        }}
+                                                                        className="w-full px-4 py-1.5 text-left text-xs hover:bg-blue-50 transition-colors"
+                                                                    >
+                                                                        {opt}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+
+                                                {/* Product Dropdown */}
+                                                <div className="space-y-1.5 relative" ref={productFilterSearchRef}>
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">PRODUCT</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={historyFilterSearchInputs.product}
+                                                            onChange={(e) => {
+                                                                setHistoryFilterSearchInputs(prev => ({ ...prev, product: e.target.value }));
+                                                                setHistoryFilters(prev => ({ ...prev, productName: e.target.value }));
+                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, product: true, lcNo: false }));
+                                                            }}
+                                                            onFocus={() => setHistoryFilterDropdownOpen(prev => ({ ...prev, product: true, lcNo: false }))}
+                                                            placeholder={historyFilters.productName || "Select Product..."}
+                                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
+                                                        />
+                                                        <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                                    </div>
+                                                    {historyFilterDropdownOpen.product && (() => {
+                                                        const options = getUniqueHistoryOptions('product');
+                                                        const filtered = options.filter(opt => opt.toLowerCase().includes(historyFilterSearchInputs.product.toLowerCase()));
+                                                        return filtered.length > 0 ? (
+                                                            <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
+                                                                {filtered.map(opt => (
+                                                                    <button
+                                                                        key={opt}
+                                                                        onClick={() => {
+                                                                            setHistoryFilters(prev => ({ ...prev, productName: opt }));
+                                                                            setHistoryFilterSearchInputs(prev => ({ ...prev, product: '' }));
+                                                                            setHistoryFilterDropdownOpen(prev => ({ ...prev, product: false }));
+                                                                        }}
+                                                                        className="w-full px-4 py-1.5 text-left text-xs hover:bg-blue-50 transition-colors"
+                                                                    >
+                                                                        {opt}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+                                            </div>
+
+                                            <button onClick={() => setShowHistoryFilterPanel(false)} className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all shadow-lg active:scale-[0.98]">
+                                                APPLY FILTERS
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 hide-scrollbar min-h-0">
                             {historyLoading ? <div className="flex justify-center p-12"><div className="w-8 h-8 border-2 border-t-blue-600 rounded-full animate-spin"></div></div> : (
                                 <div className="space-y-6">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                                         {/* Total Bill Card */}
-                                        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
                                             <div className="flex items-center justify-between">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest opacity-70">Total Bill</p>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                <div className="space-y-1 min-w-0 flex-1">
+                                                    <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest opacity-70 truncate">Total Bill</p>
+                                                    <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 leading-none truncate">
                                                             {(
                                                                 historyRecords.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0) +
                                                                 expenseRecords.reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0)
                                                             ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </h3>
-                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
-                                                <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
-                                                    <BarChartIcon className="w-6 h-6" />
+                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                    <BarChartIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* Total Paid Card */}
-                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
                                             <div className="flex items-center justify-between">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70">Total Paid</p>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                <div className="space-y-1 min-w-0 flex-1">
+                                                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70 truncate">Total Paid</p>
+                                                    <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 leading-none truncate">
                                                             {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-IN')}
                                                         </h3>
-                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
-                                                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
-                                                    <DollarSignIcon className="w-6 h-6" />
+                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                    <DollarSignIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* Total Discount Card */}
-                                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
                                             <div className="flex items-center justify-between">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70">Total Discount</p>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                <div className="space-y-1 min-w-0 flex-1">
+                                                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70 truncate">Total Discount</p>
+                                                    <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 leading-none truncate">
                                                             {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.discount) || 0), 0).toLocaleString('en-IN')}
                                                         </h3>
-                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
-                                                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                                                    <ReceiptIcon className="w-6 h-6" />
+                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                    <ReceiptIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* Balance Card */}
-                                        <div className="bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                        <div className="bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
                                             <div className="flex items-center justify-between">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70">Current Balance</p>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <h3 className="text-2xl font-black text-gray-900 leading-none">
+                                                <div className="space-y-1 min-w-0 flex-1">
+                                                    <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70 truncate">Current Balance</p>
+                                                    <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 leading-none truncate">
                                                             {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
                                                         </h3>
-                                                        <span className="text-[10px] font-bold text-gray-400">TK</span>
+                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
-                                                <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
-                                                    <TrendingUpIcon className="w-6 h-6" />
+                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                    <TrendingUpIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                 </div>
                                             </div>
                                         </div>
@@ -1815,44 +1867,83 @@ const CnF = ({
                                             </div>
                                         </>
                                     ) : historyViewMode === 'expense' ? (
-                                        <div className="hidden md:block overflow-x-auto">
-                                            <table className="cnf-table">
-                                                <thead>
-                                                    <tr className="cnf-table-header-row">
-                                                        <th className="cnf-table-header">Billing Date</th>
-                                                        <th className="cnf-table-header whitespace-nowrap">LC No</th>
-                                                        <th className="cnf-table-header">Importer</th>
-                                                        <th className="cnf-table-header">Product</th>
-                                                        <th className="cnf-table-header">Port</th>
-                                                        <th className="cnf-table-header text-right">Amount</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="cnf-table-body">
-                                                    {filteredExpenses.map((row, idx) => (
-                                                        <tr key={idx} className="cnf-table-row transition-colors">
-                                                            <td className="cnf-table-cell whitespace-nowrap">{formatDate(row.date)}</td>
-                                                            <td className="cnf-table-cell font-bold whitespace-nowrap text-blue-600">{row.lcNo}</td>
-                                                            <td className="cnf-table-cell truncate max-w-[150px]">{row.importer}</td>
-                                                            <td className="cnf-table-cell">{row.product}</td>
-                                                            <td className="cnf-table-cell">{row.port}</td>
-                                                            <td className="cnf-table-cell text-right font-black text-rose-600">
-                                                                {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                            </td>
+                                        <>
+                                            <div className="hidden md:block overflow-x-auto">
+                                                <table className="cnf-table">
+                                                    <thead>
+                                                        <tr className="cnf-table-header-row">
+                                                            <th className="cnf-table-header">Billing Date</th>
+                                                            <th className="cnf-table-header whitespace-nowrap">LC No</th>
+                                                            <th className="cnf-table-header">Importer</th>
+                                                            <th className="cnf-table-header">Product</th>
+                                                            <th className="cnf-table-header">Port</th>
+                                                            <th className="cnf-table-header text-right">Amount</th>
                                                         </tr>
-                                                    ))}
-                                                    {filteredExpenses.length === 0 && (
-                                                        <tr>
-                                                            <td colSpan="6" className="py-12 text-center text-gray-400">
-                                                                <div className="flex flex-col items-center justify-center">
-                                                                    <DollarSignIcon className="w-12 h-12 mb-3 text-gray-200" />
-                                                                    <p>No expense records found</p>
+                                                    </thead>
+                                                    <tbody className="cnf-table-body">
+                                                        {filteredExpenses.map((row, idx) => (
+                                                            <tr key={idx} className="cnf-table-row transition-colors">
+                                                                <td className="cnf-table-cell whitespace-nowrap">{formatDate(row.date)}</td>
+                                                                <td className="cnf-table-cell font-bold whitespace-nowrap text-blue-600">{row.lcNo}</td>
+                                                                <td className="cnf-table-cell truncate max-w-[150px]">{row.importer}</td>
+                                                                <td className="cnf-table-cell">{row.product}</td>
+                                                                <td className="cnf-table-cell">{row.port}</td>
+                                                                <td className="cnf-table-cell text-right font-black text-rose-600">
+                                                                    {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {filteredExpenses.length === 0 && (
+                                                            <tr>
+                                                                <td colSpan="6" className="py-12 text-center text-gray-400">
+                                                                    <div className="flex flex-col items-center justify-center">
+                                                                        <DollarSignIcon className="w-12 h-12 mb-3 text-gray-200" />
+                                                                        <p>No expense records found</p>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div className="block md:hidden space-y-3">
+                                                {filteredExpenses.length > 0 ? (
+                                                    filteredExpenses.map((row, idx) => (
+                                                        <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+                                                            <div className="flex justify-between items-center">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
+                                                                <span className="text-xs font-bold text-blue-600">{row.lcNo}</span>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-3 bg-gray-50/50 rounded-lg p-2 text-xs">
+                                                                <div>
+                                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Product</p>
+                                                                    <p className="font-semibold text-gray-700">{row.product || '-'}</p>
                                                                 </div>
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</p>
+                                                                    <p className="font-semibold text-gray-700">{row.port || '-'}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-xs">
+                                                                <span className="text-gray-500 font-medium">Importer:</span>
+                                                                <span className="font-semibold text-gray-700 truncate max-w-[200px]">{row.importer || '-'}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center pt-2 border-t border-gray-50">
+                                                                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Amount</span>
+                                                                <span className="text-sm font-black text-rose-600">
+                                                                    {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="text-center py-12 text-gray-400">
+                                                        <DollarSignIcon className="w-8 h-8 mb-2 mx-auto opacity-20" />
+                                                        <p className="text-sm">No expense records found</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
                                     ) : historyViewMode === 'payments' ? (
                                         <>
                                             <div className="hidden md:block overflow-x-auto">
@@ -1917,9 +2008,10 @@ const CnF = ({
                                             </div>
                                         </>
                                     ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="cnf-table">
-                                                <thead>
+                                        <>
+                                            <div className="hidden md:block overflow-x-auto">
+                                                <table className="cnf-table">
+                                                    <thead>
                                                         <tr className="cnf-table-header-row bg-gray-50">
                                                             <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Date</th>
                                                             <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">LC No</th>
@@ -1956,19 +2048,88 @@ const CnF = ({
                                                                 </td>
                                                             </tr>
                                                         ))}
-                                                    {filteredAll.length === 0 && (
-                                                        <tr>
-                                                            <td colSpan="9" className="py-20 text-center text-gray-400">
-                                                                <div className="flex flex-col items-center justify-center gap-3">
-                                                                    <BoxIcon className="w-12 h-12 opacity-20" />
-                                                                    <p className="text-sm font-medium uppercase tracking-widest opacity-50">No ledger entries found</p>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                        {filteredAll.length === 0 && (
+                                                            <tr>
+                                                                <td colSpan="10" className="py-20 text-center text-gray-400">
+                                                                    <div className="flex flex-col items-center justify-center gap-3">
+                                                                        <BoxIcon className="w-12 h-12 opacity-20" />
+                                                                        <p className="text-sm font-medium uppercase tracking-widest opacity-50">No ledger entries found</p>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div className="block md:hidden space-y-3">
+                                                {filteredAll.length > 0 ? (
+                                                    filteredAll.map((row, idx) => (
+                                                        <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+                                                            <div className="flex justify-between items-center">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
+                                                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                                                                    row.type === 'earning'
+                                                                        ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                                                        : row.type === 'expense'
+                                                                        ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                                                }`}>
+                                                                    {row.type === 'earning' ? 'Earning' : row.type === 'expense' ? 'Expense' : 'Payment'}
+                                                                </span>
+                                                            </div>
+                                                            {row.type !== 'payment' ? (
+                                                                <>
+                                                                    <div className="flex justify-between items-baseline">
+                                                                        <span className="text-xs font-bold text-blue-600">{row.lcNo}</span>
+                                                                        <span className="text-xs font-semibold text-gray-700">{row.product || '-'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center text-xs">
+                                                                        <span className="text-gray-500 font-medium">Importer:</span>
+                                                                        <span className="font-semibold text-gray-700 truncate max-w-[180px]">{row.importer || '-'}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-50">
+                                                                        <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Billing Amount</span>
+                                                                        <span className="text-sm font-black text-gray-900">+{row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} Tk</span>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="flex justify-between items-center text-xs">
+                                                                        <span className="text-gray-500 font-medium">Method:</span>
+                                                                        <span className="font-bold text-gray-700">{row.method || '-'}</span>
+                                                                    </div>
+                                                                    {(row.bankName || row.reference) && (
+                                                                        <div className="flex justify-between items-center text-xs">
+                                                                            <span className="text-gray-500 font-medium">Ref / Bank:</span>
+                                                                            <span className="font-medium text-gray-600 truncate max-w-[180px]">{row.bankName || row.reference}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {row.discount > 0 && (
+                                                                        <div className="flex justify-between items-center text-xs text-emerald-600">
+                                                                            <span>Discount:</span>
+                                                                            <span className="font-semibold">{(row.discount).toLocaleString('en-IN', { minimumFractionDigits: 2 })} Tk</span>
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-50">
+                                                                        <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Payment Amount</span>
+                                                                        <span className="text-sm font-black text-rose-600">-{row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} Tk</span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                            <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100/50 mt-1">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Running Balance</span>
+                                                                <span className="text-xs font-black text-gray-900">{row.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })} Tk</span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="text-center py-12 text-gray-400">
+                                                        <BoxIcon className="w-8 h-8 mb-2 mx-auto opacity-20" />
+                                                        <p className="text-sm">No ledger entries found</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             )}
@@ -1978,7 +2139,7 @@ const CnF = ({
             )}
 
             {editRecord && (
-                <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setEditRecord(null)}></div>
                     <div className="cnf-form-container w-full max-w-xl">
 
@@ -2013,7 +2174,7 @@ const CnF = ({
             )}
 
             {isBulkEditModalOpen && (
-                <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setIsBulkEditModalOpen(false)}></div>
                     <div className="cnf-form-container w-full max-w-xl">
 

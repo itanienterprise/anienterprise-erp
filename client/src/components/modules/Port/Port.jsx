@@ -339,24 +339,26 @@ const Port = ({
 
                                         {isExpanded && (
                                             <div className="mt-6 space-y-4 animate-in slide-in-from-top-4 duration-500">
-                                                <div className="bg-gray-50/50 rounded-xl p-3 border border-gray-100/50">
-                                                    <div className="flex items-start gap-2">
-                                                        <div className="flex-[0.8]">
-                                                            <div className="text-[9px] font-bold text-gray-400 uppercase leading-none mb-1">Code</div>
-                                                            <div className="text-[13px] font-bold text-gray-800 uppercase">{port.code}</div>
-                                                        </div>
-                                                        <div className="flex-[1.2] border-l border-gray-200/50 pl-3">
-                                                            <div className="text-[9px] font-bold text-gray-400 uppercase leading-none mb-1">Location</div>
-                                                            <div className="text-[13px] font-bold text-gray-700 break-words leading-tight">{port.location}</div>
-                                                        </div>
-                                                        <div className="flex-[1.2] border-l border-gray-200/50 pl-3">
-                                                            <div className="text-[9px] font-bold text-gray-400 uppercase leading-none mb-1">Place of Receipt</div>
-                                                            <div className="text-[13px] font-bold text-gray-700 break-words leading-tight">{port.placeOfReceipt || '-'}</div>
-                                                        </div>
-                                                        <div className="flex-[1.1] border-l border-gray-200/50 pl-3">
-                                                            <div className="text-[9px] font-bold text-blue-400 uppercase leading-none mb-1">Type</div>
-                                                            <div className="text-[13px] font-black text-blue-600">{port.type}</div>
-                                                        </div>
+                                                <div className="bg-gray-50/50 rounded-2xl p-4 border border-gray-100/50 space-y-2.5">
+                                                    <div className="flex items-center text-[13px]">
+                                                        <span className="w-36 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Code</span>
+                                                        <span className="text-gray-400 font-bold mr-3 shrink-0">:</span>
+                                                        <span className="font-black text-gray-900 uppercase truncate">{port.code}</span>
+                                                    </div>
+                                                    <div className="flex items-start text-[13px]">
+                                                        <span className="w-36 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Location</span>
+                                                        <span className="text-gray-400 font-bold mr-3 shrink-0">:</span>
+                                                        <span className="font-bold text-gray-800 uppercase leading-tight">{port.location}</span>
+                                                    </div>
+                                                    <div className="flex items-start text-[13px]">
+                                                        <span className="w-36 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Place of Receipt</span>
+                                                        <span className="text-gray-400 font-bold mr-3 shrink-0">:</span>
+                                                        <span className="font-bold text-gray-700 leading-tight">{port.placeOfReceipt || '-'}</span>
+                                                    </div>
+                                                    <div className="flex items-center text-[13px]">
+                                                        <span className="w-36 text-[11px] font-bold text-blue-400 uppercase tracking-wider shrink-0">Type</span>
+                                                        <span className="text-blue-400 font-bold mr-3 shrink-0">:</span>
+                                                        <span className="font-black text-blue-600 tracking-tight">{port.type}</span>
                                                     </div>
                                                 </div>
                                             </div>

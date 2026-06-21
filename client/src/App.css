@@ -319,3 +319,9 @@ input[type="number"] {
 .touch-device .from-gray-50 {
     background-color: #f8fafc !important;
 }
+
+/* Global stacking context fix on mobile/touch devices where overflow/compositing creates a stacking context */
+main:has(.app-modal-overlay) {
+    position: relative;
+    z-index: 2000;
+}

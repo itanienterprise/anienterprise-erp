@@ -411,8 +411,8 @@ const CnFPayment = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
+             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="text-center md:text-left w-full md:w-auto">
                     <h2 className="text-xl md:text-2xl font-bold text-gray-800">C&F Payment</h2>
                 </div>
 
@@ -431,7 +431,7 @@ const CnFPayment = () => {
                     </div>
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto">
                     {!showAddModal && (
                         <div className="relative">
                             <button
@@ -732,48 +732,48 @@ const CnFPayment = () => {
             ) : (
                 /* Main View: Summary Cards + Table */
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         {/* Total Paid */}
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                    <DollarSignIcon className="w-5 h-5" />
+                        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
+                            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                                <div className="p-1.5 sm:p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                    <DollarSignIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </div>
-                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Paid</span>
+                                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Paid</span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-black text-gray-900">৳{totalPaid.toLocaleString('en-IN')}</span>
+                                <span className="text-xl sm:text-2xl font-black text-gray-900">৳{totalPaid.toLocaleString('en-IN')}</span>
                             </div>
-                            <div className="text-[10px] text-gray-400 mt-1 italic">Across filtered records</div>
+                            <div className="text-[9px] sm:text-[10px] text-gray-400 mt-1 italic">Across filtered records</div>
                         </div>
 
                         {/* Total Discount */}
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                                    <DollarSignIcon className="w-5 h-5" />
+                        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
+                            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                                <div className="p-1.5 sm:p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                    <DollarSignIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </div>
-                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Discount</span>
+                                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Discount</span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-black text-gray-900">৳{totalDiscount.toLocaleString('en-IN')}</span>
+                                <span className="text-xl sm:text-2xl font-black text-gray-900">৳{totalDiscount.toLocaleString('en-IN')}</span>
                             </div>
-                            <div className="text-[10px] text-gray-400 mt-1 italic">Across filtered records</div>
+                            <div className="text-[9px] sm:text-[10px] text-gray-400 mt-1 italic">Across filtered records</div>
                         </div>
 
                         {/* Transactions */}
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                    <BarChartIcon className="w-5 h-5" />
+                        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group col-span-2 md:col-span-1">
+                            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                                <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                    <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </div>
-                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Transactions</span>
+                                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Transactions</span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-black text-gray-900">{transactionCount}</span>
+                                <span className="text-xl sm:text-2xl font-black text-gray-900">{transactionCount}</span>
                                 <span className="text-xs font-bold text-gray-400 ml-1">Entries</span>
                             </div>
-                            <div className="text-[10px] text-gray-400 mt-1 italic">Total entries</div>
+                            <div className="text-[9px] sm:text-[10px] text-gray-400 mt-1 italic">Total entries</div>
                         </div>
                     </div>
 

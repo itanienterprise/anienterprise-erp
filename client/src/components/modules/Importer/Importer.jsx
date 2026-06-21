@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon } from '../../Icons';
-import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
+import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Importer.css';
 
@@ -31,6 +31,8 @@ const Importer = ({
     const [viewData, setViewData] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [historySearchQuery, setHistorySearchQuery] = useState('');
+    const [lcRecords, setLcRecords] = useState([]);
+    const [expandedHistoryRowKey, setExpandedHistoryRowKey] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
         address: '',
@@ -52,8 +54,12 @@ const Importer = ({
     const fetchImporters = async () => {
         setIsLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/importers`);
-            setImporters(Array.isArray(response.data) ? response.data : []);
+            const [impResponse, lcResponse] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/importers`),
+                axios.get(`${API_BASE_URL}/api/lc-management`)
+            ]);
+            setImporters(Array.isArray(impResponse.data) ? impResponse.data : []);
+            setLcRecords(Array.isArray(lcResponse.data) ? lcResponse.data : []);
         } catch (error) {
             console.error('Error fetching importers:', error);
         } finally {
@@ -223,6 +229,27 @@ const Importer = ({
             return 0;
         });
     };
+
+    const filteredHistory = useMemo(() => {
+        if (!viewData) return [];
+        return lcRecords.filter(lc => 
+            (lc.importerName || '').trim().toLowerCase() === (viewData.name || '').trim().toLowerCase()
+        ).filter(lc => {
+            const query = (historySearchQuery || '').toLowerCase();
+            const displayProducts = lc.productsList && lc.productsList.length > 0
+                ? lc.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                : lc.productName || '-';
+            const totalQtyTons = lc.productsList && lc.productsList.length > 0
+                ? lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                : (parseFloat(lc.quantity) || 0);
+            const qtyKg = totalQtyTons * 1000;
+            return !query ||
+                (lc.lcNo || '').toLowerCase().includes(query) ||
+                displayProducts.toLowerCase().includes(query) ||
+                (lc.port || '').toLowerCase().includes(query) ||
+                (lc.status || 'Active').toLowerCase().includes(query);
+        });
+    }, [lcRecords, viewData, historySearchQuery]);
 
     return (
         <div className="importer-container">
@@ -625,15 +652,20 @@ const Importer = ({
             );
             })()}
             {viewData && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setExpandedHistoryRowKey(null); setHistorySearchQuery(''); }}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                         {/* Modal Header */}
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left">
-                                                <h3 className="text-lg md:text-xl font-bold text-gray-900">Import History - {viewData.name}</h3>
-                                                <p className="text-xs text-gray-500 mt-1">BIN: {viewData.bin} | TIN: {viewData.tin} | IRC: {viewData.irc}{viewData.address ? ` | ${viewData.address}` : ''}</p>
-                                            </div>
+                                <h3 className="text-lg md:text-xl font-bold text-gray-900">Import History - {viewData.name}</h3>
+                                <div className="text-xs text-gray-500 mt-1 space-y-0.5">
+                                    <p>BIN: {viewData.bin} | TIN: {viewData.tin} | IRC: {viewData.irc}</p>
+                                    {viewData.address && (
+                                        <p className="text-gray-400 font-medium">{viewData.address}</p>
+                                    )}
+                                </div>
+                            </div>
 
                             {/* Search bar */}
                             <div className="flex-1 w-full md:max-w-sm md:mx-auto">
@@ -652,14 +684,15 @@ const Importer = ({
                             </div>
 
                             {/* Close button */}
-                            <button onClick={() => setViewData(null)} className="absolute right-4 top-4 md:static p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
+                            <button onClick={() => { setViewData(null); setExpandedHistoryRowKey(null); setHistorySearchQuery(''); }} className="absolute right-4 top-4 md:static p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
                                 <XIcon className="w-5 h-5" />
                             </button>
                         </div>
 
                         {/* Modal Body */}
                         <div className="flex-1 overflow-auto p-4 md:p-8 min-h-0">
-                            <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-x-auto">
+                            {/* Desktop View */}
+                            <div className="hidden md:block bg-gray-50 rounded-xl border border-gray-200 overflow-x-auto">
                                 <table className="w-full text-left text-sm" style={{ minWidth: '30rem' }}>
                                     <thead className="bg-white border-b border-gray-200">
                                         <tr>
@@ -672,16 +705,131 @@ const Importer = ({
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr>
-                                            <td colSpan="6" className="px-4 py-12 text-center text-gray-400">
-                                                <div className="flex flex-col items-center">
-                                                    <BoxIcon className="w-8 h-8 mb-2 opacity-20" />
-                                                    <p>No import history available</p>
-                                                </div>
-                                            </td>
-                                        </tr>
+                                        {filteredHistory.length > 0 ? (
+                                            filteredHistory.map((item, idx) => {
+                                                const displayProducts = item.productsList && item.productsList.length > 0
+                                                    ? item.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                                    : item.productName || '-';
+                                                const totalQtyTons = item.productsList && item.productsList.length > 0
+                                                    ? item.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                                                    : (parseFloat(item.quantity) || 0);
+                                                const qtyKg = totalQtyTons * 1000;
+                                                return (
+                                                    <tr key={item._id || idx} className="hover:bg-gray-50/50 transition-colors">
+                                                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(item.openingDate || item.date)}</td>
+                                                        <td className="px-4 py-3 font-bold text-gray-900 uppercase tracking-tight">{item.lcNo || '-'}</td>
+                                                        <td className="px-4 py-3 text-gray-900">{displayProducts}</td>
+                                                        <td className="px-4 py-3 text-xs font-bold text-blue-600 uppercase">{item.port || '-'}</td>
+                                                        <td className="px-4 py-3 font-bold text-right text-gray-900 whitespace-nowrap">
+                                                            {qtyKg.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${
+                                                                (item.status || 'Active') === 'Active'
+                                                                    ? 'bg-blue-50 text-blue-600 border-blue-100/50'
+                                                                    : 'bg-gray-100 text-gray-500 border-gray-200/50'
+                                                            }`}>
+                                                                {item.status || 'Active'}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        ) : (
+                                            <tr>
+                                                <td colSpan="6" className="px-4 py-12 text-center text-gray-400">
+                                                    <div className="flex flex-col items-center">
+                                                        <BoxIcon className="w-8 h-8 mb-2 opacity-20" />
+                                                        <p>{historySearchQuery ? 'No results match your search.' : 'No import history available'}</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
+                            </div>
+
+                            {/* Mobile View */}
+                            <div className="md:hidden">
+                                {filteredHistory.length > 0 ? (
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
+                                        {filteredHistory.map((item, idx) => {
+                                            const key = item._id || idx;
+                                            const isExpanded = expandedHistoryRowKey === key;
+                                            const displayProducts = item.productsList && item.productsList.length > 0
+                                                ? item.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                                : item.productName || '-';
+                                            const totalQtyTons = item.productsList && item.productsList.length > 0
+                                                ? item.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                                                : (parseFloat(item.quantity) || 0);
+                                            const qtyKg = totalQtyTons * 1000;
+                                            return (
+                                                <div key={key} className="transition-all hover:bg-gray-50/35">
+                                                    {/* Collapsed View Header */}
+                                                    <div
+                                                        onClick={() => setExpandedHistoryRowKey(isExpanded ? null : key)}
+                                                        className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
+                                                    >
+                                                        <div className="p-2 rounded-xl shrink-0 bg-blue-50 text-blue-600">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                                        </div>
+                                                        <div className="flex-1 min-w-0 text-left">
+                                                            <p className="text-xs font-bold text-gray-900 truncate">{displayProducts}</p>
+                                                            <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(item.openingDate || item.date)}</p>
+                                                        </div>
+                                                        <div className="text-right shrink-0">
+                                                            <p className="text-xs font-black text-gray-900">{qtyKg.toLocaleString('en-US')} kg</p>
+                                                            <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded mt-1 border ${
+                                                                (item.status || 'Active') === 'Active'
+                                                                    ? 'bg-blue-50/50 text-blue-700 border-blue-100/30'
+                                                                    : 'bg-gray-50/50 text-gray-700 border-gray-100/30'
+                                                            }`}>
+                                                                {item.status || 'Active'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="shrink-0 text-gray-400 pl-1">
+                                                            {isExpanded ? (
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                                                            ) : (
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Expanded Details */}
+                                                    {isExpanded && (
+                                                        <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                            <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Number</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="font-bold text-blue-600 uppercase truncate text-[11px]">{item.lcNo || '-'}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="font-bold text-gray-900 uppercase truncate text-[11px]">{item.port || '-'}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expiry Date</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="font-semibold text-gray-700 truncate text-[11px]">{formatDate(item.expiryDate) || '-'}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="font-semibold text-gray-700 truncate text-[11px]">{item.bankName || '-'}</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
+                                        <div className="flex flex-col items-center">
+                                            <BoxIcon className="w-8 h-8 mb-2 opacity-20" />
+                                            <p>{historySearchQuery ? 'No results match your search.' : 'No import history available'}</p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

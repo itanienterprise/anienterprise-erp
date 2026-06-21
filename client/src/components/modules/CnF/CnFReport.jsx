@@ -70,16 +70,16 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-[1200px] max-h-[90vh] overflow-visible rounded-3xl shadow-2xl flex flex-col">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 app-modal-overlay">
+            <div className="bg-white w-full max-w-[1200px] max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col">
 
                 {/* Modal Header/Toolbar */}
-                <div className="flex flex-row items-center justify-between px-6 sm:px-8 py-4 border-b border-gray-100 gap-2 flex-shrink-0">
-                    <div className="flex items-center gap-3 min-w-0">
+                <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-3.5 sm:py-4 border-b border-gray-100 gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <div className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-indigo-50 rounded-xl">
                             <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
                         </div>
-                        <h3 className="text-base sm:text-xl font-black text-gray-800 truncate leading-none">
+                        <h3 className="text-sm sm:text-lg md:text-xl font-black text-gray-800 truncate leading-none">
                             {moduleType ? `${moduleType} C&F` : 'C&F'} Agent Report
                         </h3>
                     </div>
@@ -217,27 +217,27 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                 </div>
 
                 {/* Scrollable Body */}
-                <div className="flex-1 overflow-y-auto p-6 sm:p-10 bg-white">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-10 bg-white">
                     <div className="max-w-[1100px] mx-auto space-y-6 sm:space-y-8">
 
                         {/* Company Header */}
                         <div className="text-center space-y-1">
-                            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
-                            <p className="text-[12px] sm:text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[12px] sm:text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                            <h1 className="text-xl sm:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
+                            <p className="text-[11px] sm:text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
+                            <p className="text-[11px] sm:text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
                         </div>
 
                         <div className="border-t-2 border-gray-900 w-full mt-4" />
                         <div className="flex justify-center -mt-6">
-                            <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
-                                <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">
+                            <div className="bg-white border-2 border-gray-900 px-4 sm:px-12 py-1.5 inline-block">
+                                <h2 className="text-xs sm:text-xl font-bold text-gray-900 tracking-wide uppercase">
                                     {moduleType ? `${moduleType} C&F` : 'C&F'} Agent List Report
                                 </h2>
                             </div>
                         </div>
 
                         {/* Meta row */}
-                        <div className="flex justify-between items-end text-[13px] text-gray-800 pt-4 px-2">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end text-[13px] text-gray-800 pt-4 px-2 gap-2">
                             <div className="flex flex-col gap-1">
                                 {filters.name && <div className="flex"><span className="font-bold text-gray-900 w-28">Agent:</span><span>{filters.name}</span></div>}
                                 {filters.status && <div className="flex"><span className="font-bold text-gray-900 w-28">Status:</span><span>{filters.status}</span></div>}
@@ -345,30 +345,30 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                         </div>
 
                         {/* Summary Cards */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 px-2">
-                            <div className="border border-gray-200 p-5 rounded-2xl bg-gray-50 shadow-sm hover:shadow-md transition-all">
-                                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Agents</div>
-                                <div className="text-2xl font-black text-gray-900">{summary.totalAgents}</div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-6 px-2">
+                            <div className="border border-gray-200 p-3.5 sm:p-5 rounded-2xl bg-gray-50 shadow-sm hover:shadow-md transition-all">
+                                <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Total Agents</div>
+                                <div className="text-lg sm:text-2xl font-black text-gray-900">{summary.totalAgents}</div>
                             </div>
-                            <div className="border border-emerald-200 p-5 rounded-2xl bg-emerald-50/50 shadow-sm hover:shadow-md transition-all">
-                                <div className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider mb-2">Active Agents</div>
-                                <div className="text-2xl font-black text-emerald-700">{summary.activeCount}</div>
+                            <div className="border border-emerald-200 p-3.5 sm:p-5 rounded-2xl bg-emerald-50/50 shadow-sm hover:shadow-md transition-all">
+                                <div className="text-[10px] sm:text-[11px] font-bold text-emerald-500 uppercase tracking-wider mb-2">Active Agents</div>
+                                <div className="text-lg sm:text-2xl font-black text-emerald-700">{summary.activeCount}</div>
                             </div>
-                            <div className="border border-blue-200 p-5 rounded-2xl bg-white shadow-sm hover:shadow-md transition-all ring-2 ring-blue-500/10">
-                                <div className="text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2">Avg. Commission</div>
-                                <div className="text-2xl font-black text-gray-900">{summary.avgCommission.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <div className="border border-blue-200 p-3.5 sm:p-5 rounded-2xl bg-white shadow-sm hover:shadow-md transition-all ring-2 ring-blue-500/10">
+                                <div className="text-[10px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2">Avg. Commission</div>
+                                <div className="text-lg sm:text-2xl font-black text-gray-900">{summary.avgCommission.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                             </div>
-                            <div className="border border-indigo-200 p-5 rounded-2xl bg-indigo-50/50 shadow-sm hover:shadow-md transition-all">
-                                <div className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider mb-2">Total Balance (Tk)</div>
-                                <div className="text-2xl font-black text-indigo-700">{summary.totalBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                            <div className="border border-indigo-200 p-3.5 sm:p-5 rounded-2xl bg-indigo-50/50 shadow-sm hover:shadow-md transition-all">
+                                <div className="text-[10px] sm:text-[11px] font-bold text-indigo-500 uppercase tracking-wider mb-2">Total Balance (Tk)</div>
+                                <div className="text-lg sm:text-2xl font-black text-indigo-700">{summary.totalBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
                             </div>
                         </div>
 
                         {/* Signatures */}
-                        <div className="grid grid-cols-3 gap-8 pt-24 px-4 pb-12">
-                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Prepared By</div></div>
-                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Verified By</div></div>
-                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[10px] font-bold text-gray-900 uppercase">Authorized Signature</div></div>
+                        <div className="grid grid-cols-3 gap-2 sm:gap-8 pt-16 sm:pt-24 px-1 sm:px-4 pb-8 sm:pb-12">
+                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[9px] sm:text-[10px] font-bold text-gray-900 uppercase break-words">Prepared By</div></div>
+                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[9px] sm:text-[10px] font-bold text-gray-900 uppercase break-words">Verified By</div></div>
+                            <div className="text-center"><div className="border-t border-dotted border-gray-900 pt-2 text-[9px] sm:text-[10px] font-bold text-gray-900 uppercase break-words">Authorized Signature</div></div>
                         </div>
                     </div>
                 </div>

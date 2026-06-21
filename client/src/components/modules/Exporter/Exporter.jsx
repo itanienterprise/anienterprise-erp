@@ -613,14 +613,19 @@ const Exporter = ({
 
             {/* Export History Modal */}
             {viewData && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-6xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                         {/* Modal Header */}
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left min-w-0 pr-8 md:pr-0">
                                 <h3 className="text-lg md:text-xl font-bold text-gray-900 truncate">{viewData.name}</h3>
-                                <p className="text-xs text-gray-500 mt-1 truncate">BIN: {viewData.bin} | TIN: {viewData.tin} | IRC: {viewData.irc}{viewData.address ? ` | ${viewData.address}` : ''}</p>
+                                <div className="text-xs text-gray-500 mt-1 space-y-0.5">
+                                    <p>BIN: {viewData.bin} | TIN: {viewData.tin} | IRC: {viewData.irc}</p>
+                                    {viewData.address && (
+                                        <p className="text-gray-400 font-medium">{viewData.address}</p>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Search bar */}
@@ -737,12 +742,13 @@ const Exporter = ({
                                                                     onClick={() => setExpandedHistoryIdx(isExpanded ? null : idx)}
                                                                 >
                                                                     <div className="flex-1 min-w-0 pr-4">
-                                                                        <div className="flex items-center gap-2 mb-1">
-                                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
-                                                                            <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
-                                                                            <p className="text-xs font-bold text-gray-800 truncate">{row.product || '-'}</p>
+                                                                        <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden">
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">{formatDate(row.date)}</span>
+                                                                            <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                                            <span className="font-bold text-gray-800 truncate max-w-[100px] shrink-0" title={row.product}>{row.product || '-'}</span>
+                                                                            <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                                            <span className="font-black text-blue-600 truncate min-w-0" title={row.lcNo}>{row.lcNo || '-'}</span>
                                                                         </div>
-                                                                        <p className="text-sm font-black text-blue-600 truncate">{row.lcNo || '-'}</p>
                                                                     </div>
                                                                     <div className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'}`}>
                                                                         {isExpanded ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
@@ -751,48 +757,40 @@ const Exporter = ({
 
                                                                 {/* Expandable Details */}
                                                                 {isExpanded && (
-                                                                    <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
-                                                                        <div className="flex justify-between items-start pt-3 border-t border-gray-50">
-                                                                            <div>
-                                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</p>
-                                                                                <p className="text-xs font-medium text-gray-700">{row.port || '-'}</p>
-                                                                            </div>
-                                                                            <div className="text-right">
-                                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Brand</p>
-                                                                                <p className="text-[11px] font-bold text-purple-600">{row.brand || '-'}</p>
-                                                                            </div>
-                                                                        </div>
+                                                                    <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-4 duration-300">
+                                                                        <div className="grid grid-cols-[125px_8px_1fr] gap-y-2 pt-3 text-xs items-baseline">
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                            <span className="font-semibold text-gray-700 uppercase truncate text-[11px]">{row.port || '-'}</span>
 
-                                                                        <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4">
-                                                                            <div className="space-y-1">
-                                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</p>
-                                                                                <p className="text-xs font-semibold text-gray-700">{row.truck || '-'}</p>
-                                                                            </div>
-                                                                            <div className="space-y-1 text-right">
-                                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</p>
-                                                                                <p className="text-xs font-bold text-gray-900">
-                                                                                    {row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</span>
+                                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                            <span className="font-bold text-purple-600 uppercase truncate text-[11px]">{row.brand || '-'}</span>
 
-                                                                        <div className="flex justify-between items-end">
-                                                                            <div className="space-y-0.5">
-                                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate</p>
-                                                                                <p className="text-xs font-bold text-gray-700">{row.rate ? `৳${parseFloat(row.rate).toLocaleString('en-IN')}` : '-'}</p>
-                                                                            </div>
-                                                                            <div className="space-y-0.5 text-right">
-                                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Row Total</p>
-                                                                                <p className="text-sm font-black text-emerald-700">{rowTotal > 0 ? `৳${rowTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-'}</p>
-                                                                            </div>
-                                                                        </div>
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
+                                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                            <span className="font-semibold text-gray-700 text-[11px]">{row.truck || '-'}</span>
 
-                                                                        <div className="pt-3 border-t border-gray-50 flex justify-between items-center">
-                                                                            <div className="flex items-center gap-1.5 ">
-                                                                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
-                                                                                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Running Balance</span>
-                                                                            </div>
-                                                                            <span className="text-base font-black text-blue-700">
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</span>
+                                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                            <span className="font-bold text-gray-900 text-[11px]">
+                                                                                {row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}
+                                                                            </span>
+
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
+                                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                            <span className="font-bold text-gray-700 text-[11px]">{row.rate ? `৳${parseFloat(row.rate).toLocaleString('en-IN')}` : '-'}</span>
+
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Row Total</span>
+                                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                            <span className="font-bold text-emerald-700 text-[11px]">{rowTotal > 0 ? `৳${rowTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-'}</span>
+
+                                                                            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider flex items-center gap-1.5">
+                                                                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shrink-0"></span>
+                                                                                Running Balance
+                                                                            </span>
+                                                                            <span className="text-blue-500 font-bold text-[10px]">:</span>
+                                                                            <span className="font-bold text-blue-700 text-[11px]">
                                                                                 {(row.source !== 'sale' && runningBalance > 0) ? `৳${runningBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-'}
                                                                             </span>
                                                                         </div>
@@ -802,46 +800,6 @@ const Exporter = ({
                                                         );
                                                     });
                                                 })()}
-
-                                                {/* Mobile Total Summary Card - Redesigned */}
-                                                <div className="grid grid-cols-2 gap-3 mt-6 mb-4">
-                                                    {/* Total Bag Card */}
-                                                    <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col items-center justify-center transition-all hover:shadow-md">
-                                                        <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center mb-2.5">
-                                                            <BoxIcon className="w-5 h-5 text-blue-600" />
-                                                        </div>
-                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Total Bag</p>
-                                                        <p className="text-base font-black text-gray-900">{Math.round(totalBag).toLocaleString('en-US')}</p>
-                                                    </div>
-
-                                                    {/* Total Qty Card */}
-                                                    <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col items-center justify-center transition-all hover:shadow-md">
-                                                        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center mb-2.5">
-                                                            <TrendingUpIcon className="w-5 h-5 text-emerald-600" />
-                                                        </div>
-                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-1">Total Qty</p>
-                                                        <p className="text-base font-black text-gray-900">{Math.round(totalQty).toLocaleString('en-US')}</p>
-                                                    </div>
-
-                                                    {/* Grand Total Card (Full Width) */}
-                                                    <div className="col-span-full bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-5 shadow-lg shadow-gray-200 flex items-center justify-between overflow-hidden relative group">
-                                                        {/* Decorative Elements */}
-                                                        
-                                                        <div className="flex items-center gap-4 relative z-10">
-                                                            <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm border border-white/10">
-                                                                <DollarSignIcon className="w-6 h-6 text-white" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-0.5">Grand Total Amount</p>
-                                                                <p className="text-xl font-black text-white leading-tight font-mono">৳{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div className="hidden sm:block relative z-10">
-                                                            <div className="h-10 w-px bg-white/10 mx-4"></div>
-                                                        </div>
-                                                    </div>
-                                                </div>
                                             </>
                                         ) : (
                                             <div className="bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 py-12 text-center text-gray-400">
