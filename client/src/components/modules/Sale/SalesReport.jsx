@@ -777,20 +777,20 @@ const SalesReport = ({
 
                 {/* Printable Content */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-12 print:p-4 print:overflow-visible bg-white">
-                    <div className="max-w-[1200px] mx-auto space-y-6 sm:space-y-8">
+                    <div className="max-w-[1200px] mx-auto space-y-3 sm:space-y-4">
                         <div className="text-center space-y-1">
                             <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
                             <p className="text-[12px] sm:text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
                             <p className="text-[12px] sm:text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
                         </div>
-                        <div className="border-t-2 border-gray-900 w-full mt-4"></div>
-                        <div className="flex justify-center -mt-6">
+                        <div className="border-t-2 border-gray-900 w-full"></div>
+                        <div className="flex justify-center -mt-5">
                             <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
                                 <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">{saleType} Sales Report</h2>
                             </div>
                         </div>
 
-                        <div className="flex justify-between items-end text-[14px] text-gray-800 pt-6 px-2">
+                        <div className="flex justify-between items-end text-[14px] text-gray-800 pt-2 px-2">
                             <div className="flex flex-col gap-1.5">
                                 <div className="flex"><span className="font-bold text-gray-900 w-28">Date Range:</span> <span className="text-gray-900">{formatDate(saleFilters.startDate) === '-' ? 'Start' : formatDate(saleFilters.startDate)} to {formatDate(saleFilters.endDate) === '-' ? 'Present' : formatDate(saleFilters.endDate)}</span></div>
                                 {saleFilters.companyName && <div className="flex"><span className="font-bold text-gray-900 w-28">Customer:</span> <span className="text-gray-900">{saleFilters.companyName}</span></div>}

@@ -30,6 +30,7 @@ import LCReport from './components/modules/LCReceive/LCReport';
 import ProductHistoryReport from './components/modules/StockManagement/ProductHistoryReport';
 import SalesReport from './components/modules/Sale/SalesReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
+import ProfitLoss from './components/modules/Sale/ProfitLoss';
 import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
 import PaymentCollection from './components/modules/PaymentCollection/PaymentCollection';
 import Bank from './components/modules/Bank/Bank';
@@ -707,7 +708,7 @@ function App() {
       fetchSales(); // Fetch sales data
       fetchDamages();
       fetchStockRecords(); // Fetch stock records for LC No dropdown
-    } else if (currentView === 'stock-section' || currentView === 'lc-entry-section' || currentView === 'general-sale-section' || currentView === 'border-sale-section') {
+    } else if (currentView === 'stock-section' || currentView === 'lc-entry-section' || currentView === 'general-sale-section' || currentView === 'border-sale-section' || currentView === 'profit-loss-section') {
       fetchStockRecords();
       fetchWarehouses(); // Fetch warehouse data
       fetchSales(); // Fetch sales data
@@ -1708,6 +1709,8 @@ function App() {
         return <LCManagement addNotification={addNotification} currentUser={currentUser} />;
       case 'return-product-section':
         return <ReturnProduct currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />;
+      case 'profit-loss-section':
+        return <ProfitLoss salesRecords={salesRecords} products={products} />;
       default:
         return null;
     }
@@ -2149,6 +2152,13 @@ function App() {
               </div>
             </div>
           </div>
+          <button
+            onClick={() => { setCurrentView('profit-loss-section'); setSidebarOpen(false); }}
+            className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'profit-loss-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+          >
+            <BarChartIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium text-sm">Profit & Loss</span>
+          </button>
 
         </nav>
       </aside>
@@ -2202,7 +2212,7 @@ function App() {
         </header>
 
         {/* Dashboard Content */}
-        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6 ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
+        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
           {renderContent()}
         </main>
       </div>
