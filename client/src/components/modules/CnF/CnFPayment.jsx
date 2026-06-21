@@ -881,32 +881,35 @@ const CnFPayment = () => {
 
                                                 {isExpanded && (
                                                     <div className="mt-5 pt-5 border-t border-gray-100 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                        <div className="grid grid-cols-2 gap-5">
-                                                            <div>
-                                                                <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Payment Method</span>
-                                                                <div className="text-gray-900 text-sm font-bold">{p.method}</div>
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Agent Type</span>
-                                                                <div className="text-gray-900 text-sm font-bold">{p.cnfType}</div>
-                                                            </div>
-                                                            <div className="col-span-2">
-                                                                <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Reference / Bank</span>
-                                                                <div className="text-gray-800 text-sm leading-relaxed font-medium">{p.bankName || p.reference || '-'}</div>
-                                                            </div>
+                                                        <div className="grid grid-cols-[140px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Payment Method</span>
+                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                            <span className="font-semibold text-gray-900 text-[11px]">{p.method}</span>
+
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Agent Type</span>
+                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                            <span className="font-semibold text-gray-900 text-[11px] uppercase">{p.cnfType}</span>
+
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reference / Bank</span>
+                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                            <span className="font-semibold text-gray-800 text-[11px] leading-relaxed">{p.bankName || p.reference || '-'}</span>
+
                                                             {p.discount > 0 && (
-                                                                <div className="col-span-2">
-                                                                    <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Discount Given</span>
-                                                                    <div className="text-emerald-600 text-sm font-black italic">৳{p.discount.toLocaleString('en-IN')}</div>
-                                                                </div>
+                                                                <>
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Discount Given</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-bold text-emerald-600 text-[11px] italic">৳{p.discount.toLocaleString('en-IN')}</span>
+                                                                </>
                                                             )}
-                                                        {p.remarks && (
-                                                            <div className="col-span-2">
-                                                                <span className="block text-gray-400 uppercase font-black tracking-widest text-[10px] mb-1">Remarks</span>
-                                                                <div className="text-gray-600 text-xs leading-relaxed italic">{p.remarks}</div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+
+                                                            {p.remarks && (
+                                                                <>
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="text-gray-600 text-[11px] leading-relaxed italic">{p.remarks}</span>
+                                                                </>
+                                                            )}
+                                                        </div>
 
                                                     {/* Action Buttons in Expanded View */}
                                                     {isAdmin && (

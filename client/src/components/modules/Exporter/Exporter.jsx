@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, PlusIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -612,7 +613,7 @@ const Exporter = ({
             })()}
 
             {/* Export History Modal */}
-            {viewData && (
+            {viewData && createPortal(
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-6xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
@@ -813,7 +814,8 @@ const Exporter = ({
                             )}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, UserIcon, XIcon, ChevronDownIcon, ChevronUpIcon, FunnelIcon, BarChartIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
@@ -89,6 +90,19 @@ const Bank = ({ onDeleteConfirm }) => {
     useEffect(() => {
         fetchBanks();
     }, []);
+
+    // Manage scroll lock when LC Bill History modal is open
+    useEffect(() => {
+        if (lcBillHistoryBank) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+        return () => {
+            document.body.style.overflow = 'auto';
+        };
+    }, [lcBillHistoryBank]);
+
 
     // Click outside handler for history filter panel
     useEffect(() => {
@@ -1146,7 +1160,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                     {isLoading ? (
                                         Array(5).fill(0).map((_, i) => (
                                             <tr key={i} className="animate-pulse">
-                                                <td colSpan="5" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                                <td colSpan="6" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                             </tr>
                                         ))
                                     ) : displayBanks.length > 0 ? (
@@ -1154,6 +1168,21 @@ const Bank = ({ onDeleteConfirm }) => {
                                             <React.Fragment key={group.bankName}>
                                                 {group.items.map((item, idx) => {
                                                     const isBranchExpanded = expandedBranchKey === item.uniqueRowKey;
+                                                    const hasNewLcCharges = !!(
+                                                        item.lcCommission ||
+                                                        item.vatOnCommission ||
+                                                        (item.swiftCharge !== undefined && item.swiftCharge !== '') ||
+                                                        item.vatOnSwiftCharge ||
+                                                        (item.lcApplicationForm !== undefined && item.lcApplicationForm !== '') ||
+                                                        (item.mpCharge !== undefined && item.mpCharge !== '') ||
+                                                        (item.stampCharge !== undefined && item.stampCharge !== '')
+                                                    );
+                                                    const hasAmendmentCharges = !!(
+                                                        item.amendmentCommission ||
+                                                        item.amendmentVatOnCommission ||
+                                                        (item.amendmentSwiftCharge !== undefined && item.amendmentSwiftCharge !== '') ||
+                                                        item.amendmentVatOnSwift
+                                                    );
                                                     return (
                                                         <React.Fragment key={item.uniqueRowKey}>
                                                             <tr className="hover:bg-gray-50/50 transition-colors group border-b border-gray-100 last:border-b-0">
@@ -1203,67 +1232,71 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                     </div>
                                                                 </td>
                                                             </tr>
-                                                            {isBranchExpanded && (
+                                                            {isBranchExpanded && (hasNewLcCharges || hasAmendmentCharges) && (
                                                                 <tr className="bg-gray-50/30">
                                                                     <td colSpan="6" className="px-6 py-4 border-b border-gray-100">
                                                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 bg-white p-5 rounded-2xl border border-gray-100/85 shadow-inner animate-in fade-in duration-300">
                                                                             {/* New LC Bill Charges */}
-                                                                            <div className="space-y-3">
-                                                                                <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-2">New LC Bill Charges</h4>
-                                                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4">
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.lcCommission ? `${item.lcCommission}%` : '-'}</p>
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.vatOnCommission ? `${item.vatOnCommission}%` : '-'}</p>
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.swiftCharge !== undefined && item.swiftCharge !== '' ? `${item.swiftCharge}` : '-'}</p>
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT Charge</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.vatOnSwiftCharge ? `${item.vatOnSwiftCharge}%` : '-'}</p>
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.lcApplicationForm !== undefined && item.lcApplicationForm !== '' ? `${item.lcApplicationForm}` : '-'}</p>
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.mpCharge !== undefined && item.mpCharge !== '' ? `${item.mpCharge}` : '-'}</p>
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.stampCharge !== undefined && item.stampCharge !== '' ? `${item.stampCharge}` : '-'}</p>
+                                                                            {hasNewLcCharges && (
+                                                                                <div className="space-y-3">
+                                                                                    <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest border-b border-blue-50 pb-2">New LC Bill Charges</h4>
+                                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4">
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Commission</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.lcCommission ? `${item.lcCommission}%` : '-'}</p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.vatOnCommission ? `${item.vatOnCommission}%` : '-'}</p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.swiftCharge !== undefined && item.swiftCharge !== '' ? `${item.swiftCharge}` : '-'}</p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT Charge</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.vatOnSwiftCharge ? `${item.vatOnSwiftCharge}%` : '-'}</p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Application Form</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.lcApplicationForm !== undefined && item.lcApplicationForm !== '' ? `${item.lcApplicationForm}` : '-'}</p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">MP Charge</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.mpCharge !== undefined && item.mpCharge !== '' ? `${item.mpCharge}` : '-'}</p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Charge</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.stampCharge !== undefined && item.stampCharge !== '' ? `${item.stampCharge}` : '-'}</p>
+                                                                                        </div>
                                                                                     </div>
                                                                                 </div>
-                                                                            </div>
+                                                                            )}
 
                                                                             {/* Amendment Bill Charges */}
-                                                                            <div className="space-y-3">
-                                                                                <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-2">Amendment Bill Charges</h4>
-                                                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4">
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Commission on Amendment</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.amendmentCommission ? `${item.amendmentCommission}%` : '-'}</p>
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.amendmentVatOnCommission ? `${item.amendmentVatOnCommission}%` : '-'}</p>
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.amendmentSwiftCharge !== undefined && item.amendmentSwiftCharge !== '' ? `${item.amendmentSwiftCharge}` : '-'}</p>
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT</span>
-                                                                                        <p className="text-xs font-black text-gray-800">{item.amendmentVatOnSwift ? `${item.amendmentVatOnSwift}%` : '-'}</p>
+                                                                            {hasAmendmentCharges && (
+                                                                                <div className="space-y-3">
+                                                                                    <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-2">Amendment Bill Charges</h4>
+                                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4">
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Commission on Amendment</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.amendmentCommission ? `${item.amendmentCommission}%` : '-'}</p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on Commission</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.amendmentVatOnCommission ? `${item.amendmentVatOnCommission}%` : '-'}</p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SWIFT Charge</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.amendmentSwiftCharge !== undefined && item.amendmentSwiftCharge !== '' ? `${item.amendmentSwiftCharge}` : '-'}</p>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">VAT on SWIFT</span>
+                                                                                            <p className="text-xs font-black text-gray-800">{item.amendmentVatOnSwift ? `${item.amendmentVatOnSwift}%` : '-'}</p>
+                                                                                        </div>
                                                                                     </div>
                                                                                 </div>
-                                                                            </div>
+                                                                            )}
                                                                         </div>
                                                                     </td>
                                                                 </tr>
@@ -1351,86 +1384,111 @@ const Bank = ({ onDeleteConfirm }) => {
 
                                         {isExpanded && (
                                             <div className="mt-6 space-y-4 animate-in slide-in-from-top-4 duration-500">
-                                                {group.items.map((item, idx) => (
-                                                    <div key={item.uniqueRowKey} className="relative bg-gray-50/50 rounded-2xl p-4 border border-gray-100 shadow-sm">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="flex-1 space-y-2.5">
-                                                                <div className="flex items-center text-[13px]">
-                                                                    <span className="w-32 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Branch -</span>
-                                                                    <span className="font-black text-gray-900 uppercase truncate">{item.branch}</span>
-                                                                </div>
-                                                                <div className="flex items-start text-[13px]">
-                                                                    <span className="w-32 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Account Name -</span>
-                                                                    <span className="font-bold text-gray-800 uppercase leading-tight">{item.accountName}</span>
-                                                                </div>
-                                                                <div className="flex items-center text-[13px]">
-                                                                    <span className="w-32 text-[11px] font-bold text-blue-400 uppercase tracking-wider shrink-0">Account No -</span>
-                                                                    <span className="font-black text-blue-600 select-all tracking-tight">{item.accountNo}</span>
-                                                                </div>
+                                                {group.items.map((item, idx) => {
+                                                     const hasNewLcCharges = !!(
+                                                         item.lcCommission ||
+                                                         item.vatOnCommission ||
+                                                         (item.swiftCharge !== undefined && item.swiftCharge !== '') ||
+                                                         item.vatOnSwiftCharge ||
+                                                         (item.lcApplicationForm !== undefined && item.lcApplicationForm !== '') ||
+                                                         (item.mpCharge !== undefined && item.mpCharge !== '') ||
+                                                         (item.stampCharge !== undefined && item.stampCharge !== '')
+                                                     );
+                                                     const hasAmendmentCharges = !!(
+                                                         item.amendmentCommission ||
+                                                         item.amendmentVatOnCommission ||
+                                                         (item.amendmentSwiftCharge !== undefined && item.amendmentSwiftCharge !== '') ||
+                                                         item.amendmentVatOnSwift
+                                                     );
+                                                     return (
+                                                         <div key={item.uniqueRowKey} className="relative bg-gray-50/50 rounded-2xl p-4 border border-gray-100 shadow-sm text-left">
+                                                             <div className="flex items-center gap-4">
+                                                                 <div className="flex-1 space-y-2.5">
+                                                                     <div className="flex items-center text-[13px]">
+                                                                         <span className="w-32 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Branch -</span>
+                                                                         <span className="font-black text-gray-900 uppercase truncate">{item.branch}</span>
+                                                                     </div>
+                                                                     <div className="flex items-start text-[13px]">
+                                                                         <span className="w-32 text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Account Name -</span>
+                                                                         <span className="font-bold text-gray-800 uppercase leading-tight">{item.accountName}</span>
+                                                                     </div>
+                                                                     <div className="flex items-center text-[13px]">
+                                                                         <span className="w-32 text-[11px] font-bold text-blue-400 uppercase tracking-wider shrink-0">Account No -</span>
+                                                                         <span className="font-black text-blue-600 select-all tracking-tight">{item.accountNo}</span>
+                                                                     </div>
 
-                                                                <div className="border-t border-gray-200/50 my-2"></div>
+                                                                     {(hasNewLcCharges || hasAmendmentCharges) && (
+                                                                         <>
+                                                                             <div className="border-t border-gray-200/50 my-2"></div>
 
-                                                                <div className="space-y-4">
-                                                                    <div className="space-y-2">
-                                                                        <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-wider">New LC Bill Charges</h4>
-                                                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">LC Comm.</span>
-                                                                                <span className="font-black text-gray-800">{item.lcCommission ? `${item.lcCommission}%` : '-'}</span>
-                                                                            </div>
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on Comm.</span>
-                                                                                <span className="font-black text-gray-800">{item.vatOnCommission ? `${item.vatOnCommission}%` : '-'}</span>
-                                                                            </div>
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">SWIFT</span>
-                                                                                <span className="font-black text-gray-800">{item.swiftCharge !== undefined && item.swiftCharge !== '' ? `${item.swiftCharge}` : '-'}</span>
-                                                                            </div>
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on SWIFT</span>
-                                                                                <span className="font-black text-gray-800">{item.vatOnSwiftCharge ? `${item.vatOnSwiftCharge}%` : '-'}</span>
-                                                                            </div>
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">LC App Form</span>
-                                                                                <span className="font-black text-gray-800">{item.lcApplicationForm !== undefined && item.lcApplicationForm !== '' ? `${item.lcApplicationForm}` : '-'}</span>
-                                                                            </div>
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">MP Charge</span>
-                                                                                <span className="font-black text-gray-800">{item.mpCharge !== undefined && item.mpCharge !== '' ? `${item.mpCharge}` : '-'}</span>
-                                                                            </div>
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40 col-span-2">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">Stamp Charge</span>
-                                                                                <span className="font-black text-gray-800">{item.stampCharge !== undefined && item.stampCharge !== '' ? `${item.stampCharge}` : '-'}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
+                                                                             <div className="space-y-4">
+                                                                                 {hasNewLcCharges && (
+                                                                                     <div className="space-y-2">
+                                                                                         <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-wider">New LC Bill Charges</h4>
+                                                                                         <div className="grid grid-cols-2 gap-2 text-xs">
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">LC Comm.</span>
+                                                                                                 <span className="font-black text-gray-800">{item.lcCommission ? `${item.lcCommission}%` : '-'}</span>
+                                                                                             </div>
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on Comm.</span>
+                                                                                                 <span className="font-black text-gray-800">{item.vatOnCommission ? `${item.vatOnCommission}%` : '-'}</span>
+                                                                                             </div>
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">SWIFT</span>
+                                                                                                 <span className="font-black text-gray-800">{item.swiftCharge !== undefined && item.swiftCharge !== '' ? `${item.swiftCharge}` : '-'}</span>
+                                                                                             </div>
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on SWIFT</span>
+                                                                                                 <span className="font-black text-gray-800">{item.vatOnSwiftCharge ? `${item.vatOnSwiftCharge}%` : '-'}</span>
+                                                                                             </div>
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">LC App Form</span>
+                                                                                                 <span className="font-black text-gray-800">{item.lcApplicationForm !== undefined && item.lcApplicationForm !== '' ? `${item.lcApplicationForm}` : '-'}</span>
+                                                                                             </div>
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">MP Charge</span>
+                                                                                                 <span className="font-black text-gray-800">{item.mpCharge !== undefined && item.mpCharge !== '' ? `${item.mpCharge}` : '-'}</span>
+                                                                                             </div>
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40 col-span-2">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">Stamp Charge</span>
+                                                                                                 <span className="font-black text-gray-800">{item.stampCharge !== undefined && item.stampCharge !== '' ? `${item.stampCharge}` : '-'}</span>
+                                                                                             </div>
+                                                                                         </div>
+                                                                                     </div>
+                                                                                 )}
 
-                                                                    <div className="space-y-2">
-                                                                        <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-wider">Amendment Bill Charges</h4>
-                                                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">Amendment Comm.</span>
-                                                                                <span className="font-black text-gray-800">{item.amendmentCommission ? `${item.amendmentCommission}%` : '-'}</span>
-                                                                            </div>
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on Comm.</span>
-                                                                                <span className="font-black text-gray-800">{item.amendmentVatOnCommission ? `${item.amendmentVatOnCommission}%` : '-'}</span>
-                                                                            </div>
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">SWIFT</span>
-                                                                                <span className="font-black text-gray-800">{item.amendmentSwiftCharge !== undefined && item.amendmentSwiftCharge !== '' ? `${item.amendmentSwiftCharge}` : '-'}</span>
-                                                                            </div>
-                                                                            <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on SWIFT</span>
-                                                                                <span className="font-black text-gray-800">{item.amendmentVatOnSwift ? `${item.amendmentVatOnSwift}%` : '-'}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                                                 {hasAmendmentCharges && (
+                                                                                     <div className="space-y-2">
+                                                                                         <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-wider">Amendment Bill Charges</h4>
+                                                                                         <div className="grid grid-cols-2 gap-2 text-xs">
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">Amendment Comm.</span>
+                                                                                                 <span className="font-black text-gray-800">{item.amendmentCommission ? `${item.amendmentCommission}%` : '-'}</span>
+                                                                                             </div>
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on Comm.</span>
+                                                                                                 <span className="font-black text-gray-800">{item.amendmentVatOnCommission ? `${item.amendmentVatOnCommission}%` : '-'}</span>
+                                                                                             </div>
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">SWIFT</span>
+                                                                                                 <span className="font-black text-gray-800">{item.amendmentSwiftCharge !== undefined && item.amendmentSwiftCharge !== '' ? `${item.amendmentSwiftCharge}` : '-'}</span>
+                                                                                             </div>
+                                                                                             <div className="bg-white/80 p-2 rounded-xl border border-gray-150/40">
+                                                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase block leading-tight">VAT on SWIFT</span>
+                                                                                                 <span className="font-black text-gray-800">{item.amendmentVatOnSwift ? `${item.amendmentVatOnSwift}%` : '-'}</span>
+                                                                                             </div>
+                                                                                         </div>
+                                                                                     </div>
+                                                                                 )}
+                                                                             </div>
+                                                                         </>
+                                                                     )}
+                                                                 </div>
+                                                             </div>
+                                                         </div>
+                                                     );
+                                                 })}
                                             </div>
                                         )}
                                     </div>
@@ -1451,8 +1509,8 @@ const Bank = ({ onDeleteConfirm }) => {
             )}
 
             {/* LC Bill History Modal */}
-            {lcBillHistoryBank && (
-                <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
+            {lcBillHistoryBank && createPortal(
+                <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setLcBillHistoryBank(null)} />
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-6xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                         {/* Header */}
@@ -1514,10 +1572,16 @@ const Bank = ({ onDeleteConfirm }) => {
                                     </button>
 
                                     {showHistoryFilterPanel && (
-                                        <div
-                                            ref={historyFilterPanelRef}
-                                            className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 md:p-6 z-[3100] animate-in fade-in zoom-in-95 duration-200 overflow-visible"
-                                        >
+                                        <>
+                                            {/* Mobile Backdrop */}
+                                            <div 
+                                                className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[3005] md:hidden"
+                                                onClick={() => setShowHistoryFilterPanel(false)}
+                                            />
+                                            <div
+                                                ref={historyFilterPanelRef}
+                                                className="fixed inset-x-4 top-24 md:absolute md:top-12 md:left-auto md:right-0 w-auto md:w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 md:p-6 z-[3100] animate-in fade-in zoom-in-95 duration-200 overflow-visible"
+                                            >
                                             <div className="flex items-center justify-between mb-6">
                                                 <h4 className="text-lg font-bold text-gray-800">Filter History</h4>
                                                 <button
@@ -1778,7 +1842,8 @@ const Bank = ({ onDeleteConfirm }) => {
                                                 </div>
                                             </div>
                                         </div>
-                                    )}
+                                    </>
+                                )}
                                 </div>
 
                                 {/* Report Button */}
@@ -1969,7 +2034,8 @@ const Bank = ({ onDeleteConfirm }) => {
                             )}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

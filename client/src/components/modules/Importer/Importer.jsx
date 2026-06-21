@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -50,6 +51,19 @@ const Importer = ({
     useEffect(() => {
         fetchImporters();
     }, []);
+
+    // Manage scroll lock when Import History modal is open
+    useEffect(() => {
+        if (viewData) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+        return () => {
+            document.body.style.overflow = 'auto';
+        };
+    }, [viewData]);
+
 
     const fetchImporters = async () => {
         setIsLoading(true);

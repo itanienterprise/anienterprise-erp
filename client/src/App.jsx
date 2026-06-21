@@ -341,6 +341,32 @@ function App() {
     return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
 
+  // Manage body class when modal is open inside main (handles all modular modals dynamically)
+  useEffect(() => {
+    const handleMutations = () => {
+      const hasModal = document.querySelector('.app-modal-overlay') !== null;
+      if (hasModal) {
+        document.body.classList.add('app-modal-open-active');
+      } else {
+        document.body.classList.remove('app-modal-open-active');
+      }
+    };
+
+    handleMutations();
+
+    const observer = new MutationObserver(handleMutations);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      observer.disconnect();
+      document.body.classList.remove('app-modal-open-active');
+    };
+  }, []);
+
+
   // Fetch employee name if missing
   useEffect(() => {
     if (isAuthenticated && currentUser && !currentUser.name) {

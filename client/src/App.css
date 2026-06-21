@@ -320,8 +320,16 @@ input[type="number"] {
     background-color: #f8fafc !important;
 }
 
-/* Global stacking context fix on mobile/touch devices where overflow/compositing creates a stacking context */
-main:has(.app-modal-overlay) {
-    position: relative;
-    z-index: 2000;
+main:has(.app-modal-overlay),
+body.app-modal-open-active main {
+    position: relative !important;
+    z-index: 2000 !important;
+}
+
+body.app-modal-open-active header {
+    z-index: 10 !important;
+}
+
+.app-modal-overlay {
+    z-index: 99999 !important;
 }
