@@ -907,9 +907,7 @@ const SalesReport = ({
                                                             )}
                                                             {idx === 0 && (
                                                                 <>
-                                                                    {saleType === 'Border' ? (
-                                                                        <td rowSpan={flatItems.length} className="border-r border-gray-900 px-0.5 py-1 text-[12px] font-bold text-gray-900 text-center">{sale.lcNo || '-'}</td>
-                                                                    ) : (
+                                                                    {saleType !== 'Border' && (
                                                                         <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] font-bold text-gray-900 text-center">{sale.invoiceNo}</td>
                                                                     )}
                                                                     {saleType === 'Border' ? (
@@ -962,7 +960,7 @@ const SalesReport = ({
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan={saleType === 'Border' ? "9" : "9"} className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-2 py-2 text-[12px]'} font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900`}>Grand Total</td>
-                                            <td className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-black text-gray-900 border-r border-gray-900`}>{saleType === 'Border' ? '-' : summary.totalQty.toLocaleString('en-US')}</td>
+                                            <td className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-black text-gray-900 border-r border-gray-900`}>{summary.totalQty.toLocaleString('en-US')}</td>
                                             {saleType === 'Border' && <td className="px-0.5 py-1 text-[12px] text-center font-black text-gray-900 border-r border-gray-900">{summary.totalTrucks.toLocaleString('en-US')}</td>}
                                             <td className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-bold text-gray-900 border-r border-gray-900`}></td>
                                             <td className={`${saleType === 'Border' ? '' : 'border-r'} ${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-black text-gray-900 border-gray-900`}>

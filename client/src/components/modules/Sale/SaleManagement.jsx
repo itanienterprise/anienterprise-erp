@@ -93,14 +93,17 @@ const SaleManagement = ({
                 // Update items
                 const updatedItems = (sale.items || []).map(item => {
                     const updatedBrandEntries = (item.brandEntries || []).map(be => {
-                        const activeUOM = be.uom || item.uom || sale.uom || 'Truck';
+                        const activeUOM = be.uom || item.uom || sale.uom || (sale.saleType === 'General' ? 'QTY' : 'Truck');
                         const qty = parseFloat(be.quantity || item.quantity || sale.quantity) || 0;
+                        const bag = parseFloat(be.bag || item.bag || sale.bag) || 0;
                         const truckCount = parseFloat(be.truck || item.truck || sale.truck) || 0;
                         const price = newRate;
 
                         let entryTotal = 0;
                         if (activeUOM === 'QTY') {
                             entryTotal = qty * price;
+                        } else if (activeUOM === 'BAG') {
+                            entryTotal = bag * price;
                         } else {
                             entryTotal = truckCount * price;
                         }
@@ -112,13 +115,16 @@ const SaleManagement = ({
                     if (updatedBrandEntries.length > 0) {
                         itemTotalAmount = updatedBrandEntries.reduce((sum, be) => sum + (parseFloat(be.totalAmount) || 0), 0);
                     } else {
-                        const activeItemUOM = item.uom || sale.uom || 'Truck';
+                        const activeItemUOM = item.uom || sale.uom || (sale.saleType === 'General' ? 'QTY' : 'Truck');
                         const itemQty = parseFloat(item.quantity || sale.quantity) || 0;
+                        const itemBag = parseFloat(item.bag || sale.bag) || 0;
                         const itemTruck = parseFloat(item.truck || sale.truck) || 0;
                         const itemPrice = newRate;
 
                         if (activeItemUOM === 'QTY') {
                             itemTotalAmount = itemQty * itemPrice;
+                        } else if (activeItemUOM === 'BAG') {
+                            itemTotalAmount = itemBag * itemPrice;
                         } else {
                             itemTotalAmount = itemTruck * itemPrice;
                         }
@@ -138,14 +144,17 @@ const SaleManagement = ({
                     updatedSale.items = updatedItems;
                     updatedSale.totalAmount = updatedItems.reduce((sum, item) => sum + (parseFloat(item.totalAmount) || 0), 0).toFixed(2);
                 } else {
-                    const activeSaleUOM = sale.uom || 'Truck';
+                    const activeSaleUOM = sale.uom || (sale.saleType === 'General' ? 'QTY' : 'Truck');
                     const saleQty = parseFloat(sale.quantity) || 0;
+                    const saleBag = parseFloat(sale.bag) || 0;
                     const saleTruck = parseFloat(sale.truck) || 0;
                     const salePrice = newRate;
 
                     let saleTotal = 0;
                     if (activeSaleUOM === 'QTY') {
                         saleTotal = saleQty * salePrice;
+                    } else if (activeSaleUOM === 'BAG') {
+                        saleTotal = saleBag * salePrice;
                     } else {
                         saleTotal = saleTruck * salePrice;
                     }
@@ -525,6 +534,7 @@ const SaleManagement = ({
             productId: '',
             productName: '',
             lcNo: '',
+            uom: saleType === 'General' ? 'QTY' : 'Truck',
             brandEntries: [{
                 brand: '',
                 brandName: '',
@@ -534,7 +544,7 @@ const SaleManagement = ({
                 warehouseQty: '',
                 quantity: '',
                 truck: '',
-                uom: 'Truck', // Default UOM
+                uom: saleType === 'General' ? 'QTY' : 'Truck',
                 unitPrice: '',
                 totalAmount: ''
             }]
@@ -985,6 +995,7 @@ const SaleManagement = ({
                 productId: '',
                 productName: '',
                 lcNo: '',
+                uom: saleType === 'General' ? 'QTY' : 'Truck',
                 brandEntries: [{
                     brand: '',
                     brandName: '',
@@ -994,7 +1005,7 @@ const SaleManagement = ({
                     warehouseQty: '',
                     quantity: '',
                     truck: '',
-                    uom: 'Truck',
+                    uom: saleType === 'General' ? 'QTY' : 'Truck',
                     unitPrice: '',
                     totalAmount: ''
                 }]
@@ -1016,7 +1027,7 @@ const SaleManagement = ({
                     warehouseQty: '',
                     quantity: '',
                     truck: '',
-                    uom: 'Truck',
+                    uom: newItems[productIdx].uom || (saleType === 'General' ? 'QTY' : 'Truck'),
                     unitPrice: '',
                     totalAmount: ''
                 }]
@@ -1073,6 +1084,25 @@ const SaleManagement = ({
 
             if (entryIdx === null || entryIdx === undefined) {
                 product[name] = value;
+                if (name === 'uom' && prev.saleType !== 'Border') {
+                    product.brandEntries = (product.brandEntries || []).map(entry => {
+                        const qty = parseFloat(entry.quantity) || 0;
+                        const bag = parseFloat(entry.bag) || 0;
+                        const price = parseFloat(entry.unitPrice) || 0;
+
+                        let total = 0;
+                        if (value === 'BAG') {
+                            total = bag * price;
+                        } else {
+                            total = qty * price;
+                        }
+                        return {
+                            ...entry,
+                            uom: value,
+                            totalAmount: total.toFixed(2)
+                        };
+                    });
+                }
             } else {
                 const brandEntries = [...product.brandEntries];
                 const entry = { ...brandEntries[entryIdx], [name]: value };
@@ -1108,7 +1138,7 @@ const SaleManagement = ({
                         }
                     }
                 } else {
-                    // General Sale: Total = Quantity * Price
+                    // General Sale: Total = Quantity * Price OR Bag * Price based on selected UOM
                     if (name === 'quantity' || name === 'bag' || name === 'unitPrice') {
                         const bSize = parseFloat(String(entry.bagSize || '').replace(/[^0-9.]/g, '')) || 0;
 
@@ -1118,9 +1148,16 @@ const SaleManagement = ({
                             entry.quantity = (parseFloat(value) * bSize).toFixed(2);
                         }
 
+                        const activeUOM = product.uom || 'QTY';
                         const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
+                        const bag = parseFloat(name === 'bag' ? value : entry.bag) || 0;
                         const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
-                        entry.totalAmount = (qty * price).toFixed(2);
+
+                        if (activeUOM === 'BAG') {
+                            entry.totalAmount = (bag * price).toFixed(2);
+                        } else {
+                            entry.totalAmount = (qty * price).toFixed(2);
+                        }
                     }
                 }
 
@@ -1373,6 +1410,7 @@ const SaleManagement = ({
                 productId: '',
                 productName: '',
                 lcNo: '',
+                uom: saleType === 'General' ? 'QTY' : 'Truck',
                 brandEntries: [{
                     brand: '',
                     brandName: '',
@@ -1384,7 +1422,7 @@ const SaleManagement = ({
                     bag: '',
                     bagSize: '',
                     truck: '',
-                    uom: 'Truck',
+                    uom: saleType === 'General' ? 'QTY' : 'Truck',
                     unitPrice: '',
                     totalAmount: ''
                 }]
@@ -1432,10 +1470,12 @@ const SaleManagement = ({
 
         // Migrate single-item legacy
         if (initialItems.length === 0 && sale.productId) {
+            const defUom = sale.uom || (saleType === 'General' ? 'QTY' : 'Truck');
             initialItems = [{
                 productId: sale.productId,
                 productName: sale.productName,
                 lcNo: sale.lcNo || '',
+                uom: defUom,
                 brandEntries: [{
                     brand: sale.brand,
                     inhouseQty: sale.inhouseQty,
@@ -1443,7 +1483,7 @@ const SaleManagement = ({
                     warehouseName: sale.warehouseName,
                     warehouseQty: sale.warehouseQty,
                     quantity: sale.quantity,
-                    uom: sale.uom || 'Truck',
+                    uom: defUom,
                     unitPrice: sale.unitPrice,
                     totalAmount: sale.totalAmount
                 }]
@@ -1452,10 +1492,16 @@ const SaleManagement = ({
             // Check if items are flat or nested
             initialItems = initialItems.map(item => {
                 const itemLcNo = item.lcNo || sale.lcNo || '';
+                const itemUom = item.uom || sale.uom || (saleType === 'General' ? 'QTY' : 'Truck');
                 if (item.brandEntries) {
                     return {
                         ...item,
-                        lcNo: itemLcNo
+                        lcNo: itemLcNo,
+                        uom: itemUom,
+                        brandEntries: item.brandEntries.map(be => ({
+                            ...be,
+                            uom: be.uom || itemUom
+                        }))
                     };
                 }
                 // Migrate previous flat multi-item to nested brand entries
@@ -1463,6 +1509,7 @@ const SaleManagement = ({
                     productId: item.productId,
                     productName: item.productName,
                     lcNo: itemLcNo,
+                    uom: itemUom,
                     brandEntries: [{
                         brand: item.brand,
                         inhouseQty: item.inhouseQty,
@@ -1470,7 +1517,7 @@ const SaleManagement = ({
                         warehouseName: item.warehouseName,
                         warehouseQty: item.warehouseQty,
                         quantity: item.quantity,
-                        uom: item.uom || 'Truck',
+                        uom: item.uom || itemUom,
                         unitPrice: item.unitPrice,
                         totalAmount: item.totalAmount
                     }]
@@ -2086,7 +2133,7 @@ const SaleManagement = ({
                                     <tr className="bg-white border-b border-gray-50 group">
                                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest w-1/4">Product Description</th>
                                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Brand Information</th>
-                                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Qty (kg)</th>
+                                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Qty / Bag</th>
                                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Unit Price</th>
                                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Subtotal</th>
                                     </tr>
@@ -2123,7 +2170,11 @@ const SaleManagement = ({
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 text-right align-middle">
-                                                        <div className="text-[13px] font-bold text-gray-900">{parseFloat(entry.quantity).toLocaleString('en-US')} kg</div>
+                                                        <div className="text-[13px] font-bold text-gray-900">
+                                                            {product.uom === 'BAG'
+                                                                ? `${parseFloat(entry.bag || 0).toLocaleString('en-US')} Bag`
+                                                                : `${parseFloat(entry.quantity || 0).toLocaleString('en-US')} kg`}
+                                                        </div>
                                                     </td>
                                                     <td className="px-6 py-4 text-right align-middle">
                                                         <div className="text-[12px] font-bold text-gray-400">৳{parseFloat(entry.unitPrice || 0).toLocaleString('en-IN')}</div>
@@ -3712,6 +3763,31 @@ const SaleManagement = ({
                                                 </div>
                                             </div>
 
+                                            {/* UOM Selector for General Sales */}
+                                            {saleType !== 'Border' && (
+                                                <div className="space-y-1.5 px-4 flex-1 md:max-w-[200px]">
+                                                    <label className="sale-mgmt-item-label">UOM</label>
+                                                    <div className="flex items-center bg-gray-50/50 p-1 rounded-xl border border-gray-100/50 h-10 shadow-inner group/uom">
+                                                        <button
+                                                            type="button"
+                                                            disabled={isFieldReadOnly(originalData?.items?.[index]?.uom)}
+                                                            onClick={() => handleItemInputChange(index, null, { target: { name: 'uom', value: 'QTY' } })}
+                                                            className={`flex-1 h-full flex items-center justify-center rounded-lg text-xs font-black transition-all duration-200 ${item.uom === 'QTY' || !item.uom ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'} ${isFieldReadOnly(originalData?.items?.[index]?.uom) ? 'cursor-not-allowed opacity-50' : ''}`}
+                                                        >
+                                                            QTY
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={isFieldReadOnly(originalData?.items?.[index]?.uom)}
+                                                            onClick={() => handleItemInputChange(index, null, { target: { name: 'uom', value: 'BAG' } })}
+                                                            className={`flex-1 h-full flex items-center justify-center rounded-lg text-xs font-black transition-all duration-200 ${item.uom === 'BAG' ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'} ${isFieldReadOnly(originalData?.items?.[index]?.uom) ? 'cursor-not-allowed opacity-50' : ''}`}
+                                                        >
+                                                            BAG
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {saleType === 'Border' && (
                                                 <div className="flex-[3] space-y-4 pt-1">
                                                     <div className="hidden md:grid grid-cols-6 gap-4 px-4">
@@ -4264,8 +4340,8 @@ const SaleManagement = ({
                                     const items = sale.items && sale.items.length > 0
                                         ? sale.items.flatMap(item =>
                                             (item.brandEntries || []).length > 0
-                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: item.lcNo }))
-                                                : [{ ...item, productName: item.productName }]
+                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: item.lcNo, uom: be.uom || item.uom || 'QTY' }))
+                                                : [{ ...item, productName: item.productName, uom: item.uom || 'QTY' }]
                                         )
                                         : [{
                                             productName: sale.productName,
@@ -4440,13 +4516,29 @@ const SaleManagement = ({
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 {isMultiple && !isExpanded ? (
                                                     <div className="inline-block px-3 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
-                                                        {items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0).toLocaleString('en-US')}
+                                                        {(() => {
+                                                            const hasBag = items.some(it => it.uom === 'BAG');
+                                                            const hasQty = items.some(it => it.uom !== 'BAG');
+                                                            if (hasBag && !hasQty) {
+                                                                const sumBags = items.reduce((sum, it) => sum + (parseFloat(it.bag) || 0), 0);
+                                                                return `${sumBags.toLocaleString('en-US')} Bag`;
+                                                            } else if (!hasBag && hasQty) {
+                                                                const sumQty = items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0);
+                                                                return `${sumQty.toLocaleString('en-US')} kg`;
+                                                            } else {
+                                                                const sumBags = items.reduce((sum, it) => sum + (parseFloat(it.bag) || 0), 0);
+                                                                const sumQty = items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0);
+                                                                return `${sumBags.toLocaleString('en-US')} Bag / ${sumQty.toLocaleString('en-US')} kg`;
+                                                            }
+                                                        })()}
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-col gap-2">
                                                         {items.map((it, idx) => (
                                                             <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                {parseFloat(it.quantity || 0).toLocaleString('en-US')}
+                                                                {it.uom === 'BAG'
+                                                                    ? `${parseFloat(it.bag || 0).toLocaleString('en-US')} Bag`
+                                                                    : `${parseFloat(it.quantity || 0).toLocaleString('en-US')} kg`}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -4476,7 +4568,10 @@ const SaleManagement = ({
                                                         const storedTotal = parseFloat(sale.totalAmount) || 0;
                                                         if (storedTotal > 0) return storedTotal.toLocaleString('en-IN');
                                                         // Fallback for corrupted data: Recalculate from items
-                                                        const calculatedTotal = items.reduce((sum, it) => sum + (parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0)), 0);
+                                                        const calculatedTotal = items.reduce((sum, it) => {
+                                                            const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                                                            return sum + (qty * parseFloat(it.unitPrice || 0));
+                                                        }, 0);
                                                         return calculatedTotal.toLocaleString('en-IN');
                                                     })()}
                                                 </div>
@@ -4494,7 +4589,10 @@ const SaleManagement = ({
                                                         if (storedDue > 0 || storedTotal > 0) return storedDue.toLocaleString('en-IN');
                                                         
                                                         // Fallback calculation
-                                                        const calculatedTotal = items.reduce((sum, it) => sum + (parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0)), 0);
+                                                        const calculatedTotal = items.reduce((sum, it) => {
+                                                            const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                                                            return sum + (qty * parseFloat(it.unitPrice || 0));
+                                                        }, 0);
                                                         const calculatedDue = Math.max(0, calculatedTotal - parseFloat(sale.discount || 0) - parseFloat(sale.paidAmount || 0));
                                                         return calculatedDue.toLocaleString('en-IN');
                                                     })()}
@@ -4550,14 +4648,15 @@ const SaleManagement = ({
                             const items = sale.items && sale.items.length > 0
                                 ? sale.items.flatMap(item =>
                                     (item.brandEntries || []).length > 0
-                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: item.lcNo }))
-                                        : [{ ...item, productName: item.productName }]
+                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: item.lcNo, uom: be.uom || item.uom || 'QTY' }))
+                                        : [{ ...item, productName: item.productName, uom: item.uom || 'QTY' }]
                                 )
                                 : [{
                                     productName: sale.productName,
                                     brand: sale.brand,
                                     quantity: sale.quantity,
-                                    unitPrice: sale.unitPrice
+                                    unitPrice: sale.unitPrice,
+                                    uom: sale.uom || 'QTY'
                                 }];
 
                             return (
@@ -4704,13 +4803,22 @@ const SaleManagement = ({
                                                                     <span className="text-[10px] font-medium text-gray-500 italic truncate">{it.brand || '-'}</span>
                                                                 </div>
                                                                 <div className="col-span-3 text-right">
-                                                                    <div className="font-bold text-gray-900">{parseFloat(it.quantity || 0).toLocaleString('en-US')}</div>
+                                                                    <div className="font-bold text-gray-900">
+                                                                        {it.uom === 'BAG'
+                                                                            ? `${parseFloat(it.bag || 0).toLocaleString('en-US')} Bag`
+                                                                            : `${parseFloat(it.quantity || 0).toLocaleString('en-US')} kg`}
+                                                                    </div>
                                                                 </div>
                                                                 <div className="col-span-3 text-right">
                                                                     <div className="font-medium text-blue-600 truncate">{parseFloat(it.unitPrice || 0).toLocaleString('en-IN')}</div>
                                                                 </div>
                                                                 <div className="col-span-3 text-right">
-                                                                    <div className="font-black text-gray-900 truncate">৳{(parseFloat(it.quantity || 0) * parseFloat(it.unitPrice || 0)).toLocaleString('en-US')}</div>
+                                                                    <div className="font-black text-gray-900 truncate">
+                                                                        ৳ {(() => {
+                                                                            const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                                                                            return (qty * parseFloat(it.unitPrice || 0)).toLocaleString('en-US');
+                                                                        })()}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>

@@ -1818,7 +1818,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             (item.brandEntries && item.brandEntries.some(be => (parseFloat(be.returnQty) || 0) > 0))
         ) || (parseFloat(sale.returnQty) || 0) > 0;
 
-        const prepareRow = (sl, prod, brand, qty, rate, total, retQty = 0) => {
+        const prepareRow = (sl, prod, brand, qty, rate, total, retQty = 0, isBagUom = false) => {
             const netQuantity = parseFloat(qty) || 0;
             const returnQuantity = parseFloat(retQty) || 0;
             const purchaseQuantity = netQuantity + returnQuantity;
@@ -1830,14 +1830,16 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                 displayRate = (parseFloat(total) || 0) / netQuantity;
             }
 
+            const unitSuffix = isBagUom ? ' BAG' : '';
+
             if (hasReturns) {
                 return [
                     sl,
                     productName,
                     brandName,
-                    purchaseQuantity.toLocaleString('en-US'),
-                    returnQuantity.toLocaleString('en-US'),
-                    netQuantity.toLocaleString('en-US'),
+                    purchaseQuantity.toLocaleString('en-US') + unitSuffix,
+                    returnQuantity.toLocaleString('en-US') + unitSuffix,
+                    netQuantity.toLocaleString('en-US') + unitSuffix,
                     displayRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                     parseFloat(total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 ];
@@ -1847,36 +1849,40 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                 sl,
                 productName,
                 brandName,
-                netQuantity.toLocaleString('en-US'),
+                netQuantity.toLocaleString('en-US') + unitSuffix,
                 displayRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                 parseFloat(total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             ];
         };
 
         if (items.length === 0 && (sale.productId || sale.productName || sale.product)) {
+            const isBag = !isBorderSale && sale.uom === 'BAG';
             tableRows.push(prepareRow(
                 1,
                 sale.productName || sale.product || '-',
                 isBorderSale ? (sale.truck || '-') : (sale.brand || '-'),
-                sale.quantity,
+                isBag ? sale.bag : sale.quantity,
                 sale.unitPrice || sale.rate,
                 sale.totalAmount || sale.amount,
-                sale.returnQty
+                isBag ? (sale.returnBag || 0) : sale.returnQty,
+                isBag
             ));
         } else {
             let sl = 1;
             items.forEach((item) => {
                 const bEntries = item.brandEntries || [];
+                const isBag = !isBorderSale && item.uom === 'BAG';
                 if (bEntries.length > 0) {
                     bEntries.forEach((brand) => {
                         tableRows.push(prepareRow(
                             sl++,
                             item.productName || item.product || '-',
                             isBorderSale ? (brand.truck || '-') : (brand.brand || '-'),
-                            brand.quantity,
+                            isBag ? brand.bag : brand.quantity,
                             brand.unitPrice || brand.rate || 0,
                             brand.totalAmount || brand.amount || 0,
-                            brand.returnQty
+                            isBag ? (brand.returnBag || 0) : brand.returnQty,
+                            isBag
                         ));
                     });
                 } else {
@@ -1884,10 +1890,11 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                         sl++,
                         item.productName || item.product || '-',
                         isBorderSale ? (item.truck || '-') : (item.brand || '-'),
-                        item.quantity,
+                        isBag ? item.bag : item.quantity,
                         item.unitPrice || item.rate || 0,
                         item.totalAmount || item.amount || 0,
-                        item.returnQty
+                        isBag ? (item.returnBag || 0) : item.returnQty,
+                        isBag
                     ));
                 }
             });
@@ -2502,16 +2509,18 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             const flatItems = (sale.items || []).flatMap(item => {
                 const entries = (item.brandEntries && item.brandEntries.length > 0)
                     ? item.brandEntries
-                    : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: 0, totalAmount: item.totalAmount }];
+                    : [{ brandName: item.brand || '-', quantity: item.quantity, bag: item.bag, unitPrice: 0, totalAmount: item.totalAmount, uom: item.uom }];
 
                 return entries.map((entry, subIdx) => ({
                     productName: item.productName || item.product || '-',
                     brand: entry.brandName || entry.brand || '-',
                     quantity: entry.quantity || 0,
+                    bag: entry.bag || item.bag || 0,
                     truck: entry.truck || sale.truck || '-',
                     price: entry.unitPrice || 0,
                     total: entry.totalAmount || 0,
                     lcNo: item.lcNo || sale.lcNo || '-',
+                    uom: entry.uom || item.uom || 'QTY',
                     isFirstInProduct: subIdx === 0,
                     productSpan: entries.length
                 }));
@@ -2523,9 +2532,11 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     productName: sale.productName || '-',
                     brand: sale.brand || '-',
                     quantity: sale.quantity || 0,
+                    bag: sale.bag || 0,
                     price: 0,
                     total: sale.totalAmount || 0,
                     lcNo: sale.lcNo || '-',
+                    uom: sale.uom || 'QTY',
                     isFirstInProduct: true,
                     productSpan: 1
                 });
@@ -2576,7 +2587,11 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     row.push({ content: (sale.truckNo || '-'), rowSpan: flatItems.length });
                 }
 
-                row.push(parseFloat(item.quantity).toLocaleString('en-US'));
+                if (saleType !== 'Border' && item.uom === 'BAG') {
+                    row.push(parseFloat(item.bag).toLocaleString('en-US') + ' Bag');
+                } else {
+                    row.push(parseFloat(item.quantity).toLocaleString('en-US') + (saleType === 'Border' ? '' : ' kg'));
+                }
 
                 if (saleType === 'Border') {
                     row.push(item.truck || sale.truck || '-');
@@ -2615,7 +2630,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         const footRow = [[
             { content: 'GRAND TOTAL', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
-            { content: saleType === 'Border' ? '-' : summary.totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: saleType === 'Border' ? summary.totalQty.toLocaleString('en-US') : (summary.totalQty.toLocaleString('en-US') + ' kg'), styles: { halign: 'right', fontStyle: 'bold' } },
             { content: saleType === 'Border' ? totalTrucks.toLocaleString('en-US') : '', styles: { halign: 'center', fontStyle: 'bold' } },
             ...(saleType === 'Border' ? [
                 { content: '', styles: { halign: 'right', fontStyle: 'bold' } }
