@@ -348,7 +348,15 @@ const StockManagement = ({
             if (!hasMatchingProduct) return false;
             if (historyFilters.startDate && sale.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && sale.date > historyFilters.endDate) return false;
-            if (historyFilters.lcNo && (sale.lcNo || '').trim() !== historyFilters.lcNo) return false;
+            
+            if (historyFilters.lcNo) {
+                const matchesLc = (sale.lcNo || '').trim() === historyFilters.lcNo ||
+                    (sale.items || []).some(item =>
+                        (item.productName || '').trim().toLowerCase() === productName &&
+                        (item.lcNo || '').trim() === historyFilters.lcNo
+                    );
+                if (!matchesLc) return false;
+            }
             if (historyFilters.port && (sale.port || '').trim() !== historyFilters.port) return false;
 
             if (searchLower) {
@@ -356,7 +364,11 @@ const StockManagement = ({
                 const matchesCompany = (sale.companyName || '').toLowerCase().includes(searchLower);
                 const matchesCustomer = (sale.customerName || '').toLowerCase().includes(searchLower);
                 const matchesPhone = (sale.contact || '').toLowerCase().includes(searchLower);
-                const matchesLC = (sale.lcNo || '').toLowerCase().includes(searchLower);
+                const matchesLC = (sale.lcNo || '').toLowerCase().includes(searchLower) ||
+                    (sale.items || []).some(item =>
+                        (item.productName || '').trim().toLowerCase() === productName &&
+                        (item.lcNo || '').toLowerCase().includes(searchLower)
+                    );
                 const matchesItemBrand = (sale.items || [])
                     .filter(item => (item.productName || '').trim().toLowerCase() === productName)
                     .some(item => (item.brandEntries || []).some(entry => (entry.brand || '').toLowerCase().includes(searchLower)));
@@ -371,6 +383,10 @@ const StockManagement = ({
                 (item.productName || '').trim().toLowerCase() === productName
             );
             matchingItems.forEach(item => {
+                if (historyFilters.lcNo) {
+                    const currentLc = (item.lcNo || sale.lcNo || '').trim();
+                    if (currentLc !== historyFilters.lcNo) return;
+                }
                 (item.brandEntries || []).forEach(entry => {
                     if (historyFilters.brand && (entry.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return;
                     if (searchLower) {
@@ -378,7 +394,7 @@ const StockManagement = ({
                             (sale.companyName || '').toLowerCase().includes(searchLower) ||
                             (sale.customerName || '').toLowerCase().includes(searchLower) ||
                             (sale.contact || '').toLowerCase().includes(searchLower) ||
-                            (sale.lcNo || '').toLowerCase().includes(searchLower);
+                            (item.lcNo || sale.lcNo || '').toLowerCase().includes(searchLower);
                         const matchesBrand = (entry.brand || '').toLowerCase().includes(searchLower);
                         if (!matchesEnv && !matchesBrand) return;
                     }
@@ -400,6 +416,7 @@ const StockManagement = ({
 
                     flattened.push({
                         ...sale,
+                        lcNo: item.lcNo || sale.lcNo || '',
                         itemBrand: entry.brand,
                         itemTruck: entry.truck,
                         itemPacket: calculatedPacket,

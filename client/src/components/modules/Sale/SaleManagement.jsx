@@ -30,7 +30,8 @@ const SaleManagement = ({
     setSaleFilters,
     currentUser,
     addNotification,
-    refreshPendingIndicators
+    refreshPendingIndicators,
+    fetchSalesGlobal
 }) => {
     const [showForm, setShowForm] = useState(false);
     const [sales, setSales] = useState([]);
@@ -650,6 +651,9 @@ const SaleManagement = ({
             });
 
             setSales(filteredSales);
+            if (fetchSalesGlobal) {
+                fetchSalesGlobal();
+            }
         } catch (error) {
             console.error('Error fetching sales:', error);
         } finally {

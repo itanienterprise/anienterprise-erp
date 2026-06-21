@@ -718,6 +718,10 @@ function App() {
       fetchDamages(); // Ensure damages are available for stock calculations
     } else if (currentView === 'products-section') {
       fetchProducts();
+      fetchStockRecords();
+      fetchWarehouses();
+      fetchSales();
+      fetchDamages();
     }
 
   }, [currentView]);
@@ -947,6 +951,7 @@ function App() {
         else if (type === 'port') fetchPorts();
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
+        else if (type === 'sales') fetchSales();
 
         if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
@@ -1554,6 +1559,7 @@ function App() {
             stockRecords={stockRecords}
             warehouseData={warehouseData}
             salesRecords={salesRecords}
+            damages={damages}
             setShowProductHistoryReport={setShowProductHistoryReport}
             setProductHistoryReportData={setProductHistoryReportData}
           />
@@ -1625,6 +1631,7 @@ function App() {
             saleFilters={saleFilters}
             setSaleFilters={setSaleFilters}
             refreshPendingIndicators={fetchPendingEntries}
+            fetchSalesGlobal={fetchSales}
           />
         );
       case 'border-sale-section':
@@ -1648,6 +1655,7 @@ function App() {
             saleFilters={saleFilters}
             setSaleFilters={setSaleFilters}
             refreshPendingIndicators={fetchPendingEntries}
+            fetchSalesGlobal={fetchSales}
           />
         );
       case 'employee-section':
