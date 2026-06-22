@@ -151,17 +151,20 @@ const InsurancePayment = () => {
 
             if (activeDropdown === 'insurance' && insuranceDropdownRef.current && !insuranceDropdownRef.current.contains(event.target)) {
                 setActiveDropdown(null);
+                const ins = insurances.find(i => i._id === newPayment.insuranceId);
+                setInsuranceSearchQuery(ins?.companyName || '');
             }
             if (activeDropdown === 'method' && methodDropdownRef.current && !methodDropdownRef.current.contains(event.target)) {
                 setActiveDropdown(null);
             }
             if (activeDropdown === 'lc' && lcDropdownRef.current && !lcDropdownRef.current.contains(event.target)) {
                 setActiveDropdown(null);
+                setLcSearchQuery(newPayment.lcNo || '');
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [activeDropdown]);
+    }, [activeDropdown, newPayment, insurances]);
 
     // Click outside and keydown listener for Filter Panel
     useEffect(() => {
@@ -271,6 +274,7 @@ const InsurancePayment = () => {
         });
         const ins = insurances.find(i => i._id === payment.insuranceId);
         setInsuranceSearchQuery(ins?.companyName || '');
+        setLcSearchQuery(payment.lcNo || '');
         setShowAddModal(true);
     };
 
@@ -567,132 +571,140 @@ const InsurancePayment = () => {
                                     <CustomDatePicker value={newPayment.date} onChange={(e) => setNewPayment({ ...newPayment, date: e.target.value })} compact />
                                 </div>
 
-                                <div className="space-y-1.5 relative">
+                                <div className="space-y-1.5 relative" ref={lcDropdownRef}>
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">LC No</label>
-                                    <div ref={lcDropdownRef} className="relative">
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveDropdown(activeDropdown === 'lc' ? null : 'lc')}
-                                            className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                        >
-                                            <span className={`truncate ${!newPayment.lcNo ? 'text-gray-400' : 'text-gray-900'}`}>
-                                                {newPayment.lcNo || 'Select LC'}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                {newPayment.lcNo && (
-                                                    <div
-                                                        className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
-                                                        onMouseDown={(e) => {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
-                                                            setNewPayment({ ...newPayment, lcNo: '' });
-                                                        }}
-                                                    >
-                                                        <XIcon className="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" />
-                                                    </div>
-                                                )}
-                                                <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                            </div>
-                                        </button>
-                                        {activeDropdown === 'lc' && (
-                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                                                <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Search LC..."
-                                                        value={lcSearchQuery}
-                                                        onChange={(e) => setLcSearchQuery(e.target.value)}
-                                                        className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                                                    />
-                                                </div>
-                                                <div className="overflow-y-auto">
-                                                    {lcs.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).map(lc => (
-                                                        <button
-                                                            key={lc._id}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                const insCoName = (lc.insuranceCo || '').toLowerCase().trim();
-                                                                const matchingIns = insurances.find(i => (i.companyName || '').toLowerCase().trim() === insCoName);
-
-                                                                setNewPayment({
-                                                                    ...newPayment,
-                                                                    lcNo: lc.lcNo,
-                                                                    insuranceId: matchingIns ? matchingIns._id : newPayment.insuranceId
-                                                                });
-                                                                setActiveDropdown(null);
-                                                            }}
-                                                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
-                                                        >
-                                                            <div>
-                                                                <div className="font-bold text-gray-900">{lc.lcNo}</div>
-                                                                <div className="text-[10px] text-gray-500">{lc.importer}</div>
-                                                            </div>
-                                                            {newPayment.lcNo === lc.lcNo && <CheckIcon className="w-4 h-4 text-blue-600" />}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            placeholder="Search LC..."
+                                            value={lcSearchQuery}
+                                            onFocus={() => setActiveDropdown('lc')}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setLcSearchQuery(val);
+                                                setActiveDropdown('lc');
+                                                if (val === '') {
+                                                    setNewPayment(prev => ({ ...prev, lcNo: '' }));
+                                                }
+                                            }}
+                                            className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10"
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                            {newPayment.lcNo && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setNewPayment(prev => ({ ...prev, lcNo: '' }));
+                                                        setLcSearchQuery('');
+                                                    }}
+                                                    className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                                                >
+                                                    <XIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
+                                                </button>
+                                            )}
+                                            <ChevronDownIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                                        </div>
                                     </div>
+                                    {activeDropdown === 'lc' && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 overflow-y-auto flex flex-col py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            {lcs.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).map(lc => (
+                                                <button
+                                                    key={lc._id}
+                                                    type="button"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        const insCoName = (lc.insuranceCo || '').toLowerCase().trim();
+                                                        const matchingIns = insurances.find(i => (i.companyName || '').toLowerCase().trim() === insCoName);
+
+                                                        setNewPayment(prev => ({
+                                                            ...prev,
+                                                            lcNo: lc.lcNo,
+                                                            insuranceId: matchingIns ? matchingIns._id : prev.insuranceId
+                                                        }));
+                                                        setLcSearchQuery(lc.lcNo);
+                                                        if (matchingIns) {
+                                                            setInsuranceSearchQuery(matchingIns.companyName);
+                                                        }
+                                                        setActiveDropdown(null);
+                                                    }}
+                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                >
+                                                    <div>
+                                                        <div className="font-bold text-gray-900">{lc.lcNo}</div>
+                                                        <div className="text-[10px] text-gray-500">{lc.importer}</div>
+                                                    </div>
+                                                    {newPayment.lcNo === lc.lcNo && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                </button>
+                                            ))}
+                                            {lcs.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).length === 0 && (
+                                                <div className="px-4 py-3 text-sm text-gray-500 text-center">No LC matches found</div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="space-y-1.5 relative">
+                                <div className="space-y-1.5 relative" ref={insuranceDropdownRef}>
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Insurance Company</label>
-                                    <div ref={insuranceDropdownRef} className="relative">
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveDropdown(activeDropdown === 'insurance' ? null : 'insurance')}
-                                            className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                        >
-                                            <span className={`truncate ${!newPayment.insuranceId ? 'text-gray-400' : 'text-gray-900'}`}>
-                                                {insurances.find(i => i._id === newPayment.insuranceId)?.companyName || 'Select Company'}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                {newPayment.insuranceId && (
-                                                    <div
-                                                        className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
-                                                        onMouseDown={(e) => {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
-                                                            setNewPayment({ ...newPayment, insuranceId: '' });
-                                                        }}
-                                                    >
-                                                        <XIcon className="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors" />
-                                                    </div>
-                                                )}
-                                                <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                            </div>
-                                        </button>
-                                        {activeDropdown === 'insurance' && (
-                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                                                <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Search Company..."
-                                                        value={insuranceSearchQuery}
-                                                        onChange={(e) => setInsuranceSearchQuery(e.target.value)}
-                                                        className="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                                                    />
-                                                </div>
-                                                <div className="overflow-y-auto">
-                                                    {insurances.filter(i => i.companyName.toLowerCase().includes(insuranceSearchQuery.toLowerCase())).map(i => (
-                                                        <button
-                                                            key={i._id}
-                                                            type="button"
-                                                            onClick={() => { setNewPayment({ ...newPayment, insuranceId: i._id }); setActiveDropdown(null); }}
-                                                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
-                                                        >
-                                                            <div>
-                                                                <div className="font-bold text-gray-900">{i.companyName}</div>
-                                                                <div className="text-[10px] text-gray-500">{i.policyType}</div>
-                                                            </div>
-                                                            {newPayment.insuranceId === i._id && <CheckIcon className="w-4 h-4 text-blue-600" />}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            placeholder="Search Company..."
+                                            value={insuranceSearchQuery}
+                                            onFocus={() => setActiveDropdown('insurance')}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setInsuranceSearchQuery(val);
+                                                setActiveDropdown('insurance');
+                                                if (val === '') {
+                                                    setNewPayment(prev => ({ ...prev, insuranceId: '' }));
+                                                }
+                                            }}
+                                            className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10"
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                            {newPayment.insuranceId && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setNewPayment(prev => ({ ...prev, insuranceId: '' }));
+                                                        setInsuranceSearchQuery('');
+                                                    }}
+                                                    className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                                                >
+                                                    <XIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
+                                                </button>
+                                            )}
+                                            <ChevronDownIcon className="w-4 h-4 text-gray-400 pointer-events-none" />
+                                        </div>
                                     </div>
+                                    {activeDropdown === 'insurance' && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 overflow-y-auto flex flex-col py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            {insurances.filter(i => i.companyName.toLowerCase().includes(insuranceSearchQuery.toLowerCase())).map(i => (
+                                                <button
+                                                    key={i._id}
+                                                    type="button"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setNewPayment(prev => ({ ...prev, insuranceId: i._id }));
+                                                        setInsuranceSearchQuery(i.companyName);
+                                                        setActiveDropdown(null);
+                                                    }}
+                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                >
+                                                    <div>
+                                                        <div className="font-bold text-gray-900">{i.companyName}</div>
+                                                        <div className="text-[10px] text-gray-500">{i.policyType}</div>
+                                                    </div>
+                                                    {newPayment.insuranceId === i._id && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                </button>
+                                            ))}
+                                            {insurances.filter(i => i.companyName.toLowerCase().includes(insuranceSearchQuery.toLowerCase())).length === 0 && (
+                                                <div className="px-4 py-3 text-sm text-gray-500 text-center">No company matches found</div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="space-y-1.5 relative">
