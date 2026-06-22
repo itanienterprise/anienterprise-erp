@@ -99,11 +99,16 @@ const InsurancePayment = () => {
                 let returnCollected = 0;
                 allPayments.forEach(payment => {
                     if (payment.insuranceId === ins._id) {
+                        const adjustment = parseFloat(payment.adjustedAmount || 0);
+                        const amount = parseFloat(payment.amount || 0);
                         if (payment.type === 'Return Collection') {
-                            returnCollected += (parseFloat(payment.amount) || 0);
+                            returnCollected += amount;
                         } else {
                             // Default to Premium Payment if type missing or is Premium Payment
-                            premiumPaid += (parseFloat(payment.amount) || 0);
+                            premiumPaid += amount + adjustment;
+                            if (payment.isAdjustReturn) {
+                                returnCollected += adjustment;
+                            }
                         }
                     }
                 });
@@ -193,21 +198,21 @@ const InsurancePayment = () => {
         e.preventDefault();
         const amountVal = parseFloat(newPayment.amount || 0);
         const selectedIns = insurances.find(i => i._id === newPayment.insuranceId);
-        const returnBal = selectedIns?.returnBalance || 0;
+        if (!selectedIns) return;
 
-        if (!newPayment.insuranceId) return;
+        const returnBal = displayReturnBalance;
+
         if (!newPayment.isAdjustReturn && amountVal <= 0) return;
         if (newPayment.isAdjustReturn && amountVal <= 0 && returnBal <= 0) return;
 
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
-            const selectedIns = insurances.find(i => i._id === newPayment.insuranceId);
             const paymentData = {
                 ...newPayment,
-                companyName: selectedIns?.companyName,
+                companyName: selectedIns.companyName,
                 amount: parseFloat(newPayment.amount || 0),
-                adjustedAmount: newPayment.isAdjustReturn ? (selectedIns?.returnBalance || 0) : 0
+                adjustedAmount: newPayment.isAdjustReturn ? returnBal : 0
             };
 
             if (isEditMode) {
@@ -338,11 +343,19 @@ const InsurancePayment = () => {
             let returnCollected = 0;
 
             payments.forEach(payment => {
+                if (isEditMode && editingPayment && payment._id === editingPayment._id) {
+                    return;
+                }
                 if (payment.lcNo === newPayment.lcNo) {
+                    const adjustment = parseFloat(payment.adjustedAmount || 0);
+                    const amount = parseFloat(payment.amount || 0);
                     if (payment.type === 'Return Collection') {
-                        returnCollected += (parseFloat(payment.amount) || 0);
+                        returnCollected += amount;
                     } else {
-                        premiumPaid += (parseFloat(payment.amount) || 0);
+                        premiumPaid += amount + adjustment;
+                        if (payment.isAdjustReturn) {
+                            returnCollected += adjustment;
+                        }
                     }
                 }
             });
@@ -355,6 +368,19 @@ const InsurancePayment = () => {
         if (selectedIns) {
             displayPremiumBalance = selectedIns.premiumBalance || 0;
             displayReturnBalance = selectedIns.returnBalance || 0;
+
+            if (isEditMode && editingPayment && editingPayment.insuranceId === newPayment.insuranceId) {
+                const adjustment = parseFloat(editingPayment.adjustedAmount || 0);
+                const amount = parseFloat(editingPayment.amount || 0);
+                if (editingPayment.type === 'Return Collection') {
+                    displayReturnBalance += amount;
+                } else {
+                    displayPremiumBalance += amount + adjustment;
+                    if (editingPayment.isAdjustReturn) {
+                        displayReturnBalance += adjustment;
+                    }
+                }
+            }
         }
     }
 
