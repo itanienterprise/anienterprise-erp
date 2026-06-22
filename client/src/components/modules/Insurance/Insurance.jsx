@@ -3,6 +3,44 @@ import { SearchIcon, PlusIcon, EditIcon, TrashIcon, ShieldIcon, XIcon, ChevronDo
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+const getLcInsuranceStatus = (lc, payments) => {
+    const lcNo = lc.lcNo;
+    const lcPayments = payments.filter(p => p.lcNo === lcNo);
+    
+    let premiumPaid = 0;
+    let returnCollected = 0;
+    
+    lcPayments.forEach(p => {
+        const amount = parseFloat(p.amount || 0);
+        const adj = parseFloat(p.adjustedAmount || 0);
+        if (p.type === 'Return Collection') {
+            returnCollected += amount;
+        } else {
+            premiumPaid += amount + adj;
+            if (p.isAdjustReturn) {
+                returnCollected += adj;
+            }
+        }
+    });
+
+    const grossPremium = parseFloat(lc.grossPremium || 0);
+    const netPremium = parseFloat(lc.netPremium || 0);
+    const expectedReturn = parseFloat(lc.expectedReturnAmount || 0);
+
+    const isPremiumPaidFully = premiumPaid >= (netPremium - 1) || premiumPaid >= (grossPremium - 1);
+    const isReturnCollectedFully = expectedReturn <= 0 || returnCollected >= (expectedReturn - 1);
+
+    if (isPremiumPaidFully && isReturnCollectedFully) {
+        return 'complete';
+    }
+    if (returnCollected > 0) {
+        return 'return recived';
+    }
+    if (premiumPaid > 0) {
+        return 'premium paid';
+    }
+    return 'not paid';
+};
 
 const Insurance = ({ onDeleteConfirm }) => {
     const [insuranceRecords, setInsuranceRecords] = useState([]);
@@ -22,6 +60,18 @@ const Insurance = ({ onDeleteConfirm }) => {
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [activeHistoryTab, setActiveHistoryTab] = useState('payments'); // 'payments' or 'lc'
 
+    // History Filter State
+    const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', lcNo: '' });
+    const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
+    const [historyFilterSearchInputs, setHistoryFilterSearchInputs] = useState({ lcNo: '' });
+    const [historyFilterDropdownOpen, setHistoryFilterDropdownOpen] = useState({ lcNo: false });
+
+    // Refs for filter panel and buttons
+    const filterCardRef = useRef(null);
+    const filterButtonDesktopRef = useRef(null);
+    const filterButtonMobileRef = useRef(null);
+    const lcNoFilterRef = useRef(null);
+
     const [formData, setFormData] = useState({
         companyName: '',
         address: '',
@@ -39,6 +89,27 @@ const Insurance = ({ onDeleteConfirm }) => {
 
     useEffect(() => {
         fetchInsurance();
+    }, []);
+
+    // Click-outside handlers for filter panel and LC No dropdown
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            // Close LC No dropdown if clicking outside
+            if (lcNoFilterRef.current && !lcNoFilterRef.current.contains(event.target)) {
+                setHistoryFilterDropdownOpen(prev => prev.lcNo ? { ...prev, lcNo: false } : prev);
+            }
+            // Close filter panel if clicking outside the card and outside both filter buttons
+            if (
+                filterCardRef.current &&
+                !filterCardRef.current.contains(event.target) &&
+                !filterButtonDesktopRef.current?.contains(event.target) &&
+                !filterButtonMobileRef.current?.contains(event.target)
+            ) {
+                setShowHistoryFilterPanel(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const fetchInsurance = async () => {
@@ -234,23 +305,57 @@ const Insurance = ({ onDeleteConfirm }) => {
         };
     }, [insuranceTotals, insuranceRecords, insurancePayments]);
 
-    // Filtered History for Modal
+    // Helper: unique LC numbers in this insurance company's payments
+    const getUniqueHistoryLcOptions = () => {
+        if (!viewData) return [];
+        const allLcs = viewData.history.map(p => (p.lcNo || '').trim()).filter(Boolean);
+        return [...new Set(allLcs)].sort();
+    };
+
+    // Filtered History for Modal (with date + lcNo filters applied)
     const filteredHistory = useMemo(() => {
         if (!viewData) return [];
         if (activeHistoryTab === 'payments') {
-            return viewData.history.filter(item =>
-                (item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-                (item.reference || '').toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-                (item.type || '').toLowerCase().includes(historySearchQuery.toLowerCase())
-            ).sort((a, b) => new Date(a.date) - new Date(b.date));
+            return viewData.history.filter(item => {
+                // Date filter
+                if (historyFilters.startDate || historyFilters.endDate) {
+                    const rowDate = new Date(item.date);
+                    if (historyFilters.startDate && rowDate < new Date(historyFilters.startDate)) return false;
+                    if (historyFilters.endDate && rowDate > new Date(historyFilters.endDate)) return false;
+                }
+                // LC No filter
+                if (historyFilters.lcNo && !(item.lcNo || '').toLowerCase().includes(historyFilters.lcNo.toLowerCase())) return false;
+                // Search query
+                const q = historySearchQuery.toLowerCase();
+                if (!q) return true;
+                return (
+                    (item.method || '').toLowerCase().includes(q) ||
+                    (item.reference || '').toLowerCase().includes(q) ||
+                    (item.type || '').toLowerCase().includes(q) ||
+                    (item.lcNo || '').toLowerCase().includes(q)
+                );
+            }).sort((a, b) => new Date(a.date) - new Date(b.date));
         } else {
             const companyLcs = insuranceTotals[viewData.companyName]?.lcs || [];
-            return companyLcs.filter(lc =>
-                (lc.lcNo || '').toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-                (lc.exporterName || '').toLowerCase().includes(historySearchQuery.toLowerCase())
-            ).sort((a, b) => new Date(a.openingDate) - new Date(b.openingDate));
+            return companyLcs.filter(lc => {
+                // Date filter
+                if (historyFilters.startDate || historyFilters.endDate) {
+                    const rowDate = new Date(lc.openingDate);
+                    if (historyFilters.startDate && rowDate < new Date(historyFilters.startDate)) return false;
+                    if (historyFilters.endDate && rowDate > new Date(historyFilters.endDate)) return false;
+                }
+                // LC No filter
+                if (historyFilters.lcNo && !(lc.lcNo || '').toLowerCase().includes(historyFilters.lcNo.toLowerCase())) return false;
+                // Search query
+                const q = historySearchQuery.toLowerCase();
+                if (!q) return true;
+                return (
+                    (lc.lcNo || '').toLowerCase().includes(q) ||
+                    (lc.exporterName || '').toLowerCase().includes(q)
+                );
+            }).sort((a, b) => new Date(a.openingDate) - new Date(b.openingDate));
         }
-    }, [viewData, historySearchQuery, activeHistoryTab, insuranceTotals]);
+    }, [viewData, historySearchQuery, activeHistoryTab, insuranceTotals, historyFilters]);
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -779,9 +884,9 @@ const Insurance = ({ onDeleteConfirm }) => {
             {viewData && (
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-0 md:p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setViewData(null)}></div>
-                    <div className="relative bg-white border-t md:border border-gray-100 rounded-t-[32px] md:rounded-2xl shadow-2xl w-full max-w-[1200px] flex flex-col h-[95vh] md:h-auto md:max-h-[90vh] animate-in slide-in-from-bottom md:zoom-in duration-300 overflow-hidden">
+                    <div className="relative bg-white border-t md:border border-gray-100 rounded-t-[32px] md:rounded-2xl shadow-2xl w-full max-w-[1200px] flex flex-col h-[95vh] md:h-auto md:max-h-[90vh] animate-in slide-in-from-bottom md:zoom-in duration-300">
 
-                        {/* Desktop Header: 100% Reverted */}
+                        {/* Desktop Header */}
                         <div className="hidden md:flex px-6 py-5 border-b border-gray-100 flex-row items-center justify-between gap-4 bg-white rounded-t-2xl z-10 sticky top-0">
                             <div className="flex-1 text-left">
                                 <h2 className="text-xl font-bold text-gray-900">{viewData.companyName}</h2>
@@ -814,14 +919,28 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 </div>
                             </div>
 
-                            <div className="flex-1 flex items-center justify-end">
+                            <div className="flex-1 flex items-center justify-end gap-2">
+                                <button
+                                    ref={filterButtonDesktopRef}
+                                    onClick={() => setShowHistoryFilterPanel(prev => !prev)}
+                                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all border ${
+                                        showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
+                                            ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30'
+                                            : 'bg-white border-gray-200 hover:border-blue-200 hover:bg-blue-50/30'
+                                    }`}
+                                    title="Advanced Filter"
+                                >
+                                    <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                </button>
+
                                 <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded-xl transition-all">
                                     <XIcon className="w-6 h-6" />
                                 </button>
                             </div>
                         </div>
 
-                        {/* Mobile Header: Premium Overhaul */}
+
+                        {/* Mobile Header */}
                         <div className="md:hidden px-6 pt-14 pb-6 border-b border-gray-100 bg-white rounded-t-[32px] z-20 sticky top-0">
                             <div className="flex items-start justify-between gap-4 mb-4">
                                 <div className="min-w-0 flex-1">
@@ -832,19 +951,34 @@ const Insurance = ({ onDeleteConfirm }) => {
                                     <XIcon className="w-6 h-6" />
                                 </button>
                             </div>
-                            <div className="flex flex-col gap-4">
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            <div className="flex flex-col gap-3">
+                                {/* Search + Filter button row */}
+                                <div className="flex gap-2">
+                                    <div className="relative group flex-1">
+                                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder={activeHistoryTab === 'payments' ? 'Search records...' : 'Search LC history...'}
+                                            value={historySearchQuery}
+                                            onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                            className="block w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-center"
+                                        />
                                     </div>
-                                    <input
-                                        type="text"
-                                        placeholder={activeHistoryTab === 'payments' ? 'Search records...' : 'Search LC history...'}
-                                        value={historySearchQuery}
-                                        onChange={(e) => setHistorySearchQuery(e.target.value)}
-                                        className="block w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-center"
-                                    />
+                                    <button
+                                        ref={filterButtonMobileRef}
+                                        onClick={() => setShowHistoryFilterPanel(prev => !prev)}
+                                        className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all border ${
+                                            showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '')
+                                                ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30'
+                                                : 'bg-white border-gray-200 hover:border-blue-200'
+                                        }`}
+                                    >
+                                        <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                    </button>
                                 </div>
+
                                 <div className="flex p-1 bg-gray-100 rounded-xl">
                                     {['payments', 'lcs'].map(tab => (
                                         <button
@@ -858,6 +992,99 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Filter Panel — desktop: absolute from modal container; mobile: fixed */}
+                        {showHistoryFilterPanel && (
+                            <>
+                                {/* Mobile backdrop */}
+                                <div
+                                    className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[2005] md:hidden"
+                                    onClick={() => setShowHistoryFilterPanel(false)}
+                                />
+                                <div
+                                    ref={filterCardRef}
+                                    className="fixed inset-x-4 top-24 md:absolute md:top-[80px] md:left-auto md:right-6 w-auto md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200"
+                                >
+                                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                                        <h4 className="font-bold text-gray-900 text-sm">Advanced Filter</h4>
+                                        <button
+                                            onClick={() => {
+                                                setHistoryFilters({ startDate: '', endDate: '', lcNo: '' });
+                                                setHistoryFilterSearchInputs({ lcNo: '' });
+                                            }}
+                                            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                                        >
+                                            Reset
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-4 text-left">
+                                        <div className="space-y-2">
+                                            <CustomDatePicker
+                                                label="From Date"
+                                                value={historyFilters.startDate}
+                                                onChange={(e) => setHistoryFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                compact={true}
+                                            />
+                                            <CustomDatePicker
+                                                label="To Date"
+                                                value={historyFilters.endDate}
+                                                onChange={(e) => setHistoryFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                compact={true}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5 relative" ref={lcNoFilterRef}>
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC NUMBER</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={historyFilterSearchInputs.lcNo}
+                                                    onChange={(e) => {
+                                                        setHistoryFilterSearchInputs(prev => ({ ...prev, lcNo: e.target.value }));
+                                                        setHistoryFilters(prev => ({ ...prev, lcNo: e.target.value }));
+                                                        setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true }));
+                                                    }}
+                                                    onFocus={() => setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true }))}
+                                                    placeholder={historyFilters.lcNo || 'Select LC No...'}
+                                                    className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
+                                                />
+                                                <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                            </div>
+                                            {historyFilterDropdownOpen.lcNo && (() => {
+                                                const opts = getUniqueHistoryLcOptions();
+                                                const filtered = opts.filter(opt => opt.toLowerCase().includes(historyFilterSearchInputs.lcNo.toLowerCase()));
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
+                                                        {filtered.map(opt => (
+                                                            <button
+                                                                key={opt}
+                                                                onMouseDown={(e) => {
+                                                                    e.preventDefault();
+                                                                    setHistoryFilters(prev => ({ ...prev, lcNo: opt }));
+                                                                    setHistoryFilterSearchInputs(prev => ({ ...prev, lcNo: '' }));
+                                                                    setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: false }));
+                                                                }}
+                                                                className="w-full px-4 py-1.5 text-left text-xs hover:bg-blue-50 transition-colors"
+                                                            >
+                                                                {opt}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+
+                                        <button
+                                            onClick={() => setShowHistoryFilterPanel(false)}
+                                            className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all shadow-lg active:scale-[0.98]"
+                                        >
+                                            APPLY FILTERS
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
 
                         {/* Modal Body */}
                         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8">
@@ -933,6 +1160,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Gross Premium</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Net Premium</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Exp. Return</th>
+                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
                                                 </tr>
                                             )}
                                         </thead>
@@ -984,11 +1212,41 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                             <td className="px-6 py-4 text-xs font-black text-blue-600 text-right">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-US')}</td>
                                                             <td className="px-6 py-4 text-xs font-black text-rose-600 text-right">৳{parseFloat(item.netPremium || 0).toLocaleString('en-US')}</td>
                                                             <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</td>
+                                                            <td className="px-6 py-4 text-xs text-center whitespace-nowrap">
+                                                                {(() => {
+                                                                    const status = getLcInsuranceStatus(item, insurancePayments);
+                                                                    if (status === 'complete') {
+                                                                        return (
+                                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
+                                                                                complete
+                                                                            </span>
+                                                                        );
+                                                                    } else if (status === 'return recived') {
+                                                                        return (
+                                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-600 border-amber-100/50">
+                                                                                return recived
+                                                                            </span>
+                                                                        );
+                                                                    } else if (status === 'premium paid') {
+                                                                        return (
+                                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
+                                                                                premium paid
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        return (
+                                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
+                                                                                not paid
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                })()}
+                                                            </td>
                                                         </tr>
                                                     );
                                                 })
                                             ) : (
-                                                <tr><td colSpan={activeHistoryTab === 'payments' ? 9 : 6} className="px-6 py-12 text-center text-gray-400 text-sm italic">No records found matching your search.</td></tr>
+                                                <tr><td colSpan={activeHistoryTab === 'payments' ? 9 : 7} className="px-6 py-12 text-center text-gray-400 text-sm italic">No records found matching your search.</td></tr>
                                             )}
                                         </tbody>
                                     </table>
@@ -1008,7 +1266,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                                 {activeHistoryTab === 'payments' ? `${item.method} ${item.reference ? `(${item.reference})` : ''}` : item.lcNo}
                                                             </p>
                                                         </div>
-                                                        {activeHistoryTab === 'payments' && (
+                                                        {activeHistoryTab === 'payments' ? (
                                                             item.isAdjustReturn ? (
                                                                 <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
                                                                     Adjust
@@ -1022,7 +1280,34 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                                     Paid
                                                                 </span>
                                                             )
-                                                        )}
+                                                        ) : (() => {
+                                                            const status = getLcInsuranceStatus(item, insurancePayments);
+                                                            if (status === 'complete') {
+                                                                return (
+                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
+                                                                        complete
+                                                                    </span>
+                                                                );
+                                                            } else if (status === 'return recived') {
+                                                                return (
+                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-600 border-amber-100/50">
+                                                                        return recived
+                                                                    </span>
+                                                                );
+                                                            } else if (status === 'premium paid') {
+                                                                return (
+                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
+                                                                        premium paid
+                                                                    </span>
+                                                                );
+                                                            } else {
+                                                                return (
+                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
+                                                                        not paid
+                                                                    </span>
+                                                                );
+                                                            }
+                                                        })()}
                                                     </div>
 
                                                     <div className="grid grid-cols-1 gap-2 pt-3 border-t border-gray-50">

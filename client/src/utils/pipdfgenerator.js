@@ -276,7 +276,7 @@ export const generatePIPDF = (record) => {
     }
     const termsHeight = termsRefLinesInRow2.length * 4;
     const saftaHeight = showSafta ? 12 : 0;
-    let row2Height = Math.max(55, 24 + termsHeight + saftaHeight);
+    let row2Height = Math.max(58, 24 + termsHeight + saftaHeight);
     doc.rect(margin, y, leftColWidth, row2Height); // Full Stack
     doc.rect(midX, y, rightColWidth, row2Height); // Right area
 
@@ -312,41 +312,41 @@ export const generatePIPDF = (record) => {
     doc.text(partyLines, margin + leftColWidth / 2, y + 17, { align: 'center' });
 
     // Shipping Section 1 (Compact)
-    doc.line(margin, y + 27, margin + leftColWidth, y + 27);
+    doc.line(margin, y + 29, margin + leftColWidth, y + 29);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text("Pre-Carriage by", margin + leftColWidth / 4, y + 30.5, { align: 'center' });
-    doc.text("Place of Receipt by Pre-Carrier", margin + (3 * leftColWidth / 4), y + 30.5, { align: 'center' });
+    doc.text("Pre-Carriage by", margin + leftColWidth / 4, y + 32.5, { align: 'center' });
+    doc.text("Place of Receipt by Pre-Carrier", margin + (3 * leftColWidth / 4), y + 32.5, { align: 'center' });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text(record.preCarriageBy || '', margin + leftColWidth / 4, y + 35, { align: 'center' });
-    doc.text(record.placeOfReceipt || record.placeOfReceiptByPreCarrier || '', margin + (3 * leftColWidth / 4), y + 35, { align: 'center' });
+    doc.text(record.preCarriageBy || '', margin + leftColWidth / 4, y + 37, { align: 'center' });
+    doc.text(record.placeOfReceipt || record.placeOfReceiptByPreCarrier || '', margin + (3 * leftColWidth / 4), y + 37, { align: 'center' });
 
     // Shipping Section 2 (Compact)
-    doc.line(margin, y + 36, margin + leftColWidth, y + 36);
+    doc.line(margin, y + 38, margin + leftColWidth, y + 38);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text("Vessel/Flight No.", margin + leftColWidth / 4, y + 39.5, { align: 'center' });
-    doc.text("Port of Loading", margin + (3 * leftColWidth / 4), y + 39.5, { align: 'center' });
+    doc.text("Vessel/Flight No.", margin + leftColWidth / 4, y + 41.5, { align: 'center' });
+    doc.text("Port of Loading", margin + (3 * leftColWidth / 4), y + 41.5, { align: 'center' });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text(record.vesselFlightNo || '', margin + leftColWidth / 4, y + 44, { align: 'center' });
-    doc.text(record.portOfLoading || 'ANY PLACE OF INDIA', margin + (3 * leftColWidth / 4), y + 44, { align: 'center' });
+    doc.text(record.vesselFlightNo || '', margin + leftColWidth / 4, y + 46, { align: 'center' });
+    doc.text(record.portOfLoading || 'ANY PLACE OF INDIA', margin + (3 * leftColWidth / 4), y + 46, { align: 'center' });
 
     // Shipping Section 3 (Compact)
-    doc.line(margin, y + 45, margin + leftColWidth, y + 45);
+    doc.line(margin, y + 47, margin + leftColWidth, y + 47);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text("Port of Discharge", margin + leftColWidth / 4, y + 48.5, { align: 'center' });
-    doc.text("Final Destination", margin + (3 * leftColWidth / 4), y + 48.5, { align: 'center' });
+    doc.text("Port of Discharge", margin + leftColWidth / 4, y + 50.5, { align: 'center' });
+    doc.text("Final Destination", margin + (3 * leftColWidth / 4), y + 50.5, { align: 'center' });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text(record.portOfDischarge || record.port || 'HILI', margin + leftColWidth / 4, y + 53, { align: 'center' });
-    doc.text(record.finalDestination || 'BANGLADESH', margin + (3 * leftColWidth / 4), y + 53, { align: 'center' });
-    doc.line(margin + (leftColWidth / 2), y + 27, margin + (leftColWidth / 2), y + row2Height);
+    doc.text(record.portOfDischarge || record.port || 'HILI', margin + leftColWidth / 4, y + 55, { align: 'center' });
+    doc.text(record.finalDestination || 'BANGLADESH', margin + (3 * leftColWidth / 4), y + 55, { align: 'center' });
+    doc.line(margin + (leftColWidth / 2), y + 29, margin + (leftColWidth / 2), y + row2Height);
 
     // Right Column Row 2 (Top Half): Buyer & Country Side-by-Side
     const subColWidthVal = rightColWidth / 2;

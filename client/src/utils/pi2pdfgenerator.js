@@ -222,7 +222,7 @@ export const generatePI2PDF = (record) => {
     }
     const termsHeight = termsLines.length * 4;
     const saftaHeight = showSafta ? 12 : 0;
-    let row2Height = Math.max(61, countrySectionHeight + 14 + termsHeight + saftaHeight);
+    let row2Height = Math.max(64, countrySectionHeight + 14 + termsHeight + saftaHeight);
     doc.rect(margin, y, leftColWidth, row2Height);
     doc.rect(midX, y, rightColWidth, row2Height);
 
@@ -251,31 +251,31 @@ export const generatePI2PDF = (record) => {
     doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
 
     // Shipping rows (left)
-    doc.line(margin, y + 31, margin + leftColWidth, y + 31);
+    doc.line(margin, y + 33, margin + leftColWidth, y + 33);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
-    doc.text("Pre-Carriage by", margin + leftColWidth / 4, y + 34.5, { align: 'center' });
-    doc.text("Place of Receipt by Pre-Carrier", margin + (3 * leftColWidth / 4), y + 34.5, { align: 'center' });
+    doc.text("Pre-Carriage by", margin + leftColWidth / 4, y + 36.5, { align: 'center' });
+    doc.text("Place of Receipt by Pre-Carrier", margin + (3 * leftColWidth / 4), y + 36.5, { align: 'center' });
     doc.setFontSize(8.5);
-    doc.text(record.preCarriageBy || '', margin + leftColWidth / 4, y + 39, { align: 'center' });
-    doc.text(record.placeOfReceipt || record.placeOfReceiptByPreCarrier || '', margin + (3 * leftColWidth / 4), y + 39, { align: 'center' });
+    doc.text(record.preCarriageBy || '', margin + leftColWidth / 4, y + 41, { align: 'center' });
+    doc.text(record.placeOfReceipt || record.placeOfReceiptByPreCarrier || '', margin + (3 * leftColWidth / 4), y + 41, { align: 'center' });
 
-    doc.line(margin, y + 41, margin + leftColWidth, y + 41);
+    doc.line(margin, y + 43, margin + leftColWidth, y + 43);
     doc.setFontSize(8.5);
-    doc.text("Vessel/Flight No.", margin + leftColWidth / 4, y + 44.5, { align: 'center' });
-    doc.text("Port of Loading", margin + (3 * leftColWidth / 4), y + 44.5, { align: 'center' });
+    doc.text("Vessel/Flight No.", margin + leftColWidth / 4, y + 46.5, { align: 'center' });
+    doc.text("Port of Loading", margin + (3 * leftColWidth / 4), y + 46.5, { align: 'center' });
     doc.setFontSize(8.5);
-    doc.text(record.vesselFlightNo || '', margin + leftColWidth / 4, y + 49, { align: 'center' });
-    doc.text(record.portOfLoading || 'ANY PLACE OF INDIA', margin + (3 * leftColWidth / 4), y + 49, { align: 'center' });
+    doc.text(record.vesselFlightNo || '', margin + leftColWidth / 4, y + 51, { align: 'center' });
+    doc.text(record.portOfLoading || 'ANY PLACE OF INDIA', margin + (3 * leftColWidth / 4), y + 51, { align: 'center' });
 
-    doc.line(margin, y + 51, margin + leftColWidth, y + 51);
+    doc.line(margin, y + 53, margin + leftColWidth, y + 53);
     doc.setFontSize(8.5);
-    doc.text("Port of Discharge", margin + leftColWidth / 4, y + 54.5, { align: 'center' });
-    doc.text("Final Destination", margin + (3 * leftColWidth / 4), y + 54.5, { align: 'center' });
+    doc.text("Port of Discharge", margin + leftColWidth / 4, y + 56.5, { align: 'center' });
+    doc.text("Final Destination", margin + (3 * leftColWidth / 4), y + 56.5, { align: 'center' });
     doc.setFontSize(8.5);
-    doc.text(record.portOfDischarge || record.port || 'HILI', margin + leftColWidth / 4, y + 59, { align: 'center' });
-    doc.text(record.finalDestination || 'BANGLADESH', margin + (3 * leftColWidth / 4), y + 59, { align: 'center' });
-    doc.line(margin + (leftColWidth / 2), y + 31, margin + (leftColWidth / 2), y + row2Height);
+    doc.text(record.portOfDischarge || record.port || 'HILI', margin + leftColWidth / 4, y + 61, { align: 'center' });
+    doc.text(record.finalDestination || 'BANGLADESH', margin + (3 * leftColWidth / 4), y + 61, { align: 'center' });
+    doc.line(margin + (leftColWidth / 2), y + 33, margin + (leftColWidth / 2), y + row2Height);
 
     // Right: Country of Origin / Final Destination
     const subW = rightColWidth / 2;
