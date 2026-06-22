@@ -916,12 +916,14 @@ const Insurance = ({ onDeleteConfirm }) => {
                                             {activeHistoryTab === 'payments' ? (
                                                 <tr>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Type</th>
+                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">LC No</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Method</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Reference</th>
-                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Adjusted Amount</th>
-                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Paid Amount</th>
-                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Total Amount</th>
+                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Gross Premium</th>
+                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Return Amount</th>
+                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Paid</th>
+                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Adjusted</th>
+                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
                                                 </tr>
                                             ) : (
                                                 <tr>
@@ -936,23 +938,42 @@ const Insurance = ({ onDeleteConfirm }) => {
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
                                             {filteredHistory.length > 0 ? (
-                                                filteredHistory.map((item, idx) => (
-                                                    activeHistoryTab === 'payments' ? (
+                                                filteredHistory.map((item, idx) => {
+                                                    const lc = lcRecords.find(l => l.lcNo === item.lcNo);
+                                                    return activeHistoryTab === 'payments' ? (
                                                         <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
                                                             <td className="px-6 py-4 text-xs font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
-                                                            <td className="px-6 py-4 text-xs whitespace-nowrap text-nowrap">
-                                                                <span className={`px-2 py-0.5 rounded-full font-bold ${item.type === 'Return Collection' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-                                                                    {item.type}
-                                                                </span>
-                                                            </td>
+                                                            <td className="px-6 py-4 text-xs font-bold text-gray-500 whitespace-nowrap">{item.lcNo || '-'}</td>
                                                             <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">{item.method}</td>
-                                                            <td className="px-6 py-4 text-xs text-gray-500 italic truncate max-w-[120px]" title={item.reference}>{item.reference || 'No Reference'}</td>
+                                                            <td className="px-6 py-4 text-xs text-gray-500 italic truncate max-w-[120px]" title={item.reference}>{item.reference || '-'}</td>
                                                             <td className="px-6 py-4 text-xs font-bold text-blue-600 text-right whitespace-nowrap">
-                                                                {item.adjustedAmount > 0 ? `৳${item.adjustedAmount.toLocaleString('en-IN')}` : '-'}
+                                                                {lc ? `৳${(parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN')}` : '-'}
                                                             </td>
-                                                            <td className="px-6 py-4 text-xs font-bold text-gray-700 text-right whitespace-nowrap">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
-                                                            <td className="px-6 py-4 text-xs font-black text-gray-900 text-right bg-gray-50/30 whitespace-nowrap">
-                                                                ৳{((parseFloat(item.amount || 0)) + (parseFloat(item.adjustedAmount || 0))).toLocaleString('en-IN')}
+                                                            <td className="px-6 py-4 text-xs font-bold text-indigo-600 text-right whitespace-nowrap">
+                                                                {(item.isAdjustReturn || item.type === 'Return Collection')
+                                                                    ? (lc ? `৳${(parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN')}` : '-')
+                                                                    : '৳0'}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-xs font-bold text-gray-700 text-right whitespace-nowrap">
+                                                                {item.type === 'Return Collection' ? '৳0' : `৳${(parseFloat(item.amount) || 0).toLocaleString('en-IN')}`}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-xs font-bold text-rose-600 text-right whitespace-nowrap">
+                                                                {item.adjustedAmount > 0 ? `৳${(parseFloat(item.adjustedAmount) || 0).toLocaleString('en-IN')}` : '-'}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-xs text-center whitespace-nowrap">
+                                                                {item.isAdjustReturn ? (
+                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
+                                                                        Adjust
+                                                                    </span>
+                                                                ) : item.type === 'Return Collection' ? (
+                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
+                                                                        Return
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
+                                                                        Paid
+                                                                    </span>
+                                                                )}
                                                             </td>
                                                         </tr>
                                                     ) : (
@@ -964,10 +985,10 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                             <td className="px-6 py-4 text-xs font-black text-rose-600 text-right">৳{parseFloat(item.netPremium || 0).toLocaleString('en-US')}</td>
                                                             <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</td>
                                                         </tr>
-                                                    )
-                                                ))
+                                                    );
+                                                })
                                             ) : (
-                                                <tr><td colSpan={activeHistoryTab === 'payments' ? 7 : 6} className="px-6 py-12 text-center text-gray-400 text-sm italic">No records found matching your search.</td></tr>
+                                                <tr><td colSpan={activeHistoryTab === 'payments' ? 9 : 6} className="px-6 py-12 text-center text-gray-400 text-sm italic">No records found matching your search.</td></tr>
                                             )}
                                         </tbody>
                                     </table>
@@ -976,59 +997,86 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 {/* Mobile History Cards */}
                                 <div className="md:hidden space-y-4">
                                     {filteredHistory.length > 0 ? (
-                                        filteredHistory.map((item, idx) => (
-                                            <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                                                <div className="flex justify-between items-start">
-                                                    <div className="space-y-1">
-                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{activeHistoryTab === 'payments' ? formatDate(item.date) : formatDate(item.openingDate)}</p>
-                                                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight">{activeHistoryTab === 'payments' ? item.method : item.lcNo}</p>
+                                        filteredHistory.map((item, idx) => {
+                                            const lc = lcRecords.find(l => l.lcNo === item.lcNo);
+                                            return (
+                                                <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="space-y-1">
+                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{activeHistoryTab === 'payments' ? formatDate(item.date) : formatDate(item.openingDate)}</p>
+                                                            <p className="text-sm font-black text-gray-900 uppercase tracking-tight">
+                                                                {activeHistoryTab === 'payments' ? `${item.method} ${item.reference ? `(${item.reference})` : ''}` : item.lcNo}
+                                                            </p>
+                                                        </div>
+                                                        {activeHistoryTab === 'payments' && (
+                                                            item.isAdjustReturn ? (
+                                                                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
+                                                                    Adjust
+                                                                </span>
+                                                            ) : item.type === 'Return Collection' ? (
+                                                                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
+                                                                    Return
+                                                                </span>
+                                                            ) : (
+                                                                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
+                                                                    Paid
+                                                                </span>
+                                                            )
+                                                        )}
                                                     </div>
-                                                    {activeHistoryTab === 'payments' && (
-                                                        <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${item.type === 'Return Collection' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-                                                            {item.type}
-                                                        </span>
-                                                    )}
-                                                </div>
 
-                                                <div className="grid grid-cols-1 gap-2 pt-3 border-t border-gray-50">
-                                                    {activeHistoryTab === 'payments' ? (
-                                                        <>
-                                                            <div className="flex justify-between">
-                                                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Adjusted</span>
-                                                                <span className="text-sm font-bold text-blue-600">৳{parseFloat(item.adjustedAmount || 0).toLocaleString('en-IN')}</span>
-                                                            </div>
-                                                            <div className="flex justify-between">
-                                                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Paid</span>
-                                                                <span className="text-sm font-bold text-gray-700">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</span>
-                                                            </div>
-                                                            <div className="flex justify-between pt-1 border-t border-gray-50 mt-1">
-                                                                <span className="text-[11px] font-black text-gray-800 uppercase tracking-widest">Total</span>
-                                                                <span className="text-base font-black text-gray-900 uppercase">৳{((parseFloat(item.amount || 0)) + (parseFloat(item.adjustedAmount || 0))).toLocaleString('en-IN')}</span>
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <div className="flex justify-between">
-                                                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Beneficiary</span>
-                                                                <span className="text-sm font-bold text-gray-700 truncate ml-4 text-right">{item.exporterName}</span>
-                                                            </div>
-                                                            <div className="flex justify-between">
-                                                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Gross Premium</span>
-                                                                <span className="text-sm font-black text-blue-600">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-IN')}</span>
-                                                            </div>
-                                                            <div className="flex justify-between">
-                                                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Net Premium</span>
-                                                                <span className="text-sm font-black text-rose-600">৳{parseFloat(item.netPremium || 0).toLocaleString('en-IN')}</span>
-                                                            </div>
-                                                            <div className="flex justify-between">
-                                                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Exp. Return</span>
-                                                                <span className="text-sm font-black text-emerald-600">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</span>
-                                                            </div>
-                                                        </>
-                                                    )}
+                                                    <div className="grid grid-cols-1 gap-2 pt-3 border-t border-gray-50">
+                                                        {activeHistoryTab === 'payments' ? (
+                                                            <>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">LC No</span>
+                                                                    <span className="text-sm font-bold text-gray-700">{item.lcNo || '-'}</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Gross Premium</span>
+                                                                    <span className="text-sm font-bold text-blue-600">৳{lc ? (parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN') : '-'}</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Return Amount</span>
+                                                                    <span className="text-sm font-bold text-indigo-600">
+                                                                        ৳{(item.isAdjustReturn || item.type === 'Return Collection')
+                                                                            ? (lc ? (parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN') : '-')
+                                                                            : '0'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Paid</span>
+                                                                    <span className="text-sm font-bold text-gray-700">৳{item.type === 'Return Collection' ? '0' : (parseFloat(item.amount) || 0).toLocaleString('en-IN')}</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Adjusted</span>
+                                                                    <span className="text-sm font-bold text-rose-600">{item.adjustedAmount > 0 ? `৳${parseFloat(item.adjustedAmount).toLocaleString('en-IN')}` : '-'}</span>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Beneficiary</span>
+                                                                    <span className="text-sm font-bold text-gray-700 truncate ml-4 text-right">{item.exporterName}</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Gross Premium</span>
+                                                                    <span className="text-sm font-black text-blue-600">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-IN')}</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Net Premium</span>
+                                                                    <span className="text-sm font-black text-rose-600">৳{parseFloat(item.netPremium || 0).toLocaleString('en-IN')}</span>
+                                                                </div>
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Exp. Return</span>
+                                                                    <span className="text-sm font-black text-emerald-600">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</span>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     ) : (
                                         <div className="bg-white p-12 text-center rounded-2xl border border-gray-100 shadow-sm text-gray-400 italic text-sm">No records found matching your search.</div>
                                     )}

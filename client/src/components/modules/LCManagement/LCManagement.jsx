@@ -611,7 +611,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     if (insBillAmt > 0) {
         const paidAmt = insurancePayments
             .filter(p => p.lcNo === data.lcNo && p.type !== 'Return Collection')
-            .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+            .reduce((sum, p) => sum + (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0), 0);
 
         const paid = Math.min(paidAmt, insBillAmt);
         let status = "Unpaid";

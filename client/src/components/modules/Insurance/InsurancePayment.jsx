@@ -489,8 +489,8 @@ const InsurancePayment = () => {
                 /* Add/Edit Form Card */
                 <div className="relative group mb-8">
                     <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[2.5rem] blur opacity-5 group-hover:opacity-10 transition duration-1000"></div>
-                    <div className="relative bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-500">
-                        <div className="px-8 py-6 border-b border-gray-100/50 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-white">
+                    <div className="relative bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl animate-in slide-in-from-top-4 duration-500">
+                        <div className="px-8 py-6 border-b border-gray-100/50 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-white rounded-t-[2rem]">
                             <div>
                                 <h3 className="text-lg font-black text-gray-900 tracking-tight">{isEditMode ? 'Edit Insurance Payment' : 'New Insurance Payment'}</h3>
                                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Insurance Financial Record</p>
@@ -949,46 +949,71 @@ const InsurancePayment = () => {
                                         </th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider">Method</th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider">Reference</th>
-                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Adjust Paid Amount</th>
-                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">
-                                            Paid Amount
-                                        </th>
-                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Total Amount</th>
+                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Gross Premium</th>
+                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Return Amount</th>
+                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Paid</th>
+                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Adjusted</th>
+                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Status</th>
                                         {isAdmin && <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoading ? (
-                                        <tr><td colSpan={isAdmin ? 9 : 8} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
+                                        <tr><td colSpan={isAdmin ? 11 : 10} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
                                     ) : filteredPayments.length === 0 ? (
-                                        <tr><td colSpan={isAdmin ? 9 : 8} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
+                                        <tr><td colSpan={isAdmin ? 11 : 10} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
                                     ) : (
-                                        filteredPayments.map((p) => (
-                                            <tr key={p._id} className="hover:bg-gray-50/50 transition-colors group">
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-700">{formatDate(p.date)}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    <div className="font-bold text-gray-900">{p.companyName}</div>
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.lcNo || '-'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500 truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-blue-600">
-                                                    {p.adjustedAmount > 0 ? `৳${p.adjustedAmount.toLocaleString('en-IN')}` : '-'}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-gray-700">৳{p.amount.toLocaleString('en-IN')}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-right font-black text-gray-900 bg-gray-50/30">
-                                                    ৳{((p.amount || 0) + (p.adjustedAmount || 0)).toLocaleString('en-IN')}
-                                                </td>
-                                                {isAdmin && (
-                                                    <td className="px-4 py-3 whitespace-nowrap text-center">
-                                                        <div className="flex items-center justify-center gap-2">
-                                                            <button onClick={() => handleEditPayment(p)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleDeletePayment(p)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
-                                                        </div>
+                                        filteredPayments.map((p) => {
+                                            const lc = lcs.find(l => l.lcNo === p.lcNo);
+                                            return (
+                                                <tr key={p._id} className="hover:bg-gray-50/50 transition-colors group">
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-700">{formatDate(p.date)}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <div className="font-bold text-gray-900">{p.companyName}</div>
                                                     </td>
-                                                )}
-                                            </tr>
-                                        ))
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.lcNo || '-'}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500 truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-blue-600">
+                                                        {lc ? `৳${(parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN')}` : '-'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-indigo-600">
+                                                        {(p.isAdjustReturn || p.type === 'Return Collection')
+                                                            ? (lc ? `৳${(parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN')}` : '-')
+                                                            : '৳0'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-gray-700">
+                                                        {p.type === 'Return Collection' ? '৳0' : `৳${p.amount.toLocaleString('en-IN')}`}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-rose-600">
+                                                        {p.adjustedAmount > 0 ? `৳${p.adjustedAmount.toLocaleString('en-IN')}` : '-'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-center">
+                                                        {p.isAdjustReturn ? (
+                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
+                                                                Adjust
+                                                            </span>
+                                                        ) : p.type === 'Return Collection' ? (
+                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
+                                                                Return
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
+                                                                Paid
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    {isAdmin && (
+                                                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <button onClick={() => handleEditPayment(p)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
+                                                                <button onClick={() => handleDeletePayment(p)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            );
+                                        })
                                     )}
                                 </tbody>
                             </table>
