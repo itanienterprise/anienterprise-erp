@@ -941,6 +941,12 @@ const InsurancePayment = () => {
                                                 <SortIcon config={sortConfig} columnKey="companyName" />
                                             </div>
                                         </th>
+                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('lcNo')}>
+                                            <div className="flex items-center gap-1">
+                                                <span>LC No</span>
+                                                <SortIcon config={sortConfig} columnKey="lcNo" />
+                                            </div>
+                                        </th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider">Method</th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider">Reference</th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Adjust Paid Amount</th>
@@ -953,9 +959,9 @@ const InsurancePayment = () => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoading ? (
-                                        <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
+                                        <tr><td colSpan={isAdmin ? 9 : 8} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
                                     ) : filteredPayments.length === 0 ? (
-                                        <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
+                                        <tr><td colSpan={isAdmin ? 9 : 8} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
                                     ) : (
                                         filteredPayments.map((p) => (
                                             <tr key={p._id} className="hover:bg-gray-50/50 transition-colors group">
@@ -963,6 +969,7 @@ const InsurancePayment = () => {
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     <div className="font-bold text-gray-900">{p.companyName}</div>
                                                 </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.lcNo || '-'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500 truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-blue-600">
