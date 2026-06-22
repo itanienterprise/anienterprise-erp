@@ -225,6 +225,15 @@ const SaleManagement = ({
         return sale.rateMissing === true && sale.isEdited !== true;
     };
 
+    const canEditRequestedSale = (sale) => {
+        if (!currentUser) return false;
+        if (currentUser.username === 'admin') return true;
+        const role = (currentUser.role || '').toLowerCase();
+        if (role === 'admin') return true;
+        const owner = sale.requestedByUsername;
+        return owner === currentUser.username;
+    };
+
     const isFieldReadOnly = (value) => {
         if (isFullAdmin) return false;
         if (!editingId) return false; // New entries are always editable
@@ -4425,7 +4434,9 @@ const SaleManagement = ({
                                                         {sale.status === 'Requested' ? (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                {canEditRequestedSale(sale) && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                )}
                                                                 {canApprove && (
                                                                     <>
                                                                         <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
@@ -4436,11 +4447,8 @@ const SaleManagement = ({
                                                         ) : (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
-                                                                {(isFullAdmin || canUserEditSale(sale)) && (
-                                                                    <>
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                                        {isFullAdmin && <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>}
-                                                                    </>
+                                                                {isFullAdmin && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
                                                                 )}
                                                             </>
                                                         )}
@@ -4603,7 +4611,7 @@ const SaleManagement = ({
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                            {(isFullAdmin || canUserEditSale(sale)) && (
+                                                            {canEditRequestedSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                             )}
                                                             {canApprove && (
@@ -4616,11 +4624,8 @@ const SaleManagement = ({
                                                     ) : (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="Invoice"><FileTextIcon className="w-4 h-4" /></button>
-                                                            {(isFullAdmin || canUserEditSale(sale)) && (
-                                                                <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 hover:bg-blue-100 text-blue-600 rounded-xl transition-all" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                                    {isFullAdmin && <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>}
-                                                                </>
+                                                            {isFullAdmin && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 hover:bg-red-100 text-red-600 rounded-xl transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
                                                             )}
                                                         </>
                                                     )}
@@ -4721,7 +4726,7 @@ const SaleManagement = ({
                                                     {sale.status === 'Requested' ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
-                                                            {(isFullAdmin || canUserEditSale(sale)) && (
+                                                            {canEditRequestedSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
                                                             )}
                                                             {canApprove && (
@@ -4734,11 +4739,8 @@ const SaleManagement = ({
                                                     ) : (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
-                                                            {(isFullAdmin || canUserEditSale(sale)) && (
-                                                                <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 bg-blue-50 text-blue-600 rounded-lg transition-colors hover:bg-blue-100"><EditIcon className="w-4 h-4" /></button>
-                                                                    {isFullAdmin && <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>}
-                                                                </>
+                                                            {isFullAdmin && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
                                                             )}
                                                         </>
                                                     )}

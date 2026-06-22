@@ -452,8 +452,30 @@ apiRouter.post('/api/stock', async (req, res) => {
 
 apiRouter.delete('/api/stock/:id', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    const isAdmin = userSession && (userSession.username === 'admin' || (userSession.role || '').toLowerCase() === 'admin');
+
+    const existingStock = await Stock.findById(req.params.id);
+    if (!existingStock) return res.status(404).json({ message: 'Item not found' });
+
+    let existingData = decryptData(existingStock.data);
+    if (existingData && existingData.data && typeof existingData.data === 'string' && !existingData.productName) {
+      try { existingData = decryptData(existingData.data); } catch (e) { }
+    }
+
+    if (existingData && existingData.status === 'Requested') {
+      const ownerUsername = existingData.requestedByUsername;
+      const currentUsername = userSession ? userSession.username : null;
+      if (!isAdmin && currentUsername !== ownerUsername) {
+        return res.status(403).json({ message: 'Forbidden: Only the owner of the requested stock entry can delete it.' });
+      }
+    } else {
+      if (!isAdmin) {
+        return res.status(403).json({ message: 'Forbidden: Admin access required to delete accepted stock entries.' });
+      }
+    }
+
     const deletedStock = await Stock.findByIdAndDelete(req.params.id);
-    if (!deletedStock) return res.status(404).json({ message: 'Item not found' });
     res.json({ message: 'Item deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -462,9 +484,35 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
 
 apiRouter.put('/api/stock/:id', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    const isAdmin = userSession && (userSession.username === 'admin' || (userSession.role || '').toLowerCase() === 'admin');
+
+    const existingStock = await Stock.findById(req.params.id);
+    if (!existingStock) return res.status(404).json({ message: 'Item not found' });
+
+    let existingData = decryptData(existingStock.data);
+    if (existingData && existingData.data && typeof existingData.data === 'string' && !existingData.productName) {
+      try { existingData = decryptData(existingData.data); } catch (e) { }
+    }
+
+    if (existingData && existingData.status === 'Requested') {
+      const isStatusChange = req.body.status !== existingData.status;
+      if (isStatusChange) {
+        const canApprove = userSession && (['admin', 'incharge', 'sales manager'].includes((userSession.role || '').toLowerCase()) || userSession.username === 'admin');
+        if (!canApprove) {
+          return res.status(403).json({ message: 'Forbidden: You do not have permission to approve/reject requested entries.' });
+        }
+      } else {
+        const ownerUsername = existingData.requestedByUsername;
+        const currentUsername = userSession ? userSession.username : null;
+        if (!isAdmin && currentUsername !== ownerUsername) {
+          return res.status(403).json({ message: 'Forbidden: Only the owner of the requested stock entry can edit it.' });
+        }
+      }
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedStock = await Stock.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
-    if (!updatedStock) return res.status(404).json({ message: 'Item not found' });
     res.json(req.body);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -786,8 +834,30 @@ apiRouter.post('/api/sales', async (req, res) => {
 
 apiRouter.delete('/api/sales/:id', async (req, res) => {
   try {
-    const deletedSale = await Sale.findByIdAndDelete(req.params.id);
-    if (!deletedSale) return res.status(404).json({ message: 'Sale not found' });
+    const userSession = req.session.user;
+    const isAdmin = userSession && (userSession.username === 'admin' || (userSession.role || '').toLowerCase() === 'admin');
+
+    const existingSale = await Sale.findById(req.params.id);
+    if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
+
+    let existingData = decryptData(existingSale.data);
+    if (existingData && existingData.data && typeof existingData.data === 'string' && !existingData.invoiceNo) {
+      try { existingData = decryptData(existingData.data); } catch (e) { }
+    }
+
+    if (existingData && existingData.status === 'Requested') {
+      const ownerUsername = existingData.requestedByUsername;
+      const currentUsername = userSession ? userSession.username : null;
+      if (!isAdmin && currentUsername !== ownerUsername) {
+        return res.status(403).json({ message: 'Forbidden: Only the owner of the requested sale can delete it.' });
+      }
+    } else {
+      if (!isAdmin) {
+        return res.status(403).json({ message: 'Forbidden: Admin access required to delete accepted sales.' });
+      }
+    }
+
+    await Sale.findByIdAndDelete(req.params.id);
     res.json({ message: 'Sale deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -807,23 +877,39 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
       try { existingData = decryptData(existingData.data); } catch (e) { }
     }
 
-    if (!isAdmin) {
-      if (req.body.isCnfCommissionUpdate) {
-        // Allow C&F commission updates to bypass the general rate missing and edit locks
+    if (existingData && existingData.status === 'Requested') {
+      const isStatusChange = req.body.status !== existingData.status;
+      if (isStatusChange) {
+        const canApprove = userSession && (['admin', 'incharge', 'sales manager'].includes((userSession.role || '').toLowerCase()) || userSession.username === 'admin');
+        if (!canApprove) {
+          return res.status(403).json({ message: 'Forbidden: You do not have permission to approve/reject requested entries.' });
+        }
       } else {
-        const wasRateMissing = existingData.rateMissing === true;
-        const alreadyEdited = existingData.isEdited === true;
-
-        if (!wasRateMissing) {
-          return res.status(403).json({ message: 'Forbidden: You cannot edit a sale entry that already has a rate.' });
+        const ownerUsername = existingData.requestedByUsername;
+        const currentUsername = userSession ? userSession.username : null;
+        if (!isAdmin && currentUsername !== ownerUsername) {
+          return res.status(403).json({ message: 'Forbidden: Only the owner of the requested sale can edit it before acceptance.' });
         }
-        if (alreadyEdited) {
-          return res.status(403).json({ message: 'Forbidden: You have already edited this entry once.' });
-        }
+      }
+    } else {
+      if (!isAdmin) {
+        if (req.body.isCnfCommissionUpdate) {
+          // Allow C&F commission updates to bypass the general rate missing and edit locks
+        } else {
+          const wasRateMissing = existingData.rateMissing === true;
+          const alreadyEdited = existingData.isEdited === true;
 
-        // Mark as edited for non-admin
-        req.body.isEdited = true;
-        req.body.rateMissing = true; // Preserve the flag
+          if (!wasRateMissing) {
+            return res.status(403).json({ message: 'Forbidden: You cannot edit a sale entry that already has a rate.' });
+          }
+          if (alreadyEdited) {
+            return res.status(403).json({ message: 'Forbidden: You have already edited this entry once.' });
+          }
+
+          // Mark as edited for non-admin
+          req.body.isEdited = true;
+          req.body.rateMissing = true; // Preserve the flag
+        }
       }
     }
 

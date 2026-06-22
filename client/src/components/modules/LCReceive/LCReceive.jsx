@@ -435,6 +435,15 @@ function LCReceive({
         const role = (currentUser.role || '').toLowerCase();
         return role === 'admin';
     }, [currentUser]);
+
+    const canEditRequestedStock = (entry) => {
+        if (!currentUser) return false;
+        if (currentUser.username === 'admin') return true;
+        const role = (currentUser.role || '').toLowerCase();
+        if (role === 'admin') return true;
+        const owner = entry?.entries?.[0]?.requestedByUsername || entry?.requestedByUsername;
+        return owner === currentUser.username;
+    };
     const exporterRef = useRef(null);
     const indCnfRef = useRef(null);
     const bdCnfRef = useRef(null);
@@ -3482,9 +3491,11 @@ function LCReceive({
 
                                                             {entry.entries[0]?.status === 'Requested' ? (
                                                                 <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
+                                                                    {canEditRequestedStock(entry) && (
+                                                                         <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
                                                                         <EditIcon className="w-5 h-5" />
                                                                     </button>
+                                                                     )}
                                                                     {canApprove && (
                                                                         <>
                                                                             <button
@@ -3632,13 +3643,15 @@ function LCReceive({
 
                                                             {entry.entries[0]?.status === 'Requested' ? (
                                                                 <>
-                                                                    <button
+                                                                    {canEditRequestedStock(entry) && (
+                                                                         <button
                                                                         onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
                                                                         className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
                                                                         title="Edit"
                                                                     >
                                                                         <EditIcon className="w-4 h-4" />
                                                                     </button>
+                                                                     )}
                                                                     {canApprove && (
                                                                         <>
                                                                             <button
