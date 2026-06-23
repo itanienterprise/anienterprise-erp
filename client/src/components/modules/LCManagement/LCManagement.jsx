@@ -2659,28 +2659,8 @@ export const getLCHistoryTimeline = (lc) => {
                 baseAmount = parseFloat(item.totalAmount) || 0;
             } else {
                 const prevMilestone = idx > 0 ? baseTimeline[idx - 1] : null;
-                const prevQty = prevMilestone ? getMilestoneTotalQty(prevMilestone) : 0;
-                const prevRVal = prevMilestone ? parseFloat(prevMilestone.rate || 0) : 0;
-                const prevRateScaled = prevRVal > 0 ? (prevRVal < 10 ? prevRVal * 1000 : prevRVal) : 0;
-                const prevProducts = prevMilestone?.productsList?.length > 0
-                    ? prevMilestone.productsList
-                    : (lc.productsList?.length > 0 ? lc.productsList : []);
-                const prevFVal = parseFloat(prevProducts[0]?.freight || lc.freight || 0);
-                const prevFreightPerTon = prevFVal < 0.1 ? prevFVal * 1000 : prevFVal;
-
-                const prevDollarValue = prevQty * (prevRateScaled + prevFreightPerTon);
-
-                const activeQty = getMilestoneTotalQty(item);
-                const rVal = parseFloat(item.rate || 0);
-                const ratePerTon = rVal < 10 ? rVal * 1000 : rVal;
-
-                const activeProducts = item.productsList?.length > 0
-                    ? item.productsList
-                    : (lc.productsList?.length > 0 ? lc.productsList : []);
-                const fVal = parseFloat(activeProducts[0]?.freight || lc.freight || 0);
-                const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
-
-                const newDollarValue = activeQty * (ratePerTon + freightPerTon);
+                const prevDollarValue = getMilestoneTotalDollar(prevMilestone, lc);
+                const newDollarValue = getMilestoneTotalDollar(item, lc);
                 const diffDollar = newDollarValue - prevDollarValue;
                 const dollarRate = parseFloat(item.dollarRate || lc.dollarRate || 0);
                 const diffAmount = diffDollar * dollarRate;
@@ -2782,7 +2762,7 @@ const syncRootFromProductsList = (state) => {
         state.productName = first.productName || '';
         state.hsCode = first.hsCode || '';
         state.quantity = first.quantity || '';
-        state.rate = first.rate || '';
+        state.rate = first ? String((parseFloat(first.rate) || 0) + (parseFloat(first.freight) || 0)) : '';
     }
     // Sum totalDollar across ALL product lines
     const sumDollar = products.reduce((acc, p) => acc + (parseFloat(p.totalDollar) || 0), 0);
@@ -2836,6 +2816,54 @@ const syncBankBills = (state) => {
     return state;
 };
 
+const getMilestoneTotalQty = (mil) => {
+    if (!mil) return 0;
+    if (mil.productsList && mil.productsList.length > 0) {
+        return mil.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+    }
+    return parseFloat(mil.quantity || 0);
+};
+
+const getMilestoneTotalDollar = (mil, defaultLc) => {
+    if (!mil) return 0;
+    if (mil.totalDollar) {
+        const val = parseFloat(mil.totalDollar);
+        if (val > 0) return val;
+    }
+    const products = mil.productsList?.length > 0 ? mil.productsList : [];
+    if (products.length > 0) {
+        return products.reduce((acc, p) => {
+            const q = parseFloat(p.quantity) || 0;
+            const r = parseFloat(p.rate) || 0;
+            const f = parseFloat(p.freight) || 0;
+            const rScaled = r > 0 ? (r < 10 ? r * 1000 : r) : 0;
+            const fScaled = f < 0.1 ? f * 1000 : f;
+            return acc + q * (rScaled + fScaled);
+        }, 0);
+    }
+    const qty = parseFloat(mil.quantity || 0);
+    const rVal = parseFloat(mil.rate || 0);
+    const rateScaled = rVal > 0 ? (rVal < 10 ? rVal * 1000 : rVal) : 0;
+    return qty * rateScaled;
+};
+
+const getMilestoneRate = (mil, defaultLc) => {
+    if (!mil) return 0;
+    const products = mil.productsList?.length > 0
+        ? mil.productsList
+        : (defaultLc?.productsList?.length > 0 ? defaultLc.productsList : []);
+    if (products.length > 0) {
+        const first = products[0];
+        const r = parseFloat(first.rate || 0);
+        const f = parseFloat(first.freight || 0);
+        const rScaled = r > 0 ? (r < 10 ? r * 1000 : r) : 0;
+        const fScaled = f < 0.1 ? f * 1000 : f;
+        return rScaled + fScaled;
+    }
+    const rVal = parseFloat(mil.rate || 0);
+    return rVal > 0 ? (rVal < 10 ? rVal * 1000 : rVal) : 0;
+};
+
 const calculateAmendmentBillsValue = (state, lc, banksRaw, editingAmendmentNo = '') => {
     if (!lc) return {
         amendmentMargin: '',
@@ -2876,14 +2904,6 @@ const calculateAmendmentBillsValue = (state, lc, banksRaw, editingAmendmentNo = 
         : (selectedBranch?.amendmentVatOnSwift !== undefined && selectedBranch?.amendmentVatOnSwift !== '' ? parseFloat(selectedBranch.amendmentVatOnSwift) : 0);
 
     const currentAmendments = [...(lc.amendments || [])];
-    const getMilestoneTotalQty = (mil) => {
-        if (!mil) return 0;
-        if (mil.productsList && mil.productsList.length > 0) {
-            return mil.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
-        }
-        return parseFloat(mil.quantity || 0);
-    };
-
     const prevMilestone = editingAmendmentNo
         ? (() => {
             const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
@@ -2891,7 +2911,6 @@ const calculateAmendmentBillsValue = (state, lc, banksRaw, editingAmendmentNo = 
         })()
         : (currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : lc);
 
-    const prevQty = getMilestoneTotalQty(prevMilestone);
     const prevAmount = parseFloat(prevMilestone.totalAmount || lc.totalAmount || 0);
 
     const prevMargin = parseFloat(
@@ -2905,19 +2924,8 @@ const calculateAmendmentBillsValue = (state, lc, banksRaw, editingAmendmentNo = 
     const dRate = parseFloat(state.dollarRate) || 0;
     const targetRateScaled = r > 0 ? (r < 10 ? r * 1000 : r) : 0;
 
-    const firstProduct = (lc.productsList || [])[0];
-    const fVal = parseFloat(firstProduct?.freight || lc.freight || 0);
-    const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
-
-    // Fetch previous rates to compute accurate value difference
-    const prevRVal = parseFloat(prevMilestone.rate || 0);
-    const prevRateScaled = prevRVal > 0 ? (prevRVal < 10 ? prevRVal * 1000 : prevRVal) : 0;
-    const prevFirstProduct = (prevMilestone.productsList || [])[0];
-    const prevFVal = parseFloat(prevFirstProduct?.freight || prevMilestone.freight || lc.freight || 0);
-    const prevFreightPerTon = prevFVal < 0.1 ? prevFVal * 1000 : prevFVal;
-
-    const prevDollarValue = prevQty * (prevRateScaled + prevFreightPerTon);
-    const newDollarValue = qty * (targetRateScaled + freightPerTon);
+    const prevDollarValue = getMilestoneTotalDollar(prevMilestone, lc);
+    const newDollarValue = qty * targetRateScaled;
     const diffDollar = newDollarValue - prevDollarValue;
     const diffAmount = diffDollar * dRate;
     const baseAmount = Math.abs(diffAmount);
@@ -3537,10 +3545,12 @@ const LCManagement = ({ addNotification, currentUser }) => {
                         ? targetSource.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0) / 1000
                         : (parseFloat(targetSource.grandTotalQuantity || targetSource.quantity) || 0) / 1000;
 
-                    const piRate = firstProd ? (firstProd.rate || '') : (targetSource.rate || '');
+                    const piRate = firstProd 
+                        ? (parseFloat(firstProd.rate || 0) + parseFloat(firstProd.freight || 0)) 
+                        : (parseFloat(targetSource.rate || 0) + parseFloat(targetSource.freight || 0));
 
                     nextState.quantity = piQtyTons > 0 ? String(piQtyTons) : prev.quantity;
-                    nextState.rate = piRate ? String(piRate) : prev.rate;
+                    nextState.rate = piRate > 0 ? (piRate < 10 ? String(piRate * 1000) : String(piRate)) : prev.rate;
                 }
                 syncAmendmentBills(nextState, selectedLcForAmendment, banksRaw, editingAmendmentNo);
                 return nextState;
@@ -4118,6 +4128,17 @@ const LCManagement = ({ addNotification, currentUser }) => {
         return lcRecords.find(lc => lc._id === selectedAmendmentLcId) || null;
     }, [selectedAmendmentLcId, lcRecords]);
 
+    const prevMilestoneForAmendment = useMemo(() => {
+        if (!selectedLcForAmendment) return null;
+        const currentAmendments = [...(selectedLcForAmendment.amendments || [])];
+        return editingAmendmentNo
+            ? (() => {
+                const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
+                return idx > 0 ? currentAmendments[idx - 1] : selectedLcForAmendment;
+            })()
+            : (currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : selectedLcForAmendment);
+    }, [selectedLcForAmendment, editingAmendmentNo]);
+
     const amendmentInsuranceInfo = useMemo(() => {
         if (!selectedLcForAmendment) return null;
 
@@ -4127,14 +4148,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
         const targetRateScaled = rate > 0 ? (rate < 10 ? rate * 1000 : rate) : 0;
 
         const currentAmendments = [...(selectedLcForAmendment.amendments || [])];
-        const getMilestoneTotalQty = (mil) => {
-            if (!mil) return 0;
-            if (mil.productsList && mil.productsList.length > 0) {
-                return mil.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
-            }
-            return parseFloat(mil.quantity || 0);
-        };
-
         const prevMilestone = editingAmendmentNo
             ? (() => {
                 const idx = currentAmendments.findIndex(a => a.amendmentNo === editingAmendmentNo);
@@ -4142,21 +4155,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             })()
             : (currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : selectedLcForAmendment);
 
-        const prevQty = getMilestoneTotalQty(prevMilestone);
-        const prevRVal = parseFloat(prevMilestone.rate || 0);
-        const prevRateScaled = prevRVal > 0 ? (prevRVal < 10 ? prevRVal * 1000 : prevRVal) : 0;
-        const prevProducts = prevMilestone?.productsList?.length > 0
-            ? prevMilestone.productsList
-            : (selectedLcForAmendment.productsList?.length > 0 ? selectedLcForAmendment.productsList : []);
-        const prevFVal = parseFloat(prevProducts[0]?.freight || selectedLcForAmendment.freight || 0);
-        const prevFreightPerTon = prevFVal < 0.1 ? prevFVal * 1000 : prevFVal;
-
-        const firstProduct = (selectedLcForAmendment.productsList || [])[0];
-        const fVal = parseFloat(firstProduct?.freight || selectedLcForAmendment.freight || 0);
-        const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
-
-        const prevDollarValue = prevQty * (prevRateScaled + prevFreightPerTon);
-        const newDollarValue = qty * (targetRateScaled + freightPerTon);
+        const prevDollarValue = getMilestoneTotalDollar(prevMilestone, selectedLcForAmendment);
+        const newDollarValue = qty * targetRateScaled;
         const diffDollar = newDollarValue - prevDollarValue;
         const diffAmount = diffDollar * dRate;
         const baseAmount = Math.abs(diffAmount);
@@ -4264,16 +4264,20 @@ const LCManagement = ({ addNotification, currentUser }) => {
             resolvedRate = rVal < 10 ? String(rVal * 1000) : String(lc.rate);
         }
 
-        if (prefilledPiNo && prefilledPiNo !== lc.piNo) {
+        if (prefilledPiNo) {
             const cleanPi = prefilledPiNo.replace(' (REVISED)', '');
             const piRecord = piRecordsRaw.find(p => p.piNumber === cleanPi);
             if (piRecord) {
                 const isSelectedRevised = prefilledPiNo.endsWith(' (REVISED)');
                 const hasRevisions = piRecord.revisions && piRecord.revisions.length > 0;
                 let targetSource = piRecord;
-                if (hasRevisions && !isSelectedRevised) {
-                    const originalRev = piRecord.revisions.find(r => r.reviseNo === 'Original PI');
-                    if (originalRev) targetSource = { ...piRecord, ...originalRev };
+                if (hasRevisions) {
+                    if (isSelectedRevised) {
+                        targetSource = piRecord;
+                    } else {
+                        const originalRev = piRecord.revisions.find(r => r.reviseNo === 'Original PI');
+                        if (originalRev) targetSource = { ...piRecord, ...originalRev };
+                    }
                 }
                 const firstProd = (targetSource.productsList || [])[0];
                 const piQtyTons = targetSource.productsList && targetSource.productsList.length > 0
@@ -4281,12 +4285,12 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     : (parseFloat(targetSource.grandTotalQuantity || targetSource.quantity) || 0) / 1000;
 
                 if (piQtyTons > 0) resolvedQty = piQtyTons;
-                if (firstProd?.rate) {
-                    const rVal = parseFloat(firstProd.rate);
-                    resolvedRate = rVal < 10 ? String(rVal * 1000) : String(firstProd.rate);
-                } else if (targetSource.rate) {
-                    const rVal = parseFloat(targetSource.rate);
-                    resolvedRate = rVal < 10 ? String(rVal * 1000) : String(targetSource.rate);
+                
+                const rateVal = firstProd 
+                    ? (parseFloat(firstProd.rate || 0) + parseFloat(firstProd.freight || 0)) 
+                    : (parseFloat(targetSource.rate || 0) + parseFloat(targetSource.freight || 0));
+                if (rateVal > 0) {
+                    resolvedRate = rateVal < 10 ? String(rateVal * 1000) : String(rateVal);
                 }
             }
         }
@@ -4417,8 +4421,13 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 // Adjust rates if the targetRate is provided and has changed
                 if (targetRateScaled > 0) {
                     const originalFirstRate = parseFloat(updatedProductsList[0].rate) || 0;
-                    if (Math.abs(targetRateScaled - originalFirstRate) > 0.001) {
-                        updatedProductsList[0].rate = String(targetRateScaled);
+                    const firstFreight = parseFloat(updatedProductsList[0].freight || 0);
+                    // The root rate in the form includes freight, so compare the root rate (FOB + freight) with the targetRateScaled
+                    const originalTotalRate = originalFirstRate + firstFreight;
+                    if (Math.abs(targetRateScaled - originalTotalRate) > 0.001) {
+                        // Subtract freight to get the base FOB rate to store in productsList[0].rate
+                        const newFobRate = targetRateScaled - firstFreight;
+                        updatedProductsList[0].rate = String(newFobRate);
                     }
                 }
 
@@ -4444,14 +4453,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
             let amndExpectedReturnAmount = '0';
             let amndGrossPremium = '0';
 
-            const getMilestoneTotalQty = (mil) => {
-                if (!mil) return 0;
-                if (mil.productsList && mil.productsList.length > 0) {
-                    return mil.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
-                }
-                return parseFloat(mil.quantity || 0);
-            };
-
             const currentAmendments = [...(lc.amendments || [])];
             const prevMilestone = editingAmendmentNo
                 ? (() => {
@@ -4459,21 +4460,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     return idx > 0 ? currentAmendments[idx - 1] : lc;
                 })()
                 : (currentAmendments.length > 0 ? currentAmendments[currentAmendments.length - 1] : lc);
-            const prevQty = getMilestoneTotalQty(prevMilestone);
 
-            const fVal = parseFloat(updatedProductsList[0]?.freight || lc.freight || 0);
-            const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
-
-            const prevRVal = parseFloat(prevMilestone.rate || 0);
-            const prevRateScaled = prevRVal > 0 ? (prevRVal < 10 ? prevRVal * 1000 : prevRVal) : 0;
-            const prevProducts = prevMilestone?.productsList?.length > 0
-                ? prevMilestone.productsList
-                : (lc.productsList?.length > 0 ? lc.productsList : []);
-            const prevFVal = parseFloat(prevProducts[0]?.freight || lc.freight || 0);
-            const prevFreightPerTon = prevFVal < 0.1 ? prevFVal * 1000 : prevFVal;
-
-            const prevDollarValue = prevQty * (prevRateScaled + prevFreightPerTon);
-            const newDollarValue = qty * (targetRateScaled + freightPerTon);
+            const prevDollarValue = getMilestoneTotalDollar(prevMilestone, lc);
+            const newDollarValue = qty * targetRateScaled;
             const diffDollar = newDollarValue - prevDollarValue;
             const diffAmount = diffDollar * dRate;
             const baseAmount = Math.abs(diffAmount);
@@ -6546,21 +6535,45 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             <div className="grid grid-cols-2 gap-4 border-b border-gray-200/50 pb-2">
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Quantity</span>
-                                                    <p className="text-sm font-bold text-gray-800">{parseFloat(selectedLcForAmendment.quantity || 0).toLocaleString('en-US')} Ton</p>
+                                                    <p className="text-sm font-bold text-gray-800">
+                                                        {prevMilestoneForAmendment 
+                                                            ? `${parseFloat(getMilestoneTotalQty(prevMilestoneForAmendment) || 0).toLocaleString('en-US')} Ton`
+                                                            : 'N/A'
+                                                        }
+                                                    </p>
                                                 </div>
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Rate</span>
-                                                    <p className="text-sm font-bold text-gray-800">${parseFloat(selectedLcForAmendment.rate || 0).toLocaleString('en-IN')}</p>
+                                                    <p className="text-sm font-bold text-gray-800">
+                                                        {prevMilestoneForAmendment 
+                                                            ? `$${parseFloat(getMilestoneRate(prevMilestoneForAmendment, selectedLcForAmendment) || 0).toLocaleString('en-IN')}`
+                                                            : 'N/A'
+                                                        }
+                                                    </p>
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Dollar</span>
-                                                    <p className="text-sm font-bold text-blue-600">${parseFloat(selectedLcForAmendment.totalDollar || 0).toLocaleString('en-IN')}</p>
+                                                    <p className="text-sm font-bold text-blue-600">
+                                                        {prevMilestoneForAmendment 
+                                                            ? `$${parseFloat(getMilestoneTotalDollar(prevMilestoneForAmendment, selectedLcForAmendment) || 0).toLocaleString('en-IN')}`
+                                                            : 'N/A'
+                                                        }
+                                                    </p>
                                                 </div>
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
-                                                    <p className="text-sm font-bold text-gray-800">৳{parseFloat(selectedLcForAmendment.totalAmount || 0).toLocaleString('en-IN')}</p>
+                                                    <p className="text-sm font-bold text-gray-800">
+                                                        {prevMilestoneForAmendment 
+                                                            ? `৳${parseFloat(
+                                                                (getMilestoneTotalDollar(prevMilestoneForAmendment, selectedLcForAmendment) * 
+                                                                (parseFloat(prevMilestoneForAmendment.dollarRate || selectedLcForAmendment.dollarRate) || 0)
+                                                                ).toFixed(2)
+                                                              ).toLocaleString('en-IN')}`
+                                                            : 'N/A'
+                                                        }
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>

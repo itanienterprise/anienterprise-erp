@@ -3048,7 +3048,7 @@ function PI({
                                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                                                     <input
                                                         type="number"
-                                                        value={item.amount}
+                                                        value={((parseFloat(item.amount) || 0) + (parseFloat(item.totalFreight) || 0)).toFixed(2)}
                                                         readOnly
                                                         placeholder="0.00"
                                                         className="w-full pl-8 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none cursor-not-allowed font-bold text-gray-700"
@@ -3926,7 +3926,7 @@ function PI({
                                                             <td className="px-3 py-2">
                                                                 <input
                                                                     type="number"
-                                                                    step="0.01"
+                                                                    step="0.001"
                                                                     value={prod.rate}
                                                                     onChange={(e) => handleReviseProductChange(idx, 'rate', e.target.value)}
                                                                     className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
@@ -3935,13 +3935,13 @@ function PI({
                                                             <td className="px-3 py-2">
                                                                 <input
                                                                     type="number"
-                                                                    step="0.01"
+                                                                    step="0.001"
                                                                     value={prod.freight}
                                                                     onChange={(e) => handleReviseProductChange(idx, 'freight', e.target.value)}
                                                                     className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
                                                                 />
                                                             </td>
-                                                            <td className="px-3 py-2 font-bold text-blue-600">${parseFloat(prod.amount || 0).toLocaleString()}</td>
+                                                            <td className="px-3 py-2 font-bold text-blue-600">${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -4553,9 +4553,9 @@ function PI({
                                                                     <td className="px-6 py-3.5 font-bold text-gray-800">{prod.productName || 'N/A'}</td>
                                                                     <td className="px-6 py-3.5 font-mono font-medium text-gray-500">{prod.hsCode || 'N/A'}</td>
                                                                     <td className="px-6 py-3.5 text-right font-semibold text-gray-700">{parseFloat(prod.quantity || 0).toLocaleString('en-US')} kg</td>
-                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.rate || 0).toFixed(2)}</td>
-                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.freight || 0).toFixed(2)}</td>
-                                                                    <td className="px-6 py-3.5 text-right font-black text-blue-600">${parseFloat(prod.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.rate || 0).toFixed(3)}</td>
+                                                                    <td className="px-6 py-3.5 text-right font-semibold text-gray-700">${parseFloat(prod.freight || 0).toFixed(3)}</td>
+                                                                    <td className="px-6 py-3.5 text-right font-black text-blue-600">${(parseFloat(prod.amount || 0) + parseFloat(prod.totalFreight || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
