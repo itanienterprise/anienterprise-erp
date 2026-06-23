@@ -3561,8 +3561,9 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             row.port || '-',
             row.uom || '-',
             row.truck || '0',
+            row.billOfEntry || '-',
             parseFloat(row.qty || 0).toLocaleString('en-US'),
-            parseFloat(row.commission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+            (row.uom || '').toUpperCase() === 'BOE' ? '-' : parseFloat(row.commission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
             parseFloat(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })
         ]);
 
@@ -3574,11 +3575,12 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         // --- Table ---
         autoTable(doc, {
             startY: yPos + 15,
-            head: [['Date', 'LC No', 'Importer', 'Exporter', 'Product', 'Port', 'UOM', 'Trucks', 'QTY', 'Commission', 'Total']],
+            head: [['Date', 'LC No', 'Importer', 'Exporter', 'Product', 'Port', 'UOM', 'Trucks', 'BOE No', 'QTY', 'Commission', 'Total']],
             body: tableRows,
             foot: [[
                 { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } }, // Date, LC, Importer, Exporter, Product, Port, UOM
                 { content: totalTrucks.toString(), styles: { halign: 'center', fontStyle: 'bold' } },
+                '', // BOE No
                 { content: totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
                 '', // Commission rate col
                 { content: totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
@@ -3610,16 +3612,17 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             margin: { left: margin, right: margin },
             columnStyles: {
                 0: { cellWidth: 20, halign: 'center' }, // Date
-                1: { cellWidth: 28, halign: 'left' }, // LC No
-                2: { cellWidth: 36, halign: 'left' },   // Importer
-                3: { cellWidth: 38, halign: 'left' },   // Exporter
-                4: { cellWidth: 25, halign: 'left' },   // Product
-                5: { cellWidth: 22, halign: 'center' }, // Port
-                6: { cellWidth: 16, halign: 'center' }, // UOM
-                7: { cellWidth: 15, halign: 'center' }, // Trucks
-                8: { cellWidth: 20, halign: 'right' },  // QTY
-                9: { cellWidth: 24, halign: 'right' },  // Commission
-                10: { cellWidth: 31, halign: 'right' }   // Total
+                1: { cellWidth: 25, halign: 'left' },   // LC No
+                2: { cellWidth: 32, halign: 'left' },   // Importer
+                3: { cellWidth: 32, halign: 'left' },   // Exporter
+                4: { cellWidth: 20, halign: 'left' },   // Product
+                5: { cellWidth: 18, halign: 'center' }, // Port
+                6: { cellWidth: 14, halign: 'center' }, // UOM
+                7: { cellWidth: 17, halign: 'center' }, // Trucks
+                8: { cellWidth: 20, halign: 'center' }, // BOE No
+                9: { cellWidth: 20, halign: 'right' },  // QTY
+                10: { cellWidth: 24, halign: 'right' }, // Commission
+                11: { cellWidth: 30, halign: 'right' }  // Total
             }
         });
 

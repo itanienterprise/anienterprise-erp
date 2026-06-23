@@ -108,6 +108,15 @@ const CnF = ({
     useEffect(() => { fetchCnFs(); }, [moduleType]);
 
     useEffect(() => {
+        if (viewData && cnfs.length > 0) {
+            const freshViewData = cnfs.find(c => c._id === viewData._id);
+            if (freshViewData) {
+                setViewData(freshViewData);
+            }
+        }
+    }, [cnfs]);
+
+    useEffect(() => {
         const handleClickOutside = (event) => {
             if (showHistoryFilterPanel && historyFilterPanelRef.current && !historyFilterPanelRef.current.contains(event.target) && !historyFilterButtonRef.current?.contains(event.target) && !historyFilterButtonMobileRef.current?.contains(event.target)) {
                 setShowHistoryFilterPanel(false);
@@ -525,6 +534,7 @@ const CnF = ({
                     }
                     totalCommission = parseFloat(totalCommission.toFixed(2));
 
+                    console.log('CnF Stock Record:', { id: record._id, lcNo: record.lcNo, billOfEntry: record.billOfEntry });
                     rows.push({
                         _id: record._id,
                         date: record.date,
@@ -538,6 +548,7 @@ const CnF = ({
                         bag: !isNaN(parseFloat(record.totalLcPacket)) ? parseFloat(record.totalLcPacket) : (!isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (record.inHousePacket || 0)),
                         qty: qty,
                         truck: !isNaN(parseFloat(record.totalLcTruck)) ? record.totalLcTruck : (record.truckNo || record.truck || record.itemTruck || '-'),
+                        billOfEntry: record.billOfEntry || '-',
                         commission: commissionRate,
                         uom: uom,
                         totalCommission: totalCommission,
@@ -612,6 +623,10 @@ const CnF = ({
                              rateToDisplay = commissionFactor;
                         }
 
+                        // Find matching stock record to resolve bill of entry
+                        const relatedStock = stockData.find(st => st.lcNo && sale.lcNo && st.lcNo.trim().toLowerCase() === sale.lcNo.trim().toLowerCase());
+                        const boeNo = relatedStock ? (relatedStock.billOfEntry || '-') : '-';
+
                         rows.push({
                             _id: `${sale._id}-${entry.brand}-${entry.warehouseName}`,
                             date: sale.date,
@@ -625,6 +640,7 @@ const CnF = ({
                             bag: '-',
                             qty: qty,
                             truck: truck || '-',
+                            billOfEntry: boeNo,
                             commission: rateToDisplay,
                             uom: uom,
                             totalCommission: parseFloat(totalEntryComm.toFixed(2)),
@@ -752,7 +768,7 @@ const CnF = ({
 
                 const rate = parseFloat(editHistoryData.commission) || 0;
                 const uom = (editHistoryData.uom || '').toUpperCase();
-                const newTotal = (uom === 'TRUCK' ? totalTrucks : totalQty) * rate;
+                const newTotal = uom === 'BOE' ? rate : (uom === 'TRUCK' ? totalTrucks : totalQty) * rate;
 
                 if (isIndian) {
                     updatedSale.indCommissionTotal = newTotal.toFixed(2);
@@ -931,7 +947,7 @@ const CnF = ({
 
                     const rate = parseFloat(bulkEditData.commission) || 0;
                     const uom = (bulkEditData.uom || '').toUpperCase();
-                    const newTotal = (uom === 'TRUCK' ? totalTrucks : totalQty) * rate;
+                    const newTotal = uom === 'BOE' ? rate : (uom === 'TRUCK' ? totalTrucks : totalQty) * rate;
 
                     if (isIndian) {
                         updatedSale.indCommissionTotal = newTotal.toFixed(2);
@@ -1340,7 +1356,7 @@ const CnF = ({
             {viewData && (
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[1600px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[96vw] xl:max-w-[1750px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left w-full flex items-center justify-between md:block pr-12 md:pr-0">
                                 <div>
@@ -1695,6 +1711,7 @@ const CnF = ({
                                                             <th className="cnf-table-header">Product</th>
                                                             <th className="cnf-table-header">Port</th>
                                                             <th className="cnf-table-header text-center">Truck</th>
+                                                            <th className="cnf-table-header text-center whitespace-nowrap">BOE No</th>
                                                             <th className="cnf-table-header text-right">Bag</th>
                                                             <th className="cnf-table-header text-right">Qty</th>
                                                             <th className="cnf-table-header text-right">Commission</th>
@@ -1735,9 +1752,10 @@ const CnF = ({
                                                                 <td className="cnf-table-cell font-medium">{row.product || '-'}</td>
                                                                 <td className="cnf-table-cell">{row.port || '-'}</td>
                                                                 <td className="cnf-table-cell text-center uppercase">{row.truck || '-'}</td>
+                                                                <td className="cnf-table-cell text-center whitespace-nowrap font-medium">{row.billOfEntry || '-'}</td>
                                                                 <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.bag))) ? Math.round(row.bag).toLocaleString('en-US') : '-'}</td>
                                                                 <td className="cnf-table-cell text-right font-bold">{(!isNaN(parseFloat(row.qty))) ? Math.round(row.qty).toLocaleString('en-US') : '-'}</td>
-                                                                <td className="cnf-table-cell text-right">{row.commission}</td>
+                                                                <td className="cnf-table-cell text-right">{row.uom === 'BOE' ? '-' : row.commission}</td>
                                                                 <td className="cnf-table-cell text-right font-black">{(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                 <td className="cnf-table-cell text-center">
                                                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} border ${row.source === 'Sale' ? 'border-amber-200' : 'border-blue-200'}`}>
@@ -1834,12 +1852,15 @@ const CnF = ({
                                                                         </div>
                                                                         <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4">
                                                                             <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</p><p className="text-xs font-semibold text-gray-700">{row.truck || '-'}</p></div>
-                                                                            <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</p><p className="text-xs font-bold text-gray-900">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}</p></div>
+                                                                            <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BOE No</p><p className="text-xs font-semibold text-gray-700">{row.billOfEntry || '-'}</p></div>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
+                                                                            <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</p><p className="text-xs font-bold text-gray-900">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}</p></div>
                                                                         </div>
                                                                         <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-50">
                                                                             <div>
                                                                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Commission ({row.uom || viewData?.uom || 'QTY'})</p>
-                                                                                <p className="text-xs font-black text-gray-900 font-mono">{(row.commission || 0).toLocaleString('en-IN')} Tk</p>
+                                                                                <p className="text-xs font-black text-gray-900 font-mono">{row.uom === 'BOE' ? '-' : `${(row.commission || 0).toLocaleString('en-IN')} Tk`}</p>
                                                                             </div>
                                                                             <div className="text-right">
                                                                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Commission</p>
@@ -2156,10 +2177,11 @@ const CnF = ({
                                         <option value="QTY">Based on QTY</option>
                                         <option value="BAG">Based on BAG</option>
                                         <option value="TRUCK">Based on TRUCK</option>
+                                        <option value="BOE">ON BOE</option>
                                     </select>
                                 </div>
                                 <div className="cnf-form-field">
-                                    <label className="cnf-form-label">Commission Rate</label>
+                                    <label className="cnf-form-label">{editHistoryData.uom === 'BOE' ? 'Amount' : 'Commission Rate'}</label>
                                     <input type="number" step="0.01" name="commission" value={editHistoryData.commission} onChange={handleEditHistoryChange} className="cnf-form-input" />
                                 </div>
                             </div>
@@ -2191,10 +2213,11 @@ const CnF = ({
                                         <option value="QTY">Based on QTY</option>
                                         <option value="BAG">Based on BAG</option>
                                         <option value="TRUCK">Based on TRUCK</option>
+                                        <option value="BOE">ON BOE</option>
                                     </select>
                                 </div>
                                 <div className="cnf-form-field">
-                                    <label className="cnf-form-label">Commission Rate</label>
+                                    <label className="cnf-form-label">{bulkEditData.uom === 'BOE' ? 'Amount' : 'Commission Rate'}</label>
                                     <input type="number" step="0.01" value={bulkEditData.commission} onChange={(e) => setBulkEditData(p => ({ ...p, commission: e.target.value }))} className="cnf-form-input" />
                                 </div>
                             </div>

@@ -325,12 +325,12 @@
 }
 
 .cnf-table-checkbox-header {
-    padding: 1rem 1.5rem;
+    padding: 0.85rem 0.75rem;
     width: 2.5rem;
 }
 
 .cnf-table-header {
-    padding: 1rem 1.5rem;
+    padding: 0.85rem 0.75rem;
     font-size: 0.75rem;
     font-weight: 600;
     color: #6b7280;
@@ -379,7 +379,7 @@
 }
 
 .cnf-table-cell {
-    padding: 1rem 1.5rem;
+    padding: 0.85rem 0.75rem;
     font-size: 0.875rem;
     color: #4b5563;
     border-bottom: 1px solid #f3f4f6;

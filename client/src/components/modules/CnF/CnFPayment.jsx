@@ -107,6 +107,15 @@ const CnFPayment = () => {
                             : (recordIndCnF === targetName || recordBdCnF === targetName);
 
                     if (isMatch) {
+                        const status = (record.status || '').toLowerCase();
+                        if (status.includes('requested') || status.includes('rejected')) return acc;
+
+                        if (recordIndCnF === targetName && record.indCnFCost !== undefined && record.indCnFCost !== null && record.indCnFCost !== '') {
+                            return acc + (parseFloat(record.indCnFCost) || 0);
+                        } else if (recordBdCnF === targetName && record.bdCnFCost !== undefined && record.bdCnFCost !== null && record.bdCnFCost !== '') {
+                            return acc + (parseFloat(record.bdCnFCost) || 0);
+                        }
+
                         let commission = parseFloat(cnf.commission) || 0;
                         if (recordIndCnF === targetName && record.indCnFComm !== undefined && record.indCnFComm !== null && record.indCnFComm !== '') {
                             commission = parseFloat(record.indCnFComm);
@@ -119,17 +128,14 @@ const CnFPayment = () => {
                             : (record.bdCnFUom || record.uom || cnf.uom || cnf.commissionType || 'QTY');
                         const uom = typeof rawUom === 'string' ? rawUom.toUpperCase() : 'QTY';
 
-                        const status = (record.status || '').toLowerCase();
-                        if (status.includes('requested') || status.includes('rejected')) return acc;
-
                         if (uom === 'QTY') {
-                            const qty = !isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0);
+                            const qty = !isNaN(parseFloat(record.totalLcQuantity)) ? parseFloat(record.totalLcQuantity) : (!isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0));
                             return acc + (qty * commission);
                         } else if (uom === 'BAG') {
-                            const bag = !isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (parseFloat(record.inHousePacket) || 0);
+                            const bag = !isNaN(parseFloat(record.totalLcPacket)) ? parseFloat(record.totalLcPacket) : (!isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (parseFloat(record.inHousePacket) || 0));
                             return acc + (bag * commission);
                         } else if (uom === 'TRUCK') {
-                            const truckCount = parseFloat(record.truckNo) || 1;
+                            const truckCount = !isNaN(parseFloat(record.totalLcTruck)) ? parseFloat(record.totalLcTruck) : (parseFloat(record.truckNo) || 1);
                             return acc + (truckCount * commission);
                         } else {
                             return acc + commission;
@@ -144,6 +150,7 @@ const CnFPayment = () => {
                     const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (sale.invoiceNo || '').startsWith('BS');
                     if (!isBorder) return acc;
 
+                    // Skip rejected sales
                     if (sale.status && sale.status.toLowerCase().includes('rejected')) return acc;
 
                     const saleIndCnF = (sale.indianCnF || '').toLowerCase().trim();
@@ -164,6 +171,7 @@ const CnFPayment = () => {
                         } else if (!isIndian && sale.bdCommissionTotal) {
                             totalSaleComm = parseFloat(sale.bdCommissionTotal) || 0;
                         } else {
+                            // Fallback to default calculation if no sale-specific commission exists
                             const commissionFactor = parseFloat(cnf.commission) || 0;
                             const uom = (typeof cnf.uom === 'string' ? cnf.uom : (cnf.commissionType || 'QTY')).toUpperCase();
 
@@ -184,10 +192,10 @@ const CnFPayment = () => {
                     return acc;
                 }, 0);
 
-                // 3. Subtract Payments
+                // 3. Subtract Payments (including discount)
                 const paid = allPayments.reduce((acc, payment) => {
                     if (payment.cnfId === cnf._id) {
-                        return acc + (parseFloat(payment.amount) || 0);
+                        return acc + (parseFloat(payment.amount) || 0) + (parseFloat(payment.discount) || 0);
                     }
                     return acc;
                 }, 0);
