@@ -165,6 +165,42 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         return timeline[activeMilestoneIndex] || timeline[0] || {};
     }, [timeline, activeMilestoneIndex]);
 
+    const activeBankInfo = useMemo(() => {
+        if (!data) return { marginBill: 0, bankBill: 0, totalBankBill: 0 };
+        
+        const origMarginBill = parseFloat(data.marginBill) || 0;
+        const origBankBill = parseFloat(data.bankBill) || 0;
+        const origMarginPaid = parseFloat(data.marginPaid) || 0;
+
+        if (activeMilestoneIndex === 0) {
+            return {
+                marginBill: origMarginBill,
+                bankBill: origBankBill,
+                totalBankBill: parseFloat(data.totalBankBill) || (origMarginBill + origBankBill - origMarginPaid)
+            };
+        }
+
+        let cumulativeMarginBill = origMarginBill;
+        let cumulativeBankBill = origBankBill;
+        let cumulativeMarginPaid = origMarginPaid;
+
+        for (let i = 1; i <= activeMilestoneIndex; i++) {
+            const milestone = timeline[i];
+            if (milestone) {
+                cumulativeMarginBill += parseFloat(milestone.amendmentMarginBill) || 0;
+                const amndBank = parseFloat(milestone.amendmentBankBill || milestone.totalAmendmentBankBill || milestone.amendmentBill) || 0;
+                cumulativeBankBill += amndBank;
+                cumulativeMarginPaid += parseFloat(milestone.amendmentMarginPaid) || 0;
+            }
+        }
+
+        return {
+            marginBill: cumulativeMarginBill,
+            bankBill: cumulativeBankBill,
+            totalBankBill: cumulativeMarginBill + cumulativeBankBill - cumulativeMarginPaid
+        };
+    }, [data, timeline, activeMilestoneIndex]);
+
     const getMilestoneTotalQty = (mil) => {
         if (!mil) return 0;
         if (mil.productsList && mil.productsList.length > 0) {
@@ -709,15 +745,25 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     // Inject residual Bank Charges and Margin Bill payments that weren't consumed by original/amendment bills
     // remainingBankPaid = any leftover after filling original Bank Bill + amendment bank bills
     if (remainingBankPaid > 0) {
+        const firstBankCharge = lcExpenses.find(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'Bank Charges' && e.type !== 'bill');
         billPaymentsRemaining['Bank Charges'] = remainingBankPaid;
-        paymentsByHead['Bank Charges'] = [{ expenseHead: 'Bank Charges', amount: remainingBankPaid }];
+        paymentsByHead['Bank Charges'] = [{
+            expenseHead: 'Bank Charges',
+            amount: remainingBankPaid,
+            date: firstBankCharge ? firstBankCharge.date : (data.openingDate || data.createdAt)
+        }];
     }
     // For Margin Bill: compute how much of totalMarginPayments wasn't used by original + amendment margin bills
     const totalMarginBillsInBills = bills.filter(b => b.billHead === 'Margin Bill' || b.billHead.startsWith('Margin Bill (')).reduce((sum, b) => sum + b.paidBill, 0);
     const residualMarginPayment = Math.max(0, totalMarginPayments - totalMarginBillsInBills);
     if (residualMarginPayment > 0) {
+        const firstMarginPay = lcExpenses.find(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'Margin Bill' && e.type !== 'bill');
         billPaymentsRemaining['Margin Bill'] = residualMarginPayment;
-        paymentsByHead['Margin Bill'] = [{ expenseHead: 'Margin Bill', amount: residualMarginPayment }];
+        paymentsByHead['Margin Bill'] = [{
+            expenseHead: 'Margin Bill',
+            amount: residualMarginPayment,
+            date: firstMarginPay ? firstMarginPay.date : (data.openingDate || data.createdAt)
+        }];
     }
 
     const billRows = [];
@@ -2247,21 +2293,21 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Margin Bill</span>
                                             <p className="text-sm font-bold text-gray-800">
-                                                {data.marginBill ? `৳${parseFloat(data.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                {activeBankInfo.marginBill ? `৳${parseFloat(activeBankInfo.marginBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                             </p>
                                         </div>
                                         {(data.lcBillEnabled !== undefined ? data.lcBillEnabled : !!(data.bankLcCommission || data.bankSwiftCharge || data.bankLcApplicationForm || data.bankMpCharge || data.bankStampCharge)) && (
                                             <div className="space-y-1">
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Bill</span>
                                                 <p className="text-sm font-bold text-gray-800">
-                                                    {data.bankBill ? `৳${parseFloat(data.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                    {activeBankInfo.bankBill ? `৳${parseFloat(activeBankInfo.bankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                 </p>
                                             </div>
                                         )}
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Bank Bill</span>
                                             <p className="text-sm font-black text-blue-600">
-                                                {data.totalBankBill ? `৳${parseFloat(data.totalBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                {activeBankInfo.totalBankBill ? `৳${parseFloat(activeBankInfo.totalBankBill).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                             </p>
                                         </div>
                                     </div>
@@ -2326,7 +2372,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
-                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(data.stampCharge || 0).toLocaleString('en-IN')}</p>
+                                            <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.isOriginal ? data.stampCharge || 0 : 0).toLocaleString('en-IN')}</p>
                                         </div>
                                         <div className="space-y-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
@@ -2672,7 +2718,7 @@ export const getLCHistoryTimeline = (lc) => {
                 const exPct = parseFloat(lc.extraPercent) || 0;
                 const premRet = parseFloat(lc.premiumReturn) || 0;
                 const pVat = parseFloat(lc.premiumVat) || 15;
-                const stamp = parseFloat(lc.stampCharge) || 0;
+                const stamp = item.isOriginal ? (parseFloat(lc.stampCharge) || 0) : 0;
 
                 const baseNetPrem = (baseAmount * (prem / 100)) / 100;
                 const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
@@ -4171,7 +4217,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const prem = parseFloat(selectedLcForAmendment.premium) || 0;
             const exPct = parseFloat(selectedLcForAmendment.extraPercent) || 0;
             const premRet = parseFloat(selectedLcForAmendment.premiumReturn) || 0;
-            const stamp = parseFloat(selectedLcForAmendment.stampCharge) || 0;
+            const stamp = 0;
 
             const baseNetPrem = (baseAmount * (prem / 100)) / 100;
             const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
@@ -4481,7 +4527,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 const exPct = parseFloat(lc.extraPercent) || 0;
                 const premRet = parseFloat(lc.premiumReturn) || 0;
                 const pVat = parseFloat(lc.premiumVat) || 15;
-                const stamp = parseFloat(lc.stampCharge) || 0;
+                const stamp = 0;
 
                 const baseNetPrem = (baseAmount * (prem / 100)) / 100;
                 const netP = baseNetPrem + (baseNetPrem * (exPct / 100));
@@ -7252,7 +7298,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         </div>
                                                         <div>
                                                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Stamp Duty</span>
-                                                            <p className="text-xs font-bold text-gray-800">৳{parseFloat(selectedLcForAmendment.stampCharge || 0).toLocaleString('en-IN')}</p>
+                                                            <p className="text-xs font-bold text-gray-800">৳0</p>
                                                         </div>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2 border-t border-indigo-100/50 pt-1.5 mt-1">

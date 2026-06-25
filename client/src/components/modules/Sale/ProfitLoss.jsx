@@ -123,17 +123,19 @@ export default function ProfitLoss({ salesRecords, products }) {
       // Filter by Sale Type
       if (saleTypeFilter !== 'All' && sale.saleType !== saleTypeFilter) return;
 
-      // Filter by LC Number (case-insensitive substring match)
-      if (selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '') {
-        const saleLcNo = (sale.lcNo || '').trim().toLowerCase();
-        const searchLcNo = selectedLcNo.trim().toLowerCase();
-        if (!saleLcNo.includes(searchLcNo)) return;
-      }
-
       const items = sale.items || [];
 
       // Create flat list of entries for calculations
       const entries = items.flatMap(item => {
+        const itemLcNo = item.lcNo || sale.lcNo || '';
+        
+        // Filter by LC Number at the item level if specified
+        if (selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '') {
+          const entryLcNo = itemLcNo.trim().toLowerCase();
+          const searchLcNo = selectedLcNo.trim().toLowerCase();
+          if (!entryLcNo.includes(searchLcNo)) return [];
+        }
+
         const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
           ? item.brandEntries
           : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: item.unitPrice || 0, totalAmount: item.totalAmount || 0 }];
@@ -317,6 +319,8 @@ export default function ProfitLoss({ salesRecords, products }) {
           shortPrice: 0,
           damageQty: 0,
           damagePrice: 0,
+          saleQty: 0,
+          salePrice: 0,
           unit: item.unit || 'kg'
         };
       }
@@ -350,6 +354,8 @@ export default function ProfitLoss({ salesRecords, products }) {
           shortPrice: 0,
           damageQty: 0,
           damagePrice: 0,
+          saleQty: 0,
+          salePrice: 0,
           unit: d.unit || 'kg'
         };
       }
@@ -361,8 +367,52 @@ export default function ProfitLoss({ salesRecords, products }) {
       summaryMap[prodName].damagePrice += dQty * dPrice;
     });
 
+    // Aggregate sales records for this LC
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '').toLowerCase();
+    const lcNoClean = cleanLc(selectedLc.lcNo);
+
+    salesRecords.forEach(sale => {
+      const sStatus = (sale.status || '').toLowerCase();
+      if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+
+      const items = sale.items || [];
+      items.forEach(item => {
+        const itemLc = item.lcNo || sale.lcNo || '';
+        if (cleanLc(itemLc) !== lcNoClean) return;
+
+        const prodName = item.productName || item.product || 'Unknown Product';
+        if (!summaryMap[prodName]) {
+          summaryMap[prodName] = {
+            productName: prodName,
+            purchaseQty: 0,
+            purchasePrice: 0,
+            inhouseQty: 0,
+            inhousePrice: 0,
+            shortQty: 0,
+            shortPrice: 0,
+            damageQty: 0,
+            damagePrice: 0,
+            saleQty: 0,
+            salePrice: 0,
+            unit: item.unit || 'kg'
+          };
+        }
+
+        const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
+          ? item.brandEntries
+          : [{ quantity: item.quantity, totalAmount: item.totalAmount || (parseFloat(item.quantity) * parseFloat(item.unitPrice)) || 0 }];
+        
+        brandEntries.forEach(entry => {
+          const qty = parseFloat(entry.quantity) || 0;
+          const totalAmount = parseFloat(entry.totalAmount) || (qty * (parseFloat(entry.unitPrice) || 0));
+          summaryMap[prodName].saleQty += qty;
+          summaryMap[prodName].salePrice += totalAmount;
+        });
+      });
+    });
+
     return Object.values(summaryMap);
-  }, [selectedLc, selectedLcStocks, selectedLcDamages]);
+  }, [selectedLc, selectedLcStocks, selectedLcDamages, salesRecords]);
 
 
 
@@ -893,6 +943,26 @@ export default function ProfitLoss({ salesRecords, products }) {
                           <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Damage Quantity</div>
                           <div className="text-sm font-black text-rose-700">{Math.round(prod.damageQty).toLocaleString()} {prod.unit}</div>
                           <div className="text-xs font-bold text-rose-500 mt-1">৳ {Math.round(prod.damagePrice).toLocaleString('en-IN')}</div>
+                        </div>
+
+                        {/* Sold Quantity */}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-violet-100 hover:bg-violet-50/10 transition-all">
+                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Sold Quantity</div>
+                          <div className="text-sm font-black text-gray-900">{Math.round(prod.saleQty || 0).toLocaleString()} {prod.unit}</div>
+                          <div className="text-xs font-bold text-violet-600 mt-1">৳ {Math.round(prod.salePrice || 0).toLocaleString('en-IN')}</div>
+                        </div>
+
+                        {/* Current Stock */}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:bg-indigo-50/10 transition-all">
+                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Current Stock</div>
+                          <div className="text-sm font-black text-gray-900">{Math.round(prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0)).toLocaleString()} {prod.unit}</div>
+                          <div className="text-xs font-bold text-indigo-600 mt-1">
+                            ৳ {(() => {
+                              const currentStockQty = prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0);
+                              const avgPurchasePrice = prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : 0;
+                              return Math.round(currentStockQty * avgPurchasePrice).toLocaleString('en-IN');
+                            })()}
+                          </div>
                         </div>
                       </div>
                     </div>
