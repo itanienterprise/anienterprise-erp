@@ -438,6 +438,19 @@ function App() {
     return initialView === 'pi-section' || initialView === 'packing-list-section' || initialView === 'tr-setup-section';
   });
 
+  const toggleSidebarDropdown = (dropdownName) => {
+    setStockDropdownOpen(dropdownName === 'stock' ? !stockDropdownOpen : false);
+    setSaleDropdownOpen(dropdownName === 'sale' ? !saleDropdownOpen : false);
+    setHrmsDropdownOpen(dropdownName === 'hrms' ? !hrmsDropdownOpen : false);
+    setImporterDropdownOpen(dropdownName === 'importer' ? !importerDropdownOpen : false);
+    setCnfDropdownOpen(dropdownName === 'cnf' ? !cnfDropdownOpen : false);
+    setCrmDropdownOpen(dropdownName === 'crm' ? !crmDropdownOpen : false);
+    setLcDropdownOpen(dropdownName === 'lc' ? !lcDropdownOpen : false);
+    setInsuranceDropdownOpen(dropdownName === 'insurance' ? !insuranceDropdownOpen : false);
+    setIpDropdownOpen(dropdownName === 'ip' ? !ipDropdownOpen : false);
+    setPiDropdownOpen(dropdownName === 'pi' ? !piDropdownOpen : false);
+  };
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
   const [importers, setImporters] = useState([]);
@@ -1785,7 +1798,7 @@ function App() {
           </button>
           <div>
             <button
-              onClick={() => setHrmsDropdownOpen(!hrmsDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('hrms')}
               className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all ${currentView === 'employee-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
@@ -1814,7 +1827,7 @@ function App() {
 
           <div>
             <button
-              onClick={() => setImporterDropdownOpen(!importerDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('importer')}
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
@@ -1844,7 +1857,7 @@ function App() {
           </div>
           <div>
             <button
-              onClick={() => setCnfDropdownOpen(!cnfDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('cnf')}
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' || currentView === 'cnf-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
@@ -1886,7 +1899,7 @@ function App() {
           </button>
           <div>
             <button
-              onClick={() => setIpDropdownOpen(!ipDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('ip')}
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
@@ -1909,7 +1922,7 @@ function App() {
           </div>
           <div>
             <button
-              onClick={() => setPiDropdownOpen(!piDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('pi')}
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' || currentView === 'packing-list-section' || currentView === 'tr-setup-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
@@ -1946,7 +1959,7 @@ function App() {
           </div>
           <div>
             <button
-              onClick={() => setInsuranceDropdownOpen(!insuranceDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('insurance')}
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'insurance-section' || currentView === 'insurance-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
@@ -1976,7 +1989,7 @@ function App() {
           </div>
           <div>
             <button
-              onClick={() => setLcDropdownOpen(!lcDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('lc')}
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'lc-management-section' || currentView === 'lc-gp-section' || currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
@@ -2027,7 +2040,7 @@ function App() {
 
           <div>
             <button
-              onClick={() => setStockDropdownOpen(!stockDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('stock')}
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('stock') || currentView === 'products-section' || currentView === 'warehouse-section' || currentView === 'damage-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
@@ -2078,7 +2091,7 @@ function App() {
 
           <div>
             <button
-              onClick={() => setCrmDropdownOpen(!crmDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('crm')}
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'customer-section' || currentView === 'payment-collection-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">
@@ -2108,7 +2121,7 @@ function App() {
           </div>
           <div>
             <button
-              onClick={() => setSaleDropdownOpen(!saleDropdownOpen)}
+              onClick={() => toggleSidebarDropdown('sale')}
               className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('sale-section') ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <div className="flex items-center">

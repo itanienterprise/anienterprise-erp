@@ -60,6 +60,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         expenseHead: '',
         cnfAgent: '',
         amount: '',
+        paidAmount: '',
         remarks: ''
     });
     const [isSavingBill, setIsSavingBill] = useState(false);
@@ -68,6 +69,11 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const [billHeadQuery, setBillHeadQuery] = useState('');
     const [billHeadHighlight, setBillHeadHighlight] = useState(-1);
     const billHeadRef = React.useRef(null);
+
+    const [cnfDropdownOpen, setCnfDropdownOpen] = useState(false);
+    const [cnfQuery, setCnfQuery] = useState('');
+    const [cnfHighlight, setCnfHighlight] = useState(-1);
+    const cnfRef = React.useRef(null);
 
 
     useEffect(() => {
@@ -84,16 +90,25 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         fetchCnfs();
     }, []);
 
-    // Close bill head dropdown on outside click
+    // Close dropdowns on outside click
     useEffect(() => {
+        if (!showAddBillModal) return;
+
         const handleClickOutside = (e) => {
             if (billHeadRef.current && !billHeadRef.current.contains(e.target)) {
                 setBillHeadDropdownOpen(false);
             }
+            if (cnfRef.current && !cnfRef.current.contains(e.target)) {
+                setCnfDropdownOpen(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+        document.addEventListener('touchstart', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
+        };
+    }, [showAddBillModal]);
 
     const expenseHeads = [
         "Bank Charges",
@@ -111,12 +126,29 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         e.preventDefault();
         setIsSavingBill(true);
         try {
+            const { paidAmount, ...billData } = billFormData;
             const dataToSubmit = {
-                ...billFormData,
+                ...billData,
                 amount: parseFloat(billFormData.amount) || 0,
                 type: 'bill'
             };
             await axios.post(`${API_BASE_URL}/api/lc-expenses`, dataToSubmit);
+
+            const paidVal = parseFloat(billFormData.paidAmount) || 0;
+            if (paidVal > 0) {
+                const paymentToSubmit = {
+                    date: billFormData.date,
+                    lcNo: billFormData.lcNo,
+                    bankName: billFormData.bankName,
+                    expenseHead: billFormData.expenseHead,
+                    cnfAgent: billFormData.cnfAgent,
+                    amount: paidVal,
+                    remarks: billFormData.remarks ? `${billFormData.remarks} (Paid)` : 'Bill Payment',
+                    type: 'payment'
+                };
+                await axios.post(`${API_BASE_URL}/api/lc-expenses`, paymentToSubmit);
+            }
+
             setShowAddBillModal(false);
             setBillFormData({
                 date: new Date().toISOString().split('T')[0],
@@ -125,6 +157,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 expenseHead: '',
                 cnfAgent: '',
                 amount: '',
+                paidAmount: '',
                 remarks: ''
             });
             setBillHeadQuery('');
@@ -2546,42 +2579,104 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
                                 {/* Conditional C&F Agent */}
                                 {billFormData.expenseHead === 'C&F Commission' && (
-                                    <div className="space-y-1.5 text-left">
+                                    <div className="space-y-1.5 text-left relative" ref={cnfRef}>
                                         <label className="text-sm font-semibold text-gray-600 ml-1">C&F Agent *</label>
                                         <div className="relative">
-                                            <select
-                                                value={billFormData.cnfAgent}
-                                                onChange={(e) => setBillFormData(prev => ({ ...prev, cnfAgent: e.target.value }))}
-                                                className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium appearance-none pr-10 cursor-pointer"
-                                                required
-                                            >
-                                                <option value="">Select C&F Agent</option>
-                                                {bdCnfs.map(cnf => (
-                                                    <option key={cnf} value={cnf}>{cnf}</option>
-                                                ))}
-                                            </select>
-                                            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                                                </svg>
+                                            <input
+                                                type="text"
+                                                value={cnfQuery || billFormData.cnfAgent}
+                                                onChange={(e) => {
+                                                    setCnfQuery(e.target.value);
+                                                    setBillFormData(prev => ({ ...prev, cnfAgent: '' }));
+                                                    setCnfDropdownOpen(true);
+                                                    setCnfHighlight(-1);
+                                                }}
+                                                onFocus={() => { setCnfDropdownOpen(true); setCnfHighlight(-1); }}
+                                                onKeyDown={(e) => {
+                                                    const filtered = bdCnfs.filter(c => !cnfQuery || c.toLowerCase().includes(cnfQuery.toLowerCase()));
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setCnfHighlight(prev => Math.min(prev + 1, filtered.length - 1));
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setCnfHighlight(prev => Math.max(prev - 1, 0));
+                                                    } else if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        if (cnfHighlight >= 0 && cnfHighlight < filtered.length) {
+                                                            setBillFormData(prev => ({ ...prev, cnfAgent: filtered[cnfHighlight] }));
+                                                            setCnfQuery('');
+                                                            setCnfDropdownOpen(false);
+                                                        }
+                                                    } else if (e.key === 'Escape') {
+                                                        setCnfDropdownOpen(false);
+                                                    }
+                                                }}
+                                                className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                                placeholder="Search or Select C&F Agent"
+                                                autoComplete="nope"
+                                                required={!billFormData.cnfAgent}
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                {(billFormData.cnfAgent || cnfQuery) && (
+                                                    <button type="button" onClick={() => { setBillFormData(prev => ({ ...prev, cnfAgent: '' })); setCnfQuery(''); setCnfDropdownOpen(false); }} className="text-gray-400 hover:text-gray-600">
+                                                        <XIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <SearchIcon className="w-4 h-4 text-gray-300" />
                                             </div>
                                         </div>
+                                        {cnfDropdownOpen && (
+                                            <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1">
+                                                {bdCnfs.filter(c => !cnfQuery || c.toLowerCase().includes(cnfQuery.toLowerCase())).map((cnf, idx) => (
+                                                    <button
+                                                        key={cnf}
+                                                        type="button"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            setBillFormData(prev => ({ ...prev, cnfAgent: cnf }));
+                                                            setCnfQuery('');
+                                                            setCnfDropdownOpen(false);
+                                                        }}
+                                                        onMouseEnter={() => setCnfHighlight(idx)}
+                                                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${cnfHighlight === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        <span className="font-medium">{cnf}</span>
+                                                    </button>
+                                                ))}
+                                                {bdCnfs.filter(c => !cnfQuery || c.toLowerCase().includes(cnfQuery.toLowerCase())).length === 0 && (
+                                                    <div className="px-4 py-3 text-xs text-gray-400 text-center">No options found</div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
-
-                                <div className="space-y-1.5 text-left">
-                                    <label className="text-sm font-semibold text-gray-600 ml-1">Amount (৳) *</label>
-                                    <input
-                                        type="number"
-                                        value={billFormData.amount}
-                                        onChange={(e) => setBillFormData(prev => ({ ...prev, amount: e.target.value }))}
-                                        required
-                                        min="0"
-                                        step="0.01"
-                                        placeholder="0.00"
-                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold"
-                                    />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Bill Amount (৳) *</label>
+                                        <input
+                                            type="number"
+                                            value={billFormData.amount}
+                                            onChange={(e) => setBillFormData(prev => ({ ...prev, amount: e.target.value }))}
+                                            required
+                                            min="0"
+                                            step="0.01"
+                                            placeholder="0.00"
+                                            className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5 text-left">
+                                        <label className="text-sm font-semibold text-gray-600 ml-1">Paid Amount (৳)</label>
+                                        <input
+                                            type="number"
+                                            value={billFormData.paidAmount}
+                                            onChange={(e) => setBillFormData(prev => ({ ...prev, paidAmount: e.target.value }))}
+                                            min="0"
+                                            step="0.01"
+                                            placeholder="0.00"
+                                            className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold text-emerald-600 placeholder:text-gray-300"
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="space-y-1.5 text-left">

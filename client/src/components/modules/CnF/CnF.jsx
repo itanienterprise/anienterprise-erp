@@ -54,6 +54,7 @@ const CnF = ({
     const [historyRecords, setHistoryRecords] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [expandedHistoryIdx, setExpandedHistoryIdx] = useState(null);
+    const [expandedExpenseIdx, setExpandedExpenseIdx] = useState(null);
     const [expandedCnFId, setExpandedCnFId] = useState(null);
     const [editRecord, setEditRecord] = useState(null);
     const [isSavingHistory, setIsSavingHistory] = useState(false);
@@ -1623,11 +1624,16 @@ const CnF = ({
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                                         {/* Total Bill Card */}
                                         <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex items-center justify-between">
-                                                <div className="space-y-1 min-w-0 flex-1">
-                                                    <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest opacity-70 truncate">Total Bill</p>
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                                <div className="space-y-1 min-w-0 flex-1 w-full">
+                                                    <div className="flex items-center justify-between sm:block">
+                                                        <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest opacity-70 truncate">Total Bill</p>
+                                                        <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 sm:hidden shrink-0">
+                                                            <BarChartIcon className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
                                                     <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 leading-none truncate">
+                                                        <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
                                                             {(
                                                                 historyRecords.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0) +
                                                                 expenseRecords.reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0)
@@ -1636,7 +1642,7 @@ const CnF = ({
                                                         <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
-                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-100 items-center justify-center text-purple-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
                                                     <BarChartIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                 </div>
                                             </div>
@@ -1644,17 +1650,22 @@ const CnF = ({
 
                                         {/* Total Paid Card */}
                                         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex items-center justify-between">
-                                                <div className="space-y-1 min-w-0 flex-1">
-                                                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70 truncate">Total Paid</p>
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                                <div className="space-y-1 min-w-0 flex-1 w-full">
+                                                    <div className="flex items-center justify-between sm:block">
+                                                        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70 truncate">Total Paid</p>
+                                                        <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 sm:hidden shrink-0">
+                                                            <DollarSignIcon className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
                                                     <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 leading-none truncate">
+                                                        <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
                                                             {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-IN')}
                                                         </h3>
                                                         <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
-                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
                                                     <DollarSignIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                 </div>
                                             </div>
@@ -1662,17 +1673,22 @@ const CnF = ({
 
                                         {/* Total Discount Card */}
                                         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex items-center justify-between">
-                                                <div className="space-y-1 min-w-0 flex-1">
-                                                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70 truncate">Total Discount</p>
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                                <div className="space-y-1 min-w-0 flex-1 w-full">
+                                                    <div className="flex items-center justify-between sm:block">
+                                                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70 truncate">Total Discount</p>
+                                                        <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 sm:hidden shrink-0">
+                                                            <ReceiptIcon className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
                                                     <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 leading-none truncate">
+                                                        <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
                                                             {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.discount) || 0), 0).toLocaleString('en-IN')}
                                                         </h3>
                                                         <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
-                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-100 items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
                                                     <ReceiptIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                 </div>
                                             </div>
@@ -1680,22 +1696,28 @@ const CnF = ({
 
                                         {/* Balance Card */}
                                         <div className="bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex items-center justify-between">
-                                                <div className="space-y-1 min-w-0 flex-1">
-                                                    <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70 truncate">Current Balance</p>
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                                <div className="space-y-1 min-w-0 flex-1 w-full">
+                                                    <div className="flex items-center justify-between sm:block">
+                                                        <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70 truncate">Current Balance</p>
+                                                        <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 sm:hidden shrink-0">
+                                                            <TrendingUpIcon className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
                                                     <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 leading-none truncate">
+                                                        <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
                                                             {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
                                                         </h3>
                                                         <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
                                                     </div>
                                                 </div>
-                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-rose-100 items-center justify-center text-rose-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
                                                     <TrendingUpIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
+
 
                                     {historyViewMode === 'earnings' ? (
                                         <>
@@ -1818,21 +1840,21 @@ const CnF = ({
                                                                                 <input type="checkbox" checked={isSelected} readOnly className="w-5 h-5 accent-gray-900 shrink-0" onClick={(e) => e.stopPropagation()} />
                                                                             )}
                                                                         <div className="min-w-0">
-                                                                            <div className="flex items-center gap-2 mb-1">
+                                                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5 min-w-0">
                                                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
-                                                                                <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
+                                                                                <span className="h-1 w-1 bg-gray-300 rounded-full sm:block hidden"></span>
+                                                                                <p className="text-xs font-bold text-gray-800 truncate max-w-[120px] xs:max-w-[180px] sm:max-w-none">{row.product || '-'}</p>
+                                                                                <span className="h-1 w-1 bg-gray-300 rounded-full sm:block hidden"></span>
                                                                                 <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
                                                                                     {row.source || 'LC'}
                                                                                 </span>
-                                                                                <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
-                                                                                <p className="text-xs font-bold text-gray-800 truncate">{row.product || '-'}</p>
                                                                                 {row.source === 'Sale' ? (
                                                                                     (row.cnfType === 'Indian' ? row.indCommissionEdited : row.bdCommissionEdited) && (
-                                                                                        <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">Sale Edited</span>
+                                                                                        <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0 sm:inline-block hidden">Sale Edited</span>
                                                                                     )
                                                                                 ) : (
                                                                                     (row.indCnFEdited || row.bdCnFEdited || row.indCnFBulkEdited || row.bdCnFBulkEdited) && (
-                                                                                        <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter">Edited</span>
+                                                                                        <span className="text-[8px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0 sm:inline-block hidden">Edited</span>
                                                                                     )
                                                                                 )}
                                                                             </div>
@@ -1843,28 +1865,46 @@ const CnF = ({
                                                                 </div>
                                                                 {isExpanded && (
                                                                     <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
-                                                                        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-50">
-                                                                            <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</p><p className="text-xs font-medium text-gray-700">{row.port || '-'}</p></div>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
-                                                                            <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</p><p className="text-xs font-medium text-gray-700 truncate" title={row.importer || '-'}>{row.importer || '-'}</p></div>
-                                                                            <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</p><p className="text-xs font-medium text-gray-700 truncate" title={row.exporter || '-'}>{row.exporter || '-'}</p></div>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4">
-                                                                            <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</p><p className="text-xs font-semibold text-gray-700">{row.truck || '-'}</p></div>
-                                                                            <div className="space-y-1 text-right"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BOE No</p><p className="text-xs font-semibold text-gray-700">{row.billOfEntry || '-'}</p></div>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
-                                                                            <div className="space-y-1"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag / Qty</p><p className="text-xs font-bold text-gray-900">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}</p></div>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-50">
-                                                                            <div>
-                                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Commission ({row.uom || viewData?.uom || 'QTY'})</p>
-                                                                                <p className="text-xs font-black text-gray-900 font-mono">{row.uom === 'BOE' ? '-' : `${(row.commission || 0).toLocaleString('en-IN')} Tk`}</p>
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-gray-50">
+                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
+                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Port<span className="md:hidden"> :</span></span>
+                                                                                <span className="font-semibold text-gray-700 md:text-xs md:font-medium">{row.port || '-'}</span>
                                                                             </div>
-                                                                            <div className="text-right">
-                                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Commission</p>
-                                                                                <p className="text-xs font-black text-gray-900 font-mono">{(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk</p>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
+                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
+                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Importer<span className="md:hidden"> :</span></span>
+                                                                                <span className="font-semibold text-gray-700 truncate max-w-[200px] md:max-w-none md:text-xs md:font-medium" title={row.importer || '-'}>{row.importer || '-'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1 md:text-right">
+                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Exporter<span className="md:hidden"> :</span></span>
+                                                                                <span className="font-semibold text-gray-700 truncate max-w-[200px] md:max-w-none md:text-xs md:font-medium" title={row.exporter || '-'}>{row.exporter || '-'}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4">
+                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
+                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Truck No<span className="md:hidden"> :</span></span>
+                                                                                <span className="font-semibold text-gray-700 md:text-xs">{row.truck || '-'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1 md:text-right">
+                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">BOE No<span className="md:hidden"> :</span></span>
+                                                                                <span className="font-semibold text-gray-700 md:text-xs">{row.billOfEntry || '-'}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">
+                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
+                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Bag / Qty<span className="md:hidden"> :</span></span>
+                                                                                <span className="font-bold text-gray-900 md:text-xs">{row.bag && !isNaN(parseFloat(row.bag)) ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '0'} / {row.qty && !isNaN(parseFloat(row.qty)) ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '0'}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-50">
+                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
+                                                                                <span className="text-gray-500 font-medium md:text-[9px] md:font-bold md:text-gray-400 md:uppercase md:tracking-widest">Commission ({row.uom || viewData?.uom || 'QTY'})<span className="md:hidden"> :</span></span>
+                                                                                <span className="font-semibold text-gray-900 font-mono md:text-xs md:font-black">{row.uom === 'BOE' ? '-' : `${(row.commission || 0).toLocaleString('en-IN')} Tk`}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1 md:text-right">
+                                                                                <span className="text-gray-500 font-medium md:text-[9px] md:font-bold md:text-gray-400 md:uppercase md:tracking-widest">Total Commission<span className="md:hidden"> :</span></span>
+                                                                                <span className="font-semibold text-gray-900 font-mono md:text-xs md:font-black">{(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk</span>
                                                                             </div>
                                                                         </div>
                                                                         <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
@@ -1929,34 +1969,55 @@ const CnF = ({
                                             </div>
                                             <div className="block md:hidden space-y-3">
                                                 {filteredExpenses.length > 0 ? (
-                                                    filteredExpenses.map((row, idx) => (
-                                                        <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-                                                            <div className="flex justify-between items-center">
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
-                                                                <span className="text-xs font-bold text-blue-600">{row.lcNo}</span>
-                                                            </div>
-                                                            <div className="grid grid-cols-2 gap-3 bg-gray-50/50 rounded-lg p-2 text-xs">
-                                                                <div>
-                                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Product</p>
-                                                                    <p className="font-semibold text-gray-700">{row.product || '-'}</p>
+                                                    filteredExpenses.map((row, idx) => {
+                                                        const isExpanded = expandedExpenseIdx === idx;
+                                                        return (
+                                                            <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm transition-all overflow-hidden">
+                                                                <div
+                                                                    className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                                                    onClick={() => setExpandedExpenseIdx(isExpanded ? null : idx)}
+                                                                >
+                                                                    <div className="flex-1 min-w-0 pr-4 flex items-center gap-2">
+                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
+                                                                        <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
+                                                                        <span className="text-xs font-bold text-blue-600 truncate">{row.lcNo}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3 shrink-0">
+                                                                        <span className="text-xs font-black text-rose-600 font-mono">
+                                                                            {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                        </span>
+                                                                        <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-gray-50 text-gray-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                                            {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="text-right">
-                                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</p>
-                                                                    <p className="font-semibold text-gray-700">{row.port || '-'}</p>
-                                                                </div>
+                                                                {isExpanded && (
+                                                                    <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
+                                                                        <div className="grid grid-cols-2 gap-3 bg-gray-50/50 rounded-lg p-2.5 text-xs">
+                                                                            <div>
+                                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Product</p>
+                                                                                <p className="font-semibold text-gray-700">{row.product || '-'}</p>
+                                                                            </div>
+                                                                            <div className="text-right">
+                                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Port</p>
+                                                                                <p className="font-semibold text-gray-700">{row.port || '-'}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center text-xs">
+                                                                            <span className="text-gray-500 font-medium">Importer :</span>
+                                                                            <span className="font-semibold text-gray-700 truncate max-w-[200px]">{row.importer || '-'}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center pt-2 border-t border-gray-50">
+                                                                            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Amount :</span>
+                                                                            <span className="text-sm font-black text-rose-600 font-mono">
+                                                                                {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                            <div className="flex justify-between items-center text-xs">
-                                                                <span className="text-gray-500 font-medium">Importer:</span>
-                                                                <span className="font-semibold text-gray-700 truncate max-w-[200px]">{row.importer || '-'}</span>
-                                                            </div>
-                                                            <div className="flex justify-between items-center pt-2 border-t border-gray-50">
-                                                                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Amount</span>
-                                                                <span className="text-sm font-black text-rose-600">
-                                                                    {parseFloat(row.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Tk
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    ))
+                                                        );
+                                                    })
                                                 ) : (
                                                     <div className="text-center py-12 text-gray-400">
                                                         <DollarSignIcon className="w-8 h-8 mb-2 mx-auto opacity-20" />

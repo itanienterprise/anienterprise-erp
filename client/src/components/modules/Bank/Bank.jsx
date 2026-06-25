@@ -25,6 +25,7 @@ const Bank = ({ onDeleteConfirm }) => {
     const [editingId, setEditingId] = useState(null);
     const [expandedRowKey, setExpandedRowKey] = useState(null);
     const [expandedBranchKey, setExpandedBranchKey] = useState(null);
+    const [expandedHistoryRowIdx, setExpandedHistoryRowIdx] = useState(null);
     // LC Bill History modal state
     const [lcBillHistoryBank, setLcBillHistoryBank] = useState(null); // bank name being viewed
     const [lcBillHistoryRows, setLcBillHistoryRows] = useState([]);
@@ -1909,128 +1910,226 @@ const Bank = ({ onDeleteConfirm }) => {
                                     </p>
                                 </div>
                             ) : (
-                                <div className="overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
-                                    <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse min-w-[640px]">
-                                        <thead>
-                                            <tr className="bg-gray-50/50 border-b border-gray-100 select-none">
-                                                <th 
-                                                    onClick={() => requestSort('date')}
-                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-1">
-                                                        Date
-                                                        {historySortConfig.key === 'date' && (
-                                                            historySortConfig.direction === 'asc' 
-                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                                <th 
-                                                    onClick={() => requestSort('lcNo')}
-                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-1">
-                                                        LC No
-                                                        {historySortConfig.key === 'lcNo' && (
-                                                            historySortConfig.direction === 'asc' 
-                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                                <th 
-                                                    onClick={() => requestSort('importer')}
-                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-1">
-                                                        Importer
-                                                        {historySortConfig.key === 'importer' && (
-                                                            historySortConfig.direction === 'asc' 
-                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                                <th 
-                                                    onClick={() => requestSort('billType')}
-                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-1">
-                                                        Bill Type
-                                                        {historySortConfig.key === 'billType' && (
-                                                            historySortConfig.direction === 'asc' 
-                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                                <th 
-                                                    onClick={() => requestSort('marginPaid')}
-                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        Margin Paid
-                                                        {historySortConfig.key === 'marginPaid' && (
-                                                            historySortConfig.direction === 'asc' 
-                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                                <th 
-                                                    onClick={() => requestSort('bankPaid')}
-                                                    className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        Bank Charge
-                                                        {historySortConfig.key === 'bankPaid' && (
-                                                            historySortConfig.direction === 'asc' 
-                                                                ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                                : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50 font-medium">
-                                            {filteredLcBillHistoryRows.map((row, idx) => (
-                                                <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
-                                                    <td className="px-5 py-3.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(row.date)}</td>
-                                                    <td className="px-5 py-3.5 text-sm font-black text-blue-600 whitespace-nowrap">{row.lcNo}</td>
-                                                    <td className="px-5 py-3.5 text-sm text-gray-800 uppercase max-w-[160px] truncate">{row.importer}</td>
-                                                    <td className="px-5 py-3.5 whitespace-nowrap">
-                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${row.billType === 'Opening LC'
-                                                            ? 'bg-blue-50 text-blue-700 border-blue-100'
-                                                            : 'bg-amber-50 text-amber-700 border-amber-100'
-                                                            }`}>
-                                                            {row.billType}
-                                                        </span>
+                                <>
+                                    {/* Desktop View */}
+                                    <div className="hidden md:block overflow-hidden border border-gray-100 rounded-2xl shadow-sm">
+                                        <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse min-w-[640px]">
+                                            <thead>
+                                                <tr className="bg-gray-50/50 border-b border-gray-100 select-none">
+                                                    <th 
+                                                        onClick={() => requestSort('date')}
+                                                        className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            Date
+                                                            {historySortConfig.key === 'date' && (
+                                                                historySortConfig.direction === 'asc' 
+                                                                    ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                    : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => requestSort('lcNo')}
+                                                        className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            LC No
+                                                            {historySortConfig.key === 'lcNo' && (
+                                                                historySortConfig.direction === 'asc' 
+                                                                    ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                    : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => requestSort('importer')}
+                                                        className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            Importer
+                                                            {historySortConfig.key === 'importer' && (
+                                                                historySortConfig.direction === 'asc' 
+                                                                    ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                    : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => requestSort('billType')}
+                                                        className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            Bill Type
+                                                            {historySortConfig.key === 'billType' && (
+                                                                historySortConfig.direction === 'asc' 
+                                                                    ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                    : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => requestSort('marginPaid')}
+                                                        className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                    >
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            Margin Paid
+                                                            {historySortConfig.key === 'marginPaid' && (
+                                                                historySortConfig.direction === 'asc' 
+                                                                    ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                    : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        onClick={() => requestSort('bankPaid')}
+                                                        className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                    >
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            Bank Charge
+                                                            {historySortConfig.key === 'bankPaid' && (
+                                                                historySortConfig.direction === 'asc' 
+                                                                    ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                    : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50 font-medium">
+                                                {filteredLcBillHistoryRows.map((row, idx) => (
+                                                    <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                                                        <td className="px-5 py-3.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(row.date)}</td>
+                                                        <td className="px-5 py-3.5 text-sm font-black text-blue-600 whitespace-nowrap">{row.lcNo}</td>
+                                                        <td className="px-5 py-3.5 text-sm text-gray-800 uppercase max-w-[160px] truncate">{row.importer}</td>
+                                                        <td className="px-5 py-3.5 whitespace-nowrap">
+                                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${row.billType === 'Opening LC'
+                                                                ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                                                : 'bg-amber-50 text-amber-700 border-amber-100'
+                                                                }`}>
+                                                                {row.billType}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-5 py-3.5 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
+                                                            {row.marginPaid > 0 ? `৳${row.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                        </td>
+                                                        <td className="px-5 py-3.5 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
+                                                            {row.bankPaid > 0 ? `৳${row.bankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border-t border-gray-100">
+                                                <tr>
+                                                    <td colSpan="4" className="px-5 py-4 text-xs font-black text-gray-500 uppercase tracking-wider text-right">Total:</td>
+                                                    <td className="px-5 py-4 text-sm font-black text-right text-emerald-600">
+                                                        ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.marginPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                     </td>
-                                                    <td className="px-5 py-3.5 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
-                                                        {row.marginPaid > 0 ? `৳${row.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
-                                                    </td>
-                                                    <td className="px-5 py-3.5 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
-                                                        {row.bankPaid > 0 ? `৳${row.bankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                    <td className="px-5 py-4 text-sm font-black text-right text-emerald-600">
+                                                        ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.bankPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                     </td>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                        <tfoot className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border-t border-gray-100">
-                                            <tr>
-                                                <td colSpan="4" className="px-5 py-4 text-xs font-black text-gray-500 uppercase tracking-wider text-right">Total:</td>
-                                                <td className="px-5 py-4 text-sm font-black text-right text-emerald-600">
-                                                    ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.marginPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                </td>
-                                                <td className="px-5 py-4 text-sm font-black text-right text-emerald-600">
-                                                    ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.bankPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                </td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
+                                            </tfoot>
+                                        </table>
+                                        </div>
                                     </div>
-                                </div>
+
+                                    {/* Mobile View */}
+                                    <div className="block md:hidden space-y-3">
+                                        {filteredLcBillHistoryRows.map((row, idx) => {
+                                            const isExpanded = expandedHistoryRowIdx === idx;
+                                            return (
+                                                <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-200">
+                                                    <div 
+                                                        onClick={() => setExpandedHistoryRowIdx(isExpanded ? null : idx)}
+                                                        className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                                    >
+                                                        <div className="flex-1 min-w-0 pr-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(row.date)}</p>
+                                                                <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
+                                                                <p className="text-xs font-black text-blue-600 truncate">{row.lcNo && row.lcNo.length > 4 ? `...${row.lcNo.slice(-4)}` : row.lcNo}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3 shrink-0">
+                                                            <div className="text-right">
+                                                                {row.marginPaid > 0 && (
+                                                                    <p className="text-sm font-black text-emerald-600 font-mono">
+                                                                        M: ৳{row.marginPaid.toLocaleString('en-IN')}
+                                                                    </p>
+                                                                )}
+                                                                {row.bankPaid > 0 && (
+                                                                    <p className="text-[11px] font-bold text-gray-500 font-mono mt-0.5">
+                                                                        B: ৳{row.bankPaid.toLocaleString('en-IN')}
+                                                                    </p>
+                                                                )}
+                                                                {row.marginPaid === 0 && row.bankPaid === 0 && (
+                                                                    <p className="text-sm font-medium text-gray-400">-</p>
+                                                                )}
+                                                            </div>
+                                                            <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-gray-50 text-gray-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                                {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {isExpanded && (
+                                                        <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
+                                                            <div className="flex flex-col gap-2.5 py-2.5 bg-gray-50/55 rounded-xl px-4 text-xs">
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-gray-500 font-medium">LC No :</span>
+                                                                    <span className="font-semibold text-gray-700 font-mono">{row.lcNo || '-'}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center pt-2 border-t border-gray-100/50">
+                                                                    <span className="text-gray-500 font-medium">Bill Type :</span>
+                                                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${row.billType === 'Opening LC'
+                                                                        ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                                                        : 'bg-amber-50 text-amber-700 border-amber-100'
+                                                                        }`}>
+                                                                        {row.billType}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center pt-2 border-t border-gray-100/50">
+                                                                    <span className="text-gray-500 font-medium">Importer :</span>
+                                                                    <span className="font-semibold text-gray-700 truncate max-w-[200px]" title={row.importer}>{row.importer || '-'}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center pt-2 border-t border-gray-100/50">
+                                                                    <span className="text-gray-500 font-medium">Margin Paid :</span>
+                                                                    <span className="font-bold text-emerald-600 font-mono">
+                                                                        {row.marginPaid > 0 ? `৳${row.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center pt-2 border-t border-gray-100/50">
+                                                                    <span className="text-gray-500 font-medium">Bank Charge :</span>
+                                                                    <span className="font-bold text-emerald-600 font-mono">
+                                                                        {row.bankPaid > 0 ? `৳${row.bankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+
+                                        {/* Mobile Footer Sums */}
+                                        <div className="bg-gradient-to-br from-blue-50/50 to-indigo-50/50 border border-gray-100 rounded-xl p-4 space-y-2 text-xs">
+                                            <div className="flex justify-between items-center">
+                                                <span className="font-bold text-gray-500 uppercase tracking-wider">Total Margin Paid:</span>
+                                                <span className="font-black text-emerald-600 font-mono text-sm">
+                                                    ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.marginPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center pt-2 border-t border-gray-200/40">
+                                                <span className="font-bold text-gray-500 uppercase tracking-wider">Total Bank Charge:</span>
+                                                <span className="font-black text-emerald-600 font-mono text-sm">
+                                                    ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.bankPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
                             )}
                         </div>
                     </div>
