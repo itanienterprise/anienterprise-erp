@@ -344,7 +344,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         }];
 
     const activeProducts = useMemo(() => {
-        const baseProducts = activeMilestone.productsList?.length > 0
+        const hasProductsList = activeMilestone.productsList && activeMilestone.productsList.length > 0;
+        const baseProducts = hasProductsList
             ? activeMilestone.productsList
             : (data.productsList?.length > 0
                 ? data.productsList
@@ -362,8 +363,17 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             const fVal = parseFloat(p.freight || 0);
             const scaledFreight = fVal > 0 ? (fVal < 0.1 ? String(fVal * 1000) : String(fVal)) : '';
             if (idx === 0 && baseProducts.length === 1) {
-                const rVal = parseFloat(activeMilestone.rate || p.rate || 0);
-                const scaledRate = rVal > 0 ? (rVal < 10 ? String(rVal * 1000) : String(activeMilestone.rate || p.rate)) : '';
+                let scaledRate = '';
+                if (hasProductsList) {
+                    const rVal = parseFloat(p.rate || 0);
+                    scaledRate = rVal > 0 ? (rVal < 10 ? String(rVal * 1000) : String(p.rate)) : '';
+                } else {
+                    const rVal = parseFloat(activeMilestone.rate || p.rate || 0);
+                    const ratePerTon = rVal > 0 ? (rVal < 10 ? rVal * 1000 : rVal) : 0;
+                    const freightPerTon = fVal > 0 ? (fVal < 0.1 ? fVal * 1000 : fVal) : 0;
+                    const baseRateVal = Math.max(0, ratePerTon - freightPerTon);
+                    scaledRate = baseRateVal > 0 ? String(baseRateVal) : '';
+                }
                 return {
                     ...p,
                     quantity: activeMilestone.quantity || p.quantity,
@@ -2083,14 +2093,15 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 const prevQty = prevMilestone ? getMilestoneTotalQty(prevMilestone) : 0;
                                                 const diffQty = activeQty - prevQty;
 
-                                                const rVal = parseFloat(activeMilestone.rate || 0);
-                                                const ratePerTon = rVal < 10 ? rVal * 1000 : rVal;
-
-                                                const fVal = parseFloat(activeProducts[0]?.freight || data.freight || 0);
-                                                const freightPerTon = fVal < 0.1 ? fVal * 1000 : fVal;
+                                                // Use the base rate and freight from activeProducts (which correctly parses productsList)
+                                                const ratePerTon = parseFloat(activeProducts[0]?.rate || 0);
+                                                const freightPerTon = parseFloat(activeProducts[0]?.freight || 0);
 
                                                 const dollarRate = parseFloat(activeMilestone.dollarRate || data.dollarRate || 0);
-                                                const diffDollar = diffQty * (ratePerTon + freightPerTon);
+
+                                                const prevDollar = prevMilestone ? getMilestoneTotalDollar(prevMilestone, data) : 0;
+                                                const activeDollar = getMilestoneTotalDollar(activeMilestone, data);
+                                                const diffDollar = activeDollar - prevDollar;
                                                 const diffAmount = diffDollar * dollarRate;
                                                 const sign = diffQty >= 0 ? '+' : '';
                                                 const isAmndBillActive = activeMilestone.amendmentLcBillEnabled !== undefined
