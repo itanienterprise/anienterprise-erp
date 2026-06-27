@@ -52,6 +52,13 @@ const SaleManagement = ({
     const [viewData, setViewData] = useState(null);
     const [_customerSearch, setCustomerSearch] = useState('');
     const [collapsedRows, setCollapsedRows] = useState([]);
+    const [expandedMobileRows, setExpandedMobileRows] = useState([]);
+
+    const toggleMobileRowExpansion = (saleId) => {
+        setExpandedMobileRows(prev =>
+            prev.includes(saleId) ? prev.filter(id => id !== saleId) : [...prev, saleId]
+        );
+    };
     const [showSaleFilterPanel, setShowSaleFilterPanel] = useState(false);
     const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
     const [activeFilterDropdown, setActiveFilterDropdown] = useState(null); // 'from', 'to', 'company', 'invoice', 'port', 'product', 'brand', 'indCnf', 'bdCnf'
@@ -4657,7 +4664,7 @@ const SaleManagement = ({
                                 No sales records found
                             </div>
                         ) : getFilteredData().map((sale) => {
-                            const isExpanded = !collapsedRows.includes(sale._id);
+                            const isExpanded = expandedMobileRows.includes(sale._id);
                             const isMultiple = (sale.items && sale.items.length > 0)
                                 ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
                                 : false;
@@ -4687,7 +4694,7 @@ const SaleManagement = ({
                                     className={`sale-mgmt-mobile-card group cursor-pointer transition-all ${isExpanded ? 'shadow-md ring-1 ring-blue-500/10 p-4' : 'hover:bg-gray-50/30 p-2.5'} ${selectedItems.has(sale._id) ? 'bg-blue-50 ring-1 ring-blue-500/30' : ''}`}
                                     onClick={() => {
                                         if (isLongPressTriggered && isLongPressTriggered.current) return;
-                                        isSelectionMode && saleType === 'Border' ? toggleSelection(sale._id) : toggleRowExpansion(sale._id);
+                                        isSelectionMode && saleType === 'Border' ? toggleSelection(sale._id) : toggleMobileRowExpansion(sale._id);
                                     }}
                                 >
                                     {/* Collapsed Single Line View / Expanded Header Row */}
@@ -4762,8 +4769,18 @@ const SaleManagement = ({
                                                             )}
                                                         </>
                                                     )}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); toggleMobileRowExpansion(sale._id); }}
+                                                        className="p-1.5 text-gray-400 bg-gray-100 rounded-lg transition-all ml-1"
+                                                    >
+                                                        <ChevronDownIcon className="w-4 h-4 rotate-180" />
+                                                    </button>
                                                 </div>
-                                            ) : null}
+                                            ) : (
+                                                <div className="p-1.5 bg-gray-100 text-gray-400 rounded-lg">
+                                                    <ChevronDownIcon className="w-3.5 h-3.5" />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -4771,36 +4788,37 @@ const SaleManagement = ({
                                     {isExpanded && (
                                         <>
                                             {/* Customer/Company Info */}
-                                            <div className="grid grid-cols-3 gap-2 text-xs mb-4 px-1">
-                                                <div>
-                                                    <div className="sale-mgmt-mobile-label">Inv No</div>
-                                                    <div className="sale-mgmt-mobile-value">{sale.invoiceNo || '-'}</div>
-                                                </div>
-                                                <div>
-                                                    <div className="sale-mgmt-mobile-label">Customer</div>
-                                                    <div className="sale-mgmt-mobile-value">{getSafeString(sale.customerName) || '-'}</div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="sale-mgmt-mobile-label">Company</div>
-                                                    <div className="sale-mgmt-mobile-value truncate">{getSafeString(sale.companyName) || sale.port || '-'}</div>
-                                                </div>
+                                            <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-xs items-baseline text-left px-1 pb-3 mb-3 border-b border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Inv No</span>
+                                                <span className="text-gray-400 font-bold">:</span>
+                                                <span className="font-bold text-gray-900">{sale.invoiceNo || '-'}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Customer</span>
+                                                <span className="text-gray-400 font-bold">:</span>
+                                                <span className="font-bold text-gray-900">{getSafeString(sale.customerName) || '-'}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Company</span>
+                                                <span className="text-gray-400 font-bold">:</span>
+                                                <span className="font-semibold text-gray-700">{getSafeString(sale.companyName) || sale.port || '-'}</span>
+
+                                                {sale.requestedBy && (
+                                                    <>
+                                                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Requested By</span>
+                                                        <span className="text-indigo-400 font-bold">:</span>
+                                                        <span className="font-bold text-indigo-700">{sale.requestedBy}</span>
+                                                    </>
+                                                )}
                                             </div>
-                                            {sale.requestedBy && (
-                                                <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
-                                                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Requested By</div>
-                                                    <div className="text-[12px] font-bold text-indigo-700 ml-1">{sale.requestedBy}</div>
-                                                </div>
-                                            )}
 
                                             {/* Items Section */}
                                             <div className="sale-mgmt-mobile-section mt-1">
-                                                <div className="flex items-center justify-between">
+                                                <div className="flex items-center justify-between mb-2">
                                                     <div className="text-[10px] font-bold text-gray-600 uppercase">Products & Quantities</div>
                                                     {isMultiple && (
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                toggleRowExpansion(sale._id);
+                                                                toggleMobileRowExpansion(sale._id);
                                                             }}
                                                             className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors"
                                                         >
@@ -4808,62 +4826,61 @@ const SaleManagement = ({
                                                         </button>
                                                     )}
                                                 </div>
-                                                <div className="grid grid-cols-12 gap-1 px-1 pb-1 border-b border-gray-100 mb-1 mt-2">
-                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase">Brand</div>
-                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Qty</div>
-                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Price</div>
-                                                    <div className="col-span-3 text-[9px] font-bold text-gray-400 uppercase text-right">Total</div>
-                                                </div>
-                                                <div className="space-y-2.5">
+                                                <div className="space-y-3">
                                                     {items.map((it, idx) => (
-                                                        <div key={idx} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0">
-                                                            <div className="text-[12px] font-black text-gray-800 mb-0.5">{it.productName || '-'}</div>
-                                                            <div className="grid grid-cols-12 gap-1 items-center text-[10px]">
-                                                                <div className="col-span-3 min-w-0">
-                                                                    <span className="text-[10px] font-medium text-gray-500 italic truncate">{it.brand || '-'}</span>
-                                                                </div>
-                                                                <div className="col-span-3 text-right">
-                                                                    <div className="font-bold text-gray-900">
-                                                                        {it.uom === 'BAG'
-                                                                            ? `${parseFloat(it.bag || 0).toLocaleString('en-US')} Bag`
-                                                                            : `${parseFloat(it.quantity || 0).toLocaleString('en-US')} kg`}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="col-span-3 text-right">
-                                                                    <div className="font-medium text-blue-600 truncate">{parseFloat(it.unitPrice || 0).toLocaleString('en-IN')}</div>
-                                                                </div>
-                                                                <div className="col-span-3 text-right">
-                                                                    <div className="font-black text-gray-900 truncate">
-                                                                        ৳ {(() => {
-                                                                            const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
-                                                                            return (qty * parseFloat(it.unitPrice || 0)).toLocaleString('en-US');
-                                                                        })()}
-                                                                    </div>
-                                                                </div>
+                                                        <div key={idx} className="border border-gray-100 rounded-xl p-3 bg-gray-50/30">
+                                                            <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-bold text-gray-900">{it.productName || '-'}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-semibold text-gray-700">{it.brand || '-'}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-bold text-gray-800">
+                                                                    {it.uom === 'BAG'
+                                                                        ? `${parseFloat(it.bag || 0).toLocaleString('en-US')} Bag`
+                                                                        : `${parseFloat(it.quantity || 0).toLocaleString('en-US')} kg`}
+                                                                </span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-medium text-blue-600">৳{parseFloat(it.unitPrice || 0).toLocaleString('en-IN')}</span>
+
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-black text-gray-900">
+                                                                    ৳ {(() => {
+                                                                        const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                                                                        return (qty * parseFloat(it.unitPrice || 0)).toLocaleString('en-US');
+                                                                    })()}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
                                             </div>
 
-                                            {/* Money Summary */}
-                                            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-50 mt-4">
-                                                <div className="sale-mgmt-mobile-money-card bg-red-50/40 border-red-100/50">
-                                                    <div className="sale-mgmt-mobile-label text-red-600">Discount</div>
-                                                    <div className="text-[14px] font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</div>
-                                                </div>
-                                                <div className="sale-mgmt-mobile-money-card bg-blue-50/40 border-blue-100/50">
-                                                    <div className="sale-mgmt-mobile-label text-blue-600 mb-0">Total</div>
-                                                    <div className="text-[14px] font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</div>
-                                                </div>
-                                                <div className="sale-mgmt-mobile-money-card bg-emerald-50/40 border-emerald-100/50">
-                                                    <div className="sale-mgmt-mobile-label text-emerald-600">Paid</div>
-                                                    <div className="text-[14px] font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</div>
-                                                </div>
-                                                <div className="sale-mgmt-mobile-money-card bg-orange-50/40 border-orange-100/50">
-                                                    <div className="sale-mgmt-mobile-label text-orange-600">Balance</div>
-                                                    <div className="text-[14px] font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString('en-IN')}</div>
-                                                </div>
+                                            {/* Money Summary Details List */}
+                                            <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-xs items-baseline text-left pt-3 border-t border-gray-100 mt-4">
+                                                <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Discount</span>
+                                                <span className="text-red-400 font-bold">:</span>
+                                                <span className="font-black text-red-600">৳{parseFloat(sale.discount || 0).toLocaleString('en-IN')}</span>
+
+                                                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Total</span>
+                                                <span className="text-blue-400 font-bold">:</span>
+                                                <span className="font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</span>
+
+                                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Paid</span>
+                                                <span className="text-emerald-400 font-bold">:</span>
+                                                <span className="font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</span>
+
+                                                <span className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Balance</span>
+                                                <span className="text-orange-400 font-bold">:</span>
+                                                <span className="font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString('en-IN')}</span>
                                             </div>
                                         </>
                                     )}

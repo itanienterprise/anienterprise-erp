@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF } from '../../../utils/pdfGenerator';
@@ -1140,8 +1141,8 @@ const Customer = ({
                     )
                 }
                 {
-                    viewData && (
-                        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+                    viewData && createPortal(
+                        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
                             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
                             <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[1400px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
                                 {/* Modal Header */}
@@ -2171,9 +2172,9 @@ const Customer = ({
                                                                                     };
                                                                                     generateSaleInvoicePDF(saleObject);
                                                                                 }}
-                                                                                className="flex-1 flex items-center justify-start gap-1.5 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] font-bold"
+                                                                                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
                                                                             >
-                                                                                <FileTextIcon className="w-3 h-3" /> Print Invoice
+                                                                                <FileTextIcon className="w-3.5 h-3.5" /> Print Invoice
                                                                             </button>
                                                                         </div>
                                                                     </div>
@@ -2658,7 +2659,8 @@ const Customer = ({
                                     )}
                                 </div>
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )
                 }
             </div>
