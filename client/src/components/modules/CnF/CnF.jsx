@@ -86,18 +86,49 @@ const CnF = ({
         startDate: '',
         endDate: '',
         lcNo: '',
-        productName: ''
+        productName: '',
+        port: ''
     });
     const historyFilterButtonRef = useRef(null);
     const historyFilterButtonMobileRef = useRef(null);
     const historyFilterPanelRef = useRef(null);
-    const [historyFilterSearchInputs, setHistoryFilterSearchInputs] = useState({ lcNo: '', product: '' });
-    const [historyFilterDropdownOpen, setHistoryFilterDropdownOpen] = useState({ lcNo: false, product: false });
+    const [historyFilterSearchInputs, setHistoryFilterSearchInputs] = useState({ lcNo: '', product: '', port: '' });
+    const [historyFilterDropdownOpen, setHistoryFilterDropdownOpen] = useState({ lcNo: false, product: false, port: false });
     const lcNoFilterRef = useRef(null);
     const productFilterSearchRef = useRef(null);
+    const portFilterSearchRef = useRef(null);
+    const [highlightedHistoryFilterIndex, setHighlightedHistoryFilterIndex] = useState(-1);
 
     const getUniqueHistoryOptions = (key) => {
         return [...new Set(historyRecords.map(item => (item[key] || '').trim()).filter(Boolean))].sort();
+    };
+
+    const handleHistoryFilterKeyDown = (e, filterKey, searchKey, field) => {
+        const query = historyFilterSearchInputs[searchKey];
+        const options = getUniqueHistoryOptions(filterKey);
+        const filtered = options.filter(opt => opt.toLowerCase().includes(query.toLowerCase()));
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedHistoryFilterIndex(prev => Math.min(prev + 1, filtered.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedHistoryFilterIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const indexToSelect = highlightedHistoryFilterIndex >= 0 ? highlightedHistoryFilterIndex : 0;
+            if (filtered && filtered[indexToSelect]) {
+                const selectedVal = filtered[indexToSelect];
+                setHistoryFilters(prev => ({ ...prev, [field]: selectedVal }));
+                setHistoryFilterSearchInputs(prev => ({ ...prev, [searchKey]: '' }));
+                setHistoryFilterDropdownOpen(prev => ({ ...prev, [searchKey]: false }));
+                setHighlightedHistoryFilterIndex(-1);
+            } else {
+                setHistoryFilterDropdownOpen(prev => ({ ...prev, [searchKey]: false }));
+            }
+        } else if (e.key === 'Escape') {
+            setHistoryFilterDropdownOpen(prev => ({ ...prev, [searchKey]: false }));
+        }
     };
 
     const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
@@ -128,11 +159,14 @@ const CnF = ({
             if (productFilterSearchRef.current && !productFilterSearchRef.current.contains(event.target)) {
                 setHistoryFilterDropdownOpen(prev => prev.product ? { ...prev, product: false } : prev);
             }
+            if (portFilterSearchRef.current && !portFilterSearchRef.current.contains(event.target)) {
+                setHistoryFilterDropdownOpen(prev => prev.port ? { ...prev, port: false } : prev);
+            }
         };
         const handleEscape = (e) => {
             if (e.key === 'Escape') {
                 setShowHistoryFilterPanel(false);
-                setHistoryFilterDropdownOpen({ lcNo: false, product: false });
+                setHistoryFilterDropdownOpen({ lcNo: false, product: false, port: false });
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -192,6 +226,7 @@ const CnF = ({
         // Field Specific Filtering
         if (historyFilters.lcNo && !(row.lcNo || '').toLowerCase().includes(historyFilters.lcNo.toLowerCase())) return false;
         if (historyFilters.productName && !(row.product || '').toLowerCase().includes(historyFilters.productName.toLowerCase())) return false;
+        if (historyFilters.port && !(row.port || '').toLowerCase().includes(historyFilters.port.toLowerCase())) return false;
 
         // Search Query Filtering
         if (!q) return true;
@@ -1501,8 +1536,10 @@ const CnF = ({
                                             <h4 className="font-bold text-gray-900 text-sm">Advanced Filter</h4>
                                             <button
                                                 onClick={() => {
-                                                    setHistoryFilters({ startDate: '', endDate: '', lcNo: '', productName: '' });
-                                                    setHistoryFilterSearchInputs({ lcNo: '', product: '' });
+                                                    setHistoryFilters({ startDate: '', endDate: '', lcNo: '', productName: '', port: '' });
+                                                    setHistoryFilterSearchInputs({ lcNo: '', product: '', port: '' });
+                                                    setHistoryFilterDropdownOpen({ lcNo: false, product: false, port: false });
+                                                    setHighlightedHistoryFilterIndex(-1);
                                                 }}
                                                 className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
                                             >
@@ -1537,9 +1574,14 @@ const CnF = ({
                                                             onChange={(e) => {
                                                                 setHistoryFilterSearchInputs(prev => ({ ...prev, lcNo: e.target.value }));
                                                                 setHistoryFilters(prev => ({ ...prev, lcNo: e.target.value }));
-                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true, product: false }));
+                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true, product: false, port: false }));
+                                                                setHighlightedHistoryFilterIndex(-1);
                                                             }}
-                                                            onFocus={() => setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true, product: false }))}
+                                                            onFocus={() => {
+                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: true, product: false, port: false }));
+                                                                setHighlightedHistoryFilterIndex(-1);
+                                                            }}
+                                                            onKeyDown={(e) => handleHistoryFilterKeyDown(e, 'lcNo', 'lcNo', 'lcNo')}
                                                             placeholder={historyFilters.lcNo || "Select LC No..."}
                                                             className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
                                                         />
@@ -1550,15 +1592,17 @@ const CnF = ({
                                                         const filtered = options.filter(opt => opt.toLowerCase().includes(historyFilterSearchInputs.lcNo.toLowerCase()));
                                                         return filtered.length > 0 ? (
                                                             <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                                {filtered.map(opt => (
+                                                                {filtered.map((opt, idx) => (
                                                                     <button
                                                                         key={opt}
                                                                         onClick={() => {
                                                                             setHistoryFilters(prev => ({ ...prev, lcNo: opt }));
                                                                             setHistoryFilterSearchInputs(prev => ({ ...prev, lcNo: '' }));
                                                                             setHistoryFilterDropdownOpen(prev => ({ ...prev, lcNo: false }));
+                                                                            setHighlightedHistoryFilterIndex(-1);
                                                                         }}
-                                                                        className="w-full px-4 py-1.5 text-left text-xs hover:bg-blue-50 transition-colors"
+                                                                        onMouseEnter={() => setHighlightedHistoryFilterIndex(idx)}
+                                                                        className={`w-full px-4 py-1.5 text-left text-xs transition-colors ${highlightedHistoryFilterIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                     >
                                                                         {opt}
                                                                     </button>
@@ -1578,9 +1622,14 @@ const CnF = ({
                                                             onChange={(e) => {
                                                                 setHistoryFilterSearchInputs(prev => ({ ...prev, product: e.target.value }));
                                                                 setHistoryFilters(prev => ({ ...prev, productName: e.target.value }));
-                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, product: true, lcNo: false }));
+                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, product: true, lcNo: false, port: false }));
+                                                                setHighlightedHistoryFilterIndex(-1);
                                                             }}
-                                                            onFocus={() => setHistoryFilterDropdownOpen(prev => ({ ...prev, product: true, lcNo: false }))}
+                                                            onFocus={() => {
+                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, product: true, lcNo: false, port: false }));
+                                                                setHighlightedHistoryFilterIndex(-1);
+                                                            }}
+                                                            onKeyDown={(e) => handleHistoryFilterKeyDown(e, 'product', 'product', 'productName')}
                                                             placeholder={historyFilters.productName || "Select Product..."}
                                                             className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
                                                         />
@@ -1591,15 +1640,65 @@ const CnF = ({
                                                         const filtered = options.filter(opt => opt.toLowerCase().includes(historyFilterSearchInputs.product.toLowerCase()));
                                                         return filtered.length > 0 ? (
                                                             <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                                {filtered.map(opt => (
+                                                                {filtered.map((opt, idx) => (
                                                                     <button
                                                                         key={opt}
                                                                         onClick={() => {
                                                                             setHistoryFilters(prev => ({ ...prev, productName: opt }));
                                                                             setHistoryFilterSearchInputs(prev => ({ ...prev, product: '' }));
                                                                             setHistoryFilterDropdownOpen(prev => ({ ...prev, product: false }));
+                                                                            setHighlightedHistoryFilterIndex(-1);
                                                                         }}
-                                                                        className="w-full px-4 py-1.5 text-left text-xs hover:bg-blue-50 transition-colors"
+                                                                        onMouseEnter={() => setHighlightedHistoryFilterIndex(idx)}
+                                                                        className={`w-full px-4 py-1.5 text-left text-xs transition-colors ${highlightedHistoryFilterIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                    >
+                                                                        {opt}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+
+                                                {/* Port Dropdown */}
+                                                <div className="space-y-1.5 relative" ref={portFilterSearchRef}>
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">PORT</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={historyFilterSearchInputs.port}
+                                                            onChange={(e) => {
+                                                                setHistoryFilterSearchInputs(prev => ({ ...prev, port: e.target.value }));
+                                                                setHistoryFilters(prev => ({ ...prev, port: e.target.value }));
+                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, port: true, lcNo: false, product: false }));
+                                                                setHighlightedHistoryFilterIndex(-1);
+                                                            }}
+                                                            onFocus={() => {
+                                                                setHistoryFilterDropdownOpen(prev => ({ ...prev, port: true, lcNo: false, product: false }));
+                                                                setHighlightedHistoryFilterIndex(-1);
+                                                            }}
+                                                            onKeyDown={(e) => handleHistoryFilterKeyDown(e, 'port', 'port', 'port')}
+                                                            placeholder={historyFilters.port || "Select Port..."}
+                                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
+                                                        />
+                                                        <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                                    </div>
+                                                    {historyFilterDropdownOpen.port && (() => {
+                                                        const options = getUniqueHistoryOptions('port');
+                                                        const filtered = options.filter(opt => opt.toLowerCase().includes(historyFilterSearchInputs.port.toLowerCase()));
+                                                        return filtered.length > 0 ? (
+                                                            <div className="absolute z-[2020] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
+                                                                {filtered.map((opt, idx) => (
+                                                                    <button
+                                                                        key={opt}
+                                                                        onClick={() => {
+                                                                            setHistoryFilters(prev => ({ ...prev, port: opt }));
+                                                                            setHistoryFilterSearchInputs(prev => ({ ...prev, port: '' }));
+                                                                            setHistoryFilterDropdownOpen(prev => ({ ...prev, port: false }));
+                                                                            setHighlightedHistoryFilterIndex(-1);
+                                                                        }}
+                                                                        onMouseEnter={() => setHighlightedHistoryFilterIndex(idx)}
+                                                                        className={`w-full px-4 py-1.5 text-left text-xs transition-colors ${highlightedHistoryFilterIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                     >
                                                                         {opt}
                                                                     </button>
