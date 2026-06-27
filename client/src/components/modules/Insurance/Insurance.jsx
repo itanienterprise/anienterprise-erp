@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, ShieldIcon, XIcon, ChevronDownIcon, ChevronUpIcon, DollarSignIcon, BarChartIcon, TrendingUpIcon, EyeIcon, PrinterIcon, FunnelIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -59,6 +60,7 @@ const Insurance = ({ onDeleteConfirm }) => {
     const [viewData, setViewData] = useState(null);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [activeHistoryTab, setActiveHistoryTab] = useState('payments'); // 'payments' or 'lc'
+    const [expandedHistoryIdx, setExpandedHistoryIdx] = useState(null);
 
     // History Filter State
     const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', lcNo: '' });
@@ -234,6 +236,7 @@ const Insurance = ({ onDeleteConfirm }) => {
             premiumBalance: aggregates.totalPremium - paidPremium,
             returnBalance: aggregates.returnAmount - paidReturn
         });
+        setExpandedHistoryIdx(null);
     };
 
     const handleDelete = (id) => {
@@ -793,65 +796,49 @@ const Insurance = ({ onDeleteConfirm }) => {
                                             </div>
                                         </div>
                                     </div>
-
                                     {isExpanded && (
                                         <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-300">
-                                            {/* Contact Details (Shown only when expanded) */}
-                                            <div className="space-y-0.5 mb-4 pb-3 border-b border-gray-50">
-                                                <div className="flex flex-col space-y-0.5">
-                                                    <span className="text-[11px] font-black text-gray-500 uppercase tracking-tight truncate">{item.contactPerson || 'No Contact'}</span>
-                                                    <span className="text-[11px] font-bold text-blue-600 truncate">{item.email || 'No Email'}</span>
-                                                    <span className="text-[11px] font-bold text-gray-900 tabular-nums">{item.phone || 'No Phone'}</span>
+                                            {/* Contact & Card Details: Financial Metrics in clean Exporter-style Flex rows */}
+                                            <div className="space-y-2.5 pt-3 border-t border-gray-50 mb-4">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Contact Person</span>
+                                                    <span className="text-gray-900 font-black">{item.contactPerson || '-'}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Email</span>
+                                                    <span className="text-blue-600 font-black truncate max-w-[65%]">{item.email || '-'}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Phone</span>
+                                                    <span className="text-gray-900 font-black font-mono">{item.phone || '-'}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs pt-1 border-t border-gray-100/50">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Total Premium</span>
+                                                    <span className="text-blue-600 font-black">৳{aggregates.totalPremium.toLocaleString('en-IN')}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Paid Premium</span>
+                                                    <span className="text-emerald-600 font-black">৳{paidPremium.toLocaleString('en-IN')}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-rose-500 font-bold uppercase tracking-widest text-[9px]">Premium Balance</span>
+                                                    <span className="text-rose-600 font-black">৳{premiumBalance.toLocaleString('en-IN')}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Return Amount</span>
+                                                    <span className="text-indigo-600 font-black">৳{aggregates.returnAmount.toLocaleString('en-IN')}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Paid Return</span>
+                                                    <span className="text-emerald-600 font-black">৳{paidReturn.toLocaleString('en-IN')}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-rose-500 font-bold uppercase tracking-widest text-[9px]">Return Balance</span>
+                                                    <span className="text-rose-600 font-black">৳{returnBalance.toLocaleString('en-IN')}</span>
                                                 </div>
                                             </div>
-
-                                            {/* Card Details: Financial Metrics with Right Alignment */}
-                                            <div className="space-y-1 pt-1 mb-4">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Total Premium</span>
-                                                    <div className="flex items-center text-right min-w-0">
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-blue-600 truncate">৳{aggregates.totalPremium.toLocaleString('en-US')}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Paid Premium</span>
-                                                    <div className="flex items-center text-right min-w-0">
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-emerald-600 truncate">৳{paidPremium.toLocaleString('en-US')}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[11px] font-black text-rose-500 uppercase tracking-widest shrink-0">Premium Balance</span>
-                                                    <div className="flex items-center text-right min-w-0">
-                                                        <span className="text-rose-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-black text-rose-600">৳{premiumBalance.toLocaleString('en-US')}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Return Amount</span>
-                                                    <div className="flex items-center text-right min-w-0">
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-indigo-600 truncate">৳{aggregates.returnAmount.toLocaleString('en-US')}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Paid Return</span>
-                                                    <div className="flex items-center text-right min-w-0">
-                                                        <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-emerald-600 truncate">৳{paidReturn.toLocaleString('en-US')}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[11px] font-black text-rose-500 uppercase tracking-widest shrink-0">Return Balance</span>
-                                                    <div className="flex items-center text-right min-w-0">
-                                                        <span className="text-rose-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-black text-rose-600">৳{returnBalance.toLocaleString('en-US')}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex flex-row gap-2">
+ 
+                                            <div className="flex flex-row gap-2 pt-2 border-t border-gray-100">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleView(item); }}
                                                     className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
@@ -881,13 +868,13 @@ const Insurance = ({ onDeleteConfirm }) => {
             )}
 
             {/* Insurance Detail Modal (History Card) */}
-            {viewData && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-0 md:p-4">
+            {viewData && createPortal(
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setViewData(null)}></div>
-                    <div className="relative bg-white border-t md:border border-gray-100 rounded-t-[32px] md:rounded-2xl shadow-2xl w-full max-w-[1200px] flex flex-col h-[95vh] md:h-auto md:max-h-[90vh] animate-in slide-in-from-bottom md:zoom-in duration-300">
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-[1200px] flex flex-col max-h-[90vh] animate-in zoom-in duration-300">
 
                         {/* Desktop Header */}
-                        <div className="hidden md:flex px-6 py-5 border-b border-gray-100 flex-row items-center justify-between gap-4 bg-white rounded-t-2xl z-10 sticky top-0">
+                        <div className="hidden md:flex px-6 py-5 border-b border-gray-100 flex-row items-center justify-between gap-4 bg-white rounded-t-2xl flex-shrink-0">
                             <div className="flex-1 text-left">
                                 <h2 className="text-xl font-bold text-gray-900">{viewData.companyName}</h2>
                                 <p className="text-xs text-gray-500 mt-1">{viewData.policyType} | {viewData.email || 'No Email'}</p>
@@ -910,7 +897,10 @@ const Insurance = ({ onDeleteConfirm }) => {
                                     {['payments', 'lcs'].map(tab => (
                                         <button
                                             key={tab}
-                                            onClick={() => setActiveHistoryTab(tab)}
+                                            onClick={() => {
+                                                setActiveHistoryTab(tab);
+                                                setExpandedHistoryIdx(null);
+                                            }}
                                             className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${activeHistoryTab === tab ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                                         >
                                             {tab === 'payments' ? 'Payment History' : 'LC History'}
@@ -941,15 +931,15 @@ const Insurance = ({ onDeleteConfirm }) => {
 
 
                         {/* Mobile Header */}
-                        <div className="md:hidden px-6 pt-14 pb-6 border-b border-gray-100 bg-white rounded-t-[32px] z-20 sticky top-0">
-                            <div className="flex items-start justify-between gap-4 mb-4">
-                                <div className="min-w-0 flex-1">
-                                    <h2 className="text-xl font-black text-gray-900 tracking-tight uppercase tracking-widest break-words leading-tight">{viewData.companyName}</h2>
-                                    <p className="text-[10px] font-bold text-gray-500 mt-1 uppercase tracking-wider">{viewData.policyType} | {viewData.email || 'No Email'}</p>
+                        <div className="relative md:hidden px-6 py-5 border-b border-gray-100 bg-white rounded-t-2xl flex-shrink-0">
+                            <div className="mb-4">
+                                <div className="flex items-center justify-between gap-4">
+                                    <h3 className="text-lg font-bold text-gray-900 truncate min-w-0 flex-1" title={viewData.companyName}>{viewData.companyName}</h3>
+                                    <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all shrink-0 -mr-2">
+                                        <XIcon className="w-5 h-5" />
+                                    </button>
                                 </div>
-                                <button onClick={() => setViewData(null)} className="p-2 bg-gray-50 text-gray-400 rounded-xl active:scale-95 transition-all shrink-0">
-                                    <XIcon className="w-6 h-6" />
-                                </button>
+                                <p className="text-xs text-gray-500 mt-1">{viewData.policyType} | {viewData.email || 'No Email'}</p>
                             </div>
                             <div className="flex flex-col gap-3">
                                 {/* Search + Filter button row */}
@@ -983,12 +973,43 @@ const Insurance = ({ onDeleteConfirm }) => {
                                     {['payments', 'lcs'].map(tab => (
                                         <button
                                             key={tab}
-                                            onClick={() => setActiveHistoryTab(tab)}
+                                            onClick={() => {
+                                                setActiveHistoryTab(tab);
+                                                setExpandedHistoryIdx(null);
+                                            }}
                                             className={`flex-1 py-2 text-xs font-black rounded-lg transition-all uppercase tracking-widest ${activeHistoryTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                         >
                                             {tab === 'payments' ? 'Payments' : 'LCs'}
                                         </button>
                                     ))}
+                                </div>
+
+                                {/* Statistics: High Density for Mobile */}
+                                <div className="space-y-2 mt-1">
+                                    <div className="flex flex-row gap-1">
+                                        {[
+                                            { label: 'Tot. Prem', value: viewData.aggregates.totalPremium, color: 'blue' },
+                                            { label: 'Pd. Prem', value: viewData.paidPremium, color: 'emerald' },
+                                            { label: 'Prem. Bal', value: viewData.premiumBalance, color: 'rose' }
+                                        ].map((stat, i) => (
+                                            <div key={i} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate">{stat.label}</p>
+                                                <p className={`text-xs font-black text-${stat.color}-600 truncate`}>৳{stat.value.toLocaleString('en-IN')}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex flex-row gap-1">
+                                        {[
+                                            { label: 'Ret. Amt', value: viewData.aggregates.returnAmount, color: 'indigo' },
+                                            { label: 'Pd. Ret', value: viewData.paidReturn, color: 'emerald' },
+                                            { label: 'Ret. Bal', value: viewData.returnBalance, color: 'orange' }
+                                        ].map((stat, i) => (
+                                            <div key={i} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate">{stat.label}</p>
+                                                <p className={`text-xs font-black text-${stat.color}-600 truncate`}>৳{stat.value.toLocaleString('en-IN')}</p>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1089,33 +1110,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                         {/* Modal Body */}
                         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8">
 
-                            {/* Statistics: High Density for Mobile */}
-                            <div className="md:hidden space-y-2">
-                                <div className="flex flex-row gap-1">
-                                    {[
-                                        { label: 'Tot. Prem', value: viewData.aggregates.totalPremium, color: 'blue' },
-                                        { label: 'Pd. Prem', value: viewData.paidPremium, color: 'emerald' },
-                                        { label: 'Prem. Bal', value: viewData.premiumBalance, color: 'rose' }
-                                    ].map((stat, i) => (
-                                        <div key={i} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate">{stat.label}</p>
-                                            <p className={`text-xs font-black text-${stat.color}-600 truncate`}>৳{stat.value.toLocaleString('en-IN')}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="flex flex-row gap-1">
-                                    {[
-                                        { label: 'Ret. Amt', value: viewData.aggregates.returnAmount, color: 'indigo' },
-                                        { label: 'Pd. Ret', value: viewData.paidReturn, color: 'emerald' },
-                                        { label: 'Ret. Bal', value: viewData.returnBalance, color: 'orange' }
-                                    ].map((stat, i) => (
-                                        <div key={i} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate">{stat.label}</p>
-                                            <p className={`text-xs font-black text-${stat.color}-600 truncate`}>৳{stat.value.toLocaleString('en-IN')}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+
 
                             {/* Desktop Stats Grid (Restored Colors) */}
                             <div className="hidden md:grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -1253,112 +1248,146 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 </div>
 
                                 {/* Mobile History Cards */}
-                                <div className="md:hidden space-y-4">
+                                <div className="md:hidden space-y-3">
                                     {filteredHistory.length > 0 ? (
                                         filteredHistory.map((item, idx) => {
                                             const lc = lcRecords.find(l => l.lcNo === item.lcNo);
+                                            const isExpanded = expandedHistoryIdx === idx;
                                             return (
-                                                <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                                                    <div className="flex justify-between items-start">
-                                                        <div className="space-y-1">
-                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{activeHistoryTab === 'payments' ? formatDate(item.date) : formatDate(item.openingDate)}</p>
-                                                            <p className="text-sm font-black text-gray-900 uppercase tracking-tight">
-                                                                {activeHistoryTab === 'payments' ? `${item.method} ${item.reference ? `(${item.reference})` : ''}` : item.lcNo}
-                                                            </p>
+                                                <div key={idx} className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+                                                    {/* Card Toggle Header */}
+                                                    <div
+                                                        className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                                        onClick={() => setExpandedHistoryIdx(isExpanded ? null : idx)}
+                                                    >
+                                                        <div className="flex-1 min-w-0 pr-4">
+                                                            <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden flex-wrap">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
+                                                                    {activeHistoryTab === 'payments' ? formatDate(item.date) : formatDate(item.openingDate)}
+                                                                </span>
+                                                                <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                                <span className="font-bold text-gray-800 truncate max-w-[120px] shrink-0" title={activeHistoryTab === 'payments' ? item.method : item.exporterName}>
+                                                                    {activeHistoryTab === 'payments' ? item.method : item.exporterName || '-'}
+                                                                </span>
+                                                                <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                                <span className="font-black text-blue-600 truncate min-w-0" title={item.lcNo}>
+                                                                    {item.lcNo || '-'}
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                        {activeHistoryTab === 'payments' ? (
-                                                            item.isAdjustReturn ? (
-                                                                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
-                                                                    Adjust
-                                                                </span>
-                                                            ) : item.type === 'Return Collection' ? (
-                                                                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
-                                                                    Return
-                                                                </span>
-                                                            ) : (
-                                                                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
-                                                                    Paid
-                                                                </span>
-                                                            )
-                                                        ) : (() => {
-                                                            const status = getLcInsuranceStatus(item, insurancePayments);
-                                                            if (status === 'complete') {
-                                                                return (
-                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
-                                                                        complete
-                                                                    </span>
-                                                                );
-                                                            } else if (status === 'return recived') {
-                                                                return (
-                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-600 border-amber-100/50">
-                                                                        return recived
-                                                                    </span>
-                                                                );
-                                                            } else if (status === 'premium paid') {
-                                                                return (
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            {activeHistoryTab === 'payments' ? (
+                                                                item.isAdjustReturn ? (
                                                                     <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
-                                                                        premium paid
+                                                                        Adjust
                                                                     </span>
-                                                                );
-                                                            } else {
-                                                                return (
+                                                                ) : item.type === 'Return Collection' ? (
+                                                                    <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
+                                                                        Return
+                                                                    </span>
+                                                                ) : (
                                                                     <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
-                                                                        not paid
+                                                                        Paid
                                                                     </span>
-                                                                );
-                                                            }
-                                                        })()}
+                                                                )
+                                                            ) : (() => {
+                                                                const status = getLcInsuranceStatus(item, insurancePayments);
+                                                                if (status === 'complete') {
+                                                                    return (
+                                                                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
+                                                                            complete
+                                                                        </span>
+                                                                    );
+                                                                } else if (status === 'return recived') {
+                                                                    return (
+                                                                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-600 border-amber-100/50">
+                                                                            return recived
+                                                                        </span>
+                                                                    );
+                                                                } else if (status === 'premium paid') {
+                                                                    return (
+                                                                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
+                                                                            premium paid
+                                                                        </span>
+                                                                    );
+                                                                } else {
+                                                                    return (
+                                                                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
+                                                                            not paid
+                                                                        </span>
+                                                                    );
+                                                                }
+                                                            })()}
+                                                            <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                                {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                            </div>
+                                                        </div>
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 gap-2 pt-3 border-t border-gray-50">
-                                                        {activeHistoryTab === 'payments' ? (
-                                                            <>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">LC No</span>
-                                                                    <span className="text-sm font-bold text-gray-700">{item.lcNo || '-'}</span>
-                                                                </div>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Gross Premium</span>
-                                                                    <span className="text-sm font-bold text-blue-600">৳{lc ? (parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN') : '-'}</span>
-                                                                </div>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Return Amount</span>
-                                                                    <span className="text-sm font-bold text-indigo-600">
-                                                                        ৳{(item.isAdjustReturn || item.type === 'Return Collection')
-                                                                            ? (lc ? (parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN') : '-')
-                                                                            : '0'}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Paid</span>
-                                                                    <span className="text-sm font-bold text-gray-700">৳{item.type === 'Return Collection' ? '0' : (parseFloat(item.amount) || 0).toLocaleString('en-IN')}</span>
-                                                                </div>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Adjusted</span>
-                                                                    <span className="text-sm font-bold text-rose-600">{item.adjustedAmount > 0 ? `৳${parseFloat(item.adjustedAmount).toLocaleString('en-IN')}` : '-'}</span>
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Beneficiary</span>
-                                                                    <span className="text-sm font-bold text-gray-700 truncate ml-4 text-right">{item.exporterName}</span>
-                                                                </div>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Gross Premium</span>
-                                                                    <span className="text-sm font-black text-blue-600">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-IN')}</span>
-                                                                </div>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Net Premium</span>
-                                                                    <span className="text-sm font-black text-rose-600">৳{parseFloat(item.netPremium || 0).toLocaleString('en-IN')}</span>
-                                                                </div>
-                                                                <div className="flex justify-between">
-                                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Exp. Return</span>
-                                                                    <span className="text-sm font-black text-emerald-600">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</span>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </div>
+                                                    {/* Expandable Details */}
+                                                    {isExpanded && (
+                                                        <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-4 duration-300">
+                                                            <div className="grid grid-cols-[125px_8px_1fr] gap-y-2 pt-3 text-xs items-baseline">
+                                                                {activeHistoryTab === 'payments' ? (
+                                                                    <>
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 uppercase truncate text-[11px]">{item.lcNo || '-'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Method</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 uppercase truncate text-[11px]">{item.method || '-'}</span>
+
+                                                                        {item.reference && (
+                                                                            <>
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reference</span>
+                                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                                <span className="font-semibold text-gray-700 text-[11px]">{item.reference}</span>
+                                                                            </>
+                                                                        )}
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-blue-600 text-[11px]">৳{lc ? (parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN') : '-'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-indigo-600 text-[11px]">
+                                                                            ৳{(item.isAdjustReturn || item.type === 'Return Collection')
+                                                                                ? (lc ? (parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN') : '-')
+                                                                                : '0'}
+                                                                        </span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Paid</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-700 text-[11px]">৳{item.type === 'Return Collection' ? '0' : (parseFloat(item.amount) || 0).toLocaleString('en-IN')}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Adjusted</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-rose-600 text-[11px]">{item.adjustedAmount > 0 ? `৳${parseFloat(item.adjustedAmount).toLocaleString('en-IN')}` : '-'}</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Beneficiary</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 truncate text-[11px]">{item.exporterName || '-'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-blue-600 text-[11px]">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-IN')}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Premium</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-rose-600 text-[11px]">৳{parseFloat(item.netPremium || 0).toLocaleString('en-IN')}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exp. Return</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-emerald-600 text-[11px]">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })
@@ -1369,7 +1398,8 @@ const Insurance = ({ onDeleteConfirm }) => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

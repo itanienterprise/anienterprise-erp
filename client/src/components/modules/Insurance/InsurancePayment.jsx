@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, ShieldIcon, BarChartIcon, CalendarIcon, CheckIcon, TrendingUpIcon } from '../../Icons';
+import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, ChevronUpIcon, TrashIcon, EditIcon, ShieldIcon, BarChartIcon, CalendarIcon, CheckIcon, TrendingUpIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -51,6 +51,7 @@ const InsurancePayment = () => {
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
     const [lcs, setLcs] = useState([]);
+    const [expandedPaymentIdx, setExpandedPaymentIdx] = useState(null);
 
     const [newPayment, setNewPayment] = useState({
         insuranceId: '',
@@ -187,11 +188,13 @@ const InsurancePayment = () => {
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({ ...prev, [key]: value }));
         setFilterDropdownOpen(null);
+        setExpandedPaymentIdx(null);
     };
 
     const resetFilters = () => {
         setFilters(initialFilterState);
         setSearchQuery('');
+        setExpandedPaymentIdx(null);
     };
 
     const uniqueMethods = ["Cash", "Bank Transfer", "Online Banking", "Mobile Banking", "Cheque", "Other"];
@@ -256,6 +259,7 @@ const InsurancePayment = () => {
         setLcSearchQuery('');
         setIsEditMode(false);
         setEditingPayment(null);
+        setExpandedPaymentIdx(null);
     };
 
     const handleEditPayment = (payment) => {
@@ -293,6 +297,7 @@ const InsurancePayment = () => {
                 setShowDeleteConfirm(false);
                 setPaymentToDelete(null);
                 setSubmitStatus(null);
+                setExpandedPaymentIdx(null);
                 fetchPayments();
                 fetchInsurances();
             }, 1000);
@@ -391,12 +396,12 @@ const InsurancePayment = () => {
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
+                <div className="w-full md:w-auto text-center md:text-left">
                     <h2 className="text-xl md:text-2xl font-bold text-gray-800">Insurance Payment</h2>
                 </div>
 
                 {!showAddModal && (
-                    <div className="flex-1 w-full max-w-md mx-auto relative group">
+                    <div className="w-full max-w-md mx-auto relative group">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                         </div>
@@ -404,13 +409,13 @@ const InsurancePayment = () => {
                             type="text"
                             placeholder="Search by company, method, reference..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => { setSearchQuery(e.target.value); setExpandedPaymentIdx(null); }}
                             className="h-10 block w-full pl-10 pr-4 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
                         />
                     </div>
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto">
                     {!showAddModal && (
                         <div className="relative">
                             <button
@@ -884,17 +889,17 @@ const InsurancePayment = () => {
             ) : (
                 /* Main View: Summary Cards + Table */
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         {/* Total Paid (Premium) */}
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                    <DollarSignIcon className="w-5 h-5" />
+                        <div className="bg-white p-3.5 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group">
+                            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                    <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
                                 </div>
-                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Paid (Premium)</span>
+                                <span className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider truncate">Total Paid (Premium)</span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-black text-gray-900">৳{filteredPayments.reduce((sum, p) => {
+                                <span className="text-lg md:text-2xl font-black text-gray-900 truncate">৳{filteredPayments.reduce((sum, p) => {
                                     if (p.type === 'Return Collection') return sum;
                                     return sum + (p.amount || 0) + (p.adjustedAmount || 0);
                                 }, 0).toLocaleString('en-IN')}</span>
@@ -902,41 +907,28 @@ const InsurancePayment = () => {
                         </div>
 
                         {/* Total Collected (Return) */}
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                                    <TrendingUpIcon className="w-5 h-5" />
+                        <div className="bg-white p-3.5 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group">
+                            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                    <TrendingUpIcon className="w-4 h-4 md:w-5 md:h-5" />
                                 </div>
-                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Collected (Return)</span>
+                                <span className="text-[9px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider truncate">Total Collected (Return)</span>
                             </div>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-black text-emerald-600">৳{filteredPayments.reduce((sum, p) => {
+                                <span className="text-lg md:text-2xl font-black text-emerald-600 truncate">৳{filteredPayments.reduce((sum, p) => {
                                     const amount = p.type === 'Return Collection' ? (p.amount || 0) : 0;
                                     const adjustment = p.adjustedAmount || 0;
                                     return sum + amount + adjustment;
                                 }, 0).toLocaleString('en-IN')}</span>
                             </div>
                         </div>
-
-                        {/* Transactions */}
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                    <BarChartIcon className="w-5 h-5" />
-                                </div>
-                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Transactions</span>
-                            </div>
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-black text-gray-900">{transactionCount}</span>
-                                <span className="text-xs font-bold text-gray-400 ml-1">Entries</span>
-                            </div>
-                        </div>
                     </div>
 
 
 
-                    {/* Table */}
-                    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                    {/* Table / List View */}
+                    {/* Desktop View */}
+                    <div className="hidden md:block bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-[13px]">
                                 <thead className="bg-gray-50/50 border-b border-gray-200">
@@ -1030,6 +1022,127 @@ const InsurancePayment = () => {
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+
+                    {/* Mobile View */}
+                    <div className="md:hidden space-y-3">
+                        {isLoading ? (
+                            <div className="bg-white p-12 text-center rounded-2xl border border-gray-100 shadow-sm text-gray-400">
+                                Loading payments...
+                            </div>
+                        ) : filteredPayments.length === 0 ? (
+                            <div className="bg-white p-12 text-center rounded-2xl border border-gray-100 shadow-sm text-gray-400 italic text-sm">
+                                No payment records found.
+                            </div>
+                        ) : (
+                            filteredPayments.map((p, idx) => {
+                                const lc = lcs.find(l => l.lcNo === p.lcNo);
+                                const isExpanded = expandedPaymentIdx === idx;
+                                return (
+                                    <div key={p._id} className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+                                        {/* Card Toggle Header */}
+                                        <div
+                                            className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                            onClick={() => setExpandedPaymentIdx(isExpanded ? null : idx)}
+                                        >
+                                            <div className="flex-1 min-w-0 pr-4">
+                                                <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden flex-wrap">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
+                                                        {formatDate(p.date)}
+                                                    </span>
+                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                    <span className="font-bold text-gray-800 truncate max-w-[120px] shrink-0" title={p.companyName}>
+                                                        {p.companyName}
+                                                    </span>
+                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                    <span className="text-gray-500 font-medium truncate max-w-[80px] shrink-0">
+                                                        {p.method}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {p.isAdjustReturn ? (
+                                                    <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
+                                                        Adjust
+                                                    </span>
+                                                ) : p.type === 'Return Collection' ? (
+                                                    <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
+                                                        Return
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
+                                                        Paid
+                                                    </span>
+                                                )}
+                                                {isExpanded ? (
+                                                    <ChevronUpIcon className="w-4 h-4 text-gray-400" />
+                                                ) : (
+                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Expandable Details */}
+                                        {isExpanded && (
+                                            <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-4 duration-300">
+                                                <div className="grid grid-cols-[125px_8px_1fr] gap-y-2 pt-3 text-xs items-baseline">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-700 uppercase truncate text-[11px]">{p.lcNo || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reference</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-blue-600 text-[11px]">
+                                                        {lc ? `৳${(parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN')}` : '-'}
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-indigo-600 text-[11px]">
+                                                        {(p.isAdjustReturn || p.type === 'Return Collection')
+                                                            ? (lc ? `৳${(parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN')}` : '-')
+                                                            : '৳0'}
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Paid</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-gray-700 text-[11px]">
+                                                        {p.type === 'Return Collection' ? '৳0' : `৳${p.amount.toLocaleString('en-IN')}`}
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Adjusted</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-rose-600 text-[11px]">
+                                                        {p.adjustedAmount > 0 ? `৳${p.adjustedAmount.toLocaleString('en-IN')}` : '-'}
+                                                    </span>
+
+                                                    {isAdmin && (
+                                                        <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
+                                                            <button
+                                                                onClick={() => handleEditPayment(p)}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                            >
+                                                                <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeletePayment(p)}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                            >
+                                                                <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
                 </>
             )}
