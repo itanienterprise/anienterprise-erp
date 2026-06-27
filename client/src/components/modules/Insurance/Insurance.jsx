@@ -869,7 +869,7 @@ const Insurance = ({ onDeleteConfirm }) => {
 
             {/* Insurance Detail Modal (History Card) */}
             {viewData && createPortal(
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-[1200px] flex flex-col max-h-[90vh] animate-in zoom-in duration-300">
 

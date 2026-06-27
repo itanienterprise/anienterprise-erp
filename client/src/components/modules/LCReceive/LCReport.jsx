@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { XIcon, PrinterIcon, BarChartIcon, FunnelIcon, SearchIcon, ChevronDownIcon } from '../../Icons';
 import { formatDate } from '../../../utils/helpers';
 import { generateLCReceiveReportPDF } from '../../../utils/pdfGenerator';
@@ -148,8 +149,8 @@ const LCReport = ({
 
     if (!isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm app-modal-overlay">
+    return createPortal(
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm app-modal-overlay">
             <div className="w-full h-full md:w-[98%] md:h-[94%] bg-white md:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 print:w-full print:h-auto print:shadow-none print:bg-white print:rounded-none">
                 {/* Modal Header - Hidden in Print */}
                 <div className="px-4 md:px-8 py-3 md:py-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between print:hidden">
@@ -835,14 +836,19 @@ const LCReport = ({
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="text-xs font-bold text-gray-900 mb-1 leading-tight">{lcGroup.importer || 'No Importer'}</div>
-                                                <div className="flex justify-between text-[10px] text-gray-500 font-medium">
-                                                    <span className="truncate max-w-[48%] flex items-center gap-1">Port: <span className="font-bold text-gray-700">{lcGroup.port || '-'}</span></span>
-                                                    <span className="truncate max-w-[48%] flex items-center gap-1">BOE: <span className="font-bold text-gray-700">{lcGroup.billOfEntry || '-'}</span></span>
-                                                </div>
+                                                <div className="text-xs font-bold text-gray-900 leading-tight">{lcGroup.importer || 'No Importer'}</div>
                                             </div>
                                             {isExpanded && (
                                                 <div className="divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 p-3 text-xs items-baseline text-left bg-gray-50/30 border-b border-gray-100">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-bold text-blue-600">{lcGroup.port || '-'}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BOE</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-bold text-gray-800">{lcGroup.billOfEntry || '-'}</span>
+                                                    </div>
                                                     {Object.values(lcGroup.rows.reduce((acc, item) => {
                                                         const key = `${item.productName}-${item.truckNo}`;
                                                         if (!acc[key]) acc[key] = { productName: item.productName, truckNo: item.truckNo, rows: [] };
@@ -864,23 +870,22 @@ const LCReport = ({
                                                                                 <span className="text-red-500 text-[9px] font-black uppercase tracking-tighter px-1.5 py-0.5 bg-red-50 rounded">Short {Math.round(item.sweepedQuantity)} kg</span>
                                                                             )}
                                                                         </div>
-                                                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px]">
-                                                                            <div className="flex justify-between border-r border-gray-50 pr-2">
-                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">BAG</span>
-                                                                                <span className="text-gray-900 font-semibold">{item.packet || '0'}</span>
-                                                                            </div>
-                                                                            <div className="flex justify-between pl-2">
-                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">Total QTY</span>
-                                                                                <span className="text-gray-950 font-black">{Math.round(item.quantity) || '0'} {item.unit}</span>
-                                                                            </div>
-                                                                            <div className="flex justify-between border-r border-gray-50 pr-2 pt-0.5">
-                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">In-House</span>
-                                                                                <span className="text-emerald-600 font-bold">{Math.round(getIHQty(item)) || 0} {item.unit}</span>
-                                                                            </div>
-                                                                            <div className="flex justify-between pl-2 pt-0.5">
-                                                                                <span className="text-gray-400 font-bold uppercase tracking-tighter">IH Pkt</span>
-                                                                                <span className="text-blue-600 font-bold">{formatPktDisplay(getIHPkt(item), getIHQty(item), item.packetSize)}</span>
-                                                                            </div>
+                                                                        <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-[10px] items-baseline text-left pt-1">
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider">BAG</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="text-gray-900 font-bold">{item.packet || '0'}</span>
+
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider">Total QTY</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="text-gray-950 font-black">{Math.round(item.quantity) || '0'} {item.unit}</span>
+
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider">In-House</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="text-emerald-600 font-bold">{Math.round(getIHQty(item)) || 0} {item.unit}</span>
+
+                                                                            <span className="text-gray-400 font-bold uppercase tracking-wider">IH Pkt</span>
+                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                            <span className="text-blue-600 font-bold">{formatPktDisplay(getIHPkt(item), getIHQty(item), item.packetSize)}</span>
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -930,7 +935,8 @@ const LCReport = ({
                     </div>
                 </div>
             </div>
-        </div >
+        </div>,
+        document.body
     );
 };
 

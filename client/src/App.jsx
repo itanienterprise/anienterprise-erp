@@ -2225,7 +2225,7 @@ function App() {
         </header>
 
         {/* Dashboard Content */}
-        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
+        <main className={`relative z-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
           {renderContent()}
         </main>
       </div>

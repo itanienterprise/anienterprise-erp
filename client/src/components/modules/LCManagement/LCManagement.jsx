@@ -939,7 +939,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     });
 
     return createPortal(
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}></div>
             <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
                 {/* Desktop Header */}

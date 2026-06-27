@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
     SearchIcon,
     XIcon,
@@ -362,8 +363,8 @@ const StockHistoryModal = ({
 
     if (!viewRecord) return null;
 
-    return (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+    return createPortal(
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
             <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                 {/* Modal Header */}
@@ -862,7 +863,8 @@ const StockHistoryModal = ({
                     })()}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
