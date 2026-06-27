@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import {
     SearchIcon, FunnelIcon, XIcon, BarChartIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, EyeIcon, CheckIcon
@@ -24,11 +25,11 @@ const ViewDetailsModal = ({ data, onClose }) => {
     }, {});
     const uniqueEntries = Object.values(uniqueEntriesMap);
 
-    return (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+    return createPortal(
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/50">
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between px-4 md:px-6 py-3.5 md:py-4 border-b border-gray-50 bg-gray-50/50 flex-shrink-0">
                     <div>
                         <h3 className="text-lg font-bold text-gray-900">LC Receive Details</h3>
                         <p className="text-xs text-gray-500 font-medium">Grouped Record • {formatDate(data.date)}</p>
@@ -38,55 +39,86 @@ const ViewDetailsModal = ({ data, onClose }) => {
                     </button>
                 </div>
 
-                <div className="overflow-y-auto max-h-[70vh] p-6 space-y-6">
-                    {/* Core Info */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LC No</span>
-                            <p className="text-sm font-bold text-gray-800">{data.lcNo || 'N/A'}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Port</span>
-                            <p className="text-sm font-bold text-blue-600">{data.port || 'N/A'}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Importer</span>
-                            <p className="text-sm font-medium text-gray-700 truncate">{data.importer || 'N/A'}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Exporter</span>
-                            <p className="text-sm font-medium text-gray-700 truncate">{data.exporter || 'N/A'}</p>
-                        </div>
-                    </div>
+                <div className="overflow-y-auto flex-1 p-4 md:p-6 space-y-4 md:space-y-6">
+                    {/* Core Info Grid */}
+                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-3.5 text-xs text-left items-baseline pb-5 border-b border-gray-100">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-bold text-gray-800 text-[13px]">{data.lcNo || 'N/A'}</span>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-gray-50">
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND C&F</span>
-                            <p className="text-sm text-gray-700 font-medium">{data.indianCnF || '-'}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">IND Cost</span>
-                            <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString('en-IN')}` : '-'}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD C&F</span>
-                            <p className="text-sm text-gray-700 font-medium">{data.bdCnF || '-'}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BD Cost</span>
-                            <p className="text-sm text-gray-700 font-bold">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-IN')}` : '-'}</p>
-                        </div>
-                    </div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-bold text-blue-600 text-[13px]">{data.port || 'N/A'}</span>
 
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50">
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Bill Of Entry</span>
-                            <p className="text-sm text-gray-700 font-bold">{data.billOfEntry || '-'}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Trucks</span>
-                            <p className="text-sm text-amber-600 font-black">{data.totalLcTruck}</p>
-                        </div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-semibold text-gray-700 text-[13px]">{data.importer || 'N/A'}</span>
+
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-semibold text-gray-700 text-[13px]">{data.exporter || 'N/A'}</span>
+
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IND C&F</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-semibold text-gray-700 text-[13px]">{data.indianCnF || '-'}</span>
+
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Value</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-bold text-gray-800 text-[13px]">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString('en-IN')}` : '-'}</span>
+
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BD C&F</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-semibold text-gray-700 text-[13px]">{data.bdCnF || '-'}</span>
+
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Value</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-bold text-gray-800 text-[13px]">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-IN')}` : '-'}</span>
+
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bill Of Entry</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-bold text-gray-700 text-[13px]">{data.billOfEntry || '-'}</span>
+
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Trucks</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-black text-amber-600 text-[13px]">{data.totalLcTruck}</span>
+
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 text-[11px] font-bold uppercase tracking-wider w-fit">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                            {data.entries[0]?.status || 'In Stock'}
+                        </span>
+
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Warehouse</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-[11px] font-bold uppercase tracking-wider w-fit">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                            {data.entries[0]?.warehouse || 'N/A'}
+                        </span>
+
+                        {data.entries[0]?.requestedBy && (
+                            <>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Requested By</span>
+                                <span className="text-gray-400 font-bold">:</span>
+                                <span className="font-semibold text-gray-700 text-[13px]">{data.entries[0].requestedBy}</span>
+                            </>
+                        )}
+
+                        {data.entries[0]?.acceptedBy && (
+                            <>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Accepted By</span>
+                                <span className="text-gray-400 font-bold">:</span>
+                                <span className="font-semibold text-emerald-600 text-[13px]">{data.entries[0].acceptedBy}</span>
+                            </>
+                        )}
+
+                        {data.entries[0]?.rejectedBy && (
+                            <>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rejected By</span>
+                                <span className="text-gray-400 font-bold">:</span>
+                                <span className="font-semibold text-red-500 text-[13px]">{data.entries[0].rejectedBy}</span>
+                            </>
+                        )}
                     </div>
 
                     {/* Product Table */}
@@ -219,23 +251,22 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                                         {tg.brands.map((item, idx) => (
                                                             <div key={idx} className="p-3 space-y-2">
                                                                 {item.brand && <p className="text-xs text-purple-700 font-semibold">{item.brand}</p>}
-                                                                <div className="grid grid-cols-4 gap-2 pt-1 border-t border-gray-100">
-                                                                    <div className="text-center">
-                                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Bag</p>
-                                                                        <p className="text-sm font-bold text-gray-800">{Math.round(item.packet).toLocaleString('en-US')}</p>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
-                                                                        <p className="text-sm font-bold text-gray-800">{Math.round(item.quantity).toLocaleString('en-US')} kg</p>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <p className="text-[10px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
-                                                                        <p className="text-sm font-bold text-red-500">{Math.round(item.sweepedQuantity).toLocaleString('en-US')} kg</p>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
-                                                                        <p className="text-sm font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-US')} kg</p>
-                                                                    </div>
+                                                                <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 pt-1.5 border-t border-gray-100 text-xs items-baseline text-left">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-bold text-gray-800">{Math.round(item.packet).toLocaleString('en-US')}</span>
+
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Arrival</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-bold text-gray-800">{Math.round(item.quantity).toLocaleString('en-US')} kg</span>
+
+                                                                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Short</span>
+                                                                    <span className="text-red-300 font-bold">:</span>
+                                                                    <span className="font-bold text-red-500">{Math.round(item.sweepedQuantity).toLocaleString('en-US')} kg</span>
+
+                                                                    <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">In Qty</span>
+                                                                    <span className="text-blue-300 font-bold">:</span>
+                                                                    <span className="font-black text-blue-600">{Math.round(item.inHouseQuantity).toLocaleString('en-US')} kg</span>
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -249,66 +280,31 @@ const ViewDetailsModal = ({ data, onClose }) => {
                             {/* Mobile Grand Totals */}
                             <div className="bg-white rounded-xl border border-gray-200 p-3">
                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-2">Grand Totals</p>
-                                <div className="grid grid-cols-4 gap-2">
-                                    <div className="text-center">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Bag</p>
-                                        <p className="text-sm font-black text-gray-900">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-US')}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Arrival</p>
-                                        <p className="text-sm font-black text-gray-900">{Math.round(data.totalQuantity).toLocaleString('en-US')} kg</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-[10px] font-black text-red-400 uppercase tracking-wider mb-0.5">Short</p>
-                                        <p className="text-sm font-black text-red-600">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-US')} kg</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider mb-0.5">In Qty</p>
-                                        <p className="text-sm font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-US')} kg</p>
-                                    </div>
+                                <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag</span>
+                                    <span className="text-gray-400 font-bold">:</span>
+                                    <span className="font-bold text-gray-900">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-US')}</span>
+
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Arrival</span>
+                                    <span className="text-gray-400 font-bold">:</span>
+                                    <span className="font-bold text-gray-900">{Math.round(data.totalQuantity).toLocaleString('en-US')} kg</span>
+
+                                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Short</span>
+                                    <span className="text-red-300 font-bold">:</span>
+                                    <span className="font-bold text-red-600">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-US')} kg</span>
+
+                                    <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">In Qty</span>
+                                    <span className="text-blue-300 font-bold">:</span>
+                                    <span className="font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-US')} kg</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Requested By / Accepted By / Rejected By */}
-                    {(data.entries[0]?.requestedBy || data.entries[0]?.acceptedBy || data.entries[0]?.rejectedBy) && (
-                        <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-50">
-                            {data.entries[0]?.requestedBy && (
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Requested By</span>
-                                    <p className="text-sm font-semibold text-gray-700">{data.entries[0].requestedBy}</p>
-                                </div>
-                            )}
-                            {data.entries[0]?.acceptedBy && (
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Accepted By</span>
-                                    <p className="text-sm font-semibold text-emerald-600">{data.entries[0].acceptedBy}</p>
-                                </div>
-                            )}
-                            {data.entries[0]?.rejectedBy && (
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Rejected By</span>
-                                    <p className="text-sm font-semibold text-red-500">{data.entries[0].rejectedBy}</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
 
-                    {/* Status/Warehouse Info */}
-                    <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-50">
-                        <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider">Status: {data.entries[0]?.status || 'In Stock'}</span>
-                        </div>
-                        <div className="px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg border border-gray-100 flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider">Warehouse: {data.entries[0]?.warehouse || 'N/A'}</span>
-                        </div>
-                    </div>
                 </div>
 
-                <div className="p-4 border-t border-gray-50 bg-gray-50/30 flex justify-end">
+                <div className="p-4 border-t border-gray-50 bg-gray-50/30 flex justify-end flex-shrink-0">
                     <button
                         onClick={onClose}
                         className="px-6 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-black transition-all active:scale-95"
@@ -317,7 +313,8 @@ const ViewDetailsModal = ({ data, onClose }) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -2455,7 +2452,7 @@ function LCReceive({
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">IND Cost</label>
+                                    <label className="text-sm font-medium text-gray-700">Value</label>
                                     <input
                                         type="number" name="indCnFCost" value={stockFormData.indCnFCost} onChange={handleStockInputChange}
                                         placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -2511,7 +2508,7 @@ function LCReceive({
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">BD Cost</label>
+                                    <label className="text-sm font-medium text-gray-700">Value</label>
                                     <input
                                         type="number" name="bdCnFCost" value={stockFormData.bdCnFCost} onChange={handleStockInputChange}
                                         placeholder="0.00" autoComplete="off" className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -3706,52 +3703,48 @@ function LCReceive({
 
                                             {isExpanded && (
                                                 <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-3 border-t border-gray-50">
-                                                        <div className="col-span-1">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">Importer</span>
-                                                            <div className="text-gray-700 text-[13px] font-bold truncate">{entry.importer || "-"}</div>
-                                                        </div>
-                                                        <div className="col-span-1 text-right">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">Exporter</span>
-                                                            <div className="text-gray-700 text-[13px] font-bold truncate">{entry.exporter || "-"}</div>
-                                                        </div>
+                                                    <div className="grid grid-cols-[100px_8px_1fr] gap-y-2.5 pt-3 border-t border-gray-50 text-xs items-baseline text-left">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-semibold text-gray-700 truncate max-w-xs">{entry.importer || "-"}</span>
 
-                                                        <div className="col-span-1">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">IND C&F</span>
-                                                            <div className="text-gray-700 text-[13px] font-bold truncate">{entry.indianCnF || "-"}</div>
-                                                        </div>
-                                                        <div className="col-span-1 text-right">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">BD C&F</span>
-                                                            <div className="text-gray-700 text-[13px] font-bold truncate">{entry.bdCnF || "-"}</div>
-                                                        </div>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-semibold text-gray-700 truncate max-w-xs">{entry.exporter || "-"}</span>
 
-                                                        <div className="col-span-1">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">BOE</span>
-                                                            <div className="text-gray-700 text-[13px] font-bold truncate">{entry.billOfEntry || "-"}</div>
-                                                        </div>
-                                                        <div className="col-span-1 text-right">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">Port</span>
-                                                            <div className="text-blue-600 text-[13px] font-bold truncate">{entry.port || "-"}</div>
-                                                        </div>
-                                                        <div className="col-span-1">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">Truck</span>
-                                                            <div className="text-gray-900 text-[13px] font-bold">{entry.totalLcTruck}</div>
-                                                        </div>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IND C&F</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-semibold text-gray-700 truncate">{entry.indianCnF || "-"}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BD C&F</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-semibold text-gray-700 truncate">{entry.bdCnF || "-"}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BOE</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-bold text-gray-700">{entry.billOfEntry || "-"}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-bold text-blue-600 truncate">{entry.port || "-"}</span>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-bold text-gray-900">{entry.totalLcTruck}</span>
                                                     </div>
 
-                                                    <div className="grid grid-cols-3 gap-x-2 p-3 bg-gray-50/50 rounded-xl border border-gray-100">
-                                                        <div className="col-span-1 text-center">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">Total Qty</span>
-                                                            <div className="text-gray-900 font-bold text-sm">{Math.round(entry.totalQuantity).toLocaleString('en-US')} kg</div>
-                                                        </div>
-                                                        <div className="col-span-1 text-center">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">Short</span>
-                                                            <div className="text-red-500 font-bold text-sm">{Math.round(entry.totalShort).toLocaleString('en-US')} kg</div>
-                                                        </div>
-                                                        <div className="col-span-1 text-center">
-                                                            <span className="block text-gray-400 uppercase font-bold tracking-widest text-[10px] mb-0.5">IN QTY</span>
-                                                            <div className="text-blue-600 font-bold text-sm">{Math.round(entry.totalInQty).toLocaleString('en-US')} kg</div>
-                                                        </div>
+                                                    <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 p-3 bg-gray-50/50 rounded-xl border border-gray-100 text-xs items-baseline text-left">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Qty</span>
+                                                        <span className="text-gray-400 font-bold">:</span>
+                                                        <span className="font-bold text-gray-900">{Math.round(entry.totalQuantity).toLocaleString('en-US')} kg</span>
+
+                                                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Short</span>
+                                                        <span className="text-red-300 font-bold">:</span>
+                                                        <span className="font-bold text-red-500">{Math.round(entry.totalShort).toLocaleString('en-US')} kg</span>
+
+                                                        <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">In Qty</span>
+                                                        <span className="text-blue-300 font-bold">:</span>
+                                                        <span className="font-black text-blue-600">{Math.round(entry.totalInQty).toLocaleString('en-US')} kg</span>
                                                     </div>
 
                                                     <div className="space-y-1.5">
