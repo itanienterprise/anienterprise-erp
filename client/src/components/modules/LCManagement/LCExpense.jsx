@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
-import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon, FunnelIcon } from '../../Icons';
+import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
@@ -12,6 +12,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [expandedExpenseIdx, setExpandedExpenseIdx] = useState(null);
 
     // For dropdowns
     const [lcs, setLcs] = useState([]);
@@ -235,6 +236,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         fetchCnfs();
         fetchStocks();
         fetchInsurancePayments();
+        setExpandedExpenseIdx(null);
     }, [refreshKey]);
 
     useEffect(() => {
@@ -442,6 +444,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         setIsEditMode(false);
         setEditingId(null);
         setFormData(initialFormData);
+        setExpandedExpenseIdx(null);
     };
 
     const filteredExpenses = expenses.filter(exp => {
@@ -472,10 +475,10 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 {!showAddModal ? (
                     <>
-                        <div className="w-full md:w-1/4 text-center md:text-left">
+                        <div className="w-full md:w-auto text-center md:text-left">
                             <h2 className="text-2xl font-bold text-gray-800 tracking-tight">LC Expense</h2>
                         </div>
-                        <div className="w-full md:flex-1 md:max-w-md md:mx-auto relative group px-2 md:px-0">
+                        <div className="w-full max-w-md mx-auto relative group px-2 md:px-0">
                             <div className="absolute inset-y-0 left-0 pl-12 md:pl-3.5 flex items-center pointer-events-none">
                                 <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                             </div>
@@ -483,7 +486,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                 type="text"
                                 placeholder="Search expenses..."
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => { setSearchQuery(e.target.value); setExpandedExpenseIdx(null); }}
                                 className="block w-full pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
                             />
                         </div>
@@ -493,7 +496,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                 )}
 
                 {!showAddModal && (
-                    <div className="w-full md:w-auto flex flex-row justify-end gap-2 sm:gap-3 z-[60]">
+                    <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto z-[60]">
                         {/* Filter Button & Panel */}
                         <div className="relative">
                             <button
@@ -635,29 +638,29 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
             {!showAddModal && (
                 <>
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
-                            <div>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Expenses</p>
-                                <h3 className="text-2xl font-black text-gray-800">{filteredExpenses.length}</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white rounded-2xl p-3 md:p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[9px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Expenses</p>
+                                <h3 className="text-base md:text-2xl font-black text-gray-800">{filteredExpenses.length}</h3>
                             </div>
-                            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                                <FileTextIcon className="w-6 h-6 text-blue-600" />
+                            <div className="w-9 h-9 md:w-12 md:h-12 bg-blue-50 rounded-xl hidden md:flex items-center justify-center shrink-0">
+                                <FileTextIcon className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
                             </div>
                         </div>
-                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
-                            <div>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Amount</p>
-                                <h3 className="text-2xl font-black text-rose-600">৳{totalAmount.toLocaleString('en-IN')}</h3>
+                        <div className="bg-white rounded-2xl p-3 md:p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[9px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Amount</p>
+                                <h3 className="text-sm sm:text-base md:text-2xl font-black text-rose-600">৳{totalAmount.toLocaleString('en-IN')}</h3>
                             </div>
-                            <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center">
-                                <DollarSignIcon className="w-6 h-6 text-rose-600" />
+                            <div className="w-9 h-9 md:w-12 md:h-12 bg-rose-50 rounded-xl hidden md:flex items-center justify-center shrink-0">
+                                <DollarSignIcon className="w-5 h-5 md:w-6 md:h-6 text-rose-600" />
                             </div>
                         </div>
                     </div>
 
-                    {/* Table */}
-                    <div className="bg-white/70 backdrop-blur-sm rounded-3xl border border-white/60 shadow-sm overflow-hidden overflow-x-auto transition-all duration-500">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block bg-white/70 backdrop-blur-sm rounded-3xl border border-white/60 shadow-sm overflow-hidden overflow-x-auto transition-all duration-500">
                         <table className="w-full text-left min-w-[1000px]">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
@@ -705,6 +708,106 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                 )}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Mobile Card List View */}
+                    <div className="md:hidden space-y-3">
+                        {isLoading ? (
+                            <div className="bg-white p-12 text-center rounded-2xl border border-gray-100 shadow-sm text-gray-400">
+                                Loading expenses...
+                            </div>
+                        ) : filteredExpenses.length === 0 ? (
+                            <div className="bg-white p-12 text-center rounded-2xl border border-gray-100 shadow-sm text-gray-400 italic text-sm">
+                                No expenses found.
+                            </div>
+                        ) : (
+                            filteredExpenses.map((exp, idx) => {
+                                const isExpanded = expandedExpenseIdx === idx;
+                                return (
+                                    <div key={exp._id} className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+                                        {/* Card Toggle Header */}
+                                        <div
+                                            className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                            onClick={() => setExpandedExpenseIdx(isExpanded ? null : idx)}
+                                        >
+                                            <div className="flex-1 min-w-0 pr-4">
+                                                <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden flex-wrap">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
+                                                        {formatDate(exp.date)}
+                                                    </span>
+                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                    <span className="font-bold text-gray-800 truncate max-w-[120px] shrink-0" title={exp.lcNo}>
+                                                        {exp.lcNo || '-'}
+                                                    </span>
+                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                    <span className="text-blue-600 font-medium truncate max-w-[120px] shrink-0">
+                                                        {exp.expenseHead}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <span className="text-xs font-black text-gray-900">
+                                                    ৳{parseFloat(exp.amount || 0).toLocaleString('en-IN')}
+                                                </span>
+                                                {isExpanded ? (
+                                                    <ChevronUpIcon className="w-4 h-4 text-gray-400" />
+                                                ) : (
+                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Expandable Details */}
+                                        {isExpanded && (
+                                            <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-4 duration-300">
+                                                <div className="grid grid-cols-[125px_8px_1fr] gap-y-2 pt-3 text-xs items-baseline">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{exp.lcNo || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expense Head</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-blue-600 text-[11px] truncate max-w-[180px]">{exp.expenseHead}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{exp.bankName || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">C&F Agent</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{exp.cnfAgent || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amount</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-black text-gray-900 text-[11px]">
+                                                        ৳{parseFloat(exp.amount || 0).toLocaleString('en-IN')}
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-600 text-[11px] break-words">{exp.remarks || '-'}</span>
+
+                                                    <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
+                                                        <button
+                                                            onClick={() => handleEdit(exp)}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                        >
+                                                            <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(exp._id)}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                        >
+                                                            <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
                 </>
             )}

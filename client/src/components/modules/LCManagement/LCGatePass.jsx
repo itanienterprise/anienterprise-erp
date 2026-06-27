@@ -4,7 +4,7 @@ import {
     PlusIcon, SearchIcon, FunnelIcon, 
     EditIcon, TrashIcon, FileTextIcon, CalendarIcon,
     ArrowUpRightIcon, CheckIcon, XIcon, LayoutIcon,
-    ChevronDownIcon
+    ChevronDownIcon, ChevronUpIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -44,6 +44,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     const [salesRecordsRaw, setSalesRecordsRaw] = useState([]);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [expandedGpIdx, setExpandedGpIdx] = useState(null);
     const lcRef = useRef(null);
     const partyRef = useRef(null);
 
@@ -140,6 +141,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
             }
             setShowForm(false);
             setEditingId(null);
+            setExpandedGpIdx(null);
             setFormData({
                 gpDate: new Date().toISOString().split('T')[0],
                 lcNumber: '',
@@ -176,6 +178,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
         try {
             await axios.delete(`${API_BASE_URL}/api/lc-gp/${id}`);
             addNotification?.('Gate Pass deleted successfully', 'success');
+            setExpandedGpIdx(null);
             fetchRecords();
         } catch (error) {
             console.error('Error deleting GP record:', error);
@@ -238,7 +241,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                 autoComplete="off"
                                 className="block w-full pl-10 pr-4 py-2.5 md:py-2 bg-white/50 border border-gray-200 rounded-xl text-[13px] text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => { setSearchQuery(e.target.value); setExpandedGpIdx(null); }}
                             />
                         </div>
                     </>
@@ -261,156 +264,318 @@ const LCGatePass = ({ currentUser, addNotification }) => {
 
             {/* The stats, filters, and toolbar have been removed to match the LC Open module layout */}
 
-            {/* Table Section */}
+            {/* Table / List View */}
             {!showForm && (
-                <div className="bg-white/70 backdrop-blur-sm rounded-3xl border border-white/60 shadow-sm overflow-hidden overflow-x-auto transition-all duration-500">
-                    <table className="w-full text-left min-w-[1000px]">
-                    <thead>
-                        <tr className="bg-gray-50/50 border-b border-gray-100">
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC Number</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Importer</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Party</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">LC Qty</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">G.P Qty</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Border Sale</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem. G.P</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">G.P Value</th>
-                            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
+                <>
+                    {/* Desktop View */}
+                    <div className="hidden md:block bg-white/70 backdrop-blur-sm rounded-3xl border border-white/60 shadow-sm overflow-hidden overflow-x-auto transition-all duration-500">
+                        <table className="w-full text-left min-w-[1000px]">
+                            <thead>
+                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC Number</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Importer</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Party</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Product</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">LC Qty</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">G.P Qty</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Border Sale</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem. G.P</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">G.P Value</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {isLoading ? (
+                                    Array(5).fill(0).map((_, i) => (
+                                        <tr key={i} className="animate-pulse">
+                                            {Array(11).fill(0).map((_, j) => (
+                                                <td key={j} className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full" /></td>
+                                            ))}
+                                        </tr>
+                                    ))
+                                ) : filteredRecords.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="11" className="px-6 py-32 text-center">
+                                            <div className="flex flex-col items-center gap-4">
+                                                <div className="p-6 bg-gray-50 rounded-full">
+                                                    <FileTextIcon className="w-12 h-12 text-gray-300" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-lg font-black text-gray-900">No Records Found</p>
+                                                    <p className="text-sm text-gray-500">Try adjusting your filters or search query</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredRecords.map((record) => (
+                                        <tr key={record._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <p className="text-sm font-medium text-gray-600">{formatDate(record.gpDate)}</p>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <p className="text-sm font-bold text-gray-900">{record.lcNumber}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="text-sm font-medium text-gray-700">{record.partyName}</p>
+                                            </td>
+                                            <td className="px-6 py-4 font-medium text-sm text-gray-700">{record.party || '-'}</td>
+                                            <td className="px-6 py-4 font-bold text-sm text-gray-900">{record.productName}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-sm font-bold text-gray-900">
+                                                    {parseFloat(record.lcQuantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-sm font-bold text-blue-600">
+                                                    {parseFloat(record.gpQuantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {(() => {
+                                                    const borderSaleForThisRow = salesRecordsRaw
+                                                        .filter(s => {
+                                                            const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                                            const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').startsWith('BS');
+                                                            const sCompany = (s.companyName || '').toLowerCase().trim();
+                                                            const sCustomer = (s.customerName || '').toLowerCase().trim();
+                                                            const rParty = (record.party || '').toLowerCase().trim();
+                                                            const isSameParty = sCompany === rParty || sCustomer === rParty;
+                                                            return isBorder && s.lcNo === record.lcNumber && isSameParty && s.status !== 'Rejected';
+                                                        })
+                                                        .reduce((sum, sale) => {
+                                                            const saleQty = (sale.items || []).reduce((itemSum, item) => {
+                                                                const brandQty = (item.brandEntries || []).reduce((entrySum, entry) => entrySum + (parseFloat(entry.quantity) || 0), 0);
+                                                                return itemSum + (brandQty > 0 ? brandQty : (parseFloat(item.quantity) || 0));
+                                                            }, 0);
+                                                            return sum + saleQty;
+                                                        }, 0);
+                                                    return (
+                                                        <span className="text-sm font-bold text-orange-600">
+                                                            {borderSaleForThisRow.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {(() => {
+                                                    const borderSaleForThisRow = salesRecordsRaw
+                                                        .filter(s => {
+                                                            const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                                            const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').startsWith('BS');
+                                                            const sCompany = (s.companyName || '').toLowerCase().trim();
+                                                            const sCustomer = (s.customerName || '').toLowerCase().trim();
+                                                            const rParty = (record.party || '').toLowerCase().trim();
+                                                            const isSameParty = sCompany === rParty || sCustomer === rParty;
+                                                            return isBorder && s.lcNo === record.lcNumber && isSameParty && s.status !== 'Rejected';
+                                                        })
+                                                        .reduce((sum, sale) => {
+                                                            const saleQty = (sale.items || []).reduce((itemSum, item) => {
+                                                                const brandQty = (item.brandEntries || []).reduce((entrySum, entry) => entrySum + (parseFloat(entry.quantity) || 0), 0);
+                                                                return itemSum + (brandQty > 0 ? brandQty : (parseFloat(item.quantity) || 0));
+                                                            }, 0);
+                                                            return sum + saleQty;
+                                                        }, 0);
+                                                    const remGp = Math.max(0, parseFloat(record.gpQuantity || 0) - borderSaleForThisRow);
+                                                    return (
+                                                        <span className={`text-sm font-bold ${remGp <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                                                            {remGp.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
+                                            <td className="px-6 py-4 text-right whitespace-nowrap">
+                                                <p className="text-sm font-black text-gray-900">৳{parseFloat(record.gpValue || 0).toLocaleString('en-IN')}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center justify-center gap-4">
+                                                    {canManage && (
+                                                        <>
+                                                            <button 
+                                                                onClick={() => handleEdit(record)}
+                                                                className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                title="Edit Gate Pass"
+                                                            >
+                                                                <EditIcon className="w-5 h-5" />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleDelete(record._id)}
+                                                                className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                title="Delete Gate Pass"
+                                                            >
+                                                                <TrashIcon className="w-5 h-5" />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Mobile View */}
+                    <div className="md:hidden space-y-3">
                         {isLoading ? (
-                            Array(5).fill(0).map((_, i) => (
-                                <tr key={i} className="animate-pulse">
-                                    {Array(11).fill(0).map((_, j) => (
-                                        <td key={j} className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full" /></td>
-                                    ))}
-                                </tr>
-                            ))
+                            <div className="bg-white p-12 text-center rounded-2xl border border-gray-100 shadow-sm text-gray-400">
+                                Loading records...
+                            </div>
                         ) : filteredRecords.length === 0 ? (
-                            <tr>
-                                <td colSpan="11" className="px-6 py-32 text-center">
-                                    <div className="flex flex-col items-center gap-4">
-                                        <div className="p-6 bg-gray-50 rounded-full">
-                                            <FileTextIcon className="w-12 h-12 text-gray-300" />
-                                        </div>
-                                        <div>
-                                            <p className="text-lg font-black text-gray-900">No Records Found</p>
-                                            <p className="text-sm text-gray-500">Try adjusting your filters or search query</p>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
+                            <div className="bg-white p-12 text-center rounded-2xl border border-gray-100 shadow-sm text-gray-400 italic text-sm">
+                                No records found.
+                            </div>
                         ) : (
-                            filteredRecords.map((record) => (
-                                <tr key={record._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <p className="text-sm font-medium text-gray-600">{formatDate(record.gpDate)}</p>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <p className="text-sm font-bold text-gray-900">{record.lcNumber}</p>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <p className="text-sm font-medium text-gray-700">{record.partyName}</p>
-                                    </td>
-                                    <td className="px-6 py-4 font-medium text-sm text-gray-700">{record.party || '-'}</td>
-                                    <td className="px-6 py-4 font-bold text-sm text-gray-900">{record.productName}</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="text-sm font-bold text-gray-900">
-                                            {parseFloat(record.lcQuantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="text-sm font-bold text-blue-600">
-                                            {parseFloat(record.gpQuantity || 0).toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        {(() => {
-                                            const borderSaleForThisRow = salesRecordsRaw
-                                                .filter(s => {
-                                                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                                                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').startsWith('BS');
-                                                    const sCompany = (s.companyName || '').toLowerCase().trim();
-                                                    const sCustomer = (s.customerName || '').toLowerCase().trim();
-                                                    const rParty = (record.party || '').toLowerCase().trim();
-                                                    const isSameParty = sCompany === rParty || sCustomer === rParty;
-                                                    return isBorder && s.lcNo === record.lcNumber && isSameParty && s.status !== 'Rejected';
-                                                })
-                                                .reduce((sum, sale) => {
-                                                    const saleQty = (sale.items || []).reduce((itemSum, item) => {
-                                                        const brandQty = (item.brandEntries || []).reduce((entrySum, entry) => entrySum + (parseFloat(entry.quantity) || 0), 0);
-                                                        return itemSum + (brandQty > 0 ? brandQty : (parseFloat(item.quantity) || 0));
-                                                    }, 0);
-                                                    return sum + saleQty;
-                                                }, 0);
-                                            return (
-                                                <span className="text-sm font-bold text-orange-600">
-                                                    {borderSaleForThisRow.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                            filteredRecords.map((record, idx) => {
+                                const isExpanded = expandedGpIdx === idx;
+                                return (
+                                    <div key={record._id} className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+                                        {/* Card Toggle Header */}
+                                        <div
+                                            className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                            onClick={() => setExpandedGpIdx(isExpanded ? null : idx)}
+                                        >
+                                            <div className="flex-1 min-w-0 pr-4">
+                                                <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden flex-wrap">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">
+                                                        {formatDate(record.gpDate)}
+                                                    </span>
+                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                    <span className="font-bold text-gray-800 truncate max-w-[120px] shrink-0" title={record.lcNumber}>
+                                                        {record.lcNumber}
+                                                    </span>
+                                                    <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                    <span className="text-gray-500 font-medium truncate max-w-[120px] shrink-0">
+                                                        {record.partyName}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <span className="text-xs font-bold text-blue-600">
+                                                    {parseFloat(record.gpQuantity || 0).toLocaleString('en-US')} Kg
                                                 </span>
-                                            );
-                                        })()}
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        {(() => {
-                                            const borderSaleForThisRow = salesRecordsRaw
-                                                .filter(s => {
-                                                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                                                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').startsWith('BS');
-                                                    const sCompany = (s.companyName || '').toLowerCase().trim();
-                                                    const sCustomer = (s.customerName || '').toLowerCase().trim();
-                                                    const rParty = (record.party || '').toLowerCase().trim();
-                                                    const isSameParty = sCompany === rParty || sCustomer === rParty;
-                                                    return isBorder && s.lcNo === record.lcNumber && isSameParty && s.status !== 'Rejected';
-                                                })
-                                                .reduce((sum, sale) => {
-                                                    const saleQty = (sale.items || []).reduce((itemSum, item) => {
-                                                        const brandQty = (item.brandEntries || []).reduce((entrySum, entry) => entrySum + (parseFloat(entry.quantity) || 0), 0);
-                                                        return itemSum + (brandQty > 0 ? brandQty : (parseFloat(item.quantity) || 0));
-                                                    }, 0);
-                                                    return sum + saleQty;
-                                                }, 0);
-                                            const remGp = Math.max(0, parseFloat(record.gpQuantity || 0) - borderSaleForThisRow);
-                                            return (
-                                                <span className={`text-sm font-bold ${remGp <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                                                    {remGp.toLocaleString('en-US')} <span className="text-[10px] text-gray-400 font-normal">Kg</span>
-                                                </span>
-                                            );
-                                        })()}
-                                    </td>
-                                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                                        <p className="text-sm font-black text-gray-900">৳{parseFloat(record.gpValue || 0).toLocaleString('en-IN')}</p>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center justify-center gap-4">
-                                            {canManage && (
-                                                <>
-                                                    <button 
-                                                        onClick={() => handleEdit(record)}
-                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                        title="Edit Gate Pass"
-                                                    >
-                                                        <EditIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleDelete(record._id)}
-                                                        className="text-gray-400 hover:text-red-600 transition-colors"
-                                                        title="Delete Gate Pass"
-                                                    >
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
-                                                </>
-                                            )}
+                                                {isExpanded ? (
+                                                    <ChevronUpIcon className="w-4 h-4 text-gray-400" />
+                                                ) : (
+                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                )}
+                                            </div>
                                         </div>
-                                    </td>
-                                </tr>
-                            ))
+
+                                        {/* Expandable Details */}
+                                        {isExpanded && (
+                                            <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-4 duration-300">
+                                                <div className="grid grid-cols-[125px_8px_1fr] gap-y-2 pt-3 text-xs items-baseline">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{record.partyName}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Party</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{record.party || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-gray-900 text-[11px] truncate max-w-[180px]">{record.productName}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Qty</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px]">
+                                                        {parseFloat(record.lcQuantity || 0).toLocaleString('en-US')} Kg
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">G.P Qty</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-blue-600 text-[11px]">
+                                                        {parseFloat(record.gpQuantity || 0).toLocaleString('en-US')} Kg
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Border Sale</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-bold text-orange-600 text-[11px]">
+                                                        {(() => {
+                                                            const borderSaleForThisRow = salesRecordsRaw
+                                                                .filter(s => {
+                                                                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                                                    const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').startsWith('BS');
+                                                                    const sCompany = (s.companyName || '').toLowerCase().trim();
+                                                                    const sCustomer = (s.customerName || '').toLowerCase().trim();
+                                                                    const rParty = (record.party || '').toLowerCase().trim();
+                                                                    const isSameParty = sCompany === rParty || sCustomer === rParty;
+                                                                    return isBorder && s.lcNo === record.lcNumber && isSameParty && s.status !== 'Rejected';
+                                                                })
+                                                                .reduce((sum, sale) => {
+                                                                    const saleQty = (sale.items || []).reduce((itemSum, item) => {
+                                                                        const brandQty = (item.brandEntries || []).reduce((entrySum, entry) => entrySum + (parseFloat(entry.quantity) || 0), 0);
+                                                                        return itemSum + (brandQty > 0 ? brandQty : (parseFloat(item.quantity) || 0));
+                                                                    }, 0);
+                                                                    return sum + saleQty;
+                                                                }, 0);
+                                                            return borderSaleForThisRow.toLocaleString('en-IN');
+                                                        })()} Kg
+                                                    </span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rem. G.P</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    {(() => {
+                                                        const borderSaleForThisRow = salesRecordsRaw
+                                                            .filter(s => {
+                                                                const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                                                                const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').startsWith('BS');
+                                                                const sCompany = (s.companyName || '').toLowerCase().trim();
+                                                                const sCustomer = (s.customerName || '').toLowerCase().trim();
+                                                                const rParty = (record.party || '').toLowerCase().trim();
+                                                                const isSameParty = sCompany === rParty || sCustomer === rParty;
+                                                                return isBorder && s.lcNo === record.lcNumber && isSameParty && s.status !== 'Rejected';
+                                                            })
+                                                            .reduce((sum, sale) => {
+                                                                const saleQty = (sale.items || []).reduce((itemSum, item) => {
+                                                                    const brandQty = (item.brandEntries || []).reduce((entrySum, entry) => entrySum + (parseFloat(entry.quantity) || 0), 0);
+                                                                    return itemSum + (brandQty > 0 ? brandQty : (parseFloat(item.quantity) || 0));
+                                                                }, 0);
+                                                                return sum + saleQty;
+                                                            }, 0);
+                                                        const remGp = Math.max(0, parseFloat(record.gpQuantity || 0) - borderSaleForThisRow);
+                                                        return (
+                                                            <span className={`font-bold text-[11px] ${remGp <= 0 ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                                                                {remGp.toLocaleString('en-US')} Kg
+                                                            </span>
+                                                        );
+                                                    })()}
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">G.P Value</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-black text-gray-900 text-[11px]">
+                                                        ৳{parseFloat(record.gpValue || 0).toLocaleString('en-IN')}
+                                                    </span>
+
+                                                    {canManage && (
+                                                        <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
+                                                            <button
+                                                                onClick={() => handleEdit(record)}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                            >
+                                                                <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(record._id)}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                            >
+                                                                <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
                         )}
-                    </tbody>
-                </table>
-            </div>
+                    </div>
+                </>
             )}
 
             {/* In-Line Registration Form */}
