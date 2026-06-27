@@ -2834,7 +2834,9 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
                 c.companyName || c.customerName || '-',
                 getLastTransDay(c),
                 {
-                    content: `Tk ${Math.round(due).toLocaleString('en-IN')}`,
+                    content: due < 0 
+                        ? `Tk (-${Math.round(Math.abs(due)).toLocaleString('en-IN')})` 
+                        : `Tk ${Math.round(due).toLocaleString('en-IN')}`,
                     styles: { fontStyle: due < 0 ? 'bold' : 'normal', halign: 'right' }
                 },
                 '' // Remark field
