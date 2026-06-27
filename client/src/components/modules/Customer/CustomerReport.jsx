@@ -63,6 +63,11 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
     });
 
     const grandTotalDue = filtered.reduce((s, c) => s + Math.max(0, computeDue(c)), 0);
+    // Only show customers with positive or negative (advance/credit) balances — exclude zero
+    const tableCustomers = filtered.filter(c => Math.abs(computeDue(c)) > 0.01);
+    const positiveCustomers = tableCustomers.filter(c => computeDue(c) > 0);
+    const negativeCustomers = tableCustomers.filter(c => computeDue(c) < 0);
+    const displayCustomers = [...positiveCustomers, ...negativeCustomers];
 
     const handlePrint = () => {
         generateCustomerReportPDF(filtered, typeFilter, grandTotalDue, formatDate(new Date().toISOString().split('T')[0]));
@@ -179,17 +184,21 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-900">
-                                    {filtered.length > 0 ? (
-                                        filtered.map((c, idx) => {
+                                    {displayCustomers.length > 0 ? (
+                                        displayCustomers.map((c, idx) => {
                                             const due = computeDue(c);
+                                            const isNegative = due < 0;
                                             return (
                                                 <tr key={c._id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] text-gray-900 text-center">{idx + 1}</td>
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] font-bold text-gray-700">{c.customerId || '-'}</td>
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] text-gray-900">{c.companyName || c.customerName || '-'}</td>
                                                     <td className="border-r border-gray-200 px-2 py-2 text-[13px] font-medium text-gray-700 text-center">{getLastTransDay(c)}</td>
-                                                    <td className={`px-2 py-2 text-[14px] text-right font-black ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                        ৳{Math.round(due).toLocaleString('en-IN')}
+                                                    <td className={`px-2 py-2 text-[14px] text-right font-black ${isNegative ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        {isNegative
+                                                            ? `৳(-${Math.round(Math.abs(due)).toLocaleString('en-IN')})`
+                                                            : `৳${Math.round(due).toLocaleString('en-IN')}`
+                                                        }
                                                     </td>
                                                 </tr>
                                             );
@@ -200,7 +209,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                         </tr>
                                     )}
                                 </tbody>
-                                {filtered.length > 0 && (
+                                {displayCustomers.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
                                             <td colSpan="4" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total Due</td>

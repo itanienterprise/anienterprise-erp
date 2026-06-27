@@ -2755,6 +2755,10 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         const activeCustomers = customers.filter(c => {
             const due = computeDue(c);
             return Math.abs(due) > 0.01; // Avoid floating point issues with zero
+        }).sort((a, b) => {
+            const nameA = (a.companyName || a.customerName || '').toLowerCase();
+            const nameB = (b.companyName || b.customerName || '').toLowerCase();
+            return nameA.localeCompare(nameB);
         });
 
         // --- Header ---
