@@ -62,7 +62,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
         return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
     });
 
-    const grandTotalDue = filtered.reduce((s, c) => s + Math.max(0, computeDue(c)), 0);
+    const grandTotalDue = filtered.reduce((s, c) => s + computeDue(c), 0);
     // Only show customers with positive or negative (advance/credit) balances — exclude zero
     const tableCustomers = filtered.filter(c => Math.abs(computeDue(c)) > 0.01);
     const positiveCustomers = tableCustomers.filter(c => computeDue(c) > 0);
@@ -212,9 +212,12 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                 {displayCustomers.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
-                                            <td colSpan="4" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total Due</td>
-                                            <td className="px-2 py-2 text-[14px] text-right font-black text-rose-700">
-                                                ৳{Math.round(grandTotalDue).toLocaleString('en-IN')}
+                                            <td colSpan="4" className="px-2 py-2 text-[14px] font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900">Grand Total Balance</td>
+                                            <td className={`px-2 py-2 text-[14px] text-right font-black ${grandTotalDue < 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                                {grandTotalDue < 0
+                                                    ? `৳(-${Math.round(Math.abs(grandTotalDue)).toLocaleString('en-IN')})`
+                                                    : `৳${Math.round(grandTotalDue).toLocaleString('en-IN')}`
+                                                }
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -261,9 +264,12 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                 <div className="mt-6 p-5 bg-gray-900 rounded-2xl shadow-xl">
                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 text-center">Grand Total</h4>
                                     <div className="text-center">
-                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Due</p>
-                                        <p className="text-3xl font-black text-rose-400">
-                                            ৳{Math.round(grandTotalDue).toLocaleString('en-IN')}
+                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Net Balance</p>
+                                        <p className={`text-3xl font-black ${grandTotalDue < 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {grandTotalDue < 0
+                                                ? `৳(-${Math.round(Math.abs(grandTotalDue)).toLocaleString('en-IN')})`
+                                                : `৳${Math.round(grandTotalDue).toLocaleString('en-IN')}`
+                                            }
                                         </p>
                                     </div>
                                 </div>
@@ -283,9 +289,12 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                                 </div>
                             </div>
                             <div className="border border-gray-200 p-4 sm:p-5 rounded-2xl bg-white shadow-sm">
-                                <div className="text-[10px] sm:text-[11px] font-bold text-rose-500 uppercase tracking-wider mb-2">Grand Total Due</div>
-                                <div className="text-xl sm:text-2xl font-black text-rose-600">
-                                    ৳{Math.round(grandTotalDue).toLocaleString('en-IN')}
+                                <div className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider mb-2 ${grandTotalDue < 0 ? 'text-emerald-500' : 'text-rose-500'}`}>Grand Total Balance</div>
+                                <div className={`text-xl sm:text-2xl font-black ${grandTotalDue < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {grandTotalDue < 0
+                                        ? `৳(-${Math.round(Math.abs(grandTotalDue)).toLocaleString('en-IN')})`
+                                        : `৳${Math.round(grandTotalDue).toLocaleString('en-IN')}`
+                                    }
                                 </div>
                             </div>
                         </div>
