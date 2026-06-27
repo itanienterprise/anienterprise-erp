@@ -3616,7 +3616,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 2: { cellWidth: 32, halign: 'left' },   // Importer
                 3: { cellWidth: 32, halign: 'left' },   // Exporter
                 4: { cellWidth: 20, halign: 'left' },   // Product
-                5: { cellWidth: 18, halign: 'center' }, // Port
+                5: { cellWidth: 20, halign: 'center' }, // Port
                 6: { cellWidth: 14, halign: 'center' }, // UOM
                 7: { cellWidth: 17, halign: 'center' }, // Trucks
                 8: { cellWidth: 20, halign: 'center' }, // BOE No
