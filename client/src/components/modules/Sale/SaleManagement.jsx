@@ -1858,7 +1858,8 @@ const SaleManagement = ({
             setFormData(prev => ({ ...prev, importer: '' }));
             setImporterSearch('');
         } else {
-            setFormData(prev => ({ ...prev, importer }));
+            const value = typeof importer === 'object' ? (importer.name || '') : importer;
+            setFormData(prev => ({ ...prev, importer: value }));
             setImporterSearch('');
         }
         setActiveDropdown(null);
@@ -1870,7 +1871,8 @@ const SaleManagement = ({
             setFormData(prev => ({ ...prev, exporter: '' }));
             setExporterSearch('');
         } else {
-            setFormData(prev => ({ ...prev, exporter: exporterName }));
+            const value = typeof exporterName === 'object' ? (exporterName.name || '') : exporterName;
+            setFormData(prev => ({ ...prev, exporter: value }));
             setExporterSearch('');
         }
         setActiveDropdown(null);
@@ -1882,7 +1884,8 @@ const SaleManagement = ({
             setFormData(prev => ({ ...prev, port: '' }));
             setPortSearch('');
         } else {
-            setFormData(prev => ({ ...prev, port }));
+            const value = typeof port === 'object' ? (port.name || '') : port;
+            setFormData(prev => ({ ...prev, port: value }));
             setPortSearch('');
         }
         setActiveDropdown(null);
@@ -2053,13 +2056,15 @@ const SaleManagement = ({
     };
 
     const handleIndCnfSelect = (cnfName) => {
-        setFormData(prev => ({ ...prev, indianCnF: cnfName || '' }));
+        const value = typeof cnfName === 'object' ? (cnfName.name || '') : (cnfName || '');
+        setFormData(prev => ({ ...prev, indianCnF: value }));
         setIndCnfSearch('');
         setActiveDropdown(null);
     };
 
     const handleBdCnfSelect = (cnfName) => {
-        setFormData(prev => ({ ...prev, bdCnf: cnfName || '' }));
+        const value = typeof cnfName === 'object' ? (cnfName.name || '') : (cnfName || '');
+        setFormData(prev => ({ ...prev, bdCnf: value }));
         setBdCnfSearch('');
         setActiveDropdown(null);
     };
@@ -2075,6 +2080,8 @@ const SaleManagement = ({
             e.preventDefault();
             if (highlightedIndex >= 0 && filteredOptions && filteredOptions[highlightedIndex]) {
                 onSelect(filteredOptions[highlightedIndex]);
+            } else if (filteredOptions && filteredOptions.length > 0) {
+                onSelect(filteredOptions[0]);
             } else {
                 setActiveDropdown(null);
             }
@@ -3736,6 +3743,7 @@ const SaleManagement = ({
                                                             setActiveDropdown('product');
                                                             setActiveItemIndex(index);
                                                         }}
+                                                        onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.productName) && handleDropdownKeyDown(e, 'product', getFilteredProducts(), handleProductSelect)}
                                                         className={`sale-mgmt-input pr-14 ${item.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.productName) ? 'bg-gray-50' : ''}`}
                                                     />
                                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -3917,6 +3925,7 @@ const SaleManagement = ({
                                                                         setActiveEntryIndex(entryIndex);
                                                                         setBrandSearch(entry.brandName || '');
                                                                     }}
+                                                                    onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName) && handleDropdownKeyDown(e, 'brand', getFilteredBrands(), handleBrandSelect)}
                                                                     className={`sale-mgmt-input pr-10 !text-xs ${entry.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName) ? 'bg-gray-50' : ''}`}
                                                                 />
                                                                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -3990,6 +3999,7 @@ const SaleManagement = ({
                                                                             setActiveEntryIndex(entryIndex);
                                                                             setWarehouseSearch(entry.warehouseName || '');
                                                                         }}
+                                                                        onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName) && handleDropdownKeyDown(e, 'warehouse', getFilteredWarehouses(), handleWarehouseSelect)}
                                                                         className={`sale-mgmt-input pr-10 !text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName) ? 'bg-gray-50' : ''}`}
                                                                     />
                                                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">

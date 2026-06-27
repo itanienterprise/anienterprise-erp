@@ -717,8 +717,9 @@ function PackingList({
             setHighlightedIndex(prev => (prev > 0 ? prev - 1 : filteredList.length - 1));
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            if (highlightedIndex >= 0 && highlightedIndex < filteredList.length) {
-                const item = filteredList[highlightedIndex];
+            const indexToSelect = (highlightedIndex >= 0 && highlightedIndex < filteredList.length) ? highlightedIndex : 0;
+            if (filteredList && filteredList.length > 0) {
+                const item = filteredList[indexToSelect];
                 if (dropdownKey === 'piList') {
                     handlePISelect(item);
                 } else if (dropdownKey === 'lcNumber') {

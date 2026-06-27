@@ -1066,8 +1066,9 @@ function IPManagement({
             setHighlightedIndex(prev => Math.max(prev - 1, 0));
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            if (highlightedIndex >= 0 && highlightedIndex < options.length) {
-                const selected = options[highlightedIndex];
+            const indexToSelect = (highlightedIndex >= 0 && highlightedIndex < options.length) ? highlightedIndex : 0;
+            if (options && options.length > 0) {
+                const selected = options[indexToSelect];
                 const value = selected.ipName || selected.name || selected;
 
                 if (dropdownId.startsWith('filter-')) {
