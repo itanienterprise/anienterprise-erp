@@ -51,6 +51,32 @@ const CnFPayment = () => {
     const [paymentToDelete, setPaymentToDelete] = useState(null);
     const [cnfSearchQuery, setCnfSearchQuery] = useState('');
     const [expandedCard, setExpandedCard] = useState(null);
+    const [highlightedCnfIndex, setHighlightedCnfIndex] = useState(-1);
+
+    const handleCnfKeyDown = (e) => {
+        const filteredCnfs = cnfs.filter(c => c.name.toLowerCase().includes(cnfSearchQuery.toLowerCase()));
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedCnfIndex(prev => Math.min(prev + 1, filteredCnfs.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedCnfIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const indexToSelect = highlightedCnfIndex >= 0 ? highlightedCnfIndex : 0;
+            if (filteredCnfs && filteredCnfs[indexToSelect]) {
+                const c = filteredCnfs[indexToSelect];
+                setNewPayment(prev => ({ ...prev, cnfId: c._id }));
+                setActiveDropdown(null);
+                setCnfSearchQuery(c.name);
+                setHighlightedCnfIndex(-1);
+            } else {
+                setActiveDropdown(null);
+            }
+        } else if (e.key === 'Escape') {
+            setActiveDropdown(null);
+        }
+    };
     const cnfDropdownRef = useRef(null);
     const methodDropdownRef = useRef(null);
     const bankDropdownRef = useRef(null);
@@ -551,11 +577,15 @@ const CnFPayment = () => {
                                                 onChange={(e) => {
                                                     setCnfSearchQuery(e.target.value);
                                                     if (activeDropdown !== 'cnf') setActiveDropdown('cnf');
+                                                    setHighlightedCnfIndex(-1);
                                                 }}
                                                 onFocus={() => {
                                                     setActiveDropdown('cnf');
                                                     setCnfSearchQuery('');
+                                                    setHighlightedCnfIndex(-1);
                                                 }}
+                                                onKeyDown={handleCnfKeyDown}
+                                                autoComplete="off"
                                                 className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10 font-medium text-gray-900"
                                             />
                                             <SearchIcon className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${activeDropdown === 'cnf' ? 'text-blue-500' : 'text-gray-400'}`} />
@@ -563,7 +593,7 @@ const CnFPayment = () => {
                                         {activeDropdown === 'cnf' && (
                                             <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200 border-t-0 py-1">
                                                 {cnfs.filter(c => c.name.toLowerCase().includes(cnfSearchQuery.toLowerCase())).length > 0 ? (
-                                                    cnfs.filter(c => c.name.toLowerCase().includes(cnfSearchQuery.toLowerCase())).map(c => (
+                                                    cnfs.filter(c => c.name.toLowerCase().includes(cnfSearchQuery.toLowerCase())).map((c, idx) => (
                                                         <button
                                                             key={c._id}
                                                             type="button"
@@ -571,8 +601,10 @@ const CnFPayment = () => {
                                                                 setNewPayment({ ...newPayment, cnfId: c._id }); 
                                                                 setActiveDropdown(null); 
                                                                 setCnfSearchQuery(c.name);
+                                                                setHighlightedCnfIndex(-1);
                                                             }}
-                                                            className="w-full px-5 py-3 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between group"
+                                                            onMouseEnter={() => setHighlightedCnfIndex(idx)}
+                                                            className={`w-full px-5 py-3 text-left text-sm transition-colors flex items-center justify-between group ${highlightedCnfIndex === idx ? 'bg-blue-50' : 'hover:bg-blue-50'}`}
                                                         >
                                                             <div>
                                                                 <div className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{c.name}</div>

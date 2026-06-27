@@ -393,6 +393,32 @@ function LCReceive({
     const [validationErrors, setValidationErrors] = useState([]);
     const [showWhSelectDropdown, setShowWhSelectDropdown] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null);
+    const [highlightedWhSelectIndex, setHighlightedWhSelectIndex] = useState(-1);
+
+    const handleWhSelectKeyDown = (e) => {
+        const filtered = warehouses.filter(wh => !whSearchQuery || wh.whName.toLowerCase().includes(whSearchQuery.toLowerCase()));
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedWhSelectIndex(prev => Math.min(prev + 1, filtered.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedWhSelectIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const indexToSelect = highlightedWhSelectIndex >= 0 ? highlightedWhSelectIndex : 0;
+            if (filtered && filtered[indexToSelect]) {
+                const wh = filtered[indexToSelect];
+                setStockFormData(prev => ({ ...prev, warehouse: wh.whName }));
+                setWhSearchQuery('');
+                setShowWhSelectDropdown(false);
+                setHighlightedWhSelectIndex(-1);
+            } else {
+                setShowWhSelectDropdown(false);
+            }
+        } else if (e.key === 'Escape') {
+            setShowWhSelectDropdown(false);
+        }
+    };
     const [viewData, setViewData] = useState(null);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
@@ -1102,11 +1128,14 @@ function LCReceive({
             setHighlightedIndex(prev => Math.max(prev - 1, 0));
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            if (highlightedIndex >= 0 && highlightedIndex < options.length) {
-                const selected = options[highlightedIndex];
-                const value = typeof selected === 'object' ? (selected.name || selected.port || selected.brand) : selected;
+            const indexToSelect = (highlightedIndex >= 0 && highlightedIndex < options.length) ? highlightedIndex : 0;
+            if (options && options.length > 0) {
+                const selected = options[indexToSelect];
+                const value = typeof selected === 'object' ? (selected.lcNo || selected.name || selected.whName || selected.port || selected.brand || selected.value || selected.bankName || selected.ipNumber || selected) : selected;
                 onSelect(fieldOrValue, value);
                 setHighlightedIndex(-1);
+            } else {
+                setActiveDropdown(null);
             }
         } else if (e.key === 'Escape') {
             setActiveDropdown(null);
@@ -3068,8 +3097,13 @@ function LCReceive({
                                                 onChange={(e) => {
                                                     setWhSearchQuery(e.target.value);
                                                     setShowWhSelectDropdown(true);
+                                                    setHighlightedWhSelectIndex(-1);
                                                 }}
-                                                onFocus={() => setShowWhSelectDropdown(true)}
+                                                onFocus={() => {
+                                                    setShowWhSelectDropdown(true);
+                                                    setHighlightedWhSelectIndex(-1);
+                                                }}
+                                                onKeyDown={handleWhSelectKeyDown}
                                                 placeholder={stockFormData.warehouse || "Search warehouse..."}
                                                 autoComplete="off"
                                                 className={`w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${stockFormData.warehouse ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
@@ -3082,6 +3116,7 @@ function LCReceive({
                                                             setStockFormData(prev => ({ ...prev, warehouse: '' }));
                                                             setWhSearchQuery('');
                                                             setShowWhSelectDropdown(false);
+                                                            setHighlightedWhSelectIndex(-1);
                                                         }}
                                                         className="text-gray-400 hover:text-gray-600"
                                                     >
@@ -3103,8 +3138,10 @@ function LCReceive({
                                                                 setStockFormData(prev => ({ ...prev, warehouse: wh.whName }));
                                                                 setWhSearchQuery('');
                                                                 setShowWhSelectDropdown(false);
+                                                                setHighlightedWhSelectIndex(-1);
                                                             }}
-                                                            className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium ${stockFormData.warehouse === wh.whName ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                                                            onMouseEnter={() => setHighlightedWhSelectIndex(idx)}
+                                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${stockFormData.warehouse === wh.whName ? 'bg-blue-50 text-blue-700' : highlightedWhSelectIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                         >
                                                             {wh.whName}
                                                         </button>

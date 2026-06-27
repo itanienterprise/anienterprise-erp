@@ -48,6 +48,68 @@ const InsurancePayment = () => {
     const insuranceDropdownRef = useRef(null);
     const methodDropdownRef = useRef(null);
     const lcDropdownRef = useRef(null);
+    const [highlightedLcIndex, setHighlightedLcIndex] = useState(-1);
+    const [highlightedInsuranceIndex, setHighlightedInsuranceIndex] = useState(-1);
+
+    const handleLcKeyDown = (e) => {
+        const filteredLcs = lcs.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase()));
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedLcIndex(prev => Math.min(prev + 1, filteredLcs.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedLcIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const indexToSelect = highlightedLcIndex >= 0 ? highlightedLcIndex : 0;
+            if (filteredLcs && filteredLcs[indexToSelect]) {
+                const lc = filteredLcs[indexToSelect];
+                const insCoName = (lc.insuranceCo || '').toLowerCase().trim();
+                const matchingIns = insurances.find(i => (i.companyName || '').toLowerCase().trim() === insCoName);
+
+                setNewPayment(prev => ({
+                    ...prev,
+                    lcNo: lc.lcNo,
+                    insuranceId: matchingIns ? matchingIns._id : prev.insuranceId
+                }));
+                setLcSearchQuery(lc.lcNo);
+                if (matchingIns) {
+                    setInsuranceSearchQuery(matchingIns.companyName);
+                }
+                setActiveDropdown(null);
+                setHighlightedLcIndex(-1);
+            } else {
+                setActiveDropdown(null);
+            }
+        } else if (e.key === 'Escape') {
+            setActiveDropdown(null);
+        }
+    };
+
+    const handleInsuranceKeyDown = (e) => {
+        const filteredInsurances = insurances.filter(i => i.companyName.toLowerCase().includes(insuranceSearchQuery.toLowerCase()));
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedInsuranceIndex(prev => Math.min(prev + 1, filteredInsurances.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedInsuranceIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const indexToSelect = highlightedInsuranceIndex >= 0 ? highlightedInsuranceIndex : 0;
+            if (filteredInsurances && filteredInsurances[indexToSelect]) {
+                const i = filteredInsurances[indexToSelect];
+                setNewPayment(prev => ({ ...prev, insuranceId: i._id }));
+                setInsuranceSearchQuery(i.companyName);
+                setActiveDropdown(null);
+                setHighlightedInsuranceIndex(-1);
+            } else {
+                setActiveDropdown(null);
+            }
+        } else if (e.key === 'Escape') {
+            setActiveDropdown(null);
+        }
+    };
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
     const [lcs, setLcs] = useState([]);
@@ -583,15 +645,21 @@ const InsurancePayment = () => {
                                             type="text"
                                             placeholder="Search LC..."
                                             value={lcSearchQuery}
-                                            onFocus={() => setActiveDropdown('lc')}
+                                            onFocus={() => {
+                                                setActiveDropdown('lc');
+                                                setHighlightedLcIndex(-1);
+                                            }}
                                             onChange={(e) => {
                                                 const val = e.target.value;
                                                 setLcSearchQuery(val);
                                                 setActiveDropdown('lc');
+                                                setHighlightedLcIndex(-1);
                                                 if (val === '') {
                                                     setNewPayment(prev => ({ ...prev, lcNo: '' }));
                                                 }
                                             }}
+                                            onKeyDown={handleLcKeyDown}
+                                            autoComplete="off"
                                             className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10"
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -601,6 +669,7 @@ const InsurancePayment = () => {
                                                     onClick={() => {
                                                         setNewPayment(prev => ({ ...prev, lcNo: '' }));
                                                         setLcSearchQuery('');
+                                                        setHighlightedLcIndex(-1);
                                                     }}
                                                     className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
                                                 >
@@ -612,7 +681,7 @@ const InsurancePayment = () => {
                                     </div>
                                     {activeDropdown === 'lc' && (
                                         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 overflow-y-auto flex flex-col py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            {lcs.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).map(lc => (
+                                            {lcs.filter(lc => (lc.lcNo || '').toLowerCase().includes(lcSearchQuery.toLowerCase())).map((lc, idx) => (
                                                 <button
                                                     key={lc._id}
                                                     type="button"
@@ -632,8 +701,10 @@ const InsurancePayment = () => {
                                                             setInsuranceSearchQuery(matchingIns.companyName);
                                                         }
                                                         setActiveDropdown(null);
+                                                        setHighlightedLcIndex(-1);
                                                     }}
-                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                    onMouseEnter={() => setHighlightedLcIndex(idx)}
+                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${highlightedLcIndex === idx ? 'bg-blue-50' : 'hover:bg-blue-50'}`}
                                                 >
                                                     <div>
                                                         <div className="font-bold text-gray-900">{lc.lcNo}</div>
@@ -656,15 +727,21 @@ const InsurancePayment = () => {
                                             type="text"
                                             placeholder="Search Company..."
                                             value={insuranceSearchQuery}
-                                            onFocus={() => setActiveDropdown('insurance')}
+                                            onFocus={() => {
+                                                setActiveDropdown('insurance');
+                                                setHighlightedInsuranceIndex(-1);
+                                            }}
                                             onChange={(e) => {
                                                 const val = e.target.value;
                                                 setInsuranceSearchQuery(val);
                                                 setActiveDropdown('insurance');
+                                                setHighlightedInsuranceIndex(-1);
                                                 if (val === '') {
                                                     setNewPayment(prev => ({ ...prev, insuranceId: '' }));
                                                 }
                                             }}
+                                            onKeyDown={handleInsuranceKeyDown}
+                                            autoComplete="off"
                                             className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10"
                                         />
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -674,6 +751,7 @@ const InsurancePayment = () => {
                                                     onClick={() => {
                                                         setNewPayment(prev => ({ ...prev, insuranceId: '' }));
                                                         setInsuranceSearchQuery('');
+                                                        setHighlightedInsuranceIndex(-1);
                                                     }}
                                                     className="p-0.5 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
                                                 >
@@ -685,7 +763,7 @@ const InsurancePayment = () => {
                                     </div>
                                     {activeDropdown === 'insurance' && (
                                         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-60 overflow-y-auto flex flex-col py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            {insurances.filter(i => i.companyName.toLowerCase().includes(insuranceSearchQuery.toLowerCase())).map(i => (
+                                            {insurances.filter(i => i.companyName.toLowerCase().includes(insuranceSearchQuery.toLowerCase())).map((i, idx) => (
                                                 <button
                                                     key={i._id}
                                                     type="button"
@@ -695,8 +773,10 @@ const InsurancePayment = () => {
                                                         setNewPayment(prev => ({ ...prev, insuranceId: i._id }));
                                                         setInsuranceSearchQuery(i.companyName);
                                                         setActiveDropdown(null);
+                                                        setHighlightedInsuranceIndex(-1);
                                                     }}
-                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                    onMouseEnter={() => setHighlightedInsuranceIndex(idx)}
+                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${highlightedInsuranceIndex === idx ? 'bg-blue-50' : 'hover:bg-blue-50'}`}
                                                 >
                                                     <div>
                                                         <div className="font-bold text-gray-900">{i.companyName}</div>

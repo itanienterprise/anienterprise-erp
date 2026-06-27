@@ -1081,7 +1081,7 @@ function PI({
             const indexToSelect = (highlightedIndex >= 0 && highlightedIndex < options.length) ? highlightedIndex : 0;
             if (options && options.length > 0) {
                 const selected = options[indexToSelect];
-                const value = selected.ipName || selected.name || selected;
+                const value = selected.ipName || selected.name || selected.value || selected.bankName || selected.ipNumber || selected;
 
                 if (dropdownId.startsWith('product_')) {
                     const idx = parseInt(dropdownId.split('_')[1]);

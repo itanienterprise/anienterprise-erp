@@ -57,6 +57,54 @@ const ReturnProduct = ({ currentUser }) => {
     const [showWarehouseDropdown, setShowWarehouseDropdown] = useState(false);
     const warehouseRef = useRef(null);
 
+    const [highlightedInvoiceIndex, setHighlightedInvoiceIndex] = useState(-1);
+    const [highlightedWarehouseIndex, setHighlightedWarehouseIndex] = useState(-1);
+
+    const handleInvoiceKeyDown = (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedInvoiceIndex(prev => Math.min(prev + 1, filteredSales.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedInvoiceIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const indexToSelect = highlightedInvoiceIndex >= 0 ? highlightedInvoiceIndex : 0;
+            if (filteredSales && filteredSales[indexToSelect]) {
+                handleInvoiceSelect(filteredSales[indexToSelect]);
+            } else {
+                setShowInvoiceDropdown(false);
+            }
+        } else if (e.key === 'Escape') {
+            setShowInvoiceDropdown(false);
+        }
+    };
+
+    const handleWarehouseKeyDown = (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedWarehouseIndex(prev => Math.min(prev + 1, filteredWarehouses.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedWarehouseIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const indexToSelect = highlightedWarehouseIndex >= 0 ? highlightedWarehouseIndex : 0;
+            if (filteredWarehouses && filteredWarehouses[indexToSelect]) {
+                const w = filteredWarehouses[indexToSelect];
+                const selectedName = w.whName || w.name || w.warehouse;
+                setFormData(prev => ({ ...prev, warehouse: selectedName }));
+                setWarehouseSearch(selectedName);
+                setShowWarehouseDropdown(false);
+                setHighlightedWarehouseIndex(-1);
+            } else {
+                setShowWarehouseDropdown(false);
+            }
+        } else if (e.key === 'Escape') {
+            setShowWarehouseDropdown(false);
+        }
+    };
+
     useEffect(() => {
         const qty = parseFloat(formData.quantity);
         const pktSize = parseFloat(formData.packetSize);
@@ -511,6 +559,7 @@ const ReturnProduct = ({ currentUser }) => {
         });
         setInvoiceSearch(sale.invoiceNo);
         setShowInvoiceDropdown(false);
+        setHighlightedInvoiceIndex(-1);
     };
 
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
@@ -601,17 +650,24 @@ const ReturnProduct = ({ currentUser }) => {
                                         setInvoiceSearch(e.target.value);
                                         setShowInvoiceDropdown(true);
                                         setFormData({ ...formData, invoiceNo: e.target.value });
+                                        setHighlightedInvoiceIndex(-1);
                                     }}
-                                    onFocus={() => { if (invoiceSearch.length > 0) setShowInvoiceDropdown(true); }}
+                                    onFocus={() => {
+                                        setHighlightedInvoiceIndex(-1);
+                                        if (invoiceSearch.length > 0) setShowInvoiceDropdown(true);
+                                    }}
+                                    onKeyDown={handleInvoiceKeyDown}
                                     required
+                                    autoComplete="off"
                                 />
                                 {showInvoiceDropdown && invoiceSearch.length > 0 && filteredSales.length > 0 && (
                                     <div className="absolute z-50 w-full mt-1 bg-white rounded-xl shadow-xl border border-gray-100 max-h-48 overflow-y-auto">
-                                        {filteredSales.map(sale => (
+                                        {filteredSales.map((sale, idx) => (
                                             <div
                                                 key={sale._id}
-                                                className="px-4 py-2 hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-50 last:border-0"
+                                                className={`px-4 py-2 cursor-pointer transition-colors border-b border-gray-50 last:border-0 ${highlightedInvoiceIndex === idx ? 'bg-blue-50' : 'hover:bg-blue-50'}`}
                                                 onClick={() => handleInvoiceSelect(sale)}
+                                                onMouseEnter={() => setHighlightedInvoiceIndex(idx)}
                                             >
                                                 <div className="flex justify-between items-center">
                                                     <span className="font-bold text-sm text-blue-600">{sale.invoiceNo}</span>
@@ -808,24 +864,32 @@ const ReturnProduct = ({ currentUser }) => {
                                         onChange={(e) => {
                                             setWarehouseSearch(e.target.value);
                                             setShowWarehouseDropdown(true);
+                                            setHighlightedWarehouseIndex(-1);
                                         }}
-                                        onFocus={() => setShowWarehouseDropdown(true)}
+                                        onFocus={() => {
+                                            setShowWarehouseDropdown(true);
+                                            setHighlightedWarehouseIndex(-1);
+                                        }}
+                                        onKeyDown={handleWarehouseKeyDown}
                                         required
+                                        autoComplete="off"
                                     />
                                     <ChevronDownIcon className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform duration-200 ${showWarehouseDropdown ? 'rotate-180' : ''} w-4 h-4`} />
 
                                     {showWarehouseDropdown && filteredWarehouses.length > 0 && (
                                         <div className="invoice-dropdown-list">
-                                            {filteredWarehouses.map(w => (
+                                            {filteredWarehouses.map((w, idx) => (
                                                 <div
                                                     key={w._id}
-                                                    className="invoice-dropdown-item"
+                                                    className={`invoice-dropdown-item ${highlightedWarehouseIndex === idx ? 'bg-blue-50' : ''}`}
                                                     onClick={() => {
                                                         const selectedName = w.whName || w.name || w.warehouse;
                                                         setFormData({ ...formData, warehouse: selectedName });
                                                         setWarehouseSearch(selectedName);
                                                         setShowWarehouseDropdown(false);
+                                                        setHighlightedWarehouseIndex(-1);
                                                     }}
+                                                    onMouseEnter={() => setHighlightedWarehouseIndex(idx)}
                                                 >
                                                     <div className="text-sm font-semibold text-gray-700">{w.whName || w.name || w.warehouse}</div>
                                                 </div>
