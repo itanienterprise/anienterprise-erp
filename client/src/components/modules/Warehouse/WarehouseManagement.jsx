@@ -1609,43 +1609,19 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                                                 </div>
                                                                                             )}
                                                                                         </div>
-                                                                                        <div className="grid grid-cols-2 gap-x-2 sm:gap-x-4 gap-y-4 w-full">
-                                                                                            <div className="space-y-1 min-w-0">
-                                                                                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider truncate">InHouse Info</p>
-                                                                                                <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-emerald-100 h-full flex flex-col justify-center min-w-0">
-                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-1 gap-0.5 xl:gap-1">
-                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">BAG</span>
-                                                                                                        <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
-                                                                                                            {(() => {
-                                                                                                                const { whole, remainder } = calculatePktRemainder(brand.inhouseQty, brand.packetSize);
-                                                                                                                return `${whole.toLocaleString('en-US')}${remainder > 0 ? ` - ${remainder.toLocaleString('en-US')} kg` : ''}`;
-                                                                                                            })()}
-                                                                                                        </span>
-                                                                                                    </div>
-                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-emerald-50 pt-1 gap-0.5 xl:gap-1">
-                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
-                                                                                                        <span className="text-[11px] sm:text-xs font-black text-emerald-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.inhouseQty || 0).toLocaleString('en-US')} kg</span>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <div className="space-y-1 min-w-0">
-                                                                                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider truncate">Warehouse Info</p>
-                                                                                                <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-blue-100 h-full flex flex-col justify-center min-w-0">
-                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-1 gap-0.5 xl:gap-1">
-                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">BAG</span>
-                                                                                                        <span className="text-[12px] sm:text-xs font-bold text-gray-600 truncate w-full xl:w-auto xl:text-right">
-                                                                                                            {(() => {
-                                                                                                                const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);
-                                                                                                                return `${whole.toLocaleString('en-US')}${remainder > 0 ? ` - ${remainder.toLocaleString('en-US')} kg` : ''}`;
-                                                                                                            })()}
-                                                                                                        </span>
-                                                                                                    </div>
-                                                                                                    <div className="flex flex-col xl:flex-row xl:items-end justify-between border-t border-blue-50 pt-1 gap-0.5 xl:gap-1">
-                                                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase">QTY</span>
-                                                                                                        <span className="text-[11px] sm:text-xs font-black text-blue-700 truncate w-full xl:w-auto xl:text-right">{parseFloat(brand.whQty || 0).toLocaleString('en-US')} kg</span>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            </div>
+                                                                                        <div className="grid grid-cols-[80px_8px_1fr] gap-y-2 text-xs items-baseline text-left pt-2 border-t border-gray-100">
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BAG</span>
+                                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                                            <span className="font-bold text-gray-700">
+                                                                                                {(() => {
+                                                                                                    const { whole, remainder } = calculatePktRemainder(brand.whQty, brand.packetSize);
+                                                                                                    return `${whole.toLocaleString('en-US')}${remainder > 0 ? ` - ${remainder.toLocaleString('en-US')} kg` : ''}`;
+                                                                                                })()}
+                                                                                            </span>
+
+                                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</span>
+                                                                                            <span className="text-gray-400 font-bold">:</span>
+                                                                                            <span className="font-black text-blue-700">{parseFloat(brand.whQty || 0).toLocaleString('en-US')} kg</span>
                                                                                         </div>
                                                                                     </div>
                                                                                 ))}

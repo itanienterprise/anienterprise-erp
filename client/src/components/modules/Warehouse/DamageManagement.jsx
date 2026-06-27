@@ -744,7 +744,9 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
 
             {!showForm && (
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
+
+                    {/* Desktop Table */}
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/80">
@@ -795,6 +797,102 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Mobile Cards */}
+                    <div className="md:hidden divide-y divide-gray-100">
+                        {isLoading ? (
+                            Array(3).fill(0).map((_, i) => (
+                                <div key={i} className="p-4 animate-pulse">
+                                    <div className="h-4 bg-gray-100 rounded w-1/2 mb-2"></div>
+                                    <div className="h-3 bg-gray-100 rounded w-3/4"></div>
+                                </div>
+                            ))
+                        ) : displayDamages.length > 0 ? (
+                            displayDamages.map((item) => {
+                                const isExpanded = expandedRowId === item._id;
+                                return (
+                                    <div
+                                        key={item._id}
+                                        className={`transition-all duration-200 ${isExpanded ? 'bg-blue-50/20' : 'bg-white'}`}
+                                    >
+                                        {/* Clickable Card Header */}
+                                        <div
+                                            className="flex items-center justify-between p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                            onClick={() => setExpandedRowId(isExpanded ? null : item._id)}
+                                        >
+                                            <div className="flex-1 min-w-0 pr-3">
+                                                <div className="text-sm font-black text-gray-900 truncate">{item.productName}</div>
+                                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{formatDate(item.date)}</span>
+                                                    <span className="text-gray-300">•</span>
+                                                    <span className="text-[10px] font-black text-red-600">{item.quantity} kg</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <span className="px-2.5 py-0.5 bg-red-50 text-red-600 border border-red-100/50 rounded-lg text-[10px] font-bold uppercase tracking-wider">{item.reason}</span>
+                                                <div className={`p-1.5 rounded-lg transition-all ${isExpanded ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                                                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Expandable Details */}
+                                        {isExpanded && (
+                                            <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-300">
+                                                {/* Details Grid */}
+                                                <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 text-xs items-baseline text-left pt-2 pb-3 border-t border-gray-100/80">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-semibold text-gray-700">{item.brand || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-bold text-blue-600">{item.lcNo || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Warehouse</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-semibold text-gray-700">{item.warehouse || '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-black text-red-600">{item.quantity}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-bold text-gray-800">{item.price ? `৳ ${item.price.toLocaleString('en-IN')}` : '-'}</span>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amt</span>
+                                                    <span className="text-gray-400 font-bold">:</span>
+                                                    <span className="font-black text-gray-900">
+                                                        {item.price && item.quantity ? `৳ ${(item.price * item.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Action Buttons */}
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                    >
+                                                        <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                    >
+                                                        <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="px-6 py-12 text-center text-gray-400 font-medium text-sm">No damage records found.</div>
+                        )}
+                    </div>
+
                 </div>
             )}
         </div>
