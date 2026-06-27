@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { XIcon, FileTextIcon, BarChartIcon, PrinterIcon, FunnelIcon, ChevronDownIcon } from '../../Icons';
 import { generateProductHistoryPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -209,7 +210,7 @@ const ProductHistoryReport = ({
         );
     };
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-0 md:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
             <div className="bg-white w-full max-w-7xl h-full md:max-h-[90vh] overflow-hidden md:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar */}
@@ -843,7 +844,8 @@ const ProductHistoryReport = ({
                     </div>
                 </div>
             </div >
-        </div >
+        </div >,
+        document.body
     );
 };
 
