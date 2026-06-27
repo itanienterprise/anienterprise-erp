@@ -3534,6 +3534,29 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         doc.setFont('helvetica', 'normal');
         doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
 
+        let yOffset = 6;
+        if (filters && filters.port) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Port:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.port, margin + 22, yPos + yOffset);
+        }
+        if (filters && filters.lcNo) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 22, yPos + yOffset);
+        }
+        if (filters && filters.productName) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Product:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.productName, margin + 22, yPos + yOffset);
+        }
+
         // Right Side: Date Range, Printed On
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         const rightColX = pageWidth - margin - 70; // Increased spacing for long date ranges
@@ -3574,7 +3597,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
 
         // --- Table ---
         autoTable(doc, {
-            startY: yPos + 15,
+            startY: yPos + yOffset + 9,
             head: [['Date', 'LC No', 'Importer', 'Exporter', 'Product', 'Port', 'UOM', 'Trucks', 'BOE No', 'QTY', 'Commission', 'Total']],
             body: tableRows,
             foot: [[
@@ -3702,6 +3725,29 @@ export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
         doc.setFont('helvetica', 'normal');
         doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
 
+        let yOffset = 6;
+        if (filters && filters.port) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Port:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.port, margin + 22, yPos + yOffset);
+        }
+        if (filters && filters.lcNo) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 22, yPos + yOffset);
+        }
+        if (filters && filters.productName) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Product:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.productName, margin + 22, yPos + yOffset);
+        }
+
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         const rightColX = pageWidth - margin - 70;
 
@@ -3729,7 +3775,7 @@ export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
         const totalAmount = reportData.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
 
         autoTable(doc, {
-            startY: yPos + 15,
+            startY: yPos + yOffset + 9,
             head: [['Billing Date', 'LC No', 'Importer', 'Product', 'Port', 'Amount']],
             body: tableRows,
             foot: [[
@@ -3974,6 +4020,29 @@ export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
         doc.setFont('helvetica', 'normal');
         doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
 
+        let yOffset = 6;
+        if (filters && filters.port) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Port:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.port, margin + 22, yPos + yOffset);
+        }
+        if (filters && filters.lcNo) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 22, yPos + yOffset);
+        }
+        if (filters && filters.productName) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Product:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.productName, margin + 22, yPos + yOffset);
+        }
+
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         const rightColX = pageWidth - margin - 70;
 
@@ -4001,7 +4070,7 @@ export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
         const totalDiscount = reportData.reduce((sum, row) => sum + (parseFloat(row.discount) || 0), 0);
 
         autoTable(doc, {
-            startY: yPos + 15,
+            startY: yPos + yOffset + 9,
             head: [['Date', 'Method', 'Reference / Bank', 'Amount', 'Discount']],
             body: tableRows,
             foot: [[
@@ -4116,6 +4185,29 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
         doc.setFont('helvetica', 'normal');
         doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
 
+        let yOffset = 6;
+        if (filters && filters.port) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Port:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.port, margin + 22, yPos + yOffset);
+        }
+        if (filters && filters.lcNo) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 22, yPos + yOffset);
+        }
+        if (filters && filters.productName) {
+            yOffset += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Product:", margin, yPos + yOffset);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.productName, margin + 22, yPos + yOffset);
+        }
+
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         const rightColX = pageWidth - margin - 70;
 
@@ -4153,7 +4245,7 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
         const lastBalance = reportData.length > 0 ? reportData[reportData.length - 1].runningBalance : 0;
 
         autoTable(doc, {
-            startY: yPos + 15,
+            startY: yPos + yOffset + 9,
             head: [['Date', 'LC No', 'Importer', 'Product', 'Billing Amt', 'Method', 'Reference / Bank', 'Amount', 'Discount', 'Balance']],
             body: tableRows,
             foot: [[
