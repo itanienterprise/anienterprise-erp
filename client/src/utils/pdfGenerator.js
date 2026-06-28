@@ -845,7 +845,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             // --- Data Preparation ---
             const tableRows = [];
             const boldBottomRowIndices = new Set();
-            const boldLinesToDraw = [];
+            const customLinesToDraw = [];
 
 
             const sortedDisplayRecords = [...currentStockData.displayRecords].sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -877,13 +877,12 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     // SL Column
                     headRow.push({
                         content: (index + 1).toString(),
-                        rowSpan: totalRowsForProduct,
-                        styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
+                        styles: { valign: 'middle', halign: 'center', fontStyle: 'bold', lineWidth: 0 }
                     });
                     // Product Name Header (Stays strictly in Product Name Column)
                     headRow.push({
                         content: (item.productName || '-').toUpperCase(),
-                        styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] }
+                        styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], lineWidth: 0 }
                     });
                     // Empty Brand Column
                     headRow.push({
@@ -903,47 +902,55 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 // --- 2. DETAIL ROWS ---
                 qEntries.forEach(([quality, brands], qIdx) => {
                     let isFirstRowOfQuality = true;
-                    const totalRowsForQuality = brands.length + (hasQualSubTotals ? 1 : 0);
 
                     brands.forEach((ent, bIdx) => {
                         const row = [];
 
-                        // Column 1: SL (Only if not already spanned by a header row)
-                        if (isFirstRowOfProduct) {
+                        // Column 0: SL
+                        if (!hasQuals && isFirstRowOfProduct) {
                             row.push({
                                 content: (index + 1).toString(),
-                                rowSpan: totalRowsForProduct,
-                                styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
+                                styles: { valign: 'middle', halign: 'center', fontStyle: 'bold', lineWidth: 0 }
                             });
-
-                            // Product Name without Qualities spans all the way through detail and subtotal rows
+                        } else {
                             row.push({
-                                content: (item.productName || '-').toUpperCase(),
-                                rowSpan: totalRowsForProduct,
-                                styles: { valign: 'middle', fontStyle: 'bold', halign: 'center' }
+                                content: '',
+                                styles: { valign: 'middle', halign: 'center', lineWidth: 0 }
                             });
                         }
 
-                        // Column 2/3: Quality & Brand
+                        // Column 1: PRODUCT NAME / Quality
                         if (hasQuals) {
                             if (isFirstRowOfQuality) {
                                 row.push({
                                     content: (quality === '-' ? '' : quality).toUpperCase(),
-                                    rowSpan: totalRowsForQuality,
-                                    styles: { valign: 'middle', halign: 'center', fontStyle: 'bold' }
+                                    styles: { valign: 'middle', halign: 'center', fontStyle: 'bold', lineWidth: 0 }
+                                });
+                            } else {
+                                row.push({
+                                    content: '',
+                                    styles: { valign: 'middle', halign: 'center', lineWidth: 0 }
                                 });
                             }
-                            row.push({
-                                content: ent.brand || '-',
-                                styles: { halign: 'left' }
-                            });
                         } else {
-                            // Product Name is already in column 2, so this is just the brand column
-                            row.push({
-                                content: ent.brand || '-',
-                                styles: { halign: 'left' }
-                            });
+                            if (isFirstRowOfProduct) {
+                                row.push({
+                                    content: (item.productName || '-').toUpperCase(),
+                                    styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', lineWidth: 0 }
+                                });
+                            } else {
+                                row.push({
+                                    content: '',
+                                    styles: { valign: 'middle', halign: 'center', lineWidth: 0 }
+                                });
+                            }
                         }
+
+                        // Column 2: Brand
+                        row.push({
+                            content: ent.brand || '-',
+                            styles: { halign: 'left' }
+                        });
 
                         // Detailed Numeric Data
                         if (reportType === 'detailed') {
@@ -982,9 +989,16 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     // --- Quality Sub Total Row ---
                     if (hasQualSubTotals) {
                         const qualSubRow = [];
+                        // Column 0: SL (empty)
+                        qualSubRow.push({
+                            content: '',
+                            styles: { fillColor: [245, 245, 250], lineWidth: 0 }
+                        });
+                        // Column 1 & 2: Quality TOTAL (colSpan: 2)
                         qualSubRow.push({
                             content: `${quality} TOTAL`,
-                            styles: { fontStyle: 'bolditalic', halign: 'right', fillColor: [245, 245, 250] }
+                            colSpan: 2,
+                            styles: { fontStyle: 'bolditalic', halign: 'right', fillColor: [245, 245, 250], lineWidth: 0 }
                         });
 
                         if (reportType === 'detailed') {
@@ -1014,12 +1028,16 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 // --- 3. SUB TOTAL ROW ---
                 if (hasSubTotal) {
                     const subRow = [];
-                    // If hasQuals, SUB TOTAL spans Product Name and Brand columns. 
-                    // If !hasQuals, Product Name column is occupied, so SUB TOTAL only occupies Brand column.
+                    // Column 0: SL (empty)
+                    subRow.push({
+                        content: '',
+                        styles: { fillColor: [248, 248, 248], lineWidth: 0 }
+                    });
+                    // Column 1 & 2: SUB TOTAL
                     subRow.push({
                         content: 'SUB TOTAL',
-                        colSpan: hasQuals ? 2 : 1,
-                        styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248] }
+                        colSpan: 2,
+                        styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], lineWidth: 0 }
                     });
 
                     if (reportType === 'detailed') {
@@ -1065,7 +1083,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
             // Append Grand Total Row
             const grandTotalRow = [
-                { content: 'GRAND TOTAL', colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240] } } // SL + Product Name + Brand
+                { content: 'GRAND TOTAL', colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], lineWidth: 0 } } // SL + Product Name + Brand
             ];
 
             if (reportType === 'detailed') {
@@ -1092,7 +1110,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 head: pdfHead,
                 body: tableRows,
                 theme: 'plain',
-                rowPageBreak: 'avoid',
+                rowPageBreak: 'auto',
                 styles: {
                     fontSize: reportType === 'detailed' ? 8 : 8.7,
                     cellPadding: reportType === 'detailed' ? 1.2 : 1.3,
@@ -1109,8 +1127,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     lineWidth: 0.1
                 },
                 columnStyles: reportType === 'detailed' ? {
-                    0: { cellWidth: 8, halign: 'center' }, // SL
-                    1: { cellWidth: 32 }, // Product Name / Quality
+                    0: { cellWidth: 8, halign: 'center', lineWidth: 0 }, // SL
+                    1: { cellWidth: 32, lineWidth: 0 }, // Product Name / Quality
                     2: { cellWidth: 40 }, // Brand
                     3: { cellWidth: 18, halign: 'right' }, // Opening Stock BAG
                     4: { cellWidth: 18, halign: 'right' }, // Opening Stock QTY
@@ -1119,8 +1137,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     7: { cellWidth: 18, halign: 'right' }, // Closing Stock BAG
                     8: { cellWidth: 18, halign: 'right' }  // Closing Stock QTY
                 } : {
-                    0: { cellWidth: 10, halign: 'center' }, // SL
-                    1: { cellWidth: 45 }, // Product Name / Quality
+                    0: { cellWidth: 10, halign: 'center', lineWidth: 0 }, // SL
+                    1: { cellWidth: 45, lineWidth: 0 }, // Product Name / Quality
                     2: { cellWidth: 75 }, // Brand
                     3: { cellWidth: 35, halign: 'right' }, // BAG
                     4: { cellWidth: 35, halign: 'right' }  // QUANTITY
@@ -1133,34 +1151,67 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     }
                 },
                 didDrawCell: (data) => {
-                    const { cell, row } = data;
+                    const { cell, row, column } = data;
                     if (row.section !== 'body') return;
 
-                    // Identify if this cell needs a bold bottom border
-                    // 1. It's a designated boundary row (end of quality, subtotal, or grand total)
-                    // 2. It's a spanned cell (SL/Product) that ENDS on a boundary row
                     const isBoundaryRow = boldBottomRowIndices.has(row.index);
-                    const endRowIndex = row.index + (cell.rowSpan || 1) - 1;
-                    const endsOnBoundary = boldBottomRowIndices.has(endRowIndex);
+                    const isSubTotal = row.raw && row.raw.isSubTotal;
+                    const isLastRow = row.index === data.table.body.length - 1;
 
-                    if (isBoundaryRow || (cell.rowSpan > 1 && endsOnBoundary)) {
-                        boldLinesToDraw.push({
-                            x1: cell.x,
-                            y1: cell.y + cell.height,
+                    if (column.index === 0 || column.index === 1) {
+                        // Left vertical line for SL (outer table border)
+                        if (column.index === 0) {
+                            customLinesToDraw.push({
+                                x1: cell.x,
+                                y1: cell.y,
+                                x2: cell.x,
+                                y2: cell.y + cell.height,
+                                lineWidth: 0.1
+                            });
+                        }
+
+                        // Right vertical line (divider)
+                        customLinesToDraw.push({
+                            x1: cell.x + cell.width,
+                            y1: cell.y,
                             x2: cell.x + cell.width,
-                            y2: cell.y + cell.height
+                            y2: cell.y + cell.height,
+                            lineWidth: 0.1
                         });
+
+                        // Bottom horizontal line (only for boundary rows or last row)
+                        if (isBoundaryRow || isLastRow) {
+                            customLinesToDraw.push({
+                                x1: cell.x,
+                                y1: cell.y + cell.height,
+                                x2: cell.x + cell.width,
+                                y2: cell.y + cell.height,
+                                lineWidth: isSubTotal ? 0.5 : 0.1
+                            });
+                        }
+                    } else {
+                        // For other columns (>= 2):
+                        // We draw bold bottom border for boundary rows
+                        if (isBoundaryRow) {
+                            customLinesToDraw.push({
+                                x1: cell.x,
+                                y1: cell.y + cell.height,
+                                x2: cell.x + cell.width,
+                                y2: cell.y + cell.height,
+                                lineWidth: isSubTotal ? 0.5 : 0.1
+                            });
+                        }
                     }
                 },
                 didDrawPage: () => {
-                    // Draw all collected bold lines at the end of the page to ensure they are on top
-                    if (boldLinesToDraw.length > 0) {
-                        doc.setLineWidth(0.5);
+                    // Draw all collected custom lines at the end of the page to ensure they are on top
+                    if (customLinesToDraw.length > 0) {
                         doc.setDrawColor(0, 0, 0);
-                        boldLinesToDraw.forEach(line => {
+                        customLinesToDraw.forEach(line => {
+                            doc.setLineWidth(line.lineWidth || 0.1);
                             doc.line(line.x1, line.y1, line.x2, line.y2);
                         });
-                        boldLinesToDraw.length = 0; // Clear for next page
+                        customLinesToDraw.length = 0; // Clear for next page
                     }
                 }
             });
