@@ -3701,7 +3701,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 '', // BOE No
                 { content: totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
                 '', // Commission rate col
-                { content: totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold' } }
+                { content: totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
             ]],
             theme: 'plain',
             showFoot: 'lastPage',
@@ -3731,13 +3731,13 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             columnStyles: {
                 0: { cellWidth: 18, halign: 'center' }, // Date
                 1: { cellWidth: 15, halign: 'center' }, // LC No
-                2: { cellWidth: 24, halign: 'left', overflow: 'hidden' }, // Importer
-                3: { cellWidth: 24, halign: 'left', overflow: 'hidden' },   // Exporter
+                2: { cellWidth: 22, halign: 'left', overflow: 'hidden' }, // Importer
+                3: { cellWidth: 22, halign: 'left', overflow: 'hidden' },   // Exporter
                 4: { cellWidth: 16, halign: 'left' },   // Product
                 5: { cellWidth: 20, halign: 'center' }, // Port
                 6: { cellWidth: 12, halign: 'center' }, // Trucks
                 7: { cellWidth: 16, halign: 'center' }, // BOE No
-                8: { cellWidth: 16, halign: 'right' },  // QTY
+                8: { cellWidth: 20, halign: 'right' },  // QTY
                 9: { cellWidth: 16, halign: 'right' }, // Commission
                 10: { cellWidth: 23, halign: 'right', fontStyle: 'bold' }  // Total
             }
