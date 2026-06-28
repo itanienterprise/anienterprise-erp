@@ -320,14 +320,25 @@ function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Detect touch-only devices (e.g. BB Passport) — works with any browser (Firefox, Chrome, native)
-  // Desktop has a fine pointer (mouse); touch-only devices have a coarse pointer (finger)
-  const isTouchOnlyDevice = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+  // Detect touch-only devices (e.g. BB Passport) — must be BOTH coarse pointer AND narrow screen.
+  // Desktop touchscreens / MacBook trackpads report 'coarse' too, so we guard with a width check.
+  const isTouchOnlyDeviceRaw = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+  const [windowWidth, setWindowWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const isTouchOnlyDevice = isTouchOnlyDeviceRaw && windowWidth < 768;
+
+  // Track window width for responsive behaviour
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Add .touch-device class to <html> for CSS gradient fallbacks on BB Passport
   useEffect(() => {
     if (isTouchOnlyDevice) {
       document.documentElement.classList.add('touch-device');
+    } else {
+      document.documentElement.classList.remove('touch-device');
     }
     return () => { document.documentElement.classList.remove('touch-device'); };
   }, [isTouchOnlyDevice]);
@@ -1752,43 +1763,39 @@ function App() {
   return (
     <div className={`flex h-screen bg-gray-50 font-sans text-gray-900 ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'is-printing-report' : ''}`}>
 
-      {/* Sidebar Backdrop for mobile */}
-      {sidebarOpen && (
+      {/* Sidebar Backdrop for mobile only */}
+      {sidebarOpen && windowWidth < 768 && (
         <div
-          className="fixed inset-0 bg-gray-900/50 z-[1050] md:hidden animate-in fade-in duration-300 no-print"
-          style={{backgroundColor: isTouchOnlyDevice ? 'rgba(17,24,39,0.5)' : ''}}
+          className="fixed inset-0 z-[1050] animate-in fade-in duration-300 no-print"
+          style={{backgroundColor: 'rgba(17,24,39,0.5)'}}
           onClick={() => setSidebarOpen(false)}
         />
       )}
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[1100] w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out overflow-x-hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`} style={isTouchOnlyDevice ? {transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)'} : {}}>
-        <div className="p-4 border-b border-gray-200 bg-gray-50/50">
-          <div className="flex items-center">
+      <aside className={`${windowWidth >= 768 ? 'relative' : `fixed inset-y-0 left-0 z-[1100] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out overflow-x-hidden flex-shrink-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`} style={isTouchOnlyDevice ? {transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)'} : {}}>
+        {/* Sidebar top — must match header height (64px) exactly */}
+        <div className="flex items-center px-4 border-b border-gray-200 bg-gray-50/50 flex-shrink-0" style={{height: '64px'}}>
+          <button
+            onClick={() => setShowProfile(true)}
+            className="relative group focus:outline-none flex-shrink-0"
+          >
+            <img
+              src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
+              alt="Profile"
+              className="w-9 h-9 rounded-full border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
+            />
+          </button>
+          <div className="ml-3 min-w-0">
+            <p className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-tight truncate">
+              {currentUser?.name || currentUser?.username || 'Admin User'}
+            </p>
             <button
-              onClick={() => setShowProfile(true)}
-              className="relative group focus:outline-none"
+              onClick={handleLogout}
+              className="text-[11px] text-red-600 font-medium hover:underline cursor-pointer flex items-center mt-0.5"
             >
-              <img
-                src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
-                alt="Profile"
-                className="w-10 h-10 rounded-full border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
-              />
-              <div className="absolute inset-0 rounded-full bg-blue-600/0 group-hover:bg-blue-600/10 transition-colors flex items-center justify-center">
-                <span className="sr-only">View Profile</span>
-              </div>
+              <LogOutIcon className="w-3 h-3 mr-1" />
+              Logout
             </button>
-            <div className="ml-3 min-w-0">
-              <p className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-tight truncate">
-                {currentUser?.name || currentUser?.username || 'Admin User'}
-              </p>
-              <button
-                onClick={handleLogout}
-                className="text-[11px] text-red-600 font-medium hover:underline cursor-pointer flex items-center mt-0.5"
-              >
-                <LogOutIcon className="w-3 h-3 mr-1" />
-                Logout
-              </button>
-            </div>
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden hide-scrollbar">
@@ -2179,29 +2186,39 @@ function App() {
       {/* Main Content */}
       <div className={`flex-1 flex flex-col overflow-hidden ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
         {/* Header */}
-        <header className="relative z-[1000] flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-200 shadow-sm print:hidden">
-          <div className="flex items-center">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`${isTouchOnlyDevice ? '' : 'md:hidden'} p-2 rounded-md text-gray-600 hover:bg-gray-100`}>
-              <MenuIcon className="w-6 h-6" />
-            </button>
-            <div className={`${isTouchOnlyDevice ? 'hidden' : 'hidden md:block'} ml-0`}>
+        <header className="z-[1000] flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm print:hidden" style={{height: '64px', flexShrink: 0}}>
+          {/* Left side */}
+          <div className="flex items-center gap-3">
+            {/* Hamburger — mobile only */}
+            {windowWidth < 768 && (
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              >
+                <MenuIcon className="w-6 h-6" />
+              </button>
+            )}
+            {/* App title — desktop only (mobile title is centered below) */}
+            {windowWidth >= 768 && (
               <h1 className="text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
                 ANI Enterprise ERP
               </h1>
-            </div>
+            )}
           </div>
-          {/* Centered title on mobile only */}
-          <div className={`absolute left-0 right-0 flex justify-center pointer-events-none ${isTouchOnlyDevice ? '' : 'md:hidden'}`}>
-            <h1 className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight" style={{color: '#2563eb'}}>
+
+          {/* Center — mobile title only */}
+          {windowWidth < 768 && (
+            <h1 className="absolute left-0 right-0 text-center text-xl font-black tracking-tight pointer-events-none" style={{color: '#2563eb'}}>
               ANI Enterprise ERP
             </h1>
-          </div>
-          <div className="flex items-center space-x-4">
+          )}
+
+          {/* Right side — bell icon */}
+          <div className="flex items-center gap-3 relative z-10">
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className={`relative p-2 rounded-full transition-all duration-300 ${showNotifications ? 'bg-blue-50 text-blue-600 shadow-inner' : 'text-gray-500 hover:bg-gray-100'
-                  }`}
+                className={`relative p-2 rounded-full transition-all duration-300 ${showNotifications ? 'bg-blue-50 text-blue-600 shadow-inner' : 'text-gray-500 hover:bg-gray-100'}`}
               >
                 <BellIcon className="w-6 h-6" />
                 {unreadCount > 0 && (

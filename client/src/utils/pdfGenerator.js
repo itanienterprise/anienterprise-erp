@@ -1092,6 +1092,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 head: pdfHead,
                 body: tableRows,
                 theme: 'plain',
+                rowPageBreak: 'avoid',
                 styles: {
                     fontSize: reportType === 'detailed' ? 8 : 8.7,
                     cellPadding: reportType === 'detailed' ? 1.2 : 1.3,
@@ -1125,6 +1126,12 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     4: { cellWidth: 35, halign: 'right' }  // QUANTITY
                 },
                 margin: { left: margin, right: margin },
+                didParseCell: (data) => {
+                    // Keep SUB TOTAL rows attached to the row above — prevents blank gaps
+                    if (data.row.section === 'body' && data.row.raw && data.row.raw.isSubTotal) {
+                        data.row.pageBreak = 'avoid';
+                    }
+                },
                 didDrawCell: (data) => {
                     const { cell, row } = data;
                     if (row.section !== 'body') return;
