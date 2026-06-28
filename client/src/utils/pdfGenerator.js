@@ -1189,8 +1189,9 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                             lineWidth: 0.1
                         });
 
-                        // Bottom horizontal line (only for boundary rows or last row)
-                        if (isBoundaryRow || isLastRow) {
+                        // Bottom horizontal line (only for boundary rows, last row, or the product header row)
+                        const isProductHeaderRow = cell.raw && cell.raw.styles && cell.raw.styles.fillColor && cell.raw.styles.fillColor[0] === 248;
+                        if (isBoundaryRow || isLastRow || isProductHeaderRow) {
                             customLinesToDraw.push({
                                 x1: cell.x,
                                 y1: cell.y + cell.height,
@@ -1200,8 +1201,10 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                             });
                         }
 
-                        // Top horizontal line (only for subtotal rows)
-                        if (isSubTotal) {
+                        // Top horizontal line (only for subtotal rows or if it's the start of a new product block)
+                        // If cell content has value (i.e. not empty spacer row), draw a top line to separate it from the previous subtotal.
+                        const isProductStart = cell.text && cell.text.join('').trim() !== '';
+                        if (isSubTotal || isProductStart) {
                             customLinesToDraw.push({
                                 x1: cell.x,
                                 y1: cell.y,
@@ -1212,8 +1215,9 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         }
                     } else {
                         // For other columns (>= 2):
-                        // We draw bold bottom border for boundary rows
-                        if (isBoundaryRow) {
+                        // Draw bottom border if it's a boundary row or if it's the product header row (to get the line under the product row across all columns)
+                        const isProductHeaderRow = cell.raw && cell.raw.styles && cell.raw.styles.fillColor && cell.raw.styles.fillColor[0] === 248;
+                        if (isBoundaryRow || isProductHeaderRow) {
                             customLinesToDraw.push({
                                 x1: cell.x,
                                 y1: cell.y + cell.height,
