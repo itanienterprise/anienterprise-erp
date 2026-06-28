@@ -2765,12 +2765,12 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 1: { cellWidth: 18, halign: 'center' },    // Date
                 2: { cellWidth: 15, halign: 'center' },    // LC No
                 3: { cellWidth: 17, halign: 'center' },    // Invoice
-                4: { cellWidth: 34 },                       // Company
+                4: { cellWidth: 31 },                       // Company
                 5: { cellWidth: 24, overflow: 'linebreak' }, // Product
                 6: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand
                 7: { cellWidth: 18, overflow: 'linebreak' }, // Challan No
                 8: { cellWidth: 20, overflow: 'linebreak' }, // Truck No
-                9: { cellWidth: 17, halign: 'right' },     // Qty
+                9: { cellWidth: 20, halign: 'right' },     // Qty
                 10: { cellWidth: 14, halign: 'right' },    // Price
                 11: { cellWidth: 24, halign: 'right' },    // Total
                 12: { cellWidth: 20, halign: 'right' },    // Truck Fare
@@ -2917,8 +2917,8 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
                 c.companyName || c.customerName || '-',
                 getLastTransDay(c),
                 {
-                    content: due < 0 
-                        ? `(-${Math.round(Math.abs(due)).toLocaleString('en-IN')})` 
+                    content: due < 0
+                        ? `(-${Math.round(Math.abs(due)).toLocaleString('en-IN')})`
                         : `${Math.round(due).toLocaleString('en-IN')}`,
                     styles: { fontStyle: due < 0 ? 'bold' : 'normal', halign: 'right' }
                 },

@@ -40,8 +40,8 @@ const ViewDetailsModal = ({ data, onClose }) => {
                 </div>
 
                 <div className="overflow-y-auto flex-1 p-4 md:p-6 space-y-4 md:space-y-6">
-                    {/* Core Info Grid */}
-                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-3.5 text-xs text-left items-baseline pb-5 border-b border-gray-100">
+                    {/* ── MOBILE: original label : value list ── */}
+                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-3.5 text-xs text-left items-baseline pb-5 border-b border-gray-100 md:hidden">
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
                         <span className="text-gray-400 font-bold">:</span>
                         <span className="font-bold text-gray-800 text-[13px]">{data.lcNo || 'N/A'}</span>
@@ -103,7 +103,6 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                 <span className="font-semibold text-gray-700 text-[13px]">{data.entries[0].requestedBy}</span>
                             </>
                         )}
-
                         {data.entries[0]?.acceptedBy && (
                             <>
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Accepted By</span>
@@ -111,7 +110,6 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                 <span className="font-semibold text-emerald-600 text-[13px]">{data.entries[0].acceptedBy}</span>
                             </>
                         )}
-
                         {data.entries[0]?.rejectedBy && (
                             <>
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rejected By</span>
@@ -119,6 +117,44 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                 <span className="font-semibold text-red-500 text-[13px]">{data.entries[0].rejectedBy}</span>
                             </>
                         )}
+                    </div>
+
+                    {/* ── DESKTOP: card grid (3 columns) ── */}
+                    <div className="hidden md:grid md:grid-cols-3 gap-2 pb-5 border-b border-gray-100">
+                        {[
+                            { label: 'LC No', value: data.lcNo || 'N/A', bold: true, color: 'text-gray-900' },
+                            { label: 'Port', value: data.port || 'N/A', bold: true, color: 'text-blue-600' },
+                            { label: 'Importer', value: data.importer || 'N/A', color: 'text-gray-700' },
+                            { label: 'Exporter', value: data.exporter || 'N/A', color: 'text-gray-700' },
+                            { label: 'IND C&F', value: data.indianCnF || '-', color: 'text-gray-700' },
+                            { label: 'IND C&F Value', value: !isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString('en-IN')}` : '-', bold: true, color: 'text-gray-900' },
+                            { label: 'BD C&F', value: data.bdCnF || '-', color: 'text-gray-700' },
+                            { label: 'BD C&F Value', value: !isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-IN')}` : '-', bold: true, color: 'text-gray-900' },
+                            { label: 'Bill Of Entry', value: data.billOfEntry || '-', color: 'text-gray-700' },
+                            { label: 'Total Trucks', value: data.totalLcTruck, bold: true, color: 'text-amber-600' },
+                            ...(data.entries[0]?.requestedBy ? [{ label: 'Requested By', value: data.entries[0].requestedBy, color: 'text-gray-700' }] : []),
+                            ...(data.entries[0]?.acceptedBy ? [{ label: 'Accepted By', value: data.entries[0].acceptedBy, color: 'text-emerald-600' }] : []),
+                            ...(data.entries[0]?.rejectedBy ? [{ label: 'Rejected By', value: data.entries[0].rejectedBy, color: 'text-red-500' }] : []),
+                        ].map(({ label, value, bold, color }, i) => (
+                            <div key={i} className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+                                <p className={`text-[13px] ${bold ? 'font-bold' : 'font-semibold'} ${color || 'text-gray-800'} truncate`}>{value}</p>
+                            </div>
+                        ))}
+                        <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Status</p>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 text-[11px] font-bold uppercase tracking-wider">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                {data.entries[0]?.status || 'In Stock'}
+                            </span>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Warehouse</p>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md border border-gray-200 text-[11px] font-bold uppercase tracking-wider">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                                {data.entries[0]?.warehouse || 'N/A'}
+                            </span>
+                        </div>
                     </div>
 
                     {/* Product Table */}
