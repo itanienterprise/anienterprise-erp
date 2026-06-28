@@ -381,30 +381,30 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         // --- Header ---
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0); // Changed from 100 to 0 (Black)
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("LC RECEIVE REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("LC RECEIVE REPORT", pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
 
         // Left Side: Date Range, LC No
@@ -424,7 +424,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         // Right Side: Printed On
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
         // --- Data Preparation ---
         // 1. Group by Date + LC No (matches UI logic but adds Date for safer merging)
@@ -688,30 +688,30 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
         // --- Header ---
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0); // Changed from 100 to 0 (Black)
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("STOCK REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("STOCK REPORT", pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
 
         // Left Side: Date Range, LC No, Product
@@ -739,7 +739,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
         // Right Side: Printed On
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
         const warehousesToRender = (filters.warehouse === 'All Warehouses' && stockRecords)
             ? (() => {
@@ -1367,30 +1367,30 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         // --- Header ---
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0); // Changed from 100 to 0 (Black)
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("WAREHOUSE STOCK REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("WAREHOUSE STOCK REPORT", pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
 
         // Left Side: Date Range, Warehouse, Product
@@ -2147,28 +2147,28 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
         // --- Header ---
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 50, 37, 100, 8, 'FD');
+        doc.rect(pageWidth / 2 - 50, 29, 100, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
         const title = `${activeTab.toUpperCase()} HISTORY - ${productName.toUpperCase()}`;
-        doc.text(title, pageWidth / 2, 42, { align: 'center' });
+        doc.text(title, pageWidth / 2, 34, { align: 'center' });
 
         // --- Helper for formatting date ---
         const formatDate = (dateStr) => {
@@ -2182,7 +2182,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
         };
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text("Product:", margin, yPos);
@@ -2542,28 +2542,28 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text(`${saleType.toUpperCase()} SALES REPORT`, pageWidth / 2, 42, { align: 'center' });
+        doc.text(`${saleType.toUpperCase()} SALES REPORT`, pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
 
         // Date Range
@@ -2581,7 +2581,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         }
 
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
         // --- Table --- 
         const tableRows = [];
@@ -2847,30 +2847,30 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         // --- Header ---
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("CUSTOMER BALANCE REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("CUSTOMER BALANCE REPORT", pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
 
         if (typeFilter && typeFilter !== 'All Customer') {
@@ -2886,7 +2886,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         doc.setFont('helvetica', 'normal');
         doc.text(activeCustomers.length.toString(), margin + 30, yPos);
 
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
         const getLastTransDay = (customer) => {
             const payments = customer.paymentHistory || [];
@@ -3018,30 +3018,30 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
         // --- Header ---
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 45, 37, 90, 8, 'FD');
+        doc.rect(pageWidth / 2 - 45, 29, 90, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("PAYMENT COLLECTION REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("PAYMENT COLLECTION REPORT", pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
 
         doc.setFont('helvetica', 'bold');
@@ -3175,32 +3175,32 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 50, 37, 100, 8, 'FD');
+        doc.rect(pageWidth / 2 - 50, 29, 100, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         let reportTitle = "";
         if (isSales) reportTitle = "CUSTOMER SALES HISTORY";
         else if (isPayment) reportTitle = "CUSTOMER PAYMENT HISTORY";
         else if (isAll) reportTitle = "CUSTOMER ALL TRANSACTION HISTORY";
-        doc.text(reportTitle, pageWidth / 2, 42, { align: 'center' });
+        doc.text(reportTitle, pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text("Company:", margin, yPos);
@@ -3590,30 +3590,30 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         // --- Header ---
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("C&F HISTORY REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("C&F HISTORY REPORT", pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(9);
 
         // Agent Info (Box Style)
@@ -3786,27 +3786,27 @@ export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
         // Header
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("LC EXPENSE REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("LC EXPENSE REPORT", pageWidth / 2, 34, { align: 'center' });
 
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(9);
 
         doc.setFont('helvetica', 'bold');
@@ -3952,29 +3952,29 @@ export const generateCnFAgentListReportPDF = (agents, moduleType) => {
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         const reportTitle = `${moduleType ? moduleType + ' ' : ''}C&F AGENT REPORT`;
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 50, 37, 100, 8, 'FD');
+        doc.rect(pageWidth / 2 - 50, 29, 100, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text(reportTitle, pageWidth / 2, 42, { align: 'center' });
+        doc.text(reportTitle, pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         doc.setFontSize(9);
 
@@ -4081,27 +4081,27 @@ export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
         // Header
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("C&F PAYMENT REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("C&F PAYMENT REPORT", pageWidth / 2, 34, { align: 'center' });
 
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(9);
 
         doc.setFont('helvetica', 'bold');
@@ -4246,27 +4246,27 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
         // Header
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("C&F COMPLETE LEDGER", pageWidth / 2, 42, { align: 'center' });
+        doc.text("C&F COMPLETE LEDGER", pageWidth / 2, 34, { align: 'center' });
 
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(9);
 
         doc.setFont('helvetica', 'bold');
@@ -4440,28 +4440,28 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text("LC BILL HISTORY REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("LC BILL HISTORY REPORT", pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
 
         doc.setFont('helvetica', 'bold');
@@ -4501,7 +4501,7 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
         }
 
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
         // --- Table ---
         const tableRows = reportData.map((row, idx) => [
@@ -4535,7 +4535,7 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
             body: tableRows,
             theme: 'grid',
             styles: {
-                fontSize: 8,
+                fontSize: 9,
                 cellPadding: 1.5,
                 lineColor: [0, 0, 0],
                 lineWidth: 0.1,
@@ -4551,7 +4551,7 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
                 0: { cellWidth: 8, halign: 'center' },   // SL
                 1: { cellWidth: 20, halign: 'center' },  // Date
                 2: { cellWidth: 25, halign: 'center' },  // LC No
-                3: { cellWidth: 46 },                    // Importer
+                3: { cellWidth: 46, overflow: 'hidden' },                    // Importer
                 4: { cellWidth: 35, halign: 'center' },  // Bill Type
                 5: { cellWidth: 32, halign: 'right' },   // Margin Paid
                 6: { cellWidth: 32, halign: 'right' }    // Bank Charge
@@ -4599,31 +4599,31 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
         // Header info
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 20, { align: 'center' });
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 26, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 31, { align: 'center' });
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
 
         // Separator line
         doc.setDrawColor(0);
         doc.setLineWidth(0.5);
-        doc.line(margin, 40, pageWidth - margin, 40);
+        doc.line(margin, 32, pageWidth - margin, 32);
 
         // Report Title Box
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 37, 80, 8, 'FD');
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
-        doc.text("LC MANAGEMENT REPORT", pageWidth / 2, 42, { align: 'center' });
+        doc.text("LC MANAGEMENT REPORT", pageWidth / 2, 34, { align: 'center' });
 
         // Info row
         // Info row
-        let yPos = 55;
+        let yPos = 47;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0);
@@ -4685,7 +4685,7 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
 
         // Data Preparation
         const tableHeaders = [
-            ['Date', 'Expire Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Port', 'Product', 'Quantity', 'Total Value', 'LC Balance', 'Expense']
+            ['Date', 'Exp Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Port', 'Product', 'Quantity', 'Total Value', 'LC Balance', 'Expense']
         ];
 
         const tableRows = reportData.map(record => [
@@ -4718,7 +4718,7 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
             foot: [footerRow],
             theme: 'grid',
             styles: {
-                fontSize: 8.5,
+                fontSize: 9,
                 cellPadding: 1.5,
                 textColor: [0, 0, 0],
                 lineColor: [0, 0, 0],
@@ -4740,14 +4740,14 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
                 lineWidth: 0.1
             },
             columnStyles: {
-                0: { cellWidth: 18, halign: 'center' }, // Date
-                1: { cellWidth: 18, halign: 'center' }, // Expire Date
-                2: { cellWidth: 23, halign: 'center', fontStyle: 'bold' }, // LC No
-                3: { cellWidth: 30, halign: 'left' }, // Importer
-                4: { cellWidth: 30, halign: 'left' }, // Exporter
-                5: { cellWidth: 30, halign: 'left' }, // Bank
+                0: { cellWidth: 19, halign: 'center' }, // Date
+                1: { cellWidth: 19, halign: 'center' }, // Expire Date
+                2: { cellWidth: 24, halign: 'center', fontStyle: 'bold' }, // LC No
+                3: { cellWidth: 28, overflow: "hidden" }, // Importer
+                4: { cellWidth: 28, overflow: "hidden" }, // Exporter
+                5: { cellWidth: 28, overflow: "hidden" }, // Bank
                 6: { cellWidth: 20, halign: 'center' }, // Port
-                7: { cellWidth: 22, halign: 'left' }, // Product
+                7: { cellWidth: 25, halign: 'left' }, // Product
                 8: { cellWidth: 22, halign: 'right' }, // Qty
                 9: { cellWidth: 28, halign: 'right' }, // Val
                 10: { cellWidth: 22, halign: 'right' }, // Bal
