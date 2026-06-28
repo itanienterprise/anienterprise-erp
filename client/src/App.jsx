@@ -238,9 +238,9 @@ function App() {
   const unreadCount = notifications.filter(n => n.isUnread).length;
 
   // --- Pending "Requested" entries indicator for sidebar ---
-  const [pendingModules, setPendingModules] = useState({ 
-    lc: false, 
-    stock: false, 
+  const [pendingModules, setPendingModules] = useState({
+    lc: false,
+    stock: false,
     sale: false,
     lcReceive: false,
     stockManagement: false,
@@ -260,7 +260,7 @@ function App() {
 
       const hasRequestedLC = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !!item.lcNo);
       const hasRequestedStockMgmt = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !item.lcNo);
-      
+
       const hasRequestedGeneralSale = salesData.some(item => {
         const status = (item.status || '').toLowerCase();
         const type = (item.saleType || '').toLowerCase();
@@ -576,16 +576,16 @@ function App() {
 
       // Try exact match first
       const lowerName = name.trim().toLowerCase();
-      let found = products.find(p => 
-        (p.name || '').trim().toLowerCase() === lowerName || 
+      let found = products.find(p =>
+        (p.name || '').trim().toLowerCase() === lowerName ||
         (p.ipName || '').trim().toLowerCase() === lowerName
       );
 
       if (found) return found.name;
 
       // Try normalized match (ignoring plural 's')
-      found = products.find(p => 
-        normalize(p.name) === target || 
+      found = products.find(p =>
+        normalize(p.name) === target ||
         normalize(p.ipName) === target
       );
 
@@ -861,10 +861,10 @@ function App() {
                         type === 'indian-bank' ? 'indian-banks' :
                           type === 'cnf' ? 'cnfs' :
                             type === 'pi' ? 'pi' :
-                            type === 'lc-expense' ? 'lc-expenses' :
-                            type === 'packing-list' ? 'packing-lists' :
-                            type === 'tr-setup' ? 'tr-setups' :
-                              'stock';
+                              type === 'lc-expense' ? 'lc-expenses' :
+                                type === 'packing-list' ? 'packing-lists' :
+                                  type === 'tr-setup' ? 'tr-setups' :
+                                    'stock';
 
 
     try {
@@ -1166,7 +1166,7 @@ function App() {
         const whName = (item.whName || item.warehouse || item.name || '').trim();
         const prodName = (item.product || item.productName || '').trim();
         const brand = (item.brand || '').trim();
-        
+
         return {
           ...item,
           whName,
@@ -1614,24 +1614,24 @@ function App() {
         );
       case 'warehouse-section':
         return (
-          <WarehouseManagement 
-            currentUser={currentUser} 
+          <WarehouseManagement
+            currentUser={currentUser}
             damages={damages}
-            addNotification={addNotification} 
+            addNotification={addNotification}
           />
         );
       case 'damage-section':
         return (
-          <DamageManagement 
-            currentUser={currentUser} 
-            products={products} 
-            warehouseData={warehouseData} 
+          <DamageManagement
+            currentUser={currentUser}
+            products={products}
+            warehouseData={warehouseData}
             salesRecords={salesRecords}
             stockRecords={stockRecords}
             damages={damages}
             fetchDamages={fetchDamages}
             fetchStockRecords={fetchStockRecords}
-            addNotification={addNotification} 
+            addNotification={addNotification}
             refreshPendingIndicators={fetchPendingEntries}
           />
         );
@@ -1714,14 +1714,14 @@ function App() {
         );
       case 'lc-gp-section':
         return (
-          <LCGatePass 
+          <LCGatePass
             currentUser={currentUser}
             addNotification={addNotification}
           />
         );
       case 'lc-expense-section':
         return (
-          <LCExpense 
+          <LCExpense
             key={refreshKey}
             currentUser={currentUser}
             addNotification={addNotification}
@@ -1767,14 +1767,14 @@ function App() {
       {sidebarOpen && windowWidth < 768 && (
         <div
           className="fixed inset-0 z-[1050] animate-in fade-in duration-300 no-print"
-          style={{backgroundColor: 'rgba(17,24,39,0.5)'}}
+          style={{ backgroundColor: 'rgba(17,24,39,0.5)' }}
           onClick={() => setSidebarOpen(false)}
         />
       )}
       {/* Sidebar */}
-      <aside className={`${windowWidth >= 768 ? 'relative' : `fixed inset-y-0 left-0 z-[1100] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out overflow-x-hidden flex-shrink-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`} style={isTouchOnlyDevice ? {transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)'} : {}}>
+      <aside className={`${windowWidth >= 768 ? 'relative' : `fixed inset-y-0 left-0 z-[1100] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out overflow-x-hidden flex-shrink-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`} style={isTouchOnlyDevice ? { transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' } : {}}>
         {/* Sidebar top — must match header height (64px) exactly */}
-        <div className="flex items-center px-4 border-b border-gray-200 bg-gray-50/50 flex-shrink-0" style={{height: '64px'}}>
+        <div className="flex items-center px-4 border-b border-gray-200 bg-gray-50/50 flex-shrink-0" style={{ height: '64px' }}>
           <button
             onClick={() => setShowProfile(true)}
             className="relative group focus:outline-none flex-shrink-0"
@@ -2186,7 +2186,7 @@ function App() {
       {/* Main Content */}
       <div className={`flex-1 flex flex-col overflow-hidden ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
         {/* Header */}
-        <header className="flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm print:hidden" style={{height: '64px', flexShrink: 0}}>
+        <header className="flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm print:hidden" style={{ height: '64px', flexShrink: 0 }}>
           {/* Left side */}
           <div className="flex items-center gap-3">
             {/* Hamburger — mobile only */}
@@ -2208,7 +2208,7 @@ function App() {
 
           {/* Center — mobile title only */}
           {windowWidth < 768 && (
-            <h1 className="absolute left-0 right-0 text-center text-xl font-black tracking-tight pointer-events-none" style={{color: '#2563eb'}}>
+            <h1 className="absolute left-0 right-0 text-center text-xl font-black tracking-tight pointer-events-none" style={{ color: '#2563eb' }}>
               ANI Enterprise ERP
             </h1>
           )}

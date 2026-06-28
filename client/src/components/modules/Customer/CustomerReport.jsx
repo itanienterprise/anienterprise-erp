@@ -75,18 +75,40 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
-            <div className="bg-white w-full max-w-5xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
+            <div className="bg-white w-full max-w-5xl max-h-[82vh] sm:max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
                 {/* Modal Header — hidden on print */}
-                <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 border-b border-gray-100 print:hidden gap-2">
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
-                            <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                
+                {/* MOBILE HEADER LAYOUT (visible on mobile only, hidden on tablet/desktop) */}
+                <div className="flex flex-col gap-3.5 px-4 py-4 border-b border-gray-100 print:hidden sm:hidden w-full">
+                    {/* Top row: Title and Action Buttons */}
+                    <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg">
+                                <BarChartIcon className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <h3 className="text-base font-black text-gray-800">Customer Report</h3>
                         </div>
-                        <h3 className="text-base sm:text-xl font-black text-gray-800 truncate leading-none">Customer Report</h3>
+
+                        {/* Actions (Print & X close at top right on mobile) */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                                onClick={handlePrint}
+                                className="w-8 h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
+                            >
+                                <PrinterIcon className="w-4 h-4 text-white" />
+                            </button>
+                            <button
+                                onClick={onClose}
+                                className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors no-print flex-shrink-0"
+                            >
+                                <XIcon className="w-4 h-4 text-gray-500" />
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-1 justify-center max-w-xs mx-4">
+                    {/* Search Input — full width on mobile */}
+                    <div className="w-full">
                         <div className="relative w-full">
                             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                             <input
@@ -99,14 +121,56 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-                        {/* Type filter tabs */}
-                        <div className="flex bg-gray-100/50 p-0.5 rounded-xl border border-gray-200/50 text-xs">
+                    {/* Type filter tabs — centered on mobile */}
+                    <div className="flex justify-center w-full">
+                        <div className="flex bg-gray-100/50 p-0.5 rounded-xl border border-gray-200/50 text-[11px] overflow-x-auto hide-scrollbar scroll-smooth flex-shrink-0">
                             {['All Customer', 'General Customer', 'Party Customer'].map(type => (
                                 <button
                                     key={type}
                                     onClick={() => setTypeFilter(type)}
-                                    className={`px-3 py-1.5 rounded-lg font-bold transition-all ${typeFilter === type
+                                    className={`px-3 py-1.5 rounded-md font-bold transition-all whitespace-nowrap ${typeFilter === type
+                                        ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    {type.replace(' Customer', '')}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* DESKTOP HEADER LAYOUT (visible on desktop only, hidden on mobile) */}
+                <div className="hidden sm:flex flex-row items-center justify-between px-8 py-4 border-b border-gray-100 print:hidden gap-3 w-full">
+                    <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
+                        <div className="w-10 sm:w-10 h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-xl">
+                            <BarChartIcon className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <h3 className="text-xl font-black text-gray-800 truncate leading-none">Customer Report</h3>
+                    </div>
+
+                    {/* Search Input — centered in desktop mode */}
+                    <div className="flex-1 max-w-xs mx-4">
+                        <div className="relative w-full">
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            <input
+                                type="text"
+                                placeholder="Search customers..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex flex-row items-center gap-3 flex-shrink-0">
+                        {/* Type filter tabs */}
+                        <div className="flex bg-gray-100/50 p-0.5 rounded-xl border border-gray-200/50 text-xs flex-shrink-0">
+                            {['All Customer', 'General Customer', 'Party Customer'].map(type => (
+                                <button
+                                    key={type}
+                                    onClick={() => setTypeFilter(type)}
+                                    className={`px-2.5 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap ${typeFilter === type
                                         ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
                                         : 'text-gray-500 hover:text-gray-700'
                                         }`}
@@ -116,18 +180,21 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
                             ))}
                         </div>
 
-                        <button
-                            onClick={handlePrint}
-                            className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print"
-                        >
-                            <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                        </button>
-                        <button
-                            onClick={onClose}
-                            className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"
-                        >
-                            <XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" />
-                        </button>
+                        {/* Actions */}
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handlePrint}
+                                className="w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
+                            >
+                                <PrinterIcon className="w-5 h-5 text-white" />
+                            </button>
+                            <button
+                                onClick={onClose}
+                                className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 rounded-xl transition-colors no-print flex-shrink-0"
+                            >
+                                <XIcon className="w-6 h-6 text-gray-500" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
