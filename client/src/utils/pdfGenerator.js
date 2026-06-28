@@ -583,7 +583,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
             columnStyles: {
                 0: { cellWidth: 21, halign: 'center' }, // Date
                 1: { cellWidth: 28, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' }, // LC No
-                2: { cellWidth: 38, halign: 'left' },   // Importer
+                2: { cellWidth: 35, overflow: 'hidden' },   // Importer
                 3: { cellWidth: 21, halign: 'center' }, // BOE No
                 4: { cellWidth: 12, halign: 'center' }, // Truck
                 5: { cellWidth: 26, halign: 'left' }, // Product
@@ -591,8 +591,8 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
                 7: { cellWidth: 17, halign: 'center' },  // Bag
                 8: { cellWidth: 21, halign: 'right' },  // QTY
                 9: { cellWidth: 18, halign: 'right' }, // SHORT
-                10: { cellWidth: 21, halign: 'right' }, // IH QTY
-                11: { cellWidth: 23, halign: 'right' }  // IH BAG
+                10: { cellWidth: 25, halign: 'right' }, // IH QTY
+                11: { cellWidth: 25, halign: 'right' }  // IH BAG
             }
         });
 
@@ -2338,13 +2338,13 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 columnStyles: {
                     0: { cellWidth: 18, halign: 'center' }, // Date
                     1: { cellWidth: 22, halign: 'center' }, // LC No
-                    2: { cellWidth: 24, halign: 'left' },   // Exporter
+                    2: { cellWidth: 24, halign: 'left', overflow: 'hidden' },   // Exporter
                     3: { cellWidth: 16, halign: 'center' }, // Invoice
-                    4: { cellWidth: 30, halign: 'left' },   // Party
+                    4: { cellWidth: 28, halign: 'left', overflow: 'hidden' },   // Party
                     5: { cellWidth: 19, halign: 'right' },  // Purchase
                     6: { cellWidth: 19, halign: 'right' },  // Sale
                     7: { cellWidth: 19, halign: 'right' },  // InHouse
-                    8: { cellWidth: 13, halign: 'right' },  // Short
+                    8: { cellWidth: 15, halign: 'right' },  // Short
                     9: { cellWidth: 16, halign: 'right' }   // Damage
                 },
                 margin: { left: margin, right: margin }
@@ -2370,7 +2370,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 item.lcNo || '-',
                 item.itemExporter || '-',
                 item.itemBrand || '-',
-                `TK ${parseFloat(item.itemPurchasedPrice || 0).toLocaleString('en-IN')}`,
+                parseFloat(item.itemPurchasedPrice || 0).toLocaleString('en-IN'),
                 item.itemPacket.toLocaleString('en-US'),
                 `${Math.round(item.itemQty).toLocaleString('en-US')} kg`,
                 `${Math.round(item.itemInHouseQty).toLocaleString('en-US')} kg`,
@@ -2378,7 +2378,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             ]);
             const purchaseFoot = [[
                 { content: 'TOTAL PURCHASE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `TK ${Math.round(purchaseTotals.totalValue).toLocaleString('en-IN')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: Math.round(purchaseTotals.totalValue).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: purchaseTotals.pkt.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.inHouse).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
@@ -2429,14 +2429,14 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     sale.phone || '-',
                     `${sale.itemQty.toLocaleString('en-US')} kg`,
                     sale.itemTruck || '-',
-                    `TK ${sale.itemPrice.toLocaleString('en-IN')}`,
-                    `TK ${sale.itemTotal.toLocaleString('en-IN')}`
+                    sale.itemPrice.toLocaleString('en-IN'),
+                    sale.itemTotal.toLocaleString('en-IN')
                 ]);
                 saleFoot = [[
                     { content: 'TOTAL SALE', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: '-', colSpan: 2, styles: { halign: 'right' } },
-                    { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-IN')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                    { content: Math.round(saleTotals.amount).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
                     0: { cellWidth: 16, halign: 'center' }, // Date
@@ -2460,24 +2460,24 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     sale.itemBrand || '-',
                     sale.itemPacket.toLocaleString('en-US'),
                     `${sale.itemQty.toLocaleString('en-US')} kg`,
-                    `TK ${sale.itemPrice.toLocaleString('en-IN')}`,
-                    `TK ${sale.itemTotal.toLocaleString('en-IN')}`
+                    sale.itemPrice.toLocaleString('en-IN'),
+                    sale.itemTotal.toLocaleString('en-IN')
                 ]);
                 saleFoot = [[
                     { content: 'TOTAL SALE', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
                     { content: '-', styles: { halign: 'right' } },
-                    { content: `TK ${Math.round(saleTotals.amount).toLocaleString('en-IN')}`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
+                    { content: Math.round(saleTotals.amount).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
                     0: { cellWidth: 18, halign: 'center' }, // Date
                     1: { cellWidth: 16, halign: 'center' }, // LC No
                     2: { cellWidth: 14, halign: 'center' }, // Invoice
-                    3: { cellWidth: 30, halign: 'left' },   // Company
+                    3: { cellWidth: 30, halign: 'left', overflow: 'hidden' },   // Company
                     4: { cellWidth: 28, halign: 'left' },   // Brand
                     5: { cellWidth: 16, halign: 'right' },  // Packet
-                    6: { cellWidth: 18, halign: 'right' },  // Qty
-                    7: { cellWidth: 22, halign: 'right' },  // Price
+                    6: { cellWidth: 22, halign: 'right' },  // Qty
+                    7: { cellWidth: 15, halign: 'right' },  // Price
                     8: { cellWidth: 34, halign: 'right' }   // Total Price
                 };
             }
@@ -3232,7 +3232,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         }
 
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
         // --- Table ---
         const tableRows = [];
@@ -3365,31 +3365,31 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 foot: [foot],
                 theme: 'grid',
                 showFoot: 'lastPage',
-                styles: { fontSize: 8.5, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
-                headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
+                styles: { fontSize: 9, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
+                headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center', noWrap: true },
                 columnStyles: isParty ? {
                     0: { halign: 'center', cellWidth: 7 },
-                    1: { cellWidth: 18, halign: 'center' },
+                    1: { cellWidth: 20, halign: 'center' }, // Date (increased from 18 to prevent line break)
                     2: { cellWidth: 20 },
                     3: { cellWidth: 25 },
                     4: { cellWidth: 15, halign: 'center' },
                     5: { halign: 'right', cellWidth: 15 },
-                    6: { halign: 'right', cellWidth: 15 },
+                    6: { halign: 'right', cellWidth: 11 }, // Rate (reduced to make space)
                     7: { halign: 'right', cellWidth: 20 },
                     8: { cellWidth: 25 },
                     9: { halign: 'right', cellWidth: 20 },
-                    10: { halign: 'right', cellWidth: 20 }
+                    10: { halign: 'right', cellWidth: 22 }
                 } : {
                     0: { halign: 'center', cellWidth: 7 },
-                    1: { cellWidth: 18, halign: 'center' },
+                    1: { cellWidth: 20, halign: 'center' }, // Date (increased from 18 to prevent line break)
                     2: { cellWidth: 18 },
                     3: { cellWidth: 25 },
                     4: { halign: 'right', cellWidth: 18 }, // Qty
-                    5: { halign: 'right', cellWidth: 15 }, // Rate
+                    5: { halign: 'right', cellWidth: 11 }, // Rate (reduced to make space)
                     6: { halign: 'right', cellWidth: 22 }, // Amount
                     7: { cellWidth: 35 }, // Details
                     8: { halign: 'right', cellWidth: 20 }, // Paid
-                    9: { halign: 'right', cellWidth: 22 }  // Balance
+                    9: { halign: 'right', cellWidth: 24 }  // Balance
                 },
                 margin: { left: margin, right: margin }
             });
@@ -3489,14 +3489,14 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 head: headers,
                 body: tableRows,
                 theme: 'grid',
-                styles: { fontSize: 8.5, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                styles: { fontSize: 9, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
                     0: { halign: 'center', cellWidth: 8 },    // SL
                     1: { cellWidth: 20, halign: 'center' },   // Date
                     2: { cellWidth: 25 },                     // LC No / Invoice No
                     3: { cellWidth: 25 },                     // Product
-                    4: { halign: 'center', cellWidth: 40 },    // Brand / Truck
+                    4: { halign: 'left', cellWidth: 40 },     // Brand / Truck (Left Aligned)
                     5: { halign: 'right', cellWidth: 20 },    // Qty
                     6: { halign: 'right', cellWidth: 20 },    // Rate
                     7: { halign: 'right', cellWidth: 27 },    // Amount
@@ -3532,16 +3532,16 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 head: [['SL', 'Date', 'Method', 'Bank / Receiver', 'Branch / Place', 'Acc No / Ref', 'Amount']],
                 body: tableRows,
                 theme: 'grid',
-                styles: { fontSize: 8.5, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                styles: { fontSize: 9, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
                     0: { halign: 'center', cellWidth: 10 },
                     1: { cellWidth: 25 },
-                    2: { cellWidth: 30 },
+                    2: { cellWidth: 20 },
                     3: { cellWidth: 45 },
                     4: { cellWidth: 35 },
                     5: { cellWidth: 30 },
-                    6: { halign: 'right', cellWidth: 25 }
+                    6: { halign: 'right', cellWidth: 35 }
                 },
                 margin: { left: margin, right: margin }
             });
