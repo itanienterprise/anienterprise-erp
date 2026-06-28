@@ -1021,6 +1021,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         qualSubRow.push({ content: Math.round(qCloseQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
 
                         boldBottomRowIndices.add(tableRows.length);
+                        qualSubRow.isSubTotal = true;
                         tableRows.push(qualSubRow);
                     }
                 });
@@ -1145,9 +1146,18 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 },
                 margin: { left: margin, right: margin },
                 didParseCell: (data) => {
-                    // Keep SUB TOTAL rows attached to the row above — prevents blank gaps
-                    if (data.row.section === 'body' && data.row.raw && data.row.raw.isSubTotal) {
-                        data.row.pageBreak = 'avoid';
+                    if (data.row.section === 'body') {
+                        // Keep SUB TOTAL rows attached to the row above — prevents blank gaps
+                        if (data.row.raw && data.row.raw.isSubTotal) {
+                            data.row.pageBreak = 'avoid';
+                        }
+                        // Disable default borders for SL, Product/Quality, and Brand columns on subtotal/grand total rows
+                        // to prevent vertical lines from cutting through colSpan/spanned cells.
+                        if (data.row.raw && data.row.raw.isSubTotal) {
+                            if (data.column.index === 0 || data.column.index === 1 || data.column.index === 2) {
+                                data.cell.styles.lineWidth = 0;
+                            }
+                        }
                     }
                 },
                 didDrawCell: (data) => {
@@ -1187,6 +1197,17 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                                 x2: cell.x + cell.width,
                                 y2: cell.y + cell.height,
                                 lineWidth: isSubTotal ? 0.5 : 0.1
+                            });
+                        }
+
+                        // Top horizontal line (only for subtotal rows)
+                        if (isSubTotal) {
+                            customLinesToDraw.push({
+                                x1: cell.x,
+                                y1: cell.y,
+                                x2: cell.x + cell.width,
+                                y2: cell.y,
+                                lineWidth: 0.1
                             });
                         }
                     } else {
