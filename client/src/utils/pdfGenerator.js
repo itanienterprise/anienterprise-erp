@@ -3580,12 +3580,12 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
 
 export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
     try {
-        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
         // --- Configuration ---
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
-        const margin = 10;
+        const margin = 5;
 
         // --- Header ---
         doc.setFontSize(22);
@@ -3652,7 +3652,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
 
         // Right Side: Date Range, Printed On
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        const rightColX = pageWidth - margin - 70; // Increased spacing for long date ranges
+        const rightColX = pageWidth - margin - 50;
 
         doc.setFont('helvetica', 'bold');
         doc.text("Printed on:", rightColX, yPos);
@@ -3670,12 +3670,11 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
         const tableRows = sortedReportData.map((row, index) => [
             formatDate(row.date),
-            row.lcNo || '-',
+            row.lcNo ? (row.lcNo.toString().length > 5 ? row.lcNo.toString().slice(-5) : row.lcNo.toString()) : '-',
             row.importer || '-',
             row.exporter || '-',
             row.product || '-',
             row.port || '-',
-            row.uom || '-',
             row.truck || '0',
             row.billOfEntry || '-',
             parseFloat(row.qty || 0).toLocaleString('en-US'),
@@ -3688,13 +3687,16 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         const totalQty = reportData.reduce((sum, row) => sum + (parseFloat(row.qty) || 0), 0);
         const totalCommissionVal = reportData.reduce((sum, row) => sum + (parseFloat(row.totalCommission) || 0), 0);
 
+        const totalTableWidth = 18 + 15 + 24 + 24 + 16 + 20 + 12 + 16 + 16 + 16 + 23; // 200mm (Fits well on portrait A4 width of 210mm)
+        const tableMargin = (pageWidth - totalTableWidth) / 2;
+
         // --- Table ---
         autoTable(doc, {
             startY: yPos + yOffset + 9,
-            head: [['Date', 'LC No', 'Importer', 'Exporter', 'Product', 'Port', 'UOM', 'Trucks', 'BOE No', 'QTY', 'Commission', 'Total']],
+            head: [['Date', 'LC No', 'Importer', 'Exporter', 'Product', 'Port', 'Truck', 'BOE', 'QTY', 'Comm', 'Total']],
             body: tableRows,
             foot: [[
-                { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } }, // Date, LC, Importer, Exporter, Product, Port, UOM
+                { content: 'GRAND TOTAL', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } }, // Date, LC, Importer, Exporter, Product, Port
                 { content: totalTrucks.toString(), styles: { halign: 'center', fontStyle: 'bold' } },
                 '', // BOE No
                 { content: totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
@@ -3704,7 +3706,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             theme: 'plain',
             showFoot: 'lastPage',
             styles: {
-                fontSize: 9.5,
+                fontSize: 9.0,
                 cellPadding: 1.2,
                 lineColor: [0, 0, 0],
                 lineWidth: 0.15,
@@ -3725,20 +3727,19 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 fontStyle: 'bold',
                 lineWidth: 0.15
             },
-            margin: { left: margin, right: margin },
+            margin: { left: tableMargin, right: tableMargin },
             columnStyles: {
-                0: { cellWidth: 20, halign: 'center' }, // Date
-                1: { cellWidth: 25, halign: 'left' },   // LC No
-                2: { cellWidth: 32, halign: 'left' },   // Importer
-                3: { cellWidth: 32, halign: 'left' },   // Exporter
-                4: { cellWidth: 20, halign: 'left' },   // Product
+                0: { cellWidth: 18, halign: 'center' }, // Date
+                1: { cellWidth: 15, halign: 'center' }, // LC No
+                2: { cellWidth: 24, halign: 'left' },   // Importer
+                3: { cellWidth: 24, halign: 'left', overflow: 'hidden' },   // Exporter
+                4: { cellWidth: 16, halign: 'left' },   // Product
                 5: { cellWidth: 20, halign: 'center' }, // Port
-                6: { cellWidth: 14, halign: 'center' }, // UOM
-                7: { cellWidth: 17, halign: 'center' }, // Trucks
-                8: { cellWidth: 20, halign: 'center' }, // BOE No
-                9: { cellWidth: 20, halign: 'right' },  // QTY
-                10: { cellWidth: 24, halign: 'right' }, // Commission
-                11: { cellWidth: 30, halign: 'right' }  // Total
+                6: { cellWidth: 12, halign: 'center' }, // Trucks
+                7: { cellWidth: 16, halign: 'center' }, // BOE No
+                8: { cellWidth: 16, halign: 'right' },  // QTY
+                9: { cellWidth: 16, halign: 'right' }, // Commission
+                10: { cellWidth: 23, halign: 'right', fontStyle: 'bold' }  // Total
             }
         });
 
@@ -4321,6 +4322,9 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
             row.lcNo || '-',
             row.importer || '-',
             row.product || '-',
+            row.port || '-',
+            row.qty ? `${row.qty.toLocaleString('en-US')} kg` : '-',
+            row.truckCount || '-',
             row.billingAmount > 0 ? row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
             row.method || '-',
             row.bankName ? (row.reference ? `${row.reference} / ${row.bankName}` : row.bankName) : (row.reference || '-'),
@@ -4332,17 +4336,21 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
         const totalBilling = reportData.reduce((sum, row) => sum + (parseFloat(row.billingAmount) || 0), 0);
         const totalAmount = reportData.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
         const totalDiscount = reportData.reduce((sum, row) => sum + (parseFloat(row.discount) || 0), 0);
+        const totalQty = reportData.reduce((sum, row) => sum + (parseFloat(row.qty) || 0), 0);
+        const totalTrucks = reportData.reduce((sum, row) => sum + (parseInt(row.truckCount) || 0), 0);
 
-        const totalTableWidth = 18 + 22 + 32 + 32 + 22 + 22 + 38 + 22 + 22 + 25;
+        const totalTableWidth = 18 + 24 + 25 + 20 + 20 + 20 + 12 + 20 + 18 + 44 + 20 + 20 + 20; // 281mm (fits landscape A4 page width of 297mm)
         const tableMargin = (pageWidth - totalTableWidth) / 2;
         const lastBalance = reportData.length > 0 ? reportData[reportData.length - 1].runningBalance : 0;
 
         autoTable(doc, {
             startY: yPos + yOffset + 9,
-            head: [['Date', 'LC No', 'Importer', 'Product', 'Billing Amt', 'Method', 'Reference / Bank', 'Amount', 'Discount', 'Balance']],
+            head: [['Date', 'LC No', 'Importer', 'Product', 'Port', 'QTY', 'Truck', 'Billing Amt', 'Method', 'Reference / Bank', 'Amount', 'Discount', 'Balance']],
             body: tableRows,
             foot: [[
-                { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalQty > 0 ? `${totalQty.toLocaleString('en-US')} kg` : '-', styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalTrucks > 0 ? totalTrucks.toString() : '-', styles: { halign: 'center', fontStyle: 'bold' } },
                 { content: totalBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
                 '',
                 '',
@@ -4376,16 +4384,19 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
             },
             margin: { left: tableMargin, right: tableMargin },
             columnStyles: {
-                0: { cellWidth: 18, halign: 'center' },
-                1: { cellWidth: 22, halign: 'center' },
-                2: { cellWidth: 32, halign: 'left' },
-                3: { cellWidth: 32, halign: 'left' },
-                4: { cellWidth: 22, halign: 'right' },
-                5: { cellWidth: 22, halign: 'center' },
-                6: { cellWidth: 38, halign: 'left' },
-                7: { cellWidth: 22, halign: 'right' },
-                8: { cellWidth: 22, halign: 'right' },
-                9: { cellWidth: 25, halign: 'right', fontStyle: 'bold' }
+                0: { cellWidth: 18, halign: 'center' }, // Date
+                1: { cellWidth: 24, halign: 'center' }, // LC No
+                2: { cellWidth: 25, halign: 'left', overflow: 'visible', noWrap: true }, // Importer (No wrap)
+                3: { cellWidth: 20, halign: 'left' }, // Product
+                4: { cellWidth: 20, halign: 'center' }, // Port
+                5: { cellWidth: 20, halign: 'right' }, // QTY
+                6: { cellWidth: 12, halign: 'center' }, // Truck
+                7: { cellWidth: 20, halign: 'right' }, // Billing Amt
+                8: { cellWidth: 18, halign: 'center' }, // Method
+                9: { cellWidth: 44, halign: 'left' }, // Reference / Bank
+                10: { cellWidth: 20, halign: 'right' }, // Amount
+                11: { cellWidth: 20, halign: 'right' }, // Discount
+                12: { cellWidth: 20, halign: 'right', fontStyle: 'bold' } // Balance
             }
         });
 
