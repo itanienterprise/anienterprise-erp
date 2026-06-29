@@ -344,22 +344,29 @@ const PaymentCollection = () => {
     const handleEditInitiation = (payment) => {
         setIsEditMode(true);
         setEditingPayment(payment);
+
+        // Find all payment items under the same receipt number
+        const relatedPayments = payments.filter(p => p.receiptNo === payment.receiptNo && p.customerId === payment.customerId);
+
+        // Sum the discount value across related payments
+        const discountVal = relatedPayments.reduce((sum, p) => sum + (parseFloat(p.discount) || 0), 0);
+
         setNewPayment({
             customerId: payment.customerId,
             date: payment.date,
-            items: [{
-                id: payment.id,
-                method: payment.method,
-                bankName: payment.bankName || '',
-                accountNo: payment.accountNo || '',
-                branch: payment.branch || '',
-                receiveBy: payment.receiveBy || '',
-                place: payment.place || '',
-                amount: payment.amount.toString()
-            }],
+            items: relatedPayments.map(p => ({
+                id: p.id,
+                method: p.method,
+                bankName: p.bankName || '',
+                accountNo: p.accountNo || '',
+                branch: p.branch || '',
+                receiveBy: p.receiveBy || '',
+                place: p.place || '',
+                amount: p.amount.toString()
+            })),
             status: payment.status || 'Completed',
             reference: payment.reference || '',
-            discount: payment.discount ? payment.discount.toString() : ''
+            discount: discountVal > 0 ? discountVal.toString() : ''
         });
         setCustomerSearchQuery('');
         setShowAddModal(true);
@@ -423,8 +430,8 @@ const PaymentCollection = () => {
 
     const handleUpdateCollection = async (e) => {
         e.preventDefault();
-        const item = newPayment.items[0];
-        if (!newPayment.customerId || (parseFloat(item.amount) || 0) <= 0) return;
+        const activeItems = newPayment.items.filter(item => parseFloat(item.amount) > 0);
+        if (!newPayment.customerId || activeItems.length === 0) return;
 
         setIsSubmitting(true);
         setSubmitStatus(null);
@@ -432,27 +439,33 @@ const PaymentCollection = () => {
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${newPayment.customerId}`);
             const customer = custRes.data;
 
-            const updatedHistory = (customer.paymentHistory || []).map(p => {
-                if (p.id === editingPayment.id) {
-                    return {
-                        ...p,
-                        date: newPayment.date,
-                        method: item.method,
-                        bankName: item.bankName,
-                        accountNo: item.accountNo,
-                        branch: item.branch,
-                        amount: parseFloat(item.amount),
-                        receiveBy: item.receiveBy,
-                        place: item.place,
-                        reference: newPayment.reference,
-                        status: newPayment.status,
-                        discount: parseFloat(newPayment.discount) || 0
-                    };
-                }
-                return p;
-            });
+            // Remove all existing payment history items belonging to this receiptNo
+            const remainingHistory = (customer.paymentHistory || []).filter(p => p.receiptNo !== editingPayment.receiptNo);
 
-            const updatedCustomer = { ...customer, paymentHistory: updatedHistory };
+            // Map all items currently in the form to reconstructed payment history entries
+            const updatedPaymentEntries = activeItems.map((item, idx) => ({
+                receiptNo: editingPayment.receiptNo,
+                date: newPayment.date,
+                method: item.method,
+                bankName: item.bankName,
+                accountNo: item.accountNo,
+                branch: item.branch,
+                amount: parseFloat(item.amount),
+                receiveBy: item.receiveBy,
+                place: item.place,
+                reference: newPayment.reference,
+                status: newPayment.status,
+                // The discount is stored only on the first item to prevent duplicate totals
+                discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
+                id: item.id
+            }));
+
+            // Prepend new payment entries to the remaining history list
+            const updatedCustomer = {
+                ...customer,
+                paymentHistory: [...updatedPaymentEntries, ...remainingHistory]
+            };
+
             await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
             setSubmitStatus('success');
             fetchPayments();
@@ -1456,20 +1469,18 @@ const PaymentCollection = () => {
                         {/* Dynamic Payment Items List */}
                         <div className="md:col-span-2 space-y-4 mt-6">
                             <div className="flex justify-end">
-                                {!isEditMode && (
-                                    <button
-                                        type="button"
-                                        onClick={addPaymentItem}
-                                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-[10px] hover:bg-blue-100 transition-all group border border-blue-100/50 uppercase tracking-widest"
-                                    >
-                                        <PlusIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-                                        <span>Add More Method</span>
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={addPaymentItem}
+                                    className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-[10px] hover:bg-blue-100 transition-all group border border-blue-100/50 uppercase tracking-widest"
+                                >
+                                    <PlusIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+                                    <span>Add More Method</span>
+                                </button>
                             </div>
                             {newPayment.items.map((item, index) => (
                                 <div key={item.id} className="relative p-7 bg-blue-50/10 rounded-3xl border border-blue-100/20 space-y-6 animate-in slide-in-from-top-4 duration-300 group/item">
-                                    {newPayment.items.length > 1 && !isEditMode && (
+                                    {newPayment.items.length > 1 && (
                                         <button
                                             type="button"
                                             onClick={() => removePaymentItem(item.id)}
