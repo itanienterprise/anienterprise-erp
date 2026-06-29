@@ -38,7 +38,10 @@ const PaymentCollection = () => {
         method: '',
         bankName: '',
         branch: '',
-        customer: ''
+        customer: '',
+        quickRange: 'monthly',
+        selectedMonth: new Date().getMonth() + 1,
+        selectedYear: new Date().getFullYear()
     };
     const [filters, setFilters] = useState(initialFilterState);
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(null);
@@ -177,7 +180,13 @@ const PaymentCollection = () => {
     }, [showFilterPanel]);
 
     const handleFilterChange = (key, value) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
+        setFilters(prev => {
+            const next = { ...prev, [key]: value };
+            if (key === 'startDate' || key === 'endDate') {
+                next.quickRange = 'custom';
+            }
+            return next;
+        });
         setFilterDropdownOpen(null);
     };
 
@@ -531,8 +540,48 @@ const PaymentCollection = () => {
             (p.readableCustomerId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.method || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-        const matchStartDate = !filters.startDate || (p.date && p.date >= filters.startDate);
-        const matchEndDate = !filters.endDate || (p.date && p.date <= filters.endDate);
+        let isDateMatch = true;
+        if (filters.startDate && (!p.date || p.date < filters.startDate)) {
+            isDateMatch = false;
+        }
+        if (filters.endDate && (!p.date || p.date > filters.endDate)) {
+            isDateMatch = false;
+        }
+
+        // Quick range filtering
+        if (filters.quickRange && filters.quickRange !== 'all' && filters.quickRange !== 'custom') {
+            try {
+                const rowDate = new Date(p.date);
+                const now = new Date();
+                if (filters.quickRange === 'weekly') {
+                    const dayOfWeek = now.getDay();
+                    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                    const weekStart = new Date(now);
+                    weekStart.setDate(now.getDate() + diffToMonday);
+                    weekStart.setHours(0, 0, 0, 0);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekStart.getDate() + 6);
+                    weekEnd.setHours(23, 59, 59, 999);
+                    if (rowDate < weekStart || rowDate > weekEnd) {
+                        isDateMatch = false;
+                    }
+                } else if (filters.quickRange === 'monthly') {
+                    const month = filters.selectedMonth || (now.getMonth() + 1);
+                    const year = filters.selectedYear || now.getFullYear();
+                    if (rowDate.getMonth() + 1 !== month || rowDate.getFullYear() !== year) {
+                        isDateMatch = false;
+                    }
+                } else if (filters.quickRange === 'yearly') {
+                    const year = filters.selectedYear || now.getFullYear();
+                    if (rowDate.getFullYear() !== year) {
+                        isDateMatch = false;
+                    }
+                }
+            } catch (e) {
+                console.error("Error parsing date:", e);
+            }
+        }
+
         const matchMethod = !filters.method || ((p.method || '').toLowerCase() === filters.method.toLowerCase());
         const matchBankName = !filters.bankName || ((p.bankName || '').toLowerCase() === filters.bankName.toLowerCase());
         const matchBranch = !filters.branch || ((p.branch || '').toLowerCase() === filters.branch.toLowerCase());
@@ -540,7 +589,7 @@ const PaymentCollection = () => {
             ((p.customerName || '').toLowerCase().includes(filters.customer.toLowerCase()) ||
                 (p.companyName || '').toLowerCase().includes(filters.customer.toLowerCase()));
 
-        return matchSearch && matchStartDate && matchEndDate && matchMethod && matchBankName && matchBranch && matchCustomer;
+        return matchSearch && isDateMatch && matchMethod && matchBankName && matchBranch && matchCustomer;
     });
 
     const calculateCustomerBalance = (customer) => {
@@ -618,6 +667,62 @@ const PaymentCollection = () => {
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        {/* Quick Range */}
+                                        <div className="md:col-span-2 space-y-2 text-center">
+                                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Quick Range</label>
+                                            <div className="flex flex-wrap justify-center gap-2">
+                                                {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                    <button
+                                                        key={range}
+                                                        type="button"
+                                                        onClick={() => setFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${filters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                    >
+                                                        {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {/* Month dropdown for monthly */}
+                                            {filters.quickRange === 'monthly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={filters.selectedMonth || new Date().getMonth() + 1}
+                                                        onChange={(e) => setFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                                            <option key={m} value={m}>
+                                                                {new Date(2000, m - 1).toLocaleString('default', { month: 'long' })}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <select
+                                                        value={filters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                            {/* Year selector for yearly */}
+                                            {filters.quickRange === 'yearly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={filters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {/* Date Range */}
                                         <div className="md:col-span-2 grid grid-cols-2 gap-4">
                                             <div className="space-y-1.5">

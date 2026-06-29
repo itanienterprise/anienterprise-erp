@@ -825,10 +825,10 @@ const StockReport = ({
                             {/* Single Row: All Metrics (5 Cards) */}
                             <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 print:grid-cols-5">
                                 {/* Card 1: TOTAL INHOUSE STOCK */}
-                                <div className="relative border border-gray-200 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200 h-[150px] sm:h-[160px] text-center">
-                                    <div className="absolute top-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 truncate">Total Inhouse Stock</div>
-                                        <div className="text-sm sm:text-base font-bold text-gray-700 whitespace-nowrap truncate">
+                                <div className="border border-gray-200 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200 p-4 flex flex-col justify-between items-center text-center gap-2 min-h-[150px] sm:min-h-[160px] w-full">
+                                    <div className="flex flex-col items-center gap-1 w-full">
+                                        <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Inhouse Stock</div>
+                                        <div className="text-xs sm:text-sm font-bold text-gray-700 w-full break-words">
                                             BAG: {(() => {
                                                 const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
                                                 const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
@@ -836,35 +836,35 @@ const StockReport = ({
                                             })()}
                                         </div>
                                     </div>
-                                    <div className="absolute top-[80px] sm:top-[85px] left-4 sm:left-5 right-4 sm:right-5 border-t border-gray-200"></div>
-                                    <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-xl sm:text-2xl font-black text-gray-900 whitespace-nowrap truncate">
-                                            QTY: {Math.round(totals.totalTotalInHouseQty).toLocaleString('en-IN')} <span className="text-sm font-bold">{stockData.unit}</span>
+                                    <div className="w-full border-t border-gray-200"></div>
+                                    <div className="flex flex-col items-center justify-center w-full">
+                                        <div className="text-lg sm:text-xl font-black text-gray-900 w-full break-words">
+                                            QTY: {Math.round(totals.totalTotalInHouseQty).toLocaleString('en-IN')} <span className="text-xs font-bold">{stockData.unit}</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Card 2: TOTAL SALE */}
-                                <div className="relative border border-gray-200 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200 h-[150px] sm:h-[160px] text-center">
-                                    <div className="absolute top-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 truncate">Total Sale</div>
-                                        <div className="text-sm sm:text-base font-bold text-gray-700 whitespace-nowrap truncate">
+                                <div className="border border-gray-200 rounded-2xl bg-gray-50 shadow-sm print:border-gray-200 p-4 flex flex-col justify-between items-center text-center gap-2 min-h-[150px] sm:min-h-[160px] w-full">
+                                    <div className="flex flex-col items-center gap-1 w-full">
+                                        <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Sale</div>
+                                        <div className="text-xs sm:text-sm font-bold text-gray-700 w-full break-words">
                                             BAG: {Number.isInteger(totals.totalSalePkt) ? totals.totalSalePkt : (totals.totalSalePkt || 0).toFixed(2)}
                                         </div>
                                     </div>
-                                    <div className="absolute top-[80px] sm:top-[85px] left-4 sm:left-5 right-4 sm:right-5 border-t border-gray-200"></div>
-                                    <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-xl sm:text-2xl font-black text-gray-900 whitespace-nowrap truncate">
-                                            QTY: {Math.round(totals.totalSaleQty).toLocaleString('en-IN')} <span className="text-sm font-bold">{stockData.unit}</span>
+                                    <div className="w-full border-t border-gray-200"></div>
+                                    <div className="flex flex-col items-center justify-center w-full">
+                                        <div className="text-lg sm:text-xl font-black text-gray-900 w-full break-words">
+                                            QTY: {Math.round(totals.totalSaleQty).toLocaleString('en-IN')} <span className="text-xs font-bold">{stockData.unit}</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Card 3: CURRENT INHOUSE */}
-                                <div className="relative border-2 border-blue-500 rounded-2xl bg-white shadow-md print:border-blue-500 h-[150px] sm:h-[160px] text-center">
-                                    <div className="absolute top-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-[10px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2 truncate">Current Inhouse</div>
-                                        <div className="text-sm sm:text-base font-bold text-gray-700 whitespace-nowrap truncate">
+                                <div className="border-2 border-blue-500 rounded-2xl bg-white shadow-md print:border-blue-500 p-4 flex flex-col justify-between items-center text-center gap-2 min-h-[150px] sm:min-h-[160px] w-full">
+                                    <div className="flex flex-col items-center gap-1 w-full">
+                                        <div className="text-[10px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider">Current Inhouse</div>
+                                        <div className="text-xs sm:text-sm font-bold text-gray-700 w-full break-words">
                                             BAG: {(() => {
                                                 const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
                                                 const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
@@ -872,42 +872,42 @@ const StockReport = ({
                                             })()}
                                         </div>
                                     </div>
-                                    <div className="absolute top-[80px] sm:top-[85px] left-4 sm:left-5 right-4 sm:right-5 border-t border-blue-100"></div>
-                                    <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-xl sm:text-2xl font-black text-blue-600 whitespace-nowrap truncate">
-                                            QTY: {Math.round(totals.totalInHouseQty).toLocaleString('en-IN')} <span className="text-sm font-bold">{stockData.unit}</span>
+                                    <div className="w-full border-t border-blue-100"></div>
+                                    <div className="flex flex-col items-center justify-center w-full">
+                                        <div className="text-lg sm:text-xl font-black text-blue-600 w-full break-words">
+                                            QTY: {Math.round(totals.totalInHouseQty).toLocaleString('en-IN')} <span className="text-xs font-bold">{stockData.unit}</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Card 4: SHORTAGE */}
-                                <div className="relative border border-gray-200 rounded-2xl bg-rose-50/30 shadow-sm print:border-gray-200 h-[150px] sm:h-[160px] text-center">
-                                    <div className="absolute top-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-[10px] sm:text-[11px] font-bold text-rose-500 uppercase tracking-wider mb-2 truncate">Total Shortage</div>
-                                        <div className="text-sm sm:text-base font-bold text-gray-700 whitespace-nowrap truncate">
+                                <div className="border border-gray-200 rounded-2xl bg-rose-50/30 shadow-sm print:border-gray-200 p-4 flex flex-col justify-between items-center text-center gap-2 min-h-[150px] sm:min-h-[160px] w-full">
+                                    <div className="flex flex-col items-center gap-1 w-full">
+                                        <div className="text-[10px] sm:text-[11px] font-bold text-rose-500 uppercase tracking-wider">Total Shortage</div>
+                                        <div className="text-xs sm:text-sm font-bold text-gray-700 w-full break-words">
                                             BAG: {Math.round(totals.totalShortage / 30)}
                                         </div>
                                     </div>
-                                    <div className="absolute top-[80px] sm:top-[85px] left-4 sm:left-5 right-4 sm:right-5 border-t border-rose-100"></div>
-                                    <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-xl sm:text-2xl font-black text-rose-600 whitespace-nowrap truncate">
-                                            QTY: {Math.round(totals.totalShortage).toLocaleString('en-IN')} <span className="text-sm font-bold">{stockData.unit}</span>
+                                    <div className="w-full border-t border-rose-100"></div>
+                                    <div className="flex flex-col items-center justify-center w-full">
+                                        <div className="text-lg sm:text-xl font-black text-rose-600 w-full break-words">
+                                            QTY: {Math.round(totals.totalShortage).toLocaleString('en-IN')} <span className="text-xs font-bold">{stockData.unit}</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Card 5: DAMAGE */}
-                                <div className="relative border border-gray-200 rounded-2xl bg-red-50/30 shadow-sm print:border-gray-200 h-[150px] sm:h-[160px] text-center">
-                                    <div className="absolute top-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-[10px] sm:text-[11px] font-bold text-red-500 uppercase tracking-wider mb-2 truncate">Total Damage</div>
-                                        <div className="text-sm sm:text-base font-bold text-gray-700 whitespace-nowrap truncate">
+                                <div className="border border-gray-200 rounded-2xl bg-red-50/30 shadow-sm print:border-gray-200 p-4 flex flex-col justify-between items-center text-center gap-2 min-h-[150px] sm:min-h-[160px] w-full">
+                                    <div className="flex flex-col items-center gap-1 w-full">
+                                        <div className="text-[10px] sm:text-[11px] font-bold text-red-500 uppercase tracking-wider">Total Damage</div>
+                                        <div className="text-xs sm:text-sm font-bold text-gray-700 w-full break-words">
                                             BAG: {Math.round(totals.totalDamageQty / 30)}
                                         </div>
                                     </div>
-                                    <div className="absolute top-[80px] sm:top-[85px] left-4 sm:left-5 right-4 sm:right-5 border-t border-red-100"></div>
-                                    <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
-                                        <div className="text-xl sm:text-2xl font-black text-red-600 whitespace-nowrap truncate">
-                                            QTY: {Math.round(totals.totalDamageQty).toLocaleString('en-IN')} <span className="text-sm font-bold">{stockData.unit}</span>
+                                    <div className="w-full border-t border-red-100"></div>
+                                    <div className="flex flex-col items-center justify-center w-full">
+                                        <div className="text-lg sm:text-xl font-black text-red-600 w-full break-words">
+                                            QTY: {Math.round(totals.totalDamageQty).toLocaleString('en-IN')} <span className="text-xs font-bold">{stockData.unit}</span>
                                         </div>
                                     </div>
                                 </div>
