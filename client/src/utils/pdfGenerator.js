@@ -186,8 +186,17 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
-        doc.text(payment.companyName || payment.customerName || 'N/A', margin + labelWidth, y);
-        drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
+        
+        const partyNameText = payment.companyName || payment.customerName || 'N/A';
+        const partyNameWidth = (rightColStart - 5) - (margin + labelWidth);
+        const partyNameLines = doc.splitTextToSize(partyNameText, partyNameWidth);
+        
+        partyNameLines.forEach((line, index) => {
+            doc.text(line, margin + labelWidth, y + (index * 5));
+        });
+        
+        const partyNameLastY = y + ((partyNameLines.length - 1) * 5);
+        drawDottedLine(margin + labelWidth, partyNameLastY + 1, rightColStart - 5);
 
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 0, 0);
@@ -197,7 +206,7 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.text(payment.phone || '—', rightColStart + 28, y);
         drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
 
-        y += 12;
+        y += 12 + ((partyNameLines.length - 1) * 5);
         // Line 3: Address (Full Width)
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 0, 0);
