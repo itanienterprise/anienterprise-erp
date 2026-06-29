@@ -1273,6 +1273,19 @@ const PaymentCollection = () => {
                                                                 )}
                                                             </div>
                                                         ))}
+
+                                                        {/* Card-level actions */}
+                                                        <div className="mobile-card-actions pt-3 border-t border-gray-100 flex gap-2">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleGenerateReceipt(group.items[0], totalAmount, group.items);
+                                                                }}
+                                                                className="flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold flex-1 transition-colors"
+                                                            >
+                                                                <FileTextIcon className="w-4 h-4" /> Money Receipt
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
