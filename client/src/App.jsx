@@ -306,11 +306,18 @@ function App() {
         if (response.data.authenticated) {
           setIsAuthenticated(true);
           setCurrentUser(response.data.user);
+        } else {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          localStorage.removeItem('currentUser');
+          localStorage.setItem('isAuthenticated', 'false');
         }
       } catch (err) {
         // Not authenticated, that's fine
         setIsAuthenticated(false);
         setCurrentUser(null);
+        localStorage.removeItem('currentUser');
+        localStorage.setItem('isAuthenticated', 'false');
       } finally {
         setIsCheckingSession(false);
       }

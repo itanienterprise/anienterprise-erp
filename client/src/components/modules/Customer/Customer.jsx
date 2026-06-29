@@ -1817,7 +1817,6 @@ const Customer = ({
                                                                     </div>
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left">Action</th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
                                                             </tr>
                                                         ) : (
                                                             <tr>
@@ -1882,7 +1881,6 @@ const Customer = ({
                                                                     </div>
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left">Action</th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
                                                             </tr>
                                                         )}
                                                     </thead>
@@ -1926,7 +1924,7 @@ const Customer = ({
                                                                     }
                                                                 };
                                                                 const isParty = viewData?.customerType?.toLowerCase().includes('party');
-                                                                const colSpan = isParty ? "12" : "12";
+                                                                const colSpan = isParty ? "11" : "11";
 
                                                                 return (
                                                                     <React.Fragment key={index}>
@@ -2020,11 +2018,6 @@ const Customer = ({
                                                                                     <FileTextIcon className="w-4 h-4" />
                                                                                 </button>
                                                                             </td>
-                                                                            <td className="px-4 py-4 text-left">
-                                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${group.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                                                    {group.status}
-                                                                                </span>
-                                                                            </td>
                                                                         </tr>
 
                                                                         {/* Detailed Rows */}
@@ -2051,7 +2044,6 @@ const Customer = ({
                                                                                 <td className="px-4 py-3 text-left text-xs font-bold text-teal-500">৳{parseFloat(item.paid || 0).toLocaleString('en-IN')}</td>
                                                                                 <td className="px-4 py-3 text-left text-xs font-bold text-orange-500">৳{Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0)).toLocaleString('en-IN')}</td>
                                                                                 <td className="px-4 py-3"></td>
-                                                                                <td className="px-4 py-3"></td>
                                                                             </tr>
                                                                         ))}
                                                                     </React.Fragment>
@@ -2059,7 +2051,7 @@ const Customer = ({
                                                             })
                                                         ) : (
                                                             <tr>
-                                                                <td colSpan="12" className="px-4 py-8 text-left text-gray-400 font-medium italic">No sales history found matching filters</td>
+                                                                <td colSpan="11" className="px-4 py-8 text-left text-gray-400 font-medium italic">No sales history found matching filters</td>
                                                             </tr>
                                                         )}
                                                     </tbody>

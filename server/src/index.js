@@ -1773,7 +1773,7 @@ apiRouter.get('/api/employees', async (req, res) => {
 // Authentication APIs
 apiRouter.post('/api/auth/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, rememberMe } = req.body;
 
     // Find user
     const user = await User.findOne({ username });
@@ -1818,6 +1818,12 @@ apiRouter.post('/api/auth/login', async (req, res) => {
 
     // Store user data in session
     req.session.user = userData;
+
+    if (rememberMe) {
+      req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+    } else {
+      req.session.cookie.maxAge = null; // Session-only cookie
+    }
 
     res.json({
       success: true,

@@ -22,7 +22,7 @@ const LoginPage = ({ onLogin }) => {
                     'Content-Type': 'application/json'
                 },
                 credentials: 'include',
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ username, password, rememberMe })
             });
 
             const data = await response.json();
