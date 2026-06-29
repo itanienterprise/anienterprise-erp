@@ -3049,6 +3049,8 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
         doc.setFont('helvetica', 'normal');
         doc.text((payments.length || 0).toString(), margin + 30, yPos);
 
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, yPos, { align: 'right' });
+
         if (filters?.startDate) {
             yPos += 5;
             doc.setFont('helvetica', 'bold');
@@ -3064,8 +3066,6 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
             doc.setFont('helvetica', 'normal');
             doc.text(formatDate(filters.endDate), margin + 30, yPos);
         }
-
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 55, { align: 'right' });
 
         // --- Table ---
         const tableRows = [];
@@ -3115,7 +3115,7 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
             columnStyles: {
                 0: { cellWidth: 8, halign: 'center' },  // SL
                 1: { cellWidth: 18 },                   // Date
-                2: { cellWidth: 32 },                   // Party
+                2: { cellWidth: 32, overflow: 'hidden' }, // Party
                 3: { cellWidth: 25 },                   // Method
                 4: { cellWidth: 32 },                   // Bank
                 5: { cellWidth: 18 },                   // Branch

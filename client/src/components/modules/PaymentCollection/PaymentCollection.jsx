@@ -1348,6 +1348,21 @@ const PaymentCollection = () => {
                                             }
                                         }}
                                         onFocus={() => !isEditMode && setActiveDropdown('customer')}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const filtered = rawCustomers.filter(c =>
+                                                    (c.companyName || '').toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+                                                    (c.customerId || '').toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+                                                    (c.customerName || '').toLowerCase().includes(customerSearchQuery.toLowerCase())
+                                                );
+                                                if (filtered.length > 0) {
+                                                    setNewPayment(prev => ({ ...prev, customerId: filtered[0]._id }));
+                                                    setCustomerSearchQuery('');
+                                                    setActiveDropdown(null);
+                                                }
+                                            }
+                                        }}
                                         className={`payment-form-input pl-10 ${isEditMode ? 'bg-gray-50 cursor-not-allowed opacity-75' : ''}`}
                                         autoComplete="off"
                                         readOnly={isEditMode}
@@ -1572,50 +1587,70 @@ const PaymentCollection = () => {
                                                         />
                                                     ) : (
                                                         <div className="relative group/bank">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setActiveDropdown(activeDropdown === `bank-${item.id}` ? null : `bank-${item.id}`)}
-                                                                className="payment-form-input w-full flex items-center justify-between border-blue-200/50 group bg-white/50 text-sm py-2"
-                                                            >
-                                                                <span className={`truncate ${item.bankName ? 'text-gray-900' : 'text-gray-400'}`}>
-                                                                    {item.bankName || 'Select Bank'}
-                                                                </span>
-                                                                {item.bankName ? (
-                                                                    <span
-                                                                        role="button"
-                                                                        onClick={(e) => { e.stopPropagation(); updatePaymentItem(item.id, { bankName: '', branch: '', accountNo: '' }); setActiveDropdown(null); }}
-                                                                        className="ml-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer leading-none"
-                                                                    >×</span>
-                                                                ) : (
-                                                                    <ChevronDownIcon className="w-3 h-3 text-gray-400" />
-                                                                )}
-                                                            </button>
-                                                            {activeDropdown === `bank-${item.id}` && (
-                                                                <div className="absolute z-[130] left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 animate-in slide-in-from-top-2 duration-200 max-h-52 overflow-y-auto">
-                                                                    <div className="px-3 pb-2 border-b border-gray-50 mb-2">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="Search bank..."
-                                                                            value={bankSearchQuery}
-                                                                            onChange={(e) => setBankSearchQuery(e.target.value)}
-                                                                            className="w-full px-3 py-1.5 bg-gray-50 border-none rounded-lg text-xs"
-                                                                            onClick={(e) => e.stopPropagation()}
-                                                                        />
-                                                                    </div>
-                                                                    {banks.filter(b => b.bankName.toLowerCase().includes(bankSearchQuery.toLowerCase())).map(bank => (
-                                                                        <button
-                                                                            key={bank._id}
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                updatePaymentItem(item.id, { bankName: bank.bankName, branch: '', accountNo: '' });
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Search or Select Bank"
+                                                                    value={activeDropdown === `bank-${item.id}` ? bankSearchQuery : (item.bankName || '')}
+                                                                    onChange={(e) => {
+                                                                        setBankSearchQuery(e.target.value);
+                                                                        setActiveDropdown(`bank-${item.id}`);
+                                                                    }}
+                                                                    onFocus={() => {
+                                                                        setBankSearchQuery(item.bankName || '');
+                                                                        setActiveDropdown(`bank-${item.id}`);
+                                                                    }}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') {
+                                                                            e.preventDefault();
+                                                                            const filtered = banks.filter(b => b.bankName.toLowerCase().includes(bankSearchQuery.toLowerCase()));
+                                                                            if (filtered.length > 0) {
+                                                                                updatePaymentItem(item.id, { bankName: filtered[0].bankName, branch: '', accountNo: '' });
+                                                                                setBankSearchQuery('');
+                                                                                setActiveDropdown(null);
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                    className="payment-form-input pr-10 text-sm py-2 bg-white/50 border-blue-200/50"
+                                                                    autoComplete="off"
+                                                                />
+                                                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center gap-1.5">
+                                                                    {item.bankName ? (
+                                                                        <span
+                                                                            role="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                updatePaymentItem(item.id, { bankName: '', branch: '', accountNo: '' });
                                                                                 setBankSearchQuery('');
                                                                                 setActiveDropdown(null);
                                                                             }}
-                                                                            className="w-full px-4 py-2 text-left hover:bg-blue-50 text-xs font-medium text-gray-700"
-                                                                        >
-                                                                            {bank.bankName}
-                                                                        </button>
-                                                                    ))}
+                                                                            className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer text-lg leading-none"
+                                                                        >×</span>
+                                                                    ) : (
+                                                                        <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${activeDropdown === `bank-${item.id}` ? 'rotate-180' : ''}`} />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {activeDropdown === `bank-${item.id}` && (
+                                                                <div className="absolute z-[130] left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 max-h-52 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+                                                                    {banks.filter(b => b.bankName.toLowerCase().includes(bankSearchQuery.toLowerCase())).length > 0 ? (
+                                                                        banks.filter(b => b.bankName.toLowerCase().includes(bankSearchQuery.toLowerCase())).map(bank => (
+                                                                            <button
+                                                                                key={bank._id}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    updatePaymentItem(item.id, { bankName: bank.bankName, branch: '', accountNo: '' });
+                                                                                    setBankSearchQuery('');
+                                                                                    setActiveDropdown(null);
+                                                                                }}
+                                                                                className="w-full px-5 py-2.5 text-left hover:bg-blue-50 text-xs font-semibold text-gray-700 transition-colors"
+                                                                            >
+                                                                                {bank.bankName}
+                                                                            </button>
+                                                                        ))
+                                                                    ) : (
+                                                                        <div className="px-5 py-3 text-left text-xs text-gray-400 font-medium">No banks found</div>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
