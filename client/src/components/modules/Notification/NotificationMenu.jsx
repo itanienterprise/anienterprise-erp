@@ -25,6 +25,27 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
 
     const unreadCount = notifications.filter(n => n.isUnread).length;
 
+    const renderTitle = (title) => {
+        if (!title) return '';
+        if (typeof title === 'object') {
+            return title.title || title.message || JSON.stringify(title);
+        }
+        return title;
+    };
+
+    const renderMessage = (message, title) => {
+        if (!message) {
+            if (typeof title === 'object') {
+                return title.message || '';
+            }
+            return '';
+        }
+        if (typeof message === 'object') {
+            return message.message || JSON.stringify(message);
+        }
+        return message;
+    };
+
     return (
         <>
             <div
@@ -76,10 +97,10 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
                                             {notif.isUnread && <div className="unread-dot" />}
                                             <div className={notif.isUnread ? 'ml-3 flex-1' : 'flex-1'}>
                                                 <p className={`text-sm tracking-tight ${notif.isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
-                                                    {notif.title}
+                                                    {renderTitle(notif.title)}
                                                 </p>
                                                 <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                                                    {notif.message}
+                                                    {renderMessage(notif.message, notif.title)}
                                                 </p>
                                                 <p className="notification-time">
                                                     {formatTime(notif.createdAt)}

@@ -115,11 +115,7 @@ const BackupRestore = ({ addNotification }) => {
             await saveDirHandle(handle);
             setSelectedFolderName(handle.name);
             if (addNotification) {
-                addNotification({
-                    title: 'Backup Settings',
-                    message: `Folder "${handle.name}" selected for auto-downloads.`,
-                    type: 'success'
-                });
+                addNotification('Backup Settings', `Folder "${handle.name}" selected for auto-downloads.`, ['admin'], [], true);
             }
         } catch (err) {
             console.error('Error selecting folder:', err);
@@ -180,11 +176,7 @@ const BackupRestore = ({ addNotification }) => {
 
             setSuccessMessage(`Backup completed successfully! Saved as ${filename}`);
             if (addNotification) {
-                addNotification({
-                    title: 'System Backup',
-                    message: 'Database backup downloaded successfully.',
-                    type: 'success'
-                });
+                addNotification('System Backup', 'Database backup downloaded successfully.', ['admin'], [], true);
             }
             // Refresh list of files in case of server side copies
             fetchSettingsAndFiles();
@@ -268,11 +260,7 @@ const BackupRestore = ({ addNotification }) => {
             if (response.data.success) {
                 setSuccessMessage('Database restored successfully! Reloading page to apply changes...');
                 if (addNotification) {
-                    addNotification({
-                        title: 'System Restore',
-                        message: 'Database has been restored successfully.',
-                        type: 'success'
-                    });
+                    addNotification('System Restore', 'Database has been restored successfully.', ['admin'], [], true);
                 }
                 setTimeout(() => {
                     window.location.reload();
@@ -335,11 +323,7 @@ const BackupRestore = ({ addNotification }) => {
             setSettings(response.data);
             setSuccessMessage('Auto-backup schedule saved successfully.');
             if (addNotification) {
-                addNotification({
-                    title: 'Backup Settings',
-                    message: 'Auto-backup schedule updated successfully.',
-                    type: 'success'
-                });
+                addNotification('Backup Settings', 'Auto-backup schedule updated successfully.', ['admin'], [], true);
             }
         } catch (error) {
             console.error('Settings save error:', error);
