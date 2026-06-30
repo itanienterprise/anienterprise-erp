@@ -1640,6 +1640,10 @@ const generatePassword = (length = 8) => {
 // Employee APIs
 apiRouter.post('/api/employees', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    if (userSession && (userSession.role || '').toLowerCase() === 'accounts manager') {
+      return res.status(403).json({ message: 'Forbidden: Accounts manager cannot add employees' });
+    }
     const employeeData = req.body; // Already decrypted by securityMiddleware
     const { role } = employeeData;
     const empRole = role ? role.toLowerCase() : 'staff';
@@ -1704,8 +1708,8 @@ apiRouter.post('/api/employees', async (req, res) => {
 apiRouter.delete('/api/employees/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
-    if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
-      return res.status(403).json({ message: 'Forbidden: Incharge users cannot delete employees' });
+    if (userSession && ['incharge', 'accounts manager'].includes((userSession.role || '').toLowerCase())) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to delete employees' });
     }
 
     const employee = await Employee.findById(req.params.id);
@@ -1730,6 +1734,10 @@ apiRouter.delete('/api/employees/:id', async (req, res) => {
 
 apiRouter.put('/api/employees/:id', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    if (userSession && (userSession.role || '').toLowerCase() === 'accounts manager') {
+      return res.status(403).json({ message: 'Forbidden: Accounts manager cannot edit employees' });
+    }
     const oldEmployee = await Employee.findById(req.params.id);
     if (!oldEmployee) return res.status(404).json({ message: 'Employee not found' });
 
@@ -1743,7 +1751,6 @@ apiRouter.put('/api/employees/:id', async (req, res) => {
     const employeeData = req.body; // Already decrypted by securityMiddleware
     const { employeeId: newId, role } = employeeData;
 
-    const userSession = req.session.user;
     if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
       if (role && oldDec.role && role.toLowerCase() !== oldDec.role.toLowerCase()) {
         return res.status(403).json({ message: 'Forbidden: Incharge users cannot edit employee roles' });

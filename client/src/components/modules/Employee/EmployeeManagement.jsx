@@ -45,6 +45,7 @@ const EmployeeManagement = ({
     const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
     const isAdmin = isAdminUser || isAdminRole;
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+    const cannotManage = (currentUser?.role || '').toLowerCase() === 'accounts manager';
 
     const toggleCardExpansion = (id) => {
         const newExpanded = new Set(expandedCards);
@@ -211,8 +212,8 @@ const EmployeeManagement = ({
     };
 
     const handleDelete = (id) => {
-        if (isIncharge) {
-            alert('Forbidden: Incharge users cannot delete employees');
+        if (isIncharge || cannotManage) {
+            alert('Forbidden: You do not have permission to delete employees');
             return;
         }
         onDeleteConfirm({ show: true, type: 'employees', id, isBulk: false });
@@ -367,12 +368,14 @@ const EmployeeManagement = ({
                             )}
                         </div>
 
-                        <button
-                            onClick={() => setShowForm(!showForm)}
-                            className="h-10 border border-transparent flex-1 md:flex-none justify-center px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center text-sm"
-                        >
-                            <span className="mr-2 text-xl">+</span> Add New
-                        </button>
+                        {!cannotManage && (
+                            <button
+                                onClick={() => setShowForm(!showForm)}
+                                className="h-10 border border-transparent flex-1 md:flex-none justify-center px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center text-sm"
+                            >
+                                <span className="mr-2 text-xl">+</span> Add New
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
@@ -700,8 +703,10 @@ const EmployeeManagement = ({
                                                 <td className="px-6 py-4 text-sm text-gray-600">
                                                     <div className="flex items-center justify-center space-x-2">
                                                         <button onClick={(event) => { event.stopPropagation(); setViewData(e); }} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>
-                                                        <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
-                                                        {!isIncharge && (
+                                                        {!cannotManage && (
+                                                            <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
+                                                        )}
+                                                        {!isIncharge && !cannotManage && (
                                                             <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
                                                         )}
                                                     </div>
@@ -734,8 +739,10 @@ const EmployeeManagement = ({
                                             </div>
                                             <div className="flex items-center gap-1">
                                                 <button onClick={(event) => { event.stopPropagation(); setViewData(e); }} className="p-2 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded-xl transition-colors"><EyeIcon className="w-4 h-4" /></button>
-                                                <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-colors"><EditIcon className="w-4 h-4" /></button>
-                                                {!isIncharge && (
+                                                {!cannotManage && (
+                                                    <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-colors"><EditIcon className="w-4 h-4" /></button>
+                                                )}
+                                                {!isIncharge && !cannotManage && (
                                                     <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-xl transition-colors"><TrashIcon className="w-4 h-4" /></button>
                                                 )}
                                             </div>
