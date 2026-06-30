@@ -20,6 +20,8 @@ const InsurancePayment = () => {
 
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+    const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
+    const canManage = isAdmin || isSalesManager;
 
     // Edit States
     const [isEditMode, setIsEditMode] = useState(false);
@@ -549,7 +551,7 @@ const InsurancePayment = () => {
                         </div>
                     )}
 
-                    {isAdmin && !showAddModal && (
+                    {canManage && !showAddModal && (
                         <button
                             onClick={() => setShowAddModal(true)}
                             className="h-10 border border-transparent flex items-center justify-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-sm hover:shadow-blue-500/30"

@@ -1934,7 +1934,7 @@ function App() {
             <HomeIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Dashboard</span>
           </button>
-          {(currentUser?.role || '').toLowerCase() !== 'lc manager' && (
+          {!['lc manager', 'sales manager'].includes((currentUser?.role || '').toLowerCase()) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('hrms')}
@@ -1959,42 +1959,49 @@ function App() {
               </div>
             </div>
           )}
-          <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <AnchorIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">Port</span>
-
-          </button>
-
-          <div>
-            <button
-              onClick={() => toggleSidebarDropdown('importer')}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <div className="flex items-center">
-                <GlobeIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium text-sm">Importer/Exporter</span>
-              </div>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${importerDropdownOpen ? 'transform rotate-180' : ''}`} />
+          {(currentUser?.role || '').toLowerCase() !== 'sales manager' && (
+            <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+              <AnchorIcon className="w-5 h-5 mr-3" />
+              <span className="font-medium text-sm">Port</span>
             </button>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${importerDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-7 pr-2 space-y-1">
-                <button
-                  onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Importer</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('exporter-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'exporter-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Exporter</span>
-                </button>
+          )}
+
+          {(currentUser?.role || '').toLowerCase() !== 'sales manager' && (
+            <div>
+              <button
+                onClick={() => toggleSidebarDropdown('importer')}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <div className="flex items-center">
+                  <GlobeIcon className="w-5 h-5 mr-3" />
+                  <span className="font-medium text-sm">Importer/Exporter</span>
+                </div>
+                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${importerDropdownOpen ? 'transform rotate-180' : ''}`} />
+              </button>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${importerDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                <div className="pl-7 pr-2 space-y-1">
+                  <button
+                    onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  >
+                    <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Importer</span>
+                  </button>
+                  <button
+                    onClick={() => { setCurrentView('exporter-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'exporter-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  >
+                    <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Exporter</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+          <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <DollarSignIcon className="w-5 h-5 mr-3" />
+            <span className="font-medium text-sm">Bank</span>
+          </button>
           <div>
             <button
               onClick={() => toggleSidebarDropdown('cnf')}
@@ -2032,71 +2039,70 @@ function App() {
               </div>
             </div>
           </div>
-          <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <DollarSignIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">Bank</span>
-
-          </button>
-          <div>
-            <button
-              onClick={() => toggleSidebarDropdown('ip')}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <div className="flex items-center">
-                <BoxIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium text-sm">IP</span>
-              </div>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${ipDropdownOpen ? 'transform rotate-180' : ''}`} />
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${ipDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-7 pr-2 space-y-1">
-                <button
-                  onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'ip-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Create IP</span>
-                </button>
+          {(currentUser?.role || '').toLowerCase() !== 'sales manager' && (
+            <div>
+              <button
+                onClick={() => toggleSidebarDropdown('ip')}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <div className="flex items-center">
+                  <BoxIcon className="w-5 h-5 mr-3" />
+                  <span className="font-medium text-sm">IP</span>
+                </div>
+                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${ipDropdownOpen ? 'transform rotate-180' : ''}`} />
+              </button>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${ipDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                <div className="pl-7 pr-2 space-y-1">
+                  <button
+                    onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'ip-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  >
+                    <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Create IP</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          <div>
-            <button
-              onClick={() => toggleSidebarDropdown('pi')}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' || currentView === 'packing-list-section' || currentView === 'tr-setup-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <div className="flex items-center">
-                <FileTextIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium text-sm">Proforma Invoice</span>
-              </div>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${piDropdownOpen ? 'transform rotate-180' : ''}`} />
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${piDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-7 pr-2 space-y-1">
-                <button
-                  onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Proforma Invoice</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('packing-list-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'packing-list-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Packing List</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('tr-setup-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <SettingsIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>TR Setup</span>
-                </button>
+          )}
+          {(currentUser?.role || '').toLowerCase() !== 'sales manager' && (
+            <div>
+              <button
+                onClick={() => toggleSidebarDropdown('pi')}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' || currentView === 'packing-list-section' || currentView === 'tr-setup-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <div className="flex items-center">
+                  <FileTextIcon className="w-5 h-5 mr-3" />
+                  <span className="font-medium text-sm">Proforma Invoice</span>
+                </div>
+                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${piDropdownOpen ? 'transform rotate-180' : ''}`} />
+              </button>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${piDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                <div className="pl-7 pr-2 space-y-1">
+                  <button
+                    onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  >
+                    <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Proforma Invoice</span>
+                  </button>
+                  <button
+                    onClick={() => { setCurrentView('packing-list-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'packing-list-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  >
+                    <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Packing List</span>
+                  </button>
+                  <button
+                    onClick={() => { setCurrentView('tr-setup-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  >
+                    <SettingsIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>TR Setup</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <div>
             <button
               onClick={() => toggleSidebarDropdown('insurance')}

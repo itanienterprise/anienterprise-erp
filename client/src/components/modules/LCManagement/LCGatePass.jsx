@@ -48,7 +48,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     const lcRef = useRef(null);
     const partyRef = useRef(null);
 
-    const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const canManage = ['admin', 'incharge', 'lc manager', 'data entry', 'sales manager'].includes((currentUser?.role || '').toLowerCase());
 
     const fetchRecords = async () => {
         setIsLoading(true);

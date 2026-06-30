@@ -47,7 +47,8 @@ const Insurance = ({ onDeleteConfirm }) => {
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
-    const cannotDelete = isIncharge || isLcManager;
+    const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
+    const cannotDelete = isIncharge || isLcManager || isSalesManager;
     const [insuranceRecords, setInsuranceRecords] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [isLoading, setIsLoading] = useState(false);

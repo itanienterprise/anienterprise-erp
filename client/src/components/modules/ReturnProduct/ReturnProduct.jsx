@@ -564,6 +564,7 @@ const ReturnProduct = ({ currentUser }) => {
 
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+    const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
 
     return (
         <div className="return-product-container">
@@ -586,7 +587,7 @@ const ReturnProduct = ({ currentUser }) => {
                         />
                     </div>
 
-                    {(isAdmin || isIncharge) && (
+                    {(isAdmin || isIncharge || isSalesManager) && (
                     <div className="w-full md:w-1/4 flex justify-end z-10">
                         <button
                             onClick={() => {
@@ -992,7 +993,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                     return '-';
                                                 })()}
                                             </td>
-                                            {isAdmin && (
+                                            {(isAdmin || isSalesManager) && (
                                             <td className="return-product-table-cell">
                                                 <div className="return-product-table-actions justify-end">
                                                     <button
@@ -1001,12 +1002,14 @@ const ReturnProduct = ({ currentUser }) => {
                                                     >
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button
-                                                        onClick={() => handleDelete(ret._id)}
-                                                        className="return-product-action-btn return-product-action-delete"
-                                                    >
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
+                                                    {isAdmin && (
+                                                        <button
+                                                            onClick={() => handleDelete(ret._id)}
+                                                            className="return-product-action-btn return-product-action-delete"
+                                                        >
+                                                            <TrashIcon className="w-5 h-5" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                             )}
@@ -1014,7 +1017,7 @@ const ReturnProduct = ({ currentUser }) => {
                                     ))}
                                     {filteredReturns.length === 0 && (
                                         <tr>
-                                            <td colSpan={isAdmin ? 9 : 8} className="py-20 text-center text-gray-400">
+                                            <td colSpan={(isAdmin || isSalesManager) ? 9 : 8} className="py-20 text-center text-gray-400">
                                                 <RotateCcwIcon className="w-12 h-12 mx-auto mb-4 opacity-20" />
                                                 <p className="text-sm">No return records found</p>
                                             </td>
@@ -1085,7 +1088,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                 )}
                                             </div>
 
-                                            {isAdmin && (
+                                            {(isAdmin || isSalesManager) && (
                                             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleEdit(ret); }}
@@ -1093,12 +1096,14 @@ const ReturnProduct = ({ currentUser }) => {
                                                 >
                                                     <EditIcon className="w-4 h-4" /> Edit
                                                 </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleDelete(ret._id); }}
-                                                    className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
-                                                >
-                                                    <TrashIcon className="w-4 h-4" />
-                                                </button>
+                                                {isAdmin && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(ret._id); }}
+                                                        className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
                                             )}
                                         </div>

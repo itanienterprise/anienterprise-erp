@@ -7,7 +7,8 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
-    const cannotDelete = isIncharge || isLcManager;
+    const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
+    const cannotDelete = isIncharge || isLcManager || isSalesManager;
     const [expenses, setExpenses] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');

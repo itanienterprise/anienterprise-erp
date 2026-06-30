@@ -222,6 +222,11 @@ const SaleManagement = ({
         return (currentUser.role || '').toLowerCase() === 'incharge';
     }, [currentUser]);
 
+    const isSalesManager = useMemo(() => {
+        if (!currentUser) return false;
+        return (currentUser.role || '').toLowerCase() === 'sales manager';
+    }, [currentUser]);
+
     const canApprove = useMemo(() => {
         if (!currentUser) return false;
         if (currentUser.username === 'admin') return true;
@@ -4467,7 +4472,7 @@ const SaleManagement = ({
                                                             </>
                                                         ) : (
                                                             <>
-                                                                {(isFullAdmin || isIncharge) && (
+                                                                {(isFullAdmin || isIncharge || isSalesManager) && (
                                                                     <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                                 )}
                                                                 <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
@@ -4650,7 +4655,7 @@ const SaleManagement = ({
                                                         </>
                                                     ) : (
                                                         <>
-                                                            {(isFullAdmin || isIncharge) && (
+                                                            {(isFullAdmin || isIncharge || isSalesManager) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                             )}
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
@@ -4771,7 +4776,7 @@ const SaleManagement = ({
                                                         </>
                                                     ) : (
                                                         <>
-                                                            {(isFullAdmin || isIncharge) && (
+                                                            {(isFullAdmin || isIncharge || isSalesManager) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
                                                             )}
                                                             {isFullAdmin && (

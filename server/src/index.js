@@ -143,6 +143,15 @@ const adminOrLcManager = (req, res, next) => {
   next();
 };
 
+const adminOrSalesManager = (req, res, next) => {
+  const user = req.session.user;
+  const isAuthorized = user && (user.username === 'admin' || user.role === 'admin' || (user.role || '').toLowerCase() === 'sales manager');
+  if (!isAuthorized) {
+    return res.status(403).json({ message: 'Forbidden: Admin or Sales Manager access required' });
+  }
+  next();
+};
+
 // IP Records APIs
 apiRouter.post('/api/ip-records', async (req, res) => {
   try {
@@ -1018,7 +1027,7 @@ apiRouter.post('/api/banks', async (req, res) => {
 apiRouter.delete('/api/banks/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
-    if (userSession && ['incharge', 'lc manager'].includes((userSession.role || '').toLowerCase())) {
+    if (userSession && ['incharge', 'lc manager', 'sales manager'].includes((userSession.role || '').toLowerCase())) {
       return res.status(403).json({ message: 'Forbidden: You do not have permission to delete banks' });
     }
 
@@ -1070,7 +1079,7 @@ apiRouter.post('/api/insurance', async (req, res) => {
 apiRouter.delete('/api/insurance/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
-    if (userSession && ['incharge', 'lc manager'].includes((userSession.role || '').toLowerCase())) {
+    if (userSession && ['incharge', 'lc manager', 'sales manager'].includes((userSession.role || '').toLowerCase())) {
       return res.status(403).json({ message: 'Forbidden: You do not have permission to delete insurance records' });
     }
 
@@ -1107,7 +1116,7 @@ apiRouter.get('/api/insurance', async (req, res) => {
 });
 
 // Insurance Payment APIs
-apiRouter.post('/api/insurance-payments', adminOnly, async (req, res) => {
+apiRouter.post('/api/insurance-payments', adminOrSalesManager, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const newRecord = new InsurancePayment({ data: encryptedData });
@@ -1422,7 +1431,7 @@ apiRouter.put('/api/lc-expenses/:id', async (req, res) => {
 apiRouter.delete('/api/lc-expenses/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
-    if (userSession && ['incharge', 'lc manager'].includes((userSession.role || '').toLowerCase())) {
+    if (userSession && ['incharge', 'lc manager', 'sales manager'].includes((userSession.role || '').toLowerCase())) {
       return res.status(403).json({ message: 'Forbidden: You do not have permission to delete LC expenses' });
     }
 
