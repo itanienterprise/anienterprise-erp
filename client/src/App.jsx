@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -18,6 +18,27 @@ import IPManagement from './components/modules/IPManagement/IPManagement';
 import PI from './components/modules/PI/PI';
 import PackingList from './components/modules/PackingList/PackingList';
 import TRSetup from './components/modules/TRSetup/TRSetup';
+
+const dbName = 'erp_backup_db';
+const storeName = 'settings';
+
+const getDirHandle = () => {
+  return new Promise((resolve) => {
+    const request = indexedDB.open(dbName, 1);
+    request.onupgradeneeded = (e) => {
+      e.target.result.createObjectStore(storeName);
+    };
+    request.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const getReq = store.get('directory_handle');
+      getReq.onsuccess = () => resolve(getReq.result || null);
+      getReq.onerror = () => resolve(null);
+    };
+    request.onerror = () => resolve(null);
+  });
+};
 import ProductManagement from './components/modules/Product/ProductManagement';
 import Customer from './components/modules/Customer/Customer';
 import LCReceive from './components/modules/LCReceive/LCReceive';
@@ -44,6 +65,7 @@ import LoginPage from './components/auth/LoginPage';
 import Profile from './components/modules/Profile/Profile';
 import NotificationMenu from './components/modules/Notification/NotificationMenu';
 import ReturnProduct from './components/modules/ReturnProduct/ReturnProduct';
+import BackupRestore from './components/modules/BackupRestore/BackupRestore';
 
 
 function App() {
@@ -405,6 +427,102 @@ function App() {
       }
     }
   }, [isAuthenticated, currentUser]);
+
+  // Global auto-backup auto-download polling for administrators
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser) return;
+    const isAdmin = currentUser.username === 'admin' || (currentUser.role || '').toLowerCase() === 'admin';
+    if (!isAdmin) return;
+
+    const downloadSavedFile = async (filename) => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/backup-files/${filename}`);
+        const backupJsonString = JSON.stringify(response.data, null, 2);
+
+        // Try using File System Access API if configured
+        const dirHandle = await getDirHandle();
+        if (dirHandle) {
+          try {
+            // Request permissions if not granted
+            const options = { mode: 'readwrite' };
+            if ((await dirHandle.queryPermission(options)) === 'granted' || (await dirHandle.requestPermission(options)) === 'granted') {
+              const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+              const writable = await fileHandle.createWritable();
+              await writable.write(backupJsonString);
+              await writable.close();
+              console.log(`[AutoBackup] Successfully saved ${filename} to local target folder.`);
+              return; // Successfully saved, skip browser default link download
+            }
+          } catch (fsErr) {
+            console.error('[AutoBackup] File System API write error:', fsErr);
+          }
+        }
+
+        // Fallback to standard browser download
+        const blob = new Blob([backupJsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Download error for auto backup:', error);
+      }
+    };
+
+    const checkAndDownloadNewFiles = async () => {
+      // Check if auto-download toggle is enabled in localStorage
+      if (localStorage.getItem('auto_download_backups') !== 'true') return;
+
+      try {
+        const filesRes = await axios.get(`${API_BASE_URL}/api/backup-files`);
+        const currentFiles = Array.isArray(filesRes.data) ? filesRes.data : [];
+
+        let downloadedList = [];
+        try {
+          const saved = localStorage.getItem('downloaded_backup_files');
+          if (!saved) {
+            const currentFilenames = currentFiles.map(f => f.filename);
+            localStorage.setItem('downloaded_backup_files', JSON.stringify(currentFilenames));
+            return;
+          }
+          downloadedList = JSON.parse(saved);
+        } catch (e) {
+          downloadedList = [];
+        }
+
+        let newlyDownloaded = [...downloadedList];
+        let hasNewDownload = false;
+
+        const autoBackupFiles = currentFiles.filter(f => f.filename.startsWith('auto_backup_'));
+
+        for (const file of autoBackupFiles) {
+          if (!downloadedList.includes(file.filename)) {
+            await downloadSavedFile(file.filename);
+            newlyDownloaded.push(file.filename);
+            hasNewDownload = true;
+          }
+        }
+
+        if (hasNewDownload) {
+          localStorage.setItem('downloaded_backup_files', JSON.stringify(newlyDownloaded));
+          addNotification('Auto-Download Backups', 'New automated backup files downloaded to your device.', ['admin'], [], true);
+        }
+      } catch (error) {
+        console.error('Error in global auto-download check:', error);
+      }
+    };
+
+    // Run check immediately, then check every 15 seconds
+    checkAndDownloadNewFiles();
+    const intervalId = setInterval(checkAndDownloadNewFiles, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated, currentUser]);
+
   const [currentView, setCurrentView] = useState(() => {
     return localStorage.getItem('currentView') || 'dashboard';
   });
@@ -1742,6 +1860,12 @@ function App() {
         return <ReturnProduct currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />;
       case 'profit-loss-section':
         return <ProfitLoss salesRecords={salesRecords} products={products} />;
+      case 'backup-restore-section': {
+        const isAdminUser = currentUser?.username === 'admin';
+        const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
+        if (!isAdminUser && !isAdminRole) return null;
+        return <BackupRestore addNotification={addNotification} />;
+      }
       default:
         return null;
     }
@@ -2186,6 +2310,17 @@ function App() {
             <BarChartIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Profit & Loss</span>
           </button>
+
+          {/* Backup & Restore — Admin Only */}
+          {((currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
+            <button
+              onClick={() => { setCurrentView('backup-restore-section'); setSidebarOpen(false); }}
+              className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'backup-restore-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <DatabaseIcon className="w-5 h-5 mr-3" />
+              <span className="font-medium text-sm">Backup & Restore</span>
+            </button>
+          )}
 
         </nav>
       </aside>

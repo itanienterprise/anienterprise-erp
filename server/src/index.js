@@ -5,6 +5,9 @@ const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const { MongoStore } = require('connect-mongo');
+const fs = require('fs');
+const path = require('path');
+const BackupSetting = require('./models/BackupSetting');
 
 dotenv.config();
 
@@ -1921,6 +1924,321 @@ apiRouter.put('/api/notifications/:id', async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
+
+// Backup Database API
+apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
+  try {
+    const models = mongoose.connection.models;
+    const backupData = {};
+
+    for (const modelName in models) {
+      const Model = models[modelName];
+      const documents = await Model.find({}).lean();
+      backupData[modelName] = documents;
+    }
+
+    res.json({
+      success: true,
+      version: '1.0',
+      timestamp: new Date().toISOString(),
+      data: backupData
+    });
+  } catch (err) {
+    console.error('Backup database error:', err);
+    res.status(500).json({ message: 'Backup failed: ' + err.message });
+  }
+});
+
+// Restore Database API
+apiRouter.post('/api/restore-database', adminOnly, async (req, res) => {
+  try {
+    const { version, data } = req.body;
+    if (!data || typeof data !== 'object') {
+      return res.status(400).json({ message: 'Invalid backup format' });
+    }
+
+    const models = mongoose.connection.models;
+
+    // Validate that all collections in backup exist in registered models
+    for (const modelName in data) {
+      if (!models[modelName]) {
+        return res.status(400).json({ message: `Unknown model: ${modelName} in backup file` });
+      }
+    }
+
+    // Process restoration
+    for (const modelName in data) {
+      const Model = models[modelName];
+      const documents = data[modelName];
+
+      if (Array.isArray(documents)) {
+        // Delete all existing documents in the collection
+        await Model.deleteMany({});
+        
+        // Insert backup documents if any exist
+        if (documents.length > 0) {
+          await Model.insertMany(documents, { validateBeforeSave: false });
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Database restored successfully' });
+  } catch (err) {
+    console.error('Restore database error:', err);
+    res.status(500).json({ message: 'Restore failed: ' + err.message });
+  }
+});
+
+// Auto-Backup Settings APIs
+apiRouter.get('/api/backup-settings', adminOnly, async (req, res) => {
+  try {
+    let setting = await BackupSetting.findOne({});
+    if (!setting) {
+      setting = await BackupSetting.create({
+        enabled: false,
+        schedule: 'daily',
+        time: '02:00',
+        dayOfWeek: 0,
+        dayOfMonth: 1
+      });
+    }
+    res.json(setting);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Helper to resolve backup directory
+const getBackupDir = async () => {
+  return path.resolve(__dirname, '../backups');
+};
+
+apiRouter.get('/api/backup-settings', adminOnly, async (req, res) => {
+  try {
+    let setting = await BackupSetting.findOne({});
+    if (!setting) {
+      setting = await BackupSetting.create({
+        enabled: false,
+        schedule: 'daily',
+        time: '02:00',
+        dayOfWeek: 0,
+        dayOfMonth: 1,
+        backupDirectory: 'backups'
+      });
+    }
+    res.json(setting);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.post('/api/backup-settings', adminOnly, async (req, res) => {
+  try {
+    const { enabled, schedule, time, dayOfWeek, dayOfMonth, timezoneOffset } = req.body;
+    const setting = await BackupSetting.findOneAndUpdate(
+      {},
+      { enabled, schedule, time, dayOfWeek, dayOfMonth, timezoneOffset },
+      { returnDocument: 'after', upsert: true }
+    );
+    res.json(setting);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Saved Backup Files APIs
+apiRouter.get('/api/backup-files', adminOnly, async (req, res) => {
+  try {
+    const BACKUP_DIR = await getBackupDir();
+    if (!fs.existsSync(BACKUP_DIR)) {
+      fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    }
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.endsWith('.json'))
+      .map(f => {
+        const stats = fs.statSync(path.join(BACKUP_DIR, f));
+        return {
+          filename: f,
+          size: stats.size,
+          createdAt: stats.mtime
+        };
+      })
+      .sort((a, b) => b.createdAt - a.createdAt);
+    res.json(files);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/backup-files/:filename', adminOnly, async (req, res) => {
+  try {
+    const BACKUP_DIR = await getBackupDir();
+    const filePath = path.join(BACKUP_DIR, req.params.filename);
+    if (!filePath.startsWith(BACKUP_DIR) || !fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Backup file not found' });
+    }
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.post('/api/backup-files/:filename/restore', adminOnly, async (req, res) => {
+  try {
+    const BACKUP_DIR = await getBackupDir();
+    const filePath = path.join(BACKUP_DIR, req.params.filename);
+    if (!filePath.startsWith(BACKUP_DIR) || !fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Backup file not found' });
+    }
+    const backupData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const { data } = backupData;
+    if (!data || typeof data !== 'object') {
+      return res.status(400).json({ message: 'Invalid backup file structure' });
+    }
+    const models = mongoose.connection.models;
+    for (const modelName in data) {
+      if (!models[modelName]) {
+        return res.status(400).json({ message: `Unknown model: ${modelName}` });
+      }
+    }
+    for (const modelName in data) {
+      const Model = models[modelName];
+      const documents = data[modelName];
+      if (Array.isArray(documents)) {
+        await Model.deleteMany({});
+        if (documents.length > 0) {
+          await Model.insertMany(documents, { validateBeforeSave: false });
+        }
+      }
+    }
+    res.json({ success: true, message: 'Database restored successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Restore failed: ' + err.message });
+  }
+});
+
+apiRouter.delete('/api/backup-files/:filename', adminOnly, async (req, res) => {
+  try {
+    const BACKUP_DIR = await getBackupDir();
+    const filePath = path.join(BACKUP_DIR, req.params.filename);
+    if (!filePath.startsWith(BACKUP_DIR) || !fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Backup file not found' });
+    }
+    fs.unlinkSync(filePath);
+    res.json({ success: true, message: 'Backup file deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Auto-Backup Scheduling Logic
+const runAutoBackup = async () => {
+  try {
+    const BACKUP_DIR = await getBackupDir();
+    if (!fs.existsSync(BACKUP_DIR)) {
+      fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    }
+
+    const models = mongoose.connection.models;
+    const backupData = {};
+    for (const modelName in models) {
+      const Model = models[modelName];
+      const documents = await Model.find({}).lean();
+      backupData[modelName] = documents;
+    }
+
+    const backupObj = {
+      success: true,
+      version: '1.0',
+      timestamp: new Date().toISOString(),
+      data: backupData
+    };
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
+    const filename = `auto_backup_${dateStr}_${timeStr}.json`;
+    fs.writeFileSync(path.join(BACKUP_DIR, filename), JSON.stringify(backupObj, null, 2));
+    console.log(`[AutoBackup] Successfully backed up database to ${filename}`);
+
+    await BackupSetting.findOneAndUpdate({}, { lastRun: new Date() }, { upsert: true });
+
+    // Keep only last 10 auto backup files
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.startsWith('auto_backup_') && f.endsWith('.json'))
+      .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtime.getTime() }))
+      .sort((a, b) => b.time - a.time);
+
+    if (files.length > 10) {
+      for (let i = 10; i < files.length; i++) {
+        fs.unlinkSync(path.join(BACKUP_DIR, files[i].name));
+        console.log(`[AutoBackup] Deleted old backup file: ${files[i].name}`);
+      }
+    }
+  } catch (err) {
+    console.error('[AutoBackup] Error taking automated backup:', err);
+  }
+};
+
+const checkAndRunBackup = async () => {
+  try {
+    let setting = await BackupSetting.findOne({});
+    if (!setting) {
+      setting = await BackupSetting.create({
+        enabled: false,
+        schedule: 'daily',
+        time: '02:00',
+        dayOfWeek: 0,
+        dayOfMonth: 1,
+        backupDirectory: 'backups',
+        timezoneOffset: 0
+      });
+    }
+
+    if (!setting.enabled) return;
+
+    const now = new Date();
+    // Convert server time (UTC milliseconds) to user local time using saved offset
+    const userOffset = setting.timezoneOffset !== undefined ? setting.timezoneOffset : 0;
+    const userLocalTime = new Date(now.getTime() - (userOffset * 60 * 1000));
+
+    const currentHour = String(userLocalTime.getUTCHours()).padStart(2, '0');
+    const currentMinute = String(userLocalTime.getUTCMinutes()).padStart(2, '0');
+    const currentTimeStr = `${currentHour}:${currentMinute}`;
+
+    console.log(`[AutoBackup] Tick. Current: "${currentTimeStr}", Scheduled: "${setting.time}", Enabled: ${setting.enabled}, Offset: ${setting.timezoneOffset}`);
+
+    if (currentTimeStr !== setting.time) return;
+
+    if (setting.lastRun && (now.getTime() - new Date(setting.lastRun).getTime()) < 90 * 1000) {
+      return;
+    }
+
+    let shouldBackup = false;
+    if (setting.schedule === 'daily') {
+      shouldBackup = true;
+    } else if (setting.schedule === 'weekly') {
+      if (userLocalTime.getUTCDay() === setting.dayOfWeek) {
+        shouldBackup = true;
+      }
+    } else if (setting.schedule === 'monthly') {
+      if (userLocalTime.getUTCDate() === setting.dayOfMonth) {
+        shouldBackup = true;
+      }
+    }
+
+    if (shouldBackup) {
+      await runAutoBackup();
+    }
+  } catch (err) {
+    console.error('[AutoBackup] Scheduler error:', err);
+  }
+};
+
+// Run check immediately on start, then tick every 60 seconds
+checkAndRunBackup();
+setInterval(checkAndRunBackup, 60 * 1000);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is healthy' });
