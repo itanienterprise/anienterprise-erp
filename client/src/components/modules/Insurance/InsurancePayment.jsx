@@ -19,6 +19,7 @@ const InsurancePayment = () => {
     });
 
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
 
     // Edit States
     const [isEditMode, setIsEditMode] = useState(false);
@@ -345,6 +346,10 @@ const InsurancePayment = () => {
     };
 
     const handleDeletePayment = (payment) => {
+        if (isIncharge) {
+            alert('Forbidden: Incharge users cannot delete insurance payments');
+            return;
+        }
         setPaymentToDelete(payment);
         setShowDeleteConfirm(true);
     };

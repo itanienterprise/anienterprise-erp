@@ -44,6 +44,7 @@ const EmployeeManagement = ({
     const isAdminUser = currentUser?.username === 'admin';
     const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
     const isAdmin = isAdminUser || isAdminRole;
+    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
 
     const toggleCardExpansion = (id) => {
         const newExpanded = new Set(expandedCards);
@@ -210,6 +211,10 @@ const EmployeeManagement = ({
     };
 
     const handleDelete = (id) => {
+        if (isIncharge) {
+            alert('Forbidden: Incharge users cannot delete employees');
+            return;
+        }
         onDeleteConfirm({ show: true, type: 'employees', id, isBulk: false });
     };
 
@@ -484,8 +489,9 @@ const EmployeeManagement = ({
                             <div className="relative" ref={roleDropdownRef}>
                                 <button
                                     type="button"
+                                    disabled={isIncharge}
                                     onClick={() => setOpenDropdown(openDropdown === 'role' ? null : 'role')}
-                                    className="w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-gray-800 text-left flex items-center justify-between"
+                                    className={`w-full px-4 py-2 pr-10 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm text-gray-800 text-left flex items-center justify-between ${isIncharge ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 >
                                     <span>{formData.role}</span>
                                     <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${openDropdown === 'role' ? 'rotate-180' : ''}`} />
@@ -695,7 +701,9 @@ const EmployeeManagement = ({
                                                     <div className="flex items-center justify-center space-x-2">
                                                         <button onClick={(event) => { event.stopPropagation(); setViewData(e); }} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>
                                                         <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
-                                                        <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                                        {!isIncharge && (
+                                                            <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -727,7 +735,9 @@ const EmployeeManagement = ({
                                             <div className="flex items-center gap-1">
                                                 <button onClick={(event) => { event.stopPropagation(); setViewData(e); }} className="p-2 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded-xl transition-colors"><EyeIcon className="w-4 h-4" /></button>
                                                 <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-colors"><EditIcon className="w-4 h-4" /></button>
-                                                <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-xl transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                {!isIncharge && (
+                                                    <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-xl transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                )}
                                             </div>
                                         </div>
 

@@ -5,6 +5,7 @@ import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarS
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
+    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const [expenses, setExpenses] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -436,6 +437,10 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     };
 
     const handleDelete = (id) => {
+        if (isIncharge) {
+            alert('Forbidden: Incharge users cannot delete LC expenses');
+            return;
+        }
         onDeleteConfirm({ show: true, type: 'lc-expense', id, isBulk: false });
     };
 
@@ -694,13 +699,15 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                     >
                                                         <EditIcon className="w-4 h-4" />
                                                     </button>
-                                                    <button
-                                                        onClick={() => handleDelete(exp._id)}
-                                                        className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-90"
-                                                        title="Delete Expense"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
+                                                    {!isIncharge && (
+                                                        <button
+                                                            onClick={() => handleDelete(exp._id)}
+                                                            className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-90"
+                                                            title="Delete Expense"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -795,8 +802,8 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                             <EditIcon className="w-3.5 h-3.5" /> Edit
                                                         </button>
                                                         <button
-                                                            onClick={() => handleDelete(exp._id)}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                            onClick={() => !isIncharge && handleDelete(exp._id)}
+                                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all ${isIncharge ? 'hidden' : ''}`}
                                                         >
                                                             <TrashIcon className="w-3.5 h-3.5" /> Delete
                                                         </button>

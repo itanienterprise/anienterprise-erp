@@ -214,9 +214,12 @@ const SaleManagement = ({
 
     const isFullAdmin = useMemo(() => {
         if (!currentUser) return false;
-        if (currentUser.username === 'admin') return true;
-        const role = (currentUser.role || '').toLowerCase();
-        return role === 'admin';
+        return currentUser.username === 'admin' || (currentUser.role || '').toLowerCase() === 'admin';
+    }, [currentUser]);
+
+    const isIncharge = useMemo(() => {
+        if (!currentUser) return false;
+        return (currentUser.role || '').toLowerCase() === 'incharge';
     }, [currentUser]);
 
     const canApprove = useMemo(() => {
@@ -2906,16 +2909,16 @@ const SaleManagement = ({
                             <span>Report</span>
                         </button>
 
-                        <button
-                            onClick={() => {
-                                resetForm();
-                                setEditingId(null);
-                                setShowForm(true);
-                            }}
-                            className="sale-mgmt-btn-action sale-mgmt-btn-blue"
-                        >
-                            <span className="flex items-center gap-2"><span className="text-xl leading-none">+</span> {saleType === 'Border' ? 'New G.P' : 'Add Sale'}</span>
-                        </button>
+                            <button
+                                onClick={() => {
+                                    resetForm();
+                                    setEditingId(null);
+                                    setShowForm(true);
+                                }}
+                                className="sale-mgmt-btn-action sale-mgmt-btn-blue"
+                            >
+                                <span className="flex items-center gap-2"><span className="text-xl leading-none">+</span> {saleType === 'Border' ? 'New G.P' : 'Add Sale'}</span>
+                            </button>
                     </div>
                 )}
             </div>
@@ -4463,7 +4466,7 @@ const SaleManagement = ({
                                                             </>
                                                         ) : (
                                                             <>
-                                                                {isFullAdmin && (
+                                                                {(isFullAdmin || isIncharge) && (
                                                                     <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                                 )}
                                                                 <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
@@ -4646,7 +4649,7 @@ const SaleManagement = ({
                                                         </>
                                                     ) : (
                                                         <>
-                                                            {isFullAdmin && (
+                                                            {(isFullAdmin || isIncharge) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                             )}
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
@@ -4767,11 +4770,11 @@ const SaleManagement = ({
                                                         </>
                                                     ) : (
                                                         <>
+                                                            {(isFullAdmin || isIncharge) && (
+                                                                <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
+                                                            )}
                                                             {isFullAdmin && (
-                                                                <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
-                                                                </>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
                                                             )}
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
                                                             {isFullAdmin && (

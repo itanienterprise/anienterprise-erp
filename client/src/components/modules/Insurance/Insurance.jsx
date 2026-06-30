@@ -44,6 +44,8 @@ const getLcInsuranceStatus = (lc, payments) => {
 };
 
 const Insurance = ({ onDeleteConfirm }) => {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const [insuranceRecords, setInsuranceRecords] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -240,6 +242,10 @@ const Insurance = ({ onDeleteConfirm }) => {
     };
 
     const handleDelete = (id) => {
+        if (isIncharge) {
+            alert('Forbidden: Incharge users cannot delete insurance records');
+            return;
+        }
         onDeleteConfirm({ show: true, type: 'insurance', id, isBulk: false });
     };
 
@@ -739,9 +745,11 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                         <button onClick={() => handleEdit(item)} className="p-1.5 hover:bg-amber-50 text-gray-400 hover:text-amber-600 rounded-lg transition-all" title="Edit">
                                                             <EditIcon className="w-4.5 h-4.5" />
                                                         </button>
-                                                        <button onClick={() => handleDelete(item._id)} className="p-1.5 hover:bg-rose-50 text-gray-400 hover:text-rose-500 rounded-lg transition-all" title="Delete">
-                                                            <TrashIcon className="w-4.5 h-4.5" />
-                                                        </button>
+                                                        {!isIncharge && (
+                                                            <button onClick={() => handleDelete(item._id)} className="p-1.5 hover:bg-rose-50 text-gray-400 hover:text-rose-500 rounded-lg transition-all" title="Delete">
+                                                                <TrashIcon className="w-4.5 h-4.5" />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -851,12 +859,14 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                 >
                                                     <EditIcon className="w-3.5 h-3.5" /> Edit
                                                 </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
-                                                    className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
-                                                >
-                                                    <TrashIcon className="w-3.5 h-3.5" /> Delete
-                                                </button>
+                                                {!isIncharge && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                    >
+                                                        <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     )}

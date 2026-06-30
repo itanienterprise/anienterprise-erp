@@ -1008,6 +1008,11 @@ apiRouter.post('/api/banks', async (req, res) => {
 
 apiRouter.delete('/api/banks/:id', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
+      return res.status(403).json({ message: 'Forbidden: Incharge users cannot delete banks' });
+    }
+
     const deletedBank = await Bank.findByIdAndDelete(req.params.id);
     if (!deletedBank) return res.status(404).json({ message: 'Bank not found' });
     res.json({ message: 'Bank deleted' });
@@ -1055,6 +1060,11 @@ apiRouter.post('/api/insurance', async (req, res) => {
 
 apiRouter.delete('/api/insurance/:id', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
+      return res.status(403).json({ message: 'Forbidden: Incharge users cannot delete insurance records' });
+    }
+
     const deletedRecord = await Insurance.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Insurance record not found' });
     res.json({ message: 'Insurance record deleted' });
@@ -1402,6 +1412,11 @@ apiRouter.put('/api/lc-expenses/:id', async (req, res) => {
 
 apiRouter.delete('/api/lc-expenses/:id', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
+      return res.status(403).json({ message: 'Forbidden: Incharge users cannot delete LC expenses' });
+    }
+
     const deletedRecord = await LCExpense.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'LC Expense record not found' });
 
@@ -1670,6 +1685,11 @@ apiRouter.post('/api/employees', async (req, res) => {
 
 apiRouter.delete('/api/employees/:id', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
+      return res.status(403).json({ message: 'Forbidden: Incharge users cannot delete employees' });
+    }
+
     const employee = await Employee.findById(req.params.id);
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
@@ -1704,6 +1724,13 @@ apiRouter.put('/api/employees/:id', async (req, res) => {
 
     const employeeData = req.body; // Already decrypted by securityMiddleware
     const { employeeId: newId, role } = employeeData;
+
+    const userSession = req.session.user;
+    if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
+      if (role && oldDec.role && role.toLowerCase() !== oldDec.role.toLowerCase()) {
+        return res.status(403).json({ message: 'Forbidden: Incharge users cannot edit employee roles' });
+      }
+    }
 
     const user = await User.findOne({ username: oldId });
     if (user) {
