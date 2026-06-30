@@ -563,6 +563,7 @@ const ReturnProduct = ({ currentUser }) => {
     };
 
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
 
     return (
         <div className="return-product-container">
@@ -585,7 +586,7 @@ const ReturnProduct = ({ currentUser }) => {
                         />
                     </div>
 
-                    {isAdmin && (
+                    {(isAdmin || isIncharge) && (
                     <div className="w-full md:w-1/4 flex justify-end z-10">
                         <button
                             onClick={() => {

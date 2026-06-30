@@ -66,6 +66,9 @@ const StockManagement = ({
     setProductHistoryReportData
 }) => {
 
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
+
     // Filtering & Search (Main View)
     const [stockSearchQuery, setStockSearchQuery] = useState('');
     const [showStockFilterPanel, setShowStockFilterPanel] = useState(false);
@@ -2159,13 +2162,15 @@ const StockManagement = ({
                                 <BarChartIcon className="w-4 h-4 text-gray-400" />
                                 <span>Report</span>
                             </button>
-                            <button
-                                onClick={() => setShowAddWarehouseStockForm(true)}
-                                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/20 active:scale-95 font-bold text-sm"
-                            >
-                                <PlusIcon className="w-5 h-5 text-white/90" />
-                                <span>Transfer</span>
-                            </button>
+                            {!isLcManager && (
+                                <button
+                                    onClick={() => setShowAddWarehouseStockForm(true)}
+                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/20 active:scale-95 font-bold text-sm"
+                                >
+                                    <PlusIcon className="w-5 h-5 text-white/90" />
+                                    <span>Transfer</span>
+                                </button>
+                            )}
                         </div>
                     </div>
                     {/* Summary Cards */}

@@ -21,6 +21,8 @@ const Exporter = ({
     currentUser
 }) => {
     const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'admin';
+    const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
+    const canManage = isAdmin || isLcManager;
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -486,11 +488,11 @@ const Exporter = ({
                                                 <td className="exporter-table-cell">
                                                     <div className="exporter-table-actions">
                                                         <button onClick={(e) => { e.stopPropagation(); setViewData(exporter); }} className="exporter-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
+                                                        {canManage && (
+                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
+                                                        )}
                                                         {isAdmin && (
-                                                            <>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
-                                                            </>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
                                                         )}
                                                     </div>
                                                 </td>
@@ -577,21 +579,21 @@ const Exporter = ({
                                                         >
                                                             <EyeIcon className="w-4 h-4" /> View History
                                                         </button>
+                                                        {canManage && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }}
+                                                                className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" /> Edit
+                                                            </button>
+                                                        )}
                                                         {isAdmin && (
-                                                            <>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }}
-                                                                    className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
-                                                                >
-                                                                    <EditIcon className="w-4 h-4" /> Edit
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }}
-                                                                    className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                </button>
-                                                            </>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }}
+                                                                className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>

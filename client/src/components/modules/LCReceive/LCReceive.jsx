@@ -497,8 +497,9 @@ function LCReceive({
 
     const canEditRequestedStock = (entry) => {
         if (!currentUser) return false;
-        if (currentUser.username === 'admin') return true;
         const role = (currentUser.role || '').toLowerCase();
+        if (role === 'lc manager') return false;
+        if (currentUser.username === 'admin') return true;
         if (role === 'admin') return true;
         const owner = entry?.entries?.[0]?.requestedByUsername || entry?.requestedByUsername;
         return owner === currentUser.username;

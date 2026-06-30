@@ -18,6 +18,8 @@ const EyeIcon = ({ className }) => (
 const Bank = ({ onDeleteConfirm }) => {
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+    const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
+    const cannotDelete = isIncharge || isLcManager;
     const [banks, setBanks] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -705,8 +707,8 @@ const Bank = ({ onDeleteConfirm }) => {
     };
 
     const handleDelete = (id) => {
-        if (isIncharge) {
-            alert('Forbidden: Incharge users cannot delete banks');
+        if (cannotDelete) {
+            alert('Forbidden: You do not have permission to delete banks');
             return;
         }
         onDeleteConfirm({ show: true, type: 'bank', id, isBulk: false });
@@ -1229,7 +1231,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                         >
                                                                             <EditIcon className="w-4 h-4" />
                                                                         </button>
-                                                                        {!isIncharge && (
+                                                                        {!cannotDelete && (
                                                                             <button
                                                                                 onClick={() => handleDelete(item._id)}
                                                                                 className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"
@@ -1380,7 +1382,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                                     >
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
-                                                    {!isIncharge && (
+                                                    {!cannotDelete && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(group.items[0]._id); }}
                                                             className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"

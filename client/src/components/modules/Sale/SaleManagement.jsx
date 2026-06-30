@@ -237,8 +237,9 @@ const SaleManagement = ({
 
     const canEditRequestedSale = (sale) => {
         if (!currentUser) return false;
-        if (currentUser.username === 'admin') return true;
         const role = (currentUser.role || '').toLowerCase();
+        if (role === 'lc manager') return false;
+        if (currentUser.username === 'admin') return true;
         if (role === 'admin') return true;
         const owner = sale.requestedByUsername;
         return owner === currentUser.username;

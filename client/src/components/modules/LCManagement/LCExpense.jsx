@@ -6,6 +6,8 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+    const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
+    const cannotDelete = isIncharge || isLcManager;
     const [expenses, setExpenses] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -437,8 +439,8 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     };
 
     const handleDelete = (id) => {
-        if (isIncharge) {
-            alert('Forbidden: Incharge users cannot delete LC expenses');
+        if (cannotDelete) {
+            alert('Forbidden: You do not have permission to delete LC expenses');
             return;
         }
         onDeleteConfirm({ show: true, type: 'lc-expense', id, isBulk: false });
@@ -699,7 +701,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                     >
                                                         <EditIcon className="w-4 h-4" />
                                                     </button>
-                                                    {!isIncharge && (
+                                                    {!cannotDelete && (
                                                         <button
                                                             onClick={() => handleDelete(exp._id)}
                                                             className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-90"
@@ -797,13 +799,13 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                     <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
                                                         <button
                                                             onClick={() => handleEdit(exp)}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
                                                         >
                                                             <EditIcon className="w-3.5 h-3.5" /> Edit
                                                         </button>
                                                         <button
-                                                            onClick={() => !isIncharge && handleDelete(exp._id)}
-                                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all ${isIncharge ? 'hidden' : ''}`}
+                                                            onClick={() => !cannotDelete && handleDelete(exp._id)}
+                                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all ${cannotDelete ? 'hidden' : ''}`}
                                                         >
                                                             <TrashIcon className="w-3.5 h-3.5" /> Delete
                                                         </button>

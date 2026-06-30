@@ -346,8 +346,8 @@ const InsurancePayment = () => {
     };
 
     const handleDeletePayment = (payment) => {
-        if (isIncharge) {
-            alert('Forbidden: Incharge users cannot delete insurance payments');
+        if (!isAdmin) {
+            alert('Forbidden: You do not have permission to delete insurance payments');
             return;
         }
         setPaymentToDelete(payment);
@@ -549,7 +549,7 @@ const InsurancePayment = () => {
                         </div>
                     )}
 
-                    {!showAddModal && (
+                    {isAdmin && !showAddModal && (
                         <button
                             onClick={() => setShowAddModal(true)}
                             className="h-10 border border-transparent flex items-center justify-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-sm hover:shadow-blue-500/30"

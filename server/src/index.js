@@ -134,6 +134,15 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
+const adminOrLcManager = (req, res, next) => {
+  const user = req.session.user;
+  const isAuthorized = user && (user.username === 'admin' || user.role === 'admin' || (user.role || '').toLowerCase() === 'lc manager');
+  if (!isAuthorized) {
+    return res.status(403).json({ message: 'Forbidden: Admin or LC Manager access required' });
+  }
+  next();
+};
+
 // IP Records APIs
 apiRouter.post('/api/ip-records', async (req, res) => {
   try {
@@ -206,7 +215,7 @@ apiRouter.delete('/api/importers/:id', adminOnly, async (req, res) => {
 });
 
 // Update Importer
-apiRouter.put('/api/importers/:id', adminOnly, async (req, res) => {
+apiRouter.put('/api/importers/:id', adminOrLcManager, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
@@ -254,7 +263,7 @@ apiRouter.delete('/api/exporters/:id', adminOnly, async (req, res) => {
 });
 
 // Update Exporter
-apiRouter.put('/api/exporters/:id', adminOnly, async (req, res) => {
+apiRouter.put('/api/exporters/:id', adminOrLcManager, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedExporter = await Exporter.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
@@ -1009,8 +1018,8 @@ apiRouter.post('/api/banks', async (req, res) => {
 apiRouter.delete('/api/banks/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
-    if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
-      return res.status(403).json({ message: 'Forbidden: Incharge users cannot delete banks' });
+    if (userSession && ['incharge', 'lc manager'].includes((userSession.role || '').toLowerCase())) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to delete banks' });
     }
 
     const deletedBank = await Bank.findByIdAndDelete(req.params.id);
@@ -1061,8 +1070,8 @@ apiRouter.post('/api/insurance', async (req, res) => {
 apiRouter.delete('/api/insurance/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
-    if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
-      return res.status(403).json({ message: 'Forbidden: Incharge users cannot delete insurance records' });
+    if (userSession && ['incharge', 'lc manager'].includes((userSession.role || '').toLowerCase())) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to delete insurance records' });
     }
 
     const deletedRecord = await Insurance.findByIdAndDelete(req.params.id);
@@ -1098,7 +1107,7 @@ apiRouter.get('/api/insurance', async (req, res) => {
 });
 
 // Insurance Payment APIs
-apiRouter.post('/api/insurance-payments', async (req, res) => {
+apiRouter.post('/api/insurance-payments', adminOnly, async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const newRecord = new InsurancePayment({ data: encryptedData });
@@ -1413,8 +1422,8 @@ apiRouter.put('/api/lc-expenses/:id', async (req, res) => {
 apiRouter.delete('/api/lc-expenses/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
-    if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
-      return res.status(403).json({ message: 'Forbidden: Incharge users cannot delete LC expenses' });
+    if (userSession && ['incharge', 'lc manager'].includes((userSession.role || '').toLowerCase())) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to delete LC expenses' });
     }
 
     const deletedRecord = await LCExpense.findByIdAndDelete(req.params.id);
