@@ -2181,7 +2181,111 @@ const runAutoBackup = async () => {
   }
 };
 
+const checkIpExpiryNotifications = async () => {
+  try {
+    const records = await IpRecord.find();
+    const targetRoles = ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Data Entry'];
+
+    for (const record of records) {
+      let data;
+      try {
+        data = decryptData(record.data);
+        if (!data || typeof data !== 'object') continue;
+      } catch (err) {
+        continue;
+      }
+
+      if (!data.closeDate) continue;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const closeDate = new Date(data.closeDate);
+      closeDate.setHours(0, 0, 0, 0);
+      const diffMs = closeDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      let isExtended = data.isExtended;
+      if (!isExtended && data.openingDate) {
+        const openDate = new Date(data.openingDate);
+        if (!isNaN(openDate.getTime()) && !isNaN(closeDate.getTime())) {
+          const openCloseDiffMs = closeDate.getTime() - openDate.getTime();
+          const openCloseDiffDays = Math.round(openCloseDiffMs / (1000 * 60 * 60 * 24));
+          if (openCloseDiffDays > 121) {
+            isExtended = true;
+          }
+        }
+      }
+
+      let computedStatus = "Active";
+      if (closeDate < today) {
+        computedStatus = "Expired";
+      } else if (diffDays <= 5) {
+        computedStatus = "Expire Soon";
+      } else if (isExtended) {
+        computedStatus = "Extended";
+      }
+
+      const hasSentExpireSoon = data.notificationSent?.expireSoon;
+      const hasSentExpired = data.notificationSent?.expired;
+      let hasUpdated = false;
+
+      const formattedCloseDate = new Date(data.closeDate).toLocaleDateString('en-GB');
+
+      if (computedStatus === 'Expire Soon' && !hasSentExpireSoon) {
+        const newNotif = {
+          title: 'IP Expiring Soon',
+          message: `IP No: ${data.ipNumber} (${data.ipParty}) is expiring soon on ${formattedCloseDate}.`,
+          targetRoles,
+          targetUsers: [],
+          isSystemic: true,
+          readByUsers: [],
+          createdBy: 'system',
+          createdByName: 'System Scheduler'
+        };
+
+        const notificationDoc = new Notification({
+          data: encryptData(newNotif)
+        });
+        await notificationDoc.save();
+
+        data.notificationSent = { ...(data.notificationSent || {}), expireSoon: true };
+        hasUpdated = true;
+      } else if (computedStatus === 'Expired' && !hasSentExpired) {
+        const newNotif = {
+          title: 'IP Expired',
+          message: `IP No: ${data.ipNumber} (${data.ipParty}) has expired on ${formattedCloseDate}.`,
+          targetRoles,
+          targetUsers: [],
+          isSystemic: true,
+          readByUsers: [],
+          createdBy: 'system',
+          createdByName: 'System Scheduler'
+        };
+
+        const notificationDoc = new Notification({
+          data: encryptData(newNotif)
+        });
+        await notificationDoc.save();
+
+        data.notificationSent = { ...(data.notificationSent || {}), expired: true };
+        hasUpdated = true;
+      }
+
+      if (hasUpdated) {
+        const encryptedData = encryptData(data);
+        await IpRecord.findByIdAndUpdate(record._id, { data: encryptedData });
+        console.log(`[SystemScheduler] Triggered IP expiry notification for IP No: ${data.ipNumber}`);
+      }
+    }
+  } catch (err) {
+    console.error('[SystemScheduler] Error checking IP expiries:', err);
+  }
+};
+
 const checkAndRunBackup = async () => {
+  // Check IP Expiry Notifications
+  await checkIpExpiryNotifications();
+
   try {
     let setting = await BackupSetting.findOne({});
     if (!setting) {
