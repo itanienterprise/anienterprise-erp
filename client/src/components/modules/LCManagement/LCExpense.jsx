@@ -8,7 +8,8 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
-    const cannotDelete = isIncharge || isLcManager || isSalesManager;
+    const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
+    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager;
     const [expenses, setExpenses] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');

@@ -48,7 +48,9 @@ const Insurance = ({ onDeleteConfirm }) => {
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
-    const cannotDelete = isIncharge || isLcManager || isSalesManager;
+    const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
+    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager;
+    const cannotAddEdit = isAccountsManager;
     const [insuranceRecords, setInsuranceRecords] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -144,6 +146,10 @@ const Insurance = ({ onDeleteConfirm }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (cannotAddEdit) {
+            alert('Forbidden: You do not have permission to add or edit insurance companies');
+            return;
+        }
         setIsSubmitting(true);
         setSubmitStatus(null);
 
@@ -193,6 +199,10 @@ const Insurance = ({ onDeleteConfirm }) => {
     };
 
     const handleEdit = (record) => {
+        if (cannotAddEdit) {
+            alert('Forbidden: You do not have permission to edit insurance companies');
+            return;
+        }
         setFormData({
             companyName: record.companyName || '',
             address: record.address || '',
@@ -396,7 +406,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                {!showForm && (
+                {!showForm && !cannotAddEdit && (
                     <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
                         <button
                             onClick={() => { setShowForm(true); }}
@@ -745,9 +755,11 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                         <button onClick={() => handleView(item)} className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all" title="View History">
                                                             <EyeIcon className="w-4.5 h-4.5" />
                                                         </button>
-                                                        <button onClick={() => handleEdit(item)} className="p-1.5 hover:bg-amber-50 text-gray-400 hover:text-amber-600 rounded-lg transition-all" title="Edit">
-                                                            <EditIcon className="w-4.5 h-4.5" />
-                                                        </button>
+                                                        {!cannotAddEdit && (
+                                                            <button onClick={() => handleEdit(item)} className="p-1.5 hover:bg-amber-50 text-gray-400 hover:text-amber-600 rounded-lg transition-all" title="Edit">
+                                                                <EditIcon className="w-4.5 h-4.5" />
+                                                            </button>
+                                                        )}
                                                         {!cannotDelete && (
                                                             <button onClick={() => handleDelete(item._id)} className="p-1.5 hover:bg-rose-50 text-gray-400 hover:text-rose-500 rounded-lg transition-all" title="Delete">
                                                                 <TrashIcon className="w-4.5 h-4.5" />
@@ -856,12 +868,14 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                 >
                                                     <EyeIcon className="w-3.5 h-3.5" /> View
                                                 </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
-                                                    className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
-                                                >
-                                                    <EditIcon className="w-3.5 h-3.5" /> Edit
-                                                </button>
+                                                {!cannotAddEdit && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                    >
+                                                        <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                    </button>
+                                                )}
                                                 {!cannotDelete && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}

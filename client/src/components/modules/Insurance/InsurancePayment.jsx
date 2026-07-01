@@ -21,7 +21,8 @@ const InsurancePayment = () => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
-    const canManage = isAdmin || isSalesManager;
+    const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
+    const canManage = isAdmin || isSalesManager || isAccountsManager;
 
     // Edit States
     const [isEditMode, setIsEditMode] = useState(false);

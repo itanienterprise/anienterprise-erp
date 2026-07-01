@@ -41,6 +41,7 @@ const CnF = ({
     };
     const effectiveUser = getEffectiveUser();
     const isAdmin = effectiveUser?.username === 'admin' || String(effectiveUser?.role || '').toLowerCase() === 'admin';
+    const isAccountManager = (effectiveUser?.role || '').toLowerCase() === 'accounts manager' || (effectiveUser?.role || '').toLowerCase() === 'account manager';
     const showToast = (type, message, duration = 3000) => {
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ type, message });
@@ -1032,6 +1033,10 @@ const CnF = ({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isAccountManager) {
+            showToast('error', 'Forbidden: Account managers are not allowed to register C&F agents.');
+            return;
+        }
         if (formData.phone.length !== 14) {
             showToast('error', 'Phone number must be exactly 14 characters long.');
             return;
@@ -1174,7 +1179,9 @@ const CnF = ({
                             <BarChartIcon className="w-5 h-5 text-gray-500" />
                             <span>Report</span>
                         </button>
-                        <button onClick={() => { resetForm(); setShowForm(true); }} className="w-full md:w-auto cnf-add-btn whitespace-nowrap">+ Add New</button>
+                        {!isAccountManager && (
+                            <button onClick={() => { resetForm(); setShowForm(true); }} className="w-full md:w-auto cnf-add-btn whitespace-nowrap">+ Add New</button>
+                        )}
                     </div>
                 )}
             </div>

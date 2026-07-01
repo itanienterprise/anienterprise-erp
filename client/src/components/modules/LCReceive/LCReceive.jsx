@@ -393,6 +393,7 @@ function LCReceive({
     addNotification,
     refreshPendingIndicators
 }) {
+    const isAccountManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
     const [cnfs, setCnfs] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -1181,6 +1182,10 @@ function LCReceive({
 
     const handleStockSubmit = async (e) => {
         e.preventDefault();
+        if (isAccountManager) {
+            alert('Forbidden: Account managers are not allowed to add or manage LC Receive records');
+            return;
+        }
         setValidationErrors([]);
 
         // Detailed manual validation
@@ -2219,14 +2224,16 @@ function LCReceive({
                                 <span>Report</span>
                             </button>
                         </div>
-                        <div className="flex-1 md:flex-none">
-                            <button
-                                onClick={() => setShowStockForm(!showStockForm)}
-                                className="w-full h-11 md:h-auto justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center gap-2 text-sm"
-                            >
-                                <span className="text-lg font-light">+</span> <span>Add New</span>
-                            </button>
-                        </div>
+                        {!isAccountManager && (
+                            <div className="flex-1 md:flex-none">
+                                <button
+                                    onClick={() => setShowStockForm(!showStockForm)}
+                                    className="w-full h-11 md:h-auto justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center gap-2 text-sm"
+                                >
+                                    <span className="text-lg font-light">+</span> <span>Add New</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div >
             )
