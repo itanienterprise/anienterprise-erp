@@ -3712,7 +3712,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         doc.rect(cardX, cardY, cardWidth, cardHeight, 'S');
 
         // Draw card content
-        doc.setFontSize(8);
+        doc.setFontSize(9);
         doc.setTextColor(0);
         doc.setFont('helvetica', 'bold');
         doc.text("Total Trucks", cardX + 3, cardY + 5.5);
@@ -3721,7 +3721,6 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         doc.text(":", cardX + 26, cardY + 5.5);
         doc.text(":", cardX + 26, cardY + 10.5);
 
-        doc.setFont('helvetica', 'normal');
         doc.text(totalTrucks.toString(), cardX + 29, cardY + 5.5);
         doc.text(totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), cardX + 29, cardY + 10.5);
 
