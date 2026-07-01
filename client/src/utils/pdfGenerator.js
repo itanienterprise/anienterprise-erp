@@ -3659,23 +3659,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             doc.text(filters.productName, margin + 22, yPos + yOffset);
         }
 
-        // Right Side: Date Range, Printed On
-        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        const rightColX = pageWidth - margin - 50;
-
-        doc.setFont('helvetica', 'bold');
-        doc.text("Printed on:", rightColX, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
-
-        if (filters.startDate || filters.endDate) {
-            doc.setFont('helvetica', 'bold');
-            doc.text("Date Range:", rightColX, yPos + 6);
-            doc.setFont('helvetica', 'normal');
-            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
-        }
-
-        // --- Data Preparation ---
+        // --- Data Preparation & Totals ---
         const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
         const tableRows = sortedReportData.map((row, index) => [
             formatDate(row.date),
@@ -3691,17 +3675,63 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             parseFloat(row.totalCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
         ]);
 
-        // Totals
         const totalTrucks = reportData.reduce((sum, row) => sum + (parseFloat(row.truck) || 0), 0);
         const totalQty = reportData.reduce((sum, row) => sum + (parseFloat(row.qty) || 0), 0);
         const totalCommissionVal = reportData.reduce((sum, row) => sum + (parseFloat(row.totalCommission) || 0), 0);
+        const lastRow = sortedReportData[sortedReportData.length - 1];
+        const totalBalance = lastRow ? (lastRow.runningBalance || 0) : 0;
+
+        // Right Side: Date Range, Printed On
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const rightColX = pageWidth - margin - 50;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Printed on:", rightColX, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+
+        let infoYOffset = 6;
+        if (filters.startDate || filters.endDate) {
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", rightColX, yPos + 6);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+            infoYOffset += 6;
+        }
+
+        // Draw Single Summary Card just below "Printed on" info row
+        const cardY = yPos + infoYOffset;
+        const cardWidth = 50;
+        const cardHeight = 15;
+        const cardX = pageWidth - margin - cardWidth;
+
+        // Draw background/border for the card
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.2);
+        doc.rect(cardX, cardY, cardWidth, cardHeight, 'S');
+
+        // Draw card content
+        doc.setFontSize(8);
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'bold');
+        doc.text("Total Trucks", cardX + 3, cardY + 5.5);
+        doc.text("Total Balance", cardX + 3, cardY + 10.5);
+
+        doc.text(":", cardX + 26, cardY + 5.5);
+        doc.text(":", cardX + 26, cardY + 10.5);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text(totalTrucks.toString(), cardX + 29, cardY + 5.5);
+        doc.text(totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), cardX + 29, cardY + 10.5);
 
         const totalTableWidth = 18 + 15 + 24 + 24 + 16 + 20 + 12 + 16 + 16 + 16 + 23; // 200mm (Fits well on portrait A4 width of 210mm)
         const tableMargin = (pageWidth - totalTableWidth) / 2;
+        const tableStartY = Math.max(yPos + yOffset, cardY + cardHeight) + 6;
 
         // --- Table ---
         autoTable(doc, {
-            startY: yPos + yOffset + 9,
+            startY: tableStartY,
             head: [['Date', 'LC No', 'Importer', 'Exporter', 'Product', 'Port', 'Truck', 'BOE', 'QTY', 'Comm', 'Total']],
             body: tableRows,
             foot: [[
