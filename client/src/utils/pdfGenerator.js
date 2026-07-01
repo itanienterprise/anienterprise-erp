@@ -186,15 +186,15 @@ export const generateMoneyReceiptPDF = async (payment) => {
         doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
-        
+
         const partyNameText = payment.companyName || payment.customerName || 'N/A';
         const partyNameWidth = (rightColStart - 5) - (margin + labelWidth);
         const partyNameLines = doc.splitTextToSize(partyNameText, partyNameWidth);
-        
+
         partyNameLines.forEach((line, index) => {
             doc.text(line, margin + labelWidth, y + (index * 5));
         });
-        
+
         const partyNameLastY = y + ((partyNameLines.length - 1) * 5);
         drawDottedLine(margin + labelWidth, partyNameLastY + 1, rightColStart - 5);
 
@@ -2916,8 +2916,8 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
             const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
             if (diffDays === 0) return 'Today';
-            if (diffDays === 1) return '1 day ago';
-            return `${diffDays} days ago`;
+            if (diffDays === 1) return '1 day';
+            return `${diffDays} days`;
         };
 
         // --- Table ---
@@ -2952,7 +2952,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
 
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['SL', 'ID', 'Company', 'Last Trans. Day', 'Total Balance', 'Remark']],
+            head: [['SL', 'ID', 'Company', 'Last Trans', 'Total Balance', 'Remark']],
             body: tableRows,
             theme: 'grid',
             styles: {
@@ -2968,12 +2968,12 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
                 halign: 'center'
             },
             columnStyles: {
-                0: { cellWidth: 10, halign: 'center' }, // SL
-                1: { cellWidth: 20 },                   // ID
-                2: { cellWidth: 45 },                   // Company
-                3: { cellWidth: 30, halign: 'center' }, // Last Trans. Day
-                4: { cellWidth: 35, halign: 'right' },  // Total Balance
-                5: { cellWidth: 50 }                    // Remark
+                0: { cellWidth: 10, halign: 'center', overflow: 'hidden' }, // SL
+                1: { cellWidth: 20, overflow: 'hidden' },                   // ID
+                2: { cellWidth: 45, overflow: 'hidden' },                   // Company
+                3: { cellWidth: 25, halign: 'center', overflow: 'hidden' }, // Last Trans. Day
+                4: { cellWidth: 35, halign: 'right', overflow: 'hidden' },  // Total Balance
+                5: { cellWidth: 55, overflow: 'hidden' }                    // Remark
             },
             margin: { left: margin, right: margin }
         });
