@@ -20,6 +20,7 @@ const CnFPayment = () => {
     });
 
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
 
     // Edit States
     const [isEditMode, setIsEditMode] = useState(false);
@@ -310,6 +311,10 @@ const CnFPayment = () => {
 
     const handleAddPayment = async (e) => {
         e.preventDefault();
+        if (isBorderManager) {
+            alert('Forbidden: Border managers are not allowed to add or manage C&F payments');
+            return;
+        }
         if (!newPayment.cnfId || !newPayment.amount || parseFloat(newPayment.amount) <= 0) return;
 
         setIsSubmitting(true);
@@ -531,7 +536,7 @@ const CnFPayment = () => {
                             )}
                         </div>
                     )}
-                    {!showAddModal && (
+                    {!showAddModal && !isBorderManager && (
                         <button
                             onClick={() => setShowAddModal(true)}
                             className="h-10 border border-transparent flex items-center justify-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-sm hover:shadow-blue-500/30"

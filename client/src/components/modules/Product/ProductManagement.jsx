@@ -18,6 +18,8 @@ const ProductManagement = ({
     const [showProductForm, setShowProductForm] = useState(false);
     const [viewData, setViewData] = useState(null);
     const [editingId, setEditingId] = useState(null);
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null);
     const [productFormData, setProductFormData] = useState({
@@ -123,6 +125,10 @@ const ProductManagement = ({
     };
 
     const handleProductDelete = async (id) => {
+        if (isBorderManager) {
+            alert('Forbidden: Border managers are not allowed to delete products');
+            return;
+        }
         if (!window.confirm('Are you sure you want to delete this product?')) return;
 
         try {
@@ -413,9 +419,11 @@ const ProductManagement = ({
                                                     <button onClick={() => handleProductEdit(product)} className="text-gray-400 hover:text-blue-600 transition-colors">
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button onClick={() => handleProductDelete(product._id)} className="text-gray-400 hover:text-red-600 transition-colors">
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
+                                                    {!isBorderManager && (
+                                                         <button onClick={() => handleProductDelete(product._id)} className="text-gray-400 hover:text-red-600 transition-colors">
+                                                             <TrashIcon className="w-5 h-5" />
+                                                         </button>
+                                                     )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -470,12 +478,14 @@ const ProductManagement = ({
                                                         >
                                                             <EditIcon className="w-4 h-4" />
                                                         </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleProductDelete(product._id); }}
-                                                            className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
+                                                         {!isBorderManager && (
+                                                             <button
+                                                                 onClick={(e) => { e.stopPropagation(); handleProductDelete(product._id); }}
+                                                                 className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
+                                                             >
+                                                                 <TrashIcon className="w-4 h-4" />
+                                                             </button>
+                                                         )}
                                                     </>
                                                 )}
 

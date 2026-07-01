@@ -1934,7 +1934,7 @@ function App() {
             <HomeIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Dashboard</span>
           </button>
-          {!['lc manager', 'sales manager'].includes((currentUser?.role || '').toLowerCase()) && (
+          {!['lc manager', 'sales manager', 'border manager'].includes((currentUser?.role || '').toLowerCase()) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('hrms')}
@@ -2092,47 +2092,51 @@ function App() {
                     <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>Packing List</span>
                   </button>
+                  {(currentUser?.role || '').toLowerCase() !== 'border manager' && (
+                    <button
+                      onClick={() => { setCurrentView('tr-setup-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    >
+                      <SettingsIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>TR Setup</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {(currentUser?.role || '').toLowerCase() !== 'border manager' && (
+            <div>
+              <button
+                onClick={() => toggleSidebarDropdown('insurance')}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'insurance-section' || currentView === 'insurance-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <div className="flex items-center">
+                  <ShieldIcon className="w-5 h-5 mr-3" />
+                  <span className="font-medium text-sm">Insurance</span>
+                </div>
+                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${insuranceDropdownOpen ? 'transform rotate-180' : ''}`} />
+              </button>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${insuranceDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                <div className="pl-7 pr-2 space-y-1">
                   <button
-                    onClick={() => { setCurrentView('tr-setup-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    onClick={() => { setCurrentView('insurance-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                   >
-                    <SettingsIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>TR Setup</span>
+                    <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Insurance</span>
+                  </button>
+                  <button
+                    onClick={() => { setCurrentView('insurance-payment-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  >
+                    <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Insurance Payment</span>
                   </button>
                 </div>
               </div>
             </div>
           )}
-          <div>
-            <button
-              onClick={() => toggleSidebarDropdown('insurance')}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'insurance-section' || currentView === 'insurance-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <div className="flex items-center">
-                <ShieldIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium text-sm">Insurance</span>
-              </div>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${insuranceDropdownOpen ? 'transform rotate-180' : ''}`} />
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${insuranceDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-7 pr-2 space-y-1">
-                <button
-                  onClick={() => { setCurrentView('insurance-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Insurance</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('insurance-payment-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Insurance Payment</span>
-                </button>
-              </div>
-            </div>
-          </div>
           <div>
             <button
               onClick={() => toggleSidebarDropdown('lc')}
@@ -2218,7 +2222,7 @@ function App() {
                     </div>
                     {pendingModules.stockManagement && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                   </button>
-                  {(currentUser?.role || '').toLowerCase() !== 'lc manager' && (
+                  {!['lc manager', 'border manager'].includes((currentUser?.role || '').toLowerCase()) && (
                     <button
                       onClick={() => { setCurrentView('warehouse-section'); setSidebarOpen(false); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -2227,7 +2231,7 @@ function App() {
                       <span>Warehouse</span>
                     </button>
                   )}
-                  {(currentUser?.role || '').toLowerCase() !== 'lc manager' && (
+                  {!['lc manager', 'border manager'].includes((currentUser?.role || '').toLowerCase()) && (
                     <button
                       onClick={() => { setCurrentView('damage-section'); setSidebarOpen(false); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'damage-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -2262,13 +2266,15 @@ function App() {
                     <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>Customer</span>
                   </button>
-                  <button
-                    onClick={() => { setCurrentView('payment-collection-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                  >
-                    <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Payment Collection</span>
-                  </button>
+                  {(currentUser?.role || '').toLowerCase() !== 'border manager' && (
+                    <button
+                      onClick={() => { setCurrentView('payment-collection-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    >
+                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Payment Collection</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -2310,13 +2316,15 @@ function App() {
                     </div>
                     {pendingModules.borderSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                   </button>
-                  <button
-                    onClick={() => { setCurrentView('return-product-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'return-product-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                  >
-                    <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Return Product</span>
-                  </button>
+                  {(currentUser?.role || '').toLowerCase() !== 'border manager' && (
+                    <button
+                      onClick={() => { setCurrentView('return-product-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'return-product-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    >
+                      <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Return Product</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

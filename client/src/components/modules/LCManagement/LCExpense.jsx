@@ -9,7 +9,9 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
     const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
-    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager;
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
+    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager || isBorderManager;
+    const cannotAddEdit = isBorderManager;
     const [expenses, setExpenses] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -401,6 +403,10 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (cannotAddEdit) {
+            alert('Forbidden: Border managers are not allowed to add or edit LC expenses');
+            return;
+        }
         setIsSubmitting(true);
         try {
             const dataToSubmit = {
@@ -426,6 +432,10 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     };
 
     const handleEdit = (expense) => {
+        if (cannotAddEdit) {
+            alert('Forbidden: Border managers are not allowed to edit LC expenses');
+            return;
+        }
         setFormData({
             date: expense.date || '',
             lcNo: expense.lcNo || '',
@@ -633,13 +643,15 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                             )}
                         </div>
 
-                        <button
-                            onClick={() => setShowAddModal(true)}
-                            className="w-full md:w-auto px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
-                        >
-                            <PlusIcon className="w-5 h-5 mr-2" />
-                            <span>Add Expense</span>
-                        </button>
+                        {!cannotAddEdit && (
+                            <button
+                                onClick={() => setShowAddModal(true)}
+                                className="w-full md:w-auto px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
+                            >
+                                <PlusIcon className="w-5 h-5 mr-2" />
+                                <span>Add Expense</span>
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -696,13 +708,15 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-2">
-                                                    <button
-                                                        onClick={() => handleEdit(exp)}
-                                                        className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all active:scale-90"
-                                                        title="Edit Expense"
-                                                    >
-                                                        <EditIcon className="w-4 h-4" />
-                                                    </button>
+                                                    {!cannotAddEdit && (
+                                                        <button
+                                                            onClick={() => handleEdit(exp)}
+                                                            className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all active:scale-90"
+                                                            title="Edit Expense"
+                                                        >
+                                                            <EditIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                     {!cannotDelete && (
                                                         <button
                                                             onClick={() => handleDelete(exp._id)}
@@ -799,12 +813,14 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                     <span className="font-semibold text-gray-600 text-[11px] break-words">{exp.remarks || '-'}</span>
 
                                                     <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
-                                                        <button
-                                                            onClick={() => handleEdit(exp)}
-                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
-                                                        >
-                                                            <EditIcon className="w-3.5 h-3.5" /> Edit
-                                                        </button>
+                                                        {!cannotAddEdit && (
+                                                            <button
+                                                                onClick={() => handleEdit(exp)}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                            >
+                                                                <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => !cannotDelete && handleDelete(exp._id)}
                                                             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all ${cannotDelete ? 'hidden' : ''}`}

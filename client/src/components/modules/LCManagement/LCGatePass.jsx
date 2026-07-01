@@ -48,7 +48,9 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     const lcRef = useRef(null);
     const partyRef = useRef(null);
 
-    const canManage = ['admin', 'incharge', 'lc manager', 'data entry', 'sales manager'].includes((currentUser?.role || '').toLowerCase());
+    const canManage = ['admin', 'incharge', 'lc manager', 'data entry', 'sales manager', 'border manager'].includes((currentUser?.role || '').toLowerCase());
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
+    const cannotDelete = isBorderManager;
 
     const fetchRecords = async () => {
         setIsLoading(true);
@@ -174,6 +176,10 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     };
 
     const handleDelete = async (id) => {
+        if (cannotDelete) {
+            alert('Forbidden: Border managers are not allowed to delete LC Gate Passes');
+            return;
+        }
         if (!window.confirm('Are you sure you want to delete this Gate Pass?')) return;
         try {
             await axios.delete(`${API_BASE_URL}/api/lc-gp/${id}`);
@@ -399,13 +405,15 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                                             >
                                                                 <EditIcon className="w-5 h-5" />
                                                             </button>
-                                                            <button 
-                                                                onClick={() => handleDelete(record._id)}
-                                                                className="text-gray-400 hover:text-red-600 transition-colors"
-                                                                title="Delete Gate Pass"
-                                                            >
-                                                                <TrashIcon className="w-5 h-5" />
-                                                            </button>
+                                                            {!cannotDelete && (
+                                                                <button 
+                                                                    onClick={() => handleDelete(record._id)}
+                                                                    className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                    title="Delete Gate Pass"
+                                                                >
+                                                                    <TrashIcon className="w-5 h-5" />
+                                                                </button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -559,12 +567,14 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                                             >
                                                                 <EditIcon className="w-3.5 h-3.5" /> Edit
                                                             </button>
-                                                            <button
-                                                                onClick={() => handleDelete(record._id)}
-                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
-                                                            >
-                                                                <TrashIcon className="w-3.5 h-3.5" /> Delete
-                                                            </button>
+                                                            {!cannotDelete && (
+                                                                <button
+                                                                    onClick={() => handleDelete(record._id)}
+                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                                >
+                                                                    <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>

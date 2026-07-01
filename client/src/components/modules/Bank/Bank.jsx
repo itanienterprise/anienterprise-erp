@@ -21,7 +21,9 @@ const Bank = ({ onDeleteConfirm }) => {
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
     const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager';
-    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager;
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
+    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager || isBorderManager;
+    const cannotAddEdit = isBorderManager;
     const [banks, setBanks] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -613,6 +615,10 @@ const Bank = ({ onDeleteConfirm }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (cannotAddEdit) {
+            alert('Forbidden: You do not have permission to add or edit bank accounts');
+            return;
+        }
         setIsSubmitting(true);
         setSubmitStatus(null);
 
@@ -671,6 +677,10 @@ const Bank = ({ onDeleteConfirm }) => {
     };
 
     const handleEdit = (bank) => {
+        if (cannotAddEdit) {
+            alert('Forbidden: You do not have permission to edit bank accounts');
+            return;
+        }
         // Handle backwards compatibility for banks saved with old structure
         const rawBranches = bank.branches || [
             {
@@ -786,7 +796,7 @@ const Bank = ({ onDeleteConfirm }) => {
                     <div className="hidden md:block md:flex-1"></div>
                 )}
 
-                {!showForm && (
+                {!showForm && !cannotAddEdit && (
                     <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
                         <button
                             onClick={() => setShowForm(true)}
@@ -1226,13 +1236,15 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                                 <ChevronDownIcon className="w-4 h-4" />
                                                                             )}
                                                                         </button>
-                                                                        <button
-                                                                            onClick={() => handleEdit(item)}
-                                                                            className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"
-                                                                            title="Edit"
-                                                                        >
-                                                                            <EditIcon className="w-4 h-4" />
-                                                                        </button>
+                                                                        {!cannotAddEdit && (
+                                                                            <button
+                                                                                onClick={() => handleEdit(item)}
+                                                                                className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"
+                                                                                title="Edit"
+                                                                            >
+                                                                                <EditIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
                                                                         {!cannotDelete && (
                                                                             <button
                                                                                 onClick={() => handleDelete(item._id)}
@@ -1377,14 +1389,16 @@ const Bank = ({ onDeleteConfirm }) => {
                                                     >
                                                         <EyeIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleEdit(group.items[0]); }}
-                                                        className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-all"
-                                                        title="Edit Bank"
-                                                    >
-                                                        <EditIcon className="w-5 h-5" />
-                                                    </button>
-                                                    {!cannotDelete && (
+                                                    {!isBorderManager && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(group.items[0]); }}
+                                                            className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-all"
+                                                            title="Edit Bank"
+                                                        >
+                                                            <EditIcon className="w-5 h-5" />
+                                                        </button>
+                                                    )}
+                                                    {!isBorderManager && !cannotDelete && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(group.items[0]._id); }}
                                                             className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"

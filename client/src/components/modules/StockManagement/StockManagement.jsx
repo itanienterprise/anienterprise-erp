@@ -68,6 +68,7 @@ const StockManagement = ({
 
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
 
     // Filtering & Search (Main View)
     const [stockSearchQuery, setStockSearchQuery] = useState('');
@@ -1085,6 +1086,10 @@ const StockManagement = ({
 
     const handleAddWarehouseStockSubmit = async (e) => {
         e.preventDefault();
+        if (isBorderManager) {
+            alert('Forbidden: Border managers are not allowed to transfer stock');
+            return;
+        }
         setIsAddingWarehouseStock(true);
         setAddWarehouseStockSubmitStatus(null);
         try {
@@ -2162,7 +2167,7 @@ const StockManagement = ({
                                 <BarChartIcon className="w-4 h-4 text-gray-400" />
                                 <span>Report</span>
                             </button>
-                            {!isLcManager && (
+                            {!isLcManager && !isBorderManager && (
                                 <button
                                     onClick={() => setShowAddWarehouseStockForm(true)}
                                     className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/20 active:scale-95 font-bold text-sm"

@@ -22,7 +22,8 @@ const Exporter = ({
 }) => {
     const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'admin';
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
-    const canManage = isAdmin || isLcManager;
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
+    const canManage = (isAdmin || isLcManager) && !isBorderManager;
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -187,6 +188,10 @@ const Exporter = ({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isBorderManager) {
+            alert('Forbidden: Border managers are not allowed to add or edit exporters');
+            return;
+        }
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
@@ -229,7 +234,13 @@ const Exporter = ({
         setShowForm(true);
     };
 
-    const handleDelete = (id) => onDeleteConfirm({ show: true, type: 'exporter', id, isBulk: false });
+    const handleDelete = (id) => {
+        if (isBorderManager) {
+            alert('Forbidden: Border managers are not allowed to delete exporters');
+            return;
+        }
+        onDeleteConfirm({ show: true, type: 'exporter', id, isBulk: false });
+    };
 
     const toggleSelection = (id) => {
         const newSelected = new Set(selectedItems);
@@ -295,11 +306,13 @@ const Exporter = ({
                     />
                 </div>
 
-                <div className="w-full md:w-1/4 flex justify-end z-10">
-                    <button onClick={() => setShowForm(!showForm)} className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm whitespace-nowrap">
-                        <span className="mr-2 text-xl font-bold">+</span> Add New
-                    </button>
-                </div>
+                {canManage && (
+                    <div className="w-full md:w-1/4 flex justify-end z-10">
+                        <button onClick={() => setShowForm(!showForm)} className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm whitespace-nowrap">
+                            <span className="mr-2 text-xl font-bold">+</span> Add New
+                        </button>
+                    </div>
+                )}
             </div>
 
             {showForm && (

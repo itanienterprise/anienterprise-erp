@@ -21,6 +21,8 @@ const Port = ({
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
     const [ports, setPorts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -103,6 +105,10 @@ const Port = ({
     };
 
     const handleDelete = (id) => {
+        if (isBorderManager) {
+            alert('Forbidden: Border managers are not allowed to delete ports');
+            return;
+        }
         onDeleteConfirm({ show: true, type: 'port', id, isBulk: false });
     };
 
@@ -298,7 +304,9 @@ const Port = ({
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-center items-center gap-2">
                                                     <button onClick={() => handleEdit(port)} className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => handleDelete(port._id)} className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                    {!isBorderManager && (
+                                                        <button onClick={() => handleDelete(port._id)} className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -332,7 +340,9 @@ const Port = ({
                                             <div className="flex items-center gap-3">
                                                 <div className="flex items-center bg-gray-50/80 p-0.5 rounded-lg border border-gray-100 divide-x divide-gray-100">
                                                     <button onClick={(e) => { e.stopPropagation(); handleEdit(port); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-all"><EditIcon className="w-5 h-5" /></button>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(port._id); }} className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"><TrashIcon className="w-5 h-5" /></button>
+                                                    {!isBorderManager && (
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(port._id); }} className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"><TrashIcon className="w-5 h-5" /></button>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

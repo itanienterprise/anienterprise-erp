@@ -540,7 +540,7 @@ function IPManagement({
     const [piRecords, setPiRecords] = useState([]);
 
     // Authorization check for administrative actions
-    const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
     const [formData, setFormData] = useState({
         openingDate: '',

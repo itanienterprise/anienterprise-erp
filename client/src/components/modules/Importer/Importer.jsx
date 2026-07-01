@@ -25,7 +25,8 @@ const Importer = ({
     // Local state
     const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'admin';
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
-    const canManage = isAdmin || isLcManager;
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
+    const canManage = (isAdmin || isLcManager) && !isBorderManager;
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -133,6 +134,10 @@ const Importer = ({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isBorderManager) {
+            alert('Forbidden: Border managers are not allowed to add or edit importers');
+            return;
+        }
 
         // Validate phone number
         if (formData.phone.length !== 14) {
@@ -203,6 +208,10 @@ const Importer = ({
     };
 
     const handleDelete = (id) => {
+        if (isBorderManager) {
+            alert('Forbidden: Border managers are not allowed to delete importers');
+            return;
+        }
         onDeleteConfirm({ show: true, type: 'importer', id, isBulk: false });
     };
 
@@ -287,11 +296,13 @@ const Importer = ({
                     />
                 </div>
 
-                <div className="w-full md:w-1/4 flex justify-end z-10">
-                    <button onClick={() => setShowForm(!showForm)} className="w-full md:w-auto importer-add-btn whitespace-nowrap">
-                        <span className="importer-add-icon">+</span> Add New
-                    </button>
-                </div>
+                {canManage && (
+                    <div className="w-full md:w-1/4 flex justify-end z-10">
+                        <button onClick={() => setShowForm(!showForm)} className="w-full md:w-auto importer-add-btn whitespace-nowrap">
+                            <span className="importer-add-icon">+</span> Add New
+                        </button>
+                    </div>
+                )}
             </div>
 
             {showForm && (

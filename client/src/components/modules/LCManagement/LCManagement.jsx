@@ -125,6 +125,10 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
     const handleSaveBill = async (e) => {
         e.preventDefault();
+        if (!canManage) {
+            alert('Forbidden: You do not have permission to add bills');
+            return;
+        }
         setIsSavingBill(true);
         try {
             const { paidAmount, ...billData } = billFormData;
@@ -1002,7 +1006,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
                     {/* Right: Action Buttons */}
                     <div className="flex items-center gap-2 shrink-0">
-                        {showConsumption && activeTab === 'bill' && (
+                        {showConsumption && activeTab === 'bill' && canManage && (
                             <button
                                 onClick={() => setShowAddBillModal(true)}
                                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 transition-all transform active:scale-95"
@@ -1042,7 +1046,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                             </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                            {showConsumption && activeTab === 'bill' && (
+                            {showConsumption && activeTab === 'bill' && canManage && (
                                 <button
                                     onClick={() => setShowAddBillModal(true)}
                                     className="h-7 flex items-center justify-center gap-1 px-2.5 rounded-lg text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm transition-all transform active:scale-95 shrink-0 leading-none"
@@ -3328,7 +3332,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
     const [sortConfig, setSortConfig] = useState({ key: 'openingDate', direction: 'desc' });
 
-    const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
     const piRef = useRef(null);
     const bankRef = useRef(null);
@@ -3487,7 +3491,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         if (!addNotification || !currentUser || lcRecords.length === 0) return;
 
         // Managers and Data Entry can trigger notifications to avoid redundancy
-        const isAuthorized = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+        const isAuthorized = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
         if (!isAuthorized && currentUser?.username !== 'admin') return;
 
         const targetRoles = ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Data Entry'];

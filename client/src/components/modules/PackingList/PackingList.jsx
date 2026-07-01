@@ -54,7 +54,7 @@ function PackingList({
     addNotification,
     currentUser
 }) {
-    const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
 
     const [showForm, setShowForm] = useState(false);
     const [records, setRecords] = useState([]);
