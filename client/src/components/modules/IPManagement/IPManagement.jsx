@@ -541,6 +541,7 @@ function IPManagement({
 
     // Authorization check for administrative actions
     const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [formData, setFormData] = useState({
         openingDate: '',
@@ -1152,6 +1153,10 @@ function IPManagement({
     };
 
     const handleDelete = (id) => {
+        if (isDataEntry) {
+            alert('Forbidden: Data entry users are not allowed to delete IP records');
+            return;
+        }
         onDeleteConfirm({ show: true, type: 'ip', id, isBulk: false });
     };
 
@@ -2014,9 +2019,11 @@ function IPManagement({
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(record); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit Record">
                                                                     <EditIcon className="w-5 h-5" />
                                                                 </button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete Record">
-                                                                    <TrashIcon className="w-5 h-5" />
-                                                                </button>
+                                                                {!isDataEntry && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete Record">
+                                                                        <TrashIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                )}
                                                             </>
                                                         )}
                                                     </div>
@@ -2162,7 +2169,7 @@ function IPManagement({
                                                                     </button>
                                                                 )}
                                                             </div>
-                                                            {canManage && (
+                                                            {canManage && !isDataEntry && (
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
                                                                     className="w-full flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"

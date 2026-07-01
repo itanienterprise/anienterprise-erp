@@ -20,6 +20,8 @@ const ProductManagement = ({
     const [editingId, setEditingId] = useState(null);
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const cannotDelete = isBorderManager || isDataEntry;
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null);
     const [productFormData, setProductFormData] = useState({
@@ -125,8 +127,8 @@ const ProductManagement = ({
     };
 
     const handleProductDelete = async (id) => {
-        if (isBorderManager) {
-            alert('Forbidden: Border managers are not allowed to delete products');
+        if (cannotDelete) {
+            alert('Forbidden: You do not have permission to delete products');
             return;
         }
         if (!window.confirm('Are you sure you want to delete this product?')) return;
@@ -419,7 +421,7 @@ const ProductManagement = ({
                                                     <button onClick={() => handleProductEdit(product)} className="text-gray-400 hover:text-blue-600 transition-colors">
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
-                                                    {!isBorderManager && (
+                                                    {!cannotDelete && (
                                                          <button onClick={() => handleProductDelete(product._id)} className="text-gray-400 hover:text-red-600 transition-colors">
                                                              <TrashIcon className="w-5 h-5" />
                                                          </button>
@@ -478,7 +480,7 @@ const ProductManagement = ({
                                                         >
                                                             <EditIcon className="w-4 h-4" />
                                                         </button>
-                                                         {!isBorderManager && (
+                                                         {!cannotDelete && (
                                                              <button
                                                                  onClick={(e) => { e.stopPropagation(); handleProductDelete(product._id); }}
                                                                  className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"

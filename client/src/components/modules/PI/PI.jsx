@@ -26,6 +26,7 @@ function PI({
 
     // Authorization check for administrative actions
     const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [showForm, setShowForm] = useState(false);
     const [records, setRecords] = useState([]);
@@ -1383,6 +1384,10 @@ function PI({
     };
 
     const handleDelete = (id) => {
+        if (isDataEntry) {
+            alert('Forbidden: Data entry users are not allowed to delete PI records');
+            return;
+        }
         if (onDeleteConfirm) {
             // Reusing existing generalized delete modal if possible, otherwise trigger native confirm or basic logic
             onDeleteConfirm({ show: true, type: 'pi', id, isBulk: false });
@@ -4121,7 +4126,7 @@ function PI({
                                                             >
                                                                 <PDFIcon className="w-5 h-5" />
                                                             </button>
-                                                            {canManage && (
+                                                            {canManage && !isDataEntry && (
                                                                 <button
                                                                     onClick={() => handleDelete(record._id)}
                                                                     className="p-2 text-gray-400 hover:text-red-600 transition-all active:scale-90"
@@ -4280,7 +4285,7 @@ function PI({
                                                     >
                                                         <PDFIcon className="w-3.5 h-3.5" /> PDF
                                                     </button>
-                                                    {canManage && (
+                                                    {canManage && !isDataEntry && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
                                                             className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"

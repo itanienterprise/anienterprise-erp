@@ -5,6 +5,7 @@ import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, stockRecords, damages, fetchDamages, fetchStockRecords, addNotification }) => {
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -248,6 +249,10 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     };
 
     const handleDelete = async (id) => {
+        if (isDataEntry) {
+            alert('Forbidden: Data entry users are not allowed to delete damage records');
+            return;
+        }
         if (window.confirm('Are you sure you want to delete this damage record?')) {
             try {
                 await axios.delete(`${API_BASE_URL}/api/damages/${id}`);
@@ -784,7 +789,9 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-center gap-2">
                                                     <button onClick={() => handleEdit(item)} className="p-1.5 hover:bg-blue-100 text-gray-400 hover:text-blue-600 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => handleDelete(item._id)} className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-600 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                    {!isDataEntry && (
+                                                        <button onClick={() => handleDelete(item._id)} className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-600 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -876,12 +883,14 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                                     >
                                                         <EditIcon className="w-3.5 h-3.5" /> Edit
                                                     </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
-                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
-                                                    >
-                                                        <TrashIcon className="w-3.5 h-3.5" /> Delete
-                                                    </button>
+                                                    {!isDataEntry && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        >
+                                                            <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}

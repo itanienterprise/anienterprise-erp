@@ -42,6 +42,9 @@ const CnF = ({
     const effectiveUser = getEffectiveUser();
     const isAdmin = effectiveUser?.username === 'admin' || String(effectiveUser?.role || '').toLowerCase() === 'admin';
     const isAccountManager = (effectiveUser?.role || '').toLowerCase() === 'accounts manager' || (effectiveUser?.role || '').toLowerCase() === 'account manager';
+    const isLcManager = (effectiveUser?.role || '').toLowerCase() === 'lc manager';
+    const isDataEntry = (effectiveUser?.role || '').toLowerCase() === 'data entry';
+    const canManage = isAdmin || isLcManager || isDataEntry;
     const showToast = (type, message, duration = 3000) => {
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ type, message });
@@ -1309,11 +1312,11 @@ const CnF = ({
                                                     <td className="cnf-table-cell px-6">
                                                         <div className="cnf-table-actions justify-end">
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="cnf-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
+                                                            {canManage && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="cnf-action-btn cnf-action-edit"><EditIcon className="w-5 h-5" /></button>
+                                                            )}
                                                             {isAdmin && (
-                                                                <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="cnf-action-btn cnf-action-edit"><EditIcon className="w-5 h-5" /></button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="cnf-action-btn cnf-action-delete"><TrashIcon className="w-5 h-5" /></button>
-                                                                </>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="cnf-action-btn cnf-action-delete"><TrashIcon className="w-5 h-5" /></button>
                                                             )}
                                                         </div>
                                                     </td>
@@ -1377,11 +1380,11 @@ const CnF = ({
                                                         </div>
                                                         <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-50 text-gray-700 rounded-xl text-xs font-black flex-1 hover:bg-gray-100 transition-all active:scale-95"><EyeIcon className="w-4 h-4" /> History</button>
+                                                            {canManage && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"><EditIcon className="w-4 h-4" /> Edit</button>
+                                                            )}
                                                             {isAdmin && (
-                                                                <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"><EditIcon className="w-4 h-4" /> Edit</button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"><TrashIcon className="w-4 h-4" /></button>
-                                                                </>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"><TrashIcon className="w-4 h-4" /></button>
                                                             )}
                                                         </div>
                                                     </div>

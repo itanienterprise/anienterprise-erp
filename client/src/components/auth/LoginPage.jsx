@@ -28,7 +28,12 @@ const LoginPage = ({ onLogin }) => {
             const data = await response.json();
 
             if (response.ok && data.success) {
-                onLogin(data.user);
+                const userRole = (data.user?.role || '').toLowerCase();
+                if (userRole === 'general staff') {
+                    setError('Access denied. General staff are not allowed to log in to this system.');
+                } else {
+                    onLogin(data.user);
+                }
             } else {
                 setError(data.message || 'Invalid username or password');
             }

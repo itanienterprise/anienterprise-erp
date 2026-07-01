@@ -55,6 +55,7 @@ function PackingList({
     currentUser
 }) {
     const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [showForm, setShowForm] = useState(false);
     const [records, setRecords] = useState([]);
@@ -690,6 +691,10 @@ function PackingList({
     };
 
     const handleDeleteClick = (id) => {
+        if (isDataEntry) {
+            alert('Forbidden: Data entry users are not allowed to delete Packing Lists');
+            return;
+        }
         onDeleteConfirm({
             show: true,
             type: 'packing-list',
@@ -2061,13 +2066,15 @@ function PackingList({
                                                             >
                                                                 <EditIcon className="w-4 h-4" />
                                                             </button>
-                                                            <button
-                                                                onClick={() => handleDeleteClick(rec._id)}
-                                                                title="Delete"
-                                                                className="p-1.5 text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-all"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
+                                                            {!isDataEntry && (
+                                                                <button
+                                                                    onClick={() => handleDeleteClick(rec._id)}
+                                                                    title="Delete"
+                                                                    className="p-1.5 text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-all"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </td>
@@ -2154,12 +2161,14 @@ function PackingList({
                                                             >
                                                                 <EditIcon className="w-4 h-4" />
                                                             </button>
-                                                            <button
-                                                                onClick={() => handleDeleteClick(rec._id)}
-                                                                className="p-2 text-red-600 bg-red-50 border border-red-100 rounded-lg"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
+                                                            {!isDataEntry && (
+                                                                <button
+                                                                    onClick={() => handleDeleteClick(rec._id)}
+                                                                    className="p-2 text-red-600 bg-red-50 border border-red-100 rounded-lg"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>

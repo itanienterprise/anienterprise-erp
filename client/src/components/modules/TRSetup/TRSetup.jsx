@@ -5,6 +5,7 @@ import axios from '../../../utils/api';
 
 function TRSetup({ onDeleteConfirm, currentUser }) {
     const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [records, setRecords] = useState([]);
     const [showForm, setShowForm] = useState(false);
@@ -130,6 +131,10 @@ function TRSetup({ onDeleteConfirm, currentUser }) {
     };
 
     const handleDelete = (id) => {
+        if (isDataEntry) {
+            alert('Forbidden: Data entry users are not allowed to delete TR records');
+            return;
+        }
         onDeleteConfirm({ show: true, type: 'tr-setup', id, isBulk: false });
     };
 
@@ -321,14 +326,16 @@ function TRSetup({ onDeleteConfirm, currentUser }) {
                                                     <EditIcon className="w-4 h-4" />
                                                     Edit
                                                 </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDelete(record._id)}
-                                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                                                >
-                                                    <TrashIcon className="w-4 h-4" />
-                                                    Delete
-                                                </button>
+                                                {!isDataEntry && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDelete(record._id)}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                        Delete
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
                                     </div>

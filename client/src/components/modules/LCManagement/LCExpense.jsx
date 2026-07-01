@@ -10,7 +10,8 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
     const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager || isBorderManager;
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager || isBorderManager || isDataEntry;
     const cannotAddEdit = isBorderManager;
     const [expenses, setExpenses] = useState([]);
     const [isLoading, setIsLoading] = useState(false);

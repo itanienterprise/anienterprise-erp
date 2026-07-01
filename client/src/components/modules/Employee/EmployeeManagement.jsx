@@ -46,6 +46,8 @@ const EmployeeManagement = ({
     const isAdmin = isAdminUser || isAdminRole;
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const cannotManage = (currentUser?.role || '').toLowerCase() === 'accounts manager';
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const cannotDelete = isIncharge || cannotManage || isDataEntry;
 
     const toggleCardExpansion = (id) => {
         const newExpanded = new Set(expandedCards);
@@ -212,7 +214,7 @@ const EmployeeManagement = ({
     };
 
     const handleDelete = (id) => {
-        if (isIncharge || cannotManage) {
+        if (cannotDelete) {
             alert('Forbidden: You do not have permission to delete employees');
             return;
         }
@@ -706,7 +708,7 @@ const EmployeeManagement = ({
                                                         {!cannotManage && (
                                                             <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
                                                         )}
-                                                        {!isIncharge && !cannotManage && (
+                                                        {!cannotDelete && (
                                                             <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
                                                         )}
                                                     </div>
@@ -742,7 +744,7 @@ const EmployeeManagement = ({
                                                 {!cannotManage && (
                                                     <button onClick={(event) => { event.stopPropagation(); handleEdit(e); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-colors"><EditIcon className="w-4 h-4" /></button>
                                                 )}
-                                                {!isIncharge && !cannotManage && (
+                                                {!cannotDelete && (
                                                     <button onClick={(event) => { event.stopPropagation(); handleDelete(e._id); }} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-xl transition-colors"><TrashIcon className="w-4 h-4" /></button>
                                                 )}
                                             </div>

@@ -565,6 +565,8 @@ const ReturnProduct = ({ currentUser }) => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const canManage = isAdmin || isIncharge || isSalesManager || isDataEntry;
 
     return (
         <div className="return-product-container">
@@ -587,7 +589,7 @@ const ReturnProduct = ({ currentUser }) => {
                         />
                     </div>
 
-                    {(isAdmin || isIncharge || isSalesManager) && (
+                    {canManage && (
                     <div className="w-full md:w-1/4 flex justify-end z-10">
                         <button
                             onClick={() => {
@@ -993,7 +995,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                     return '-';
                                                 })()}
                                             </td>
-                                            {(isAdmin || isSalesManager) && (
+                                            {canManage && (
                                             <td className="return-product-table-cell">
                                                 <div className="return-product-table-actions justify-end">
                                                     <button
@@ -1088,7 +1090,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                 )}
                                             </div>
 
-                                            {(isAdmin || isSalesManager) && (
+                                            {canManage && (
                                             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleEdit(ret); }}

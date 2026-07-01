@@ -26,7 +26,9 @@ const Importer = ({
     const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'admin';
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const canManage = (isAdmin || isLcManager) && !isBorderManager;
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const canManage = (isAdmin || isLcManager || isDataEntry) && !isBorderManager;
+    const cannotDelete = isBorderManager || isDataEntry;
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -208,8 +210,8 @@ const Importer = ({
     };
 
     const handleDelete = (id) => {
-        if (isBorderManager) {
-            alert('Forbidden: Border managers are not allowed to delete importers');
+        if (cannotDelete) {
+            alert('Forbidden: You do not have permission to delete importers');
             return;
         }
         onDeleteConfirm({ show: true, type: 'importer', id, isBulk: false });
@@ -574,7 +576,7 @@ const Importer = ({
                                                         {canManage && (
                                                             <button onClick={(e) => { e.stopPropagation(); handleEdit(importer); }} className="importer-action-btn importer-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                         )}
-                                                        {isAdmin && (
+                                                        {isAdmin && !cannotDelete && (
                                                             <button onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }} className="importer-action-btn importer-action-delete"><TrashIcon className="w-5 h-5" /></button>
                                                         )}
                                                     </div>
@@ -657,7 +659,7 @@ const Importer = ({
                                                     <EditIcon className="w-4 h-4" /> Edit
                                                 </button>
                                             )}
-                                            {canManage && (
+                                            {canManage && !cannotDelete && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }}
                                                     className="flex items-center justify-center gap-1.5 py-2 px-3 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"

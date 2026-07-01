@@ -3333,6 +3333,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [sortConfig, setSortConfig] = useState({ key: 'openingDate', direction: 'desc' });
 
     const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const piRef = useRef(null);
     const bankRef = useRef(null);
@@ -4259,6 +4260,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
     };
 
     const handleDelete = (id) => {
+        if (isDataEntry) {
+            alert('Forbidden: Data entry users are not allowed to delete LC records');
+            return;
+        }
         setIdToDelete(id);
         setShowDeleteConfirm(true);
     };
@@ -7641,13 +7646,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                     >
                                                                         <EditIcon className="w-5 h-5" />
                                                                     </button>
-                                                                    <button
-                                                                        onClick={() => handleDelete(record._id)}
-                                                                        className="text-gray-400 hover:text-red-600 transition-colors"
-                                                                        title="Delete Record"
-                                                                    >
-                                                                        <TrashIcon className="w-5 h-5" />
-                                                                    </button>
+                                                                    {!isDataEntry && (
+                                                                        <button
+                                                                            onClick={() => handleDelete(record._id)}
+                                                                            className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                            title="Delete Record"
+                                                                        >
+                                                                            <TrashIcon className="w-5 h-5" />
+                                                                        </button>
+                                                                    )}
                                                                 </>
                                                             )}
                                                         </div>
@@ -8595,13 +8602,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                 >
                                                                     <EditIcon className="w-4.5 h-4.5" />
                                                                 </button>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
-                                                                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                                                                    title="Delete Record"
-                                                                >
-                                                                    <TrashIcon className="w-4.5 h-4.5" />
-                                                                </button>
+                                                                {!isDataEntry && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                                                        title="Delete Record"
+                                                                    >
+                                                                        <TrashIcon className="w-4.5 h-4.5" />
+                                                                    </button>
+                                                                )}
                                                             </>
                                                         )}
                                                     </div>

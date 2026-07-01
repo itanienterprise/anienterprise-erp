@@ -22,7 +22,8 @@ const InsurancePayment = () => {
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
     const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
-    const canManage = isAdmin || isSalesManager || isAccountsManager;
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const canManage = isAdmin || isSalesManager || isAccountsManager || isDataEntry;
 
     // Edit States
     const [isEditMode, setIsEditMode] = useState(false);
@@ -1046,14 +1047,14 @@ const InsurancePayment = () => {
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Paid</th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Adjusted</th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Status</th>
-                                        {isAdmin && <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Actions</th>}
+                                        {canManage && <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoading ? (
-                                        <tr><td colSpan={isAdmin ? 11 : 10} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
+                                        <tr><td colSpan={canManage ? 11 : 10} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
                                     ) : filteredPayments.length === 0 ? (
-                                        <tr><td colSpan={isAdmin ? 11 : 10} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
+                                        <tr><td colSpan={canManage ? 11 : 10} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
                                     ) : (
                                         filteredPayments.map((p) => {
                                             const lc = lcs.find(l => l.lcNo === p.lcNo);
@@ -1095,11 +1096,13 @@ const InsurancePayment = () => {
                                                             </span>
                                                         )}
                                                     </td>
-                                                    {isAdmin && (
+                                                    {canManage && (
                                                         <td className="px-4 py-3 whitespace-nowrap text-center">
                                                             <div className="flex items-center justify-center gap-2">
                                                                 <button onClick={() => handleEditPayment(p)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
-                                                                <button onClick={() => handleDeletePayment(p)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                                {isAdmin && (
+                                                                    <button onClick={() => handleDeletePayment(p)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                                )}
                                                             </div>
                                                         </td>
                                                     )}
@@ -1208,7 +1211,7 @@ const InsurancePayment = () => {
                                                         {p.adjustedAmount > 0 ? `৳${p.adjustedAmount.toLocaleString('en-IN')}` : '-'}
                                                     </span>
 
-                                                    {isAdmin && (
+                                                    {canManage && (
                                                         <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
                                                             <button
                                                                 onClick={() => handleEditPayment(p)}
@@ -1216,12 +1219,14 @@ const InsurancePayment = () => {
                                                             >
                                                                 <EditIcon className="w-3.5 h-3.5" /> Edit
                                                             </button>
-                                                            <button
-                                                                onClick={() => handleDeletePayment(p)}
-                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
-                                                            >
-                                                                <TrashIcon className="w-3.5 h-3.5" /> Delete
-                                                            </button>
+                                                            {isAdmin && (
+                                                                <button
+                                                                    onClick={() => handleDeletePayment(p)}
+                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                                >
+                                                                    <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>

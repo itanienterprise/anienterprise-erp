@@ -50,7 +50,8 @@ const LCGatePass = ({ currentUser, addNotification }) => {
 
     const canManage = ['admin', 'incharge', 'lc manager', 'data entry', 'sales manager', 'border manager'].includes((currentUser?.role || '').toLowerCase());
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const cannotDelete = isBorderManager;
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const cannotDelete = isBorderManager || isDataEntry;
 
     const fetchRecords = async () => {
         setIsLoading(true);
@@ -177,7 +178,7 @@ const LCGatePass = ({ currentUser, addNotification }) => {
 
     const handleDelete = async (id) => {
         if (cannotDelete) {
-            alert('Forbidden: Border managers are not allowed to delete LC Gate Passes');
+            alert('Forbidden: You do not have permission to delete LC Gate Passes');
             return;
         }
         if (!window.confirm('Are you sure you want to delete this Gate Pass?')) return;

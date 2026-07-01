@@ -22,7 +22,8 @@ const Bank = ({ onDeleteConfirm }) => {
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
     const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager';
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager || isBorderManager;
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager || isBorderManager || isDataEntry;
     const cannotAddEdit = isBorderManager;
     const [banks, setBanks] = useState([]);
     const [showForm, setShowForm] = useState(false);

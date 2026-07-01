@@ -23,7 +23,9 @@ const Exporter = ({
     const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'admin';
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const canManage = (isAdmin || isLcManager) && !isBorderManager;
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const canManage = (isAdmin || isLcManager || isDataEntry) && !isBorderManager;
+    const cannotDelete = isBorderManager || isDataEntry;
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -235,8 +237,8 @@ const Exporter = ({
     };
 
     const handleDelete = (id) => {
-        if (isBorderManager) {
-            alert('Forbidden: Border managers are not allowed to delete exporters');
+        if (cannotDelete) {
+            alert('Forbidden: You do not have permission to delete exporters');
             return;
         }
         onDeleteConfirm({ show: true, type: 'exporter', id, isBulk: false });
@@ -504,7 +506,7 @@ const Exporter = ({
                                                         {canManage && (
                                                             <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                         )}
-                                                        {isAdmin && (
+                                                        {isAdmin && !cannotDelete && (
                                                             <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
                                                         )}
                                                     </div>
@@ -600,7 +602,7 @@ const Exporter = ({
                                                                 <EditIcon className="w-4 h-4" /> Edit
                                                             </button>
                                                         )}
-                                                        {isAdmin && (
+                                                        {isAdmin && !cannotDelete && (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }}
                                                                 className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
