@@ -53,6 +53,8 @@ import SalesReport from './components/modules/Sale/SalesReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
 import ProfitLoss from './components/modules/Sale/ProfitLoss';
 import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
+import SystemAccess from './components/modules/Employee/SystemAccess';
+import RoleCreation from './components/modules/Employee/RoleCreation';
 import PaymentCollection from './components/modules/PaymentCollection/PaymentCollection';
 import Bank from './components/modules/Bank/Bank';
 import Insurance from './components/modules/Insurance/Insurance';
@@ -66,6 +68,7 @@ import Profile from './components/modules/Profile/Profile';
 import NotificationMenu from './components/modules/Notification/NotificationMenu';
 import ReturnProduct from './components/modules/ReturnProduct/ReturnProduct';
 import BackupRestore from './components/modules/BackupRestore/BackupRestore';
+import { hasPermission } from './utils/permissionHelper';
 
 
 function App() {
@@ -320,7 +323,7 @@ function App() {
     return () => { if (interval) clearInterval(interval); };
   }, [isAuthenticated, currentUser?.username]);
 
-  // Check session on mount
+  // Check session on mount + poll every 60s to pick up permission changes
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -328,6 +331,8 @@ function App() {
         if (response.data.authenticated) {
           setIsAuthenticated(true);
           setCurrentUser(response.data.user);
+          localStorage.setItem('currentUser', JSON.stringify(response.data.user));
+          localStorage.setItem('isAuthenticated', 'true');
         } else {
           setIsAuthenticated(false);
           setCurrentUser(null);
@@ -345,6 +350,33 @@ function App() {
       }
     };
     checkSession();
+
+    // Poll every 60 seconds so any permission changes made by admin
+    // are automatically reflected in all logged-in users without re-login
+    const sessionPollInterval = setInterval(async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/auth/check`);
+        if (response.data.authenticated) {
+          setCurrentUser(prev => {
+            const fresh = response.data.user;
+            // Only update if permissions actually changed to avoid unnecessary re-renders
+            if (JSON.stringify(prev?.permissions) !== JSON.stringify(fresh?.permissions) ||
+                prev?.role !== fresh?.role || prev?.status !== fresh?.status) {
+              localStorage.setItem('currentUser', JSON.stringify(fresh));
+              return fresh;
+            }
+            return prev;
+          });
+        } else {
+          // Session expired
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          localStorage.removeItem('currentUser');
+        }
+      } catch (e) { /* silent */ }
+    }, 60000);
+
+    return () => clearInterval(sessionPollInterval);
   }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -537,7 +569,7 @@ function App() {
 
   const [hrmsDropdownOpen, setHrmsDropdownOpen] = useState(() => {
     const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'employee-section';
+    return initialView === 'employee-section' || initialView === 'role-creation' || initialView === 'system-access';
   });
 
   const [importerDropdownOpen, setImporterDropdownOpen] = useState(() => {
@@ -1826,6 +1858,18 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
           />
         );
+      case 'role-creation': {
+        const isAdminUser = currentUser?.username === 'admin';
+        const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
+        if (!isAdminUser && !isAdminRole) return null;
+        return <RoleCreation setCurrentUser={setCurrentUser} />;
+      }
+      case 'system-access': {
+        const isAdminUser = currentUser?.username === 'admin';
+        const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
+        if (!isAdminUser && !isAdminRole) return null;
+        return <SystemAccess currentUser={currentUser} setCurrentUser={setCurrentUser} />;
+      }
       case 'insurance-section':
         return (
           <Insurance
@@ -1934,11 +1978,11 @@ function App() {
             <HomeIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Dashboard</span>
           </button>
-          {!['lc manager', 'sales manager', 'border manager'].includes((currentUser?.role || '').toLowerCase()) && (
+          {(hasPermission(currentUser, 'employees', 'view') || hasPermission(currentUser, 'backupRestore', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('hrms')}
-                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all ${currentView === 'employee-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all ${['employee-section', 'role-creation', 'system-access'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <div className="flex items-center">
                   <BriefcaseIcon className="w-5 h-5 mr-3" />
@@ -1946,27 +1990,47 @@ function App() {
                 </div>
                 <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${hrmsDropdownOpen ? 'transform rotate-180' : ''}`} />
               </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${hrmsDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${hrmsDropdownOpen ? 'max-h-56 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
-                  <button
-                    onClick={() => { setCurrentView('employee-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'employee-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                  >
-                    <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Employee</span>
-                  </button>
+                  {hasPermission(currentUser, 'employees', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('employee-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'employee-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    >
+                      <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Employee</span>
+                    </button>
+                  )}
+                  {((currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
+                    <>
+                      <button
+                        onClick={() => { setCurrentView('role-creation'); setSidebarOpen(false); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'role-creation' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                      >
+                        <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Role Creation</span>
+                      </button>
+                      <button
+                        onClick={() => { setCurrentView('system-access'); setSidebarOpen(false); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'system-access' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                      >
+                        <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>System access</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
           )}
-          {!['sales manager', 'accounts manager'].includes((currentUser?.role || '').toLowerCase()) && (
+          {hasPermission(currentUser, 'port', 'view') && (
             <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
               <AnchorIcon className="w-5 h-5 mr-3" />
               <span className="font-medium text-sm">Port</span>
             </button>
           )}
 
-          {!['sales manager', 'accounts manager'].includes((currentUser?.role || '').toLowerCase()) && (
+          {hasPermission(currentUser, 'importerExporter', 'view') && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('importer')}
@@ -1998,48 +2062,52 @@ function App() {
               </div>
             </div>
           )}
-          <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <DollarSignIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">Bank</span>
-          </button>
-          <div>
-            <button
-              onClick={() => toggleSidebarDropdown('cnf')}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' || currentView === 'cnf-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <div className="flex items-center">
-                <LinkIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium text-sm">C&F</span>
-              </div>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${cnfDropdownOpen ? 'transform rotate-180' : ''}`} />
+          {hasPermission(currentUser, 'bank', 'view') && (
+            <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+              <DollarSignIcon className="w-5 h-5 mr-3" />
+              <span className="font-medium text-sm">Bank</span>
             </button>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${cnfDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-              <div className="pl-7 pr-2 space-y-1">
-                <button
-                  onClick={() => { setCurrentView('indian-cnf-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>Indian C&F</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('bd-cnf-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bd-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>BD C&F</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('cnf-payment-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>C&F Payment</span>
-                </button>
+          )}
+          {hasPermission(currentUser, 'cnf', 'view') && (
+            <div>
+              <button
+                onClick={() => toggleSidebarDropdown('cnf')}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' || currentView === 'cnf-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <div className="flex items-center">
+                  <LinkIcon className="w-5 h-5 mr-3" />
+                  <span className="font-medium text-sm">C&F</span>
+                </div>
+                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${cnfDropdownOpen ? 'transform rotate-180' : ''}`} />
+              </button>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${cnfDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                <div className="pl-7 pr-2 space-y-1">
+                  <button
+                    onClick={() => { setCurrentView('indian-cnf-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                  >
+                    <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Indian C&F</span>
+                  </button>
+                  <button
+                    onClick={() => { setCurrentView('bd-cnf-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bd-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  >
+                    <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>BD C&F</span>
+                  </button>
+                  <button
+                    onClick={() => { setCurrentView('cnf-payment-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                  >
+                    <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>C&F Payment</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          {!['sales manager', 'accounts manager'].includes((currentUser?.role || '').toLowerCase()) && (
+          )}
+          {hasPermission(currentUser, 'ipManagement', 'view') && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('ip')}
@@ -2055,7 +2123,7 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1">
                   <button
                     onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'ip-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'ip-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>Create IP</span>
@@ -2064,7 +2132,7 @@ function App() {
               </div>
             </div>
           )}
-          {!['sales manager', 'accounts manager'].includes((currentUser?.role || '').toLowerCase()) && (
+          {hasPermission(currentUser, 'pi', 'view') && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('pi')}
@@ -2080,22 +2148,24 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1">
                   <button
                     onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>Proforma Invoice</span>
                   </button>
-                  <button
-                    onClick={() => { setCurrentView('packing-list-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'packing-list-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                  >
-                    <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Packing List</span>
-                  </button>
-                  {(currentUser?.role || '').toLowerCase() !== 'border manager' && (
+                  {hasPermission(currentUser, 'packingList', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('packing-list-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'packing-list-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Packing List</span>
+                    </button>
+                  )}
+                  {hasPermission(currentUser, 'trSetup', 'view') && (
                     <button
                       onClick={() => { setCurrentView('tr-setup-section'); setSidebarOpen(false); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <SettingsIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                       <span>TR Setup</span>
@@ -2105,7 +2175,7 @@ function App() {
               </div>
             </div>
           )}
-          {(currentUser?.role || '').toLowerCase() !== 'border manager' && (
+          {(hasPermission(currentUser, 'insurance', 'view') || hasPermission(currentUser, 'insurancePayment', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('insurance')}
@@ -2119,76 +2189,84 @@ function App() {
               </button>
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${insuranceDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
-                  <button
-                    onClick={() => { setCurrentView('insurance-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                  >
-                    <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Insurance</span>
-                  </button>
-                  <button
-                    onClick={() => { setCurrentView('insurance-payment-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                  >
-                    <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Insurance Payment</span>
-                  </button>
+                  {hasPermission(currentUser, 'insurance', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('insurance-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Insurance</span>
+                    </button>
+                  )}
+                  {hasPermission(currentUser, 'insurancePayment', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('insurance-payment-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Insurance Payment</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           )}
-          <div>
-            <button
-              onClick={() => toggleSidebarDropdown('lc')}
-              className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'lc-management-section' || currentView === 'lc-gp-section' || currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <div className="flex items-center">
-                <LCManagerIcon className="w-5 h-5 mr-3" />
-                <span className="font-medium text-sm">LC Management</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {pendingModules.lc && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
-                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${lcDropdownOpen ? 'transform rotate-180' : ''}`} />
-              </div>
-            </button>
-            {lcDropdownOpen && (
-              <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
-                <button
-                  onClick={() => { setCurrentView('lc-management-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-management-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <LCManagerIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>LC Open</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('lc-gp-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-gp-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>LC G.P</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('lc-expense-section'); setSidebarOpen(false); }}
-                  className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-expense-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                  <span>LC Expense</span>
-                </button>
-                <button
-                  onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }}
-                  className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-entry-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                >
-                  <div className="flex items-center">
-                    <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>LC Receive</span>
-                  </div>
-                  {pendingModules.lcReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                </button>
-              </div>
-            )}
-          </div>
+          {hasPermission(currentUser, 'lcManagement', 'view') && (
+            <div>
+              <button
+                onClick={() => toggleSidebarDropdown('lc')}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'lc-management-section' || currentView === 'lc-gp-section' || currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <div className="flex items-center">
+                  <LCManagerIcon className="w-5 h-5 mr-3" />
+                  <span className="font-medium text-sm">LC Management</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {pendingModules.lc && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
+                  <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${lcDropdownOpen ? 'transform rotate-180' : ''}`} />
+                </div>
+              </button>
+              {lcDropdownOpen && (
+                <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
+                  <button
+                    onClick={() => { setCurrentView('lc-management-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-management-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                  >
+                    <LCManagerIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>LC Open</span>
+                  </button>
+                  <button
+                    onClick={() => { setCurrentView('lc-gp-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-gp-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                  >
+                    <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>LC G.P</span>
+                  </button>
+                  <button
+                    onClick={() => { setCurrentView('lc-expense-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-expense-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                  >
+                    <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>LC Expense</span>
+                  </button>
+                  {hasPermission(currentUser, 'lcReceive', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }}
+                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-entry-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <div className="flex items-center">
+                        <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>LC Receive</span>
+                      </div>
+                      {pendingModules.lcReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
-          {(currentUser?.role || '').toLowerCase() !== 'accounts manager' && (
+          {hasPermission(currentUser, 'stock', 'view') && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('stock')}
@@ -2205,16 +2283,18 @@ function App() {
               </button>
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${stockDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
-                  <button
-                    onClick={() => { setCurrentView('products-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'products-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                  >
-                    <VegetableIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Product</span>
-                  </button>
+                  {hasPermission(currentUser, 'product', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('products-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'products-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <VegetableIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Product</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => { setCurrentView('stock-section'); setSidebarOpen(false); }}
-                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <div className="flex items-center">
                       <BarChartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2222,30 +2302,30 @@ function App() {
                     </div>
                     {pendingModules.stockManagement && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                   </button>
-                  {!['lc manager', 'border manager'].includes((currentUser?.role || '').toLowerCase()) && (
-                    <button
-                      onClick={() => { setCurrentView('warehouse-section'); setSidebarOpen(false); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                    >
-                      <HomeIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Warehouse</span>
-                    </button>
-                  )}
-                  {!['lc manager', 'border manager'].includes((currentUser?.role || '').toLowerCase()) && (
-                    <button
-                      onClick={() => { setCurrentView('damage-section'); setSidebarOpen(false); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'damage-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                    >
-                      <TrashIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Damage</span>
-                    </button>
+                  {hasPermission(currentUser, 'warehouse', 'view') && (
+                    <>
+                      <button
+                        onClick={() => { setCurrentView('warehouse-section'); setSidebarOpen(false); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      >
+                        <HomeIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Warehouse</span>
+                      </button>
+                      <button
+                        onClick={() => { setCurrentView('damage-section'); setSidebarOpen(false); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'damage-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      >
+                        <TrashIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Damage</span>
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
             </div>
           )}
 
-          {(currentUser?.role || '').toLowerCase() !== 'lc manager' && (
+          {hasPermission(currentUser, 'customer', 'view') && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('crm')}
@@ -2261,15 +2341,15 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
                   <button
                     onClick={() => { setCurrentView('customer-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>Customer</span>
                   </button>
-                  {(currentUser?.role || '').toLowerCase() !== 'border manager' && (
+                  {hasPermission(currentUser, 'paymentCollection', 'view') && (
                     <button
                       onClick={() => { setCurrentView('payment-collection-section'); setSidebarOpen(false); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                       <span>Payment Collection</span>
@@ -2279,7 +2359,7 @@ function App() {
               )}
             </div>
           )}
-          {!['lc manager', 'accounts manager'].includes((currentUser?.role || '').toLowerCase()) && (
+          {hasPermission(currentUser, 'sales', 'view') && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('sale')}
@@ -2298,7 +2378,7 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1">
                   <button
                     onClick={() => { setCurrentView('general-sale-section'); setSidebarOpen(false); }}
-                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <div className="flex items-center">
                       <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2308,7 +2388,7 @@ function App() {
                   </button>
                   <button
                     onClick={() => { setCurrentView('border-sale-section'); setSidebarOpen(false); }}
-                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <div className="flex items-center">
                       <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2316,10 +2396,10 @@ function App() {
                     </div>
                     {pendingModules.borderSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                   </button>
-                  {(currentUser?.role || '').toLowerCase() !== 'border manager' && (
+                  {hasPermission(currentUser, 'returnProduct', 'view') && (
                     <button
                       onClick={() => { setCurrentView('return-product-section'); setSidebarOpen(false); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'return-product-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'return-product-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                       <span>Return Product</span>
@@ -2329,16 +2409,18 @@ function App() {
               </div>
             </div>
           )}
-          <button
-            onClick={() => { setCurrentView('profit-loss-section'); setSidebarOpen(false); }}
-            className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'profit-loss-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-          >
-            <BarChartIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">Profit & Loss</span>
-          </button>
+          {hasPermission(currentUser, 'sales', 'special') && (
+            <button
+              onClick={() => { setCurrentView('profit-loss-section'); setSidebarOpen(false); }}
+              className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'profit-loss-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <BarChartIcon className="w-5 h-5 mr-3" />
+              <span className="font-medium text-sm">Profit & Loss</span>
+            </button>
+          )}
 
           {/* Backup & Restore — Admin Only */}
-          {((currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
+          {hasPermission(currentUser, 'backupRestore', 'view') && (
             <button
               onClick={() => { setCurrentView('backup-restore-section'); setSidebarOpen(false); }}
               className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'backup-restore-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}

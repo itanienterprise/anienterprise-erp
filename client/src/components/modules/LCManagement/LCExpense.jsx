@@ -3,16 +3,14 @@ import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
-    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
-    const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
-    const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
-    const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
-    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager || isBorderManager || isDataEntry;
-    const cannotAddEdit = isBorderManager;
+    const canAdd = hasPermission(currentUser, 'lcManagement', 'add');
+    const canEdit = hasPermission(currentUser, 'lcManagement', 'edit');
+    const canDelete = hasPermission(currentUser, 'lcManagement', 'delete');
+    const cannotDelete = !canDelete;
+    const cannotAddEdit = !canAdd && !canEdit;
     const [expenses, setExpenses] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');

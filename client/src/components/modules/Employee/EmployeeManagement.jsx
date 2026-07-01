@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ShieldIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
+import { hasPermission } from '../../../utils/permissionHelper';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './EmployeeManagement.css';
@@ -45,9 +46,11 @@ const EmployeeManagement = ({
     const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
     const isAdmin = isAdminUser || isAdminRole;
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
-    const cannotManage = (currentUser?.role || '').toLowerCase() === 'accounts manager';
-    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const cannotDelete = isIncharge || cannotManage || isDataEntry;
+    const canAdd = hasPermission(currentUser, 'employees', 'add');
+    const canEdit = hasPermission(currentUser, 'employees', 'edit');
+    const canDelete = hasPermission(currentUser, 'employees', 'delete');
+    const cannotManage = !canAdd && !canEdit;
+    const cannotDelete = !canDelete;
 
     const toggleCardExpansion = (id) => {
         const newExpanded = new Set(expandedCards);
@@ -69,9 +72,23 @@ const EmployeeManagement = ({
         status: 'Active'
     });
 
+    const [customRoles, setCustomRoles] = useState([]);
+
     useEffect(() => {
         fetchEmployees();
+        fetchCustomRoles();
     }, []);
+
+    const fetchCustomRoles = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/metadata?category=roles`);
+            if (response.data) {
+                setCustomRoles(response.data);
+            }
+        } catch (error) {
+            console.error('Error fetching custom roles:', error);
+        }
+    };
 
     // Close custom dropdowns on outside click
     useEffect(() => {
@@ -503,7 +520,10 @@ const EmployeeManagement = ({
                                 </button>
                                 {openDropdown === 'role' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                        {['Admin', 'Incharge', 'LC Manager', 'Sales Manager', 'Accounts Manager', 'Border Manager', 'Data Entry', 'General Staff'].map(opt => (
+                                        {[
+                                            'Admin', 'Incharge', 'LC Manager', 'Sales Manager', 'Accounts Manager', 'Border Manager', 'Data Entry', 'General Staff',
+                                            ...customRoles.filter(cr => !['Admin', 'Incharge', 'LC Manager', 'Sales Manager', 'Accounts Manager', 'Border Manager', 'Data Entry', 'General Staff'].includes(cr.name)).map(cr => cr.name)
+                                        ].map(opt => (
                                             <button
                                                 key={opt}
                                                 type="button"

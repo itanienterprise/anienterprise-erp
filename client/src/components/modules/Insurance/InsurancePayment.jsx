@@ -3,6 +3,7 @@ import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, Chevr
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const InsurancePayment = () => {
     const [payments, setPayments] = useState([]);
@@ -23,7 +24,11 @@ const InsurancePayment = () => {
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
     const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const canManage = isAdmin || isSalesManager || isAccountsManager || isDataEntry;
+    // Use hasPermission so custom role assignments (e.g. Incharge with add toggled on) work correctly
+    const canAdd = hasPermission(currentUser, 'insurancePayment', 'add');
+    const canEdit = hasPermission(currentUser, 'insurancePayment', 'edit');
+    const canDelete = hasPermission(currentUser, 'insurancePayment', 'delete');
+    const canManage = canAdd || canEdit || canDelete;
 
     // Edit States
     const [isEditMode, setIsEditMode] = useState(false);
@@ -553,7 +558,7 @@ const InsurancePayment = () => {
                         </div>
                     )}
 
-                    {canManage && !showAddModal && (
+                    {canAdd && !showAddModal && (
                         <button
                             onClick={() => setShowAddModal(true)}
                             className="h-10 border border-transparent flex items-center justify-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-sm hover:shadow-blue-500/30"

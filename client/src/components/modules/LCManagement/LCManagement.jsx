@@ -11,6 +11,7 @@ import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
 import { generateLCManagementReportPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const gridColsClassMap = {
     1: 'md:grid-cols-1',
@@ -3332,7 +3333,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
     const [sortConfig, setSortConfig] = useState({ key: 'openingDate', direction: 'desc' });
 
-    const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const canAdd = hasPermission(currentUser, 'lcManagement', 'add');
+    const canEdit = hasPermission(currentUser, 'lcManagement', 'edit');
+    const canDelete = hasPermission(currentUser, 'lcManagement', 'delete');
+    const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const piRef = useRef(null);

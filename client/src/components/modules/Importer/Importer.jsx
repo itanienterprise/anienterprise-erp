@@ -4,6 +4,7 @@ import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, Plu
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Importer.css';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const Importer = ({
     // Shared state from parent
@@ -23,12 +24,12 @@ const Importer = ({
     currentUser
 }) => {
     // Local state
-    const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'admin';
-    const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
-    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const canManage = (isAdmin || isLcManager || isDataEntry) && !isBorderManager;
-    const cannotDelete = isBorderManager || isDataEntry;
+    // Dynamic permissions check
+    const canAdd = hasPermission(currentUser, 'importerExporter', 'add');
+    const canEdit = hasPermission(currentUser, 'importerExporter', 'edit');
+    const canDelete = hasPermission(currentUser, 'importerExporter', 'delete');
+    const canManage = canAdd || canEdit;
+    const cannotDelete = !canDelete;
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -298,7 +299,7 @@ const Importer = ({
                     />
                 </div>
 
-                {canManage && (
+                {canAdd && (
                     <div className="w-full md:w-1/4 flex justify-end z-10">
                         <button onClick={() => setShowForm(!showForm)} className="w-full md:w-auto importer-add-btn whitespace-nowrap">
                             <span className="importer-add-icon">+</span> Add New
@@ -576,7 +577,7 @@ const Importer = ({
                                                         {canManage && (
                                                             <button onClick={(e) => { e.stopPropagation(); handleEdit(importer); }} className="importer-action-btn importer-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                         )}
-                                                        {isAdmin && !cannotDelete && (
+                                                        {canDelete && (
                                                             <button onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }} className="importer-action-btn importer-action-delete"><TrashIcon className="w-5 h-5" /></button>
                                                         )}
                                                     </div>
@@ -651,7 +652,7 @@ const Importer = ({
                                             >
                                                 <EyeIcon className="w-4 h-4" /> View
                                             </button>
-                                            {canManage && (
+                                            {canEdit && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleEdit(importer); }}
                                                     className="flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
@@ -659,7 +660,7 @@ const Importer = ({
                                                     <EditIcon className="w-4 h-4" /> Edit
                                                 </button>
                                             )}
-                                            {canManage && !cannotDelete && (
+                                            {canDelete && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleDelete(importer._id); }}
                                                     className="flex items-center justify-center gap-1.5 py-2 px-3 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"

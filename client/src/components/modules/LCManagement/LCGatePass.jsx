@@ -8,6 +8,7 @@ import {
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const LCGatePass = ({ currentUser, addNotification }) => {
     const [records, setRecords] = useState([]);
@@ -48,10 +49,13 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     const lcRef = useRef(null);
     const partyRef = useRef(null);
 
-    const canManage = ['admin', 'incharge', 'lc manager', 'data entry', 'sales manager', 'border manager'].includes((currentUser?.role || '').toLowerCase());
+    const canAdd = hasPermission(currentUser, 'lcManagement', 'add');
+    const canEdit = hasPermission(currentUser, 'lcManagement', 'edit');
+    const canDelete = hasPermission(currentUser, 'lcManagement', 'delete');
+    const canManage = canAdd || canEdit || canDelete;
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const cannotDelete = isBorderManager || isDataEntry;
+    const cannotDelete = !canDelete;
 
     const fetchRecords = async () => {
         setIsLoading(true);

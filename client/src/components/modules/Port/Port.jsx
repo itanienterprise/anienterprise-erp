@@ -3,6 +3,7 @@ import { EditIcon, TrashIcon, AnchorIcon, SearchIcon, XIcon } from '../../Icons'
 import { API_BASE_URL, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Port.css';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const Port = ({
     isSelectionMode,
@@ -22,9 +23,10 @@ const Port = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const cannotDelete = isBorderManager || isDataEntry;
+    const canAdd = hasPermission(currentUser, 'port', 'add');
+    const canEdit = hasPermission(currentUser, 'port', 'edit');
+    const canDelete = hasPermission(currentUser, 'port', 'delete');
+    const cannotDelete = !canDelete;
     const [ports, setPorts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');

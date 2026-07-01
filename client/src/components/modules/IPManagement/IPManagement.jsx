@@ -7,6 +7,7 @@ import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './IPManagement.css';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 // Modal to show all LCs using a specific IP
 const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRecords = [], onClose }) => {
@@ -540,7 +541,10 @@ function IPManagement({
     const [piRecords, setPiRecords] = useState([]);
 
     // Authorization check for administrative actions
-    const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const canAdd = hasPermission(currentUser, 'ipManagement', 'add');
+    const canEdit = hasPermission(currentUser, 'ipManagement', 'edit');
+    const canDelete = hasPermission(currentUser, 'ipManagement', 'delete');
+    const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [formData, setFormData] = useState({

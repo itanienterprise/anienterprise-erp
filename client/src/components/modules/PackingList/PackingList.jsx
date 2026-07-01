@@ -9,6 +9,7 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './PackingList.css';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
@@ -54,7 +55,10 @@ function PackingList({
     addNotification,
     currentUser
 }) {
-    const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const canAdd = hasPermission(currentUser, 'packingList', 'add');
+    const canEdit = hasPermission(currentUser, 'packingList', 'edit');
+    const canDelete = hasPermission(currentUser, 'packingList', 'delete');
+    const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [showForm, setShowForm] = useState(false);

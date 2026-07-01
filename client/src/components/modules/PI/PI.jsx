@@ -9,6 +9,7 @@ import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './PI.css';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 function PI({
     importers,
@@ -25,7 +26,10 @@ function PI({
     const STYLE2_DECLARATION = "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.\nWe do certify that we have no local agent in Bangladesh and the quoted price is net and no commission is payable.";
 
     // Authorization check for administrative actions
-    const canManage = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const canAdd = hasPermission(currentUser, 'pi', 'add');
+    const canEdit = hasPermission(currentUser, 'pi', 'edit');
+    const canDelete = hasPermission(currentUser, 'pi', 'delete');
+    const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [showForm, setShowForm] = useState(false);

@@ -5,6 +5,7 @@ import { generateCnFHistoryReportPDF, generateCnFAgentListReportPDF, generateCnF
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './CnF.css';
+import { hasPermission } from '../../../utils/permissionHelper';
 import CnFReport from './CnFReport';
 
 const CnF = ({
@@ -44,7 +45,10 @@ const CnF = ({
     const isAccountManager = (effectiveUser?.role || '').toLowerCase() === 'accounts manager' || (effectiveUser?.role || '').toLowerCase() === 'account manager';
     const isLcManager = (effectiveUser?.role || '').toLowerCase() === 'lc manager';
     const isDataEntry = (effectiveUser?.role || '').toLowerCase() === 'data entry';
-    const canManage = isAdmin || isLcManager || isDataEntry;
+    const canAdd = hasPermission(effectiveUser, 'cnf', 'add');
+    const canEdit = hasPermission(effectiveUser, 'cnf', 'edit');
+    const canDelete = hasPermission(effectiveUser, 'cnf', 'delete');
+    const canManage = canAdd || canEdit || canDelete;
     const showToast = (type, message, duration = 3000) => {
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ type, message });

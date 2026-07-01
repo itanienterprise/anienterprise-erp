@@ -4,6 +4,7 @@ import { SearchIcon, PlusIcon, EditIcon, TrashIcon, ShieldIcon, XIcon, ChevronDo
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { hasPermission } from '../../../utils/permissionHelper';
 const getLcInsuranceStatus = (lc, payments) => {
     const lcNo = lc.lcNo;
     const lcPayments = payments.filter(p => p.lcNo === lcNo);
@@ -45,12 +46,11 @@ const getLcInsuranceStatus = (lc, payments) => {
 
 const Insurance = ({ onDeleteConfirm }) => {
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
-    const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
-    const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
-    const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
-    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager;
-    const cannotAddEdit = isAccountsManager;
+    const canAdd = hasPermission(currentUser, 'insurance', 'add');
+    const canEdit = hasPermission(currentUser, 'insurance', 'edit');
+    const canDelete = hasPermission(currentUser, 'insurance', 'delete');
+    const cannotDelete = !canDelete;
+    const cannotAddEdit = !canAdd && !canEdit;
     const [insuranceRecords, setInsuranceRecords] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [isLoading, setIsLoading] = useState(false);

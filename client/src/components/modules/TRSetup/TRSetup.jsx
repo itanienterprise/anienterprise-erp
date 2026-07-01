@@ -2,9 +2,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SearchIcon, PlusIcon, EditIcon, TrashIcon, XIcon } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 function TRSetup({ onDeleteConfirm, currentUser }) {
-    const canManage = ['admin', 'incharge', 'lc manager', 'border manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
+    const canAdd = hasPermission(currentUser, 'trSetup', 'add');
+    const canEdit = hasPermission(currentUser, 'trSetup', 'edit');
+    const canDelete = hasPermission(currentUser, 'trSetup', 'delete');
+    const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [records, setRecords] = useState([]);

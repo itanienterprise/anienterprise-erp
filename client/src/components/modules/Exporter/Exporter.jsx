@@ -4,6 +4,7 @@ import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, Che
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './Exporter.css';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const Exporter = ({
     isSelectionMode,
@@ -20,12 +21,12 @@ const Exporter = ({
     isLongPressTriggered,
     currentUser
 }) => {
-    const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'admin';
-    const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
-    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const canManage = (isAdmin || isLcManager || isDataEntry) && !isBorderManager;
-    const cannotDelete = isBorderManager || isDataEntry;
+    // Dynamic permissions check
+    const canAdd = hasPermission(currentUser, 'importerExporter', 'add');
+    const canEdit = hasPermission(currentUser, 'importerExporter', 'edit');
+    const canDelete = hasPermission(currentUser, 'importerExporter', 'delete');
+    const canManage = canAdd || canEdit;
+    const cannotDelete = !canDelete;
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -308,7 +309,7 @@ const Exporter = ({
                     />
                 </div>
 
-                {canManage && (
+                {canAdd && (
                     <div className="w-full md:w-1/4 flex justify-end z-10">
                         <button onClick={() => setShowForm(!showForm)} className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm whitespace-nowrap">
                             <span className="mr-2 text-xl font-bold">+</span> Add New
@@ -506,7 +507,7 @@ const Exporter = ({
                                                         {canManage && (
                                                             <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                         )}
-                                                        {isAdmin && !cannotDelete && (
+                                                        {canDelete && (
                                                             <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
                                                         )}
                                                     </div>
@@ -594,7 +595,7 @@ const Exporter = ({
                                                         >
                                                             <EyeIcon className="w-4 h-4" /> View History
                                                         </button>
-                                                        {canManage && (
+                                                        {canEdit && (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }}
                                                                 className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
@@ -602,7 +603,7 @@ const Exporter = ({
                                                                 <EditIcon className="w-4 h-4" /> Edit
                                                             </button>
                                                         )}
-                                                        {isAdmin && !cannotDelete && (
+                                                        {canDelete && (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }}
                                                                 className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"

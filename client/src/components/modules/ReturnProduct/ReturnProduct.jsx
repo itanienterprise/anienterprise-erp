@@ -17,6 +17,7 @@ import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import './ReturnProduct.css';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const ReturnProduct = ({ currentUser }) => {
     const [showForm, setShowForm] = useState(false);
@@ -566,7 +567,10 @@ const ReturnProduct = ({ currentUser }) => {
     const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
     const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const canManage = isAdmin || isIncharge || isSalesManager || isDataEntry;
+    const canAdd = hasPermission(currentUser, 'returnProduct', 'add');
+    const canEdit = hasPermission(currentUser, 'returnProduct', 'edit');
+    const canDelete = hasPermission(currentUser, 'returnProduct', 'delete');
+    const canManage = canAdd || canEdit || canDelete;
 
     return (
         <div className="return-product-container">

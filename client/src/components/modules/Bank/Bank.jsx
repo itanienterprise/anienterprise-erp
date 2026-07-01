@@ -6,6 +6,7 @@ import { encryptData, decryptData } from '../../../utils/encryption';
 import axios from '../../../utils/api';
 import { generateLcBillHistoryReportPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 
 const EyeIcon = ({ className }) => (
@@ -17,14 +18,11 @@ const EyeIcon = ({ className }) => (
 
 const Bank = ({ onDeleteConfirm }) => {
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
-    const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
-    const isSalesManager = (currentUser?.role || '').toLowerCase() === 'sales manager';
-    const isAccountsManager = (currentUser?.role || '').toLowerCase() === 'accounts manager';
-    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const cannotDelete = isIncharge || isLcManager || isSalesManager || isAccountsManager || isBorderManager || isDataEntry;
-    const cannotAddEdit = isBorderManager;
+    const canAdd = hasPermission(currentUser, 'bank', 'add');
+    const canEdit = hasPermission(currentUser, 'bank', 'edit');
+    const canDelete = hasPermission(currentUser, 'bank', 'delete');
+    const cannotDelete = !canDelete;
+    const cannotAddEdit = !canAdd && !canEdit;
     const [banks, setBanks] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [isLoading, setIsLoading] = useState(false);

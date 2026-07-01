@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import StockHistoryModal from '../../shared/StockHistoryModal';
 import './ProductManagement.css';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const ProductManagement = ({ 
     products, 
@@ -19,9 +20,10 @@ const ProductManagement = ({
     const [viewData, setViewData] = useState(null);
     const [editingId, setEditingId] = useState(null);
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
-    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
-    const cannotDelete = isBorderManager || isDataEntry;
+    const canAdd = hasPermission(currentUser, 'product', 'add');
+    const canEdit = hasPermission(currentUser, 'product', 'edit');
+    const canDelete = hasPermission(currentUser, 'product', 'delete');
+    const cannotDelete = !canDelete;
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null);
     const [productFormData, setProductFormData] = useState({

@@ -152,6 +152,125 @@ const adminOrSalesManager = (req, res, next) => {
   next();
 };
 
+const getDefaultPermissionsForRole = (role) => {
+  const roleLower = (role || '').toLowerCase();
+  const defaults = {};
+
+  const modules = [
+    'employees', 'port', 'importerExporter', 'cnf', 'ipManagement', 'pi', 'packingList', 'trSetup', 
+    'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'paymentCollection', 'bank', 
+    'insurance', 'insurancePayment', 'lcManagement', 'returnProduct', 'backupRestore'
+  ];
+
+  modules.forEach(m => {
+    defaults[m] = { view: false, add: false, edit: false, delete: false, special: false };
+  });
+
+  if (roleLower === 'admin') {
+    modules.forEach(m => {
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+    });
+  } else if (roleLower === 'incharge') {
+    modules.forEach(m => {
+      if (m !== 'backupRestore') {
+        defaults[m] = { view: true, add: true, edit: true, delete: m !== 'employees', special: true };
+      }
+    });
+  } else if (roleLower === 'lc manager') {
+    const lcModules = ['port', 'importerExporter', 'cnf', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement'];
+    lcModules.forEach(m => {
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+    });
+  } else if (roleLower === 'sales manager') {
+    const salesModules = ['product', 'customer', 'sales', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+    salesModules.forEach(m => {
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+    });
+  } else if (roleLower === 'accounts manager') {
+    const accModules = ['paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+    accModules.forEach(m => {
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+    });
+    defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false };
+  } else if (roleLower === 'border manager') {
+    const borderModules = ['port', 'importerExporter', 'cnf', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement'];
+    borderModules.forEach(m => {
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+    });
+  } else if (roleLower === 'data entry') {
+    modules.forEach(m => {
+      if (m !== 'backupRestore') {
+        defaults[m] = { view: true, add: true, edit: true, delete: false, special: false };
+      }
+    });
+  } else {
+    const staffModules = ['product', 'customer', 'stock', 'sales'];
+    staffModules.forEach(m => {
+      defaults[m] = { view: true, add: false, edit: false, delete: false, special: false };
+    });
+  }
+
+  return defaults;
+};
+
+const resolveUserPermissions = async (role, customPermissions) => {
+  // Build full role defaults (includes all known modules)
+  const roleDefaults = getDefaultPermissionsForRole(role);
+
+  // Check for a role-level override stored in MetaData (from RoleCreation)
+  let roleOverridePermissions = null;
+  try {
+    const MetaData = require('./models/MetaData');
+    const records = await MetaData.find({ category: 'roles' });
+    const match = records.find(r => {
+      try {
+        const d = decryptData(r.data);
+        return d && d.name && d.name.toLowerCase() === (role || '').toLowerCase();
+      } catch (e) {
+        return false;
+      }
+    });
+    if (match) {
+      const dec = decryptData(match.data);
+      if (dec && dec.permissions) {
+        roleOverridePermissions = dec.permissions;
+      }
+    }
+  } catch (e) {
+    console.error('Error resolving role override:', e);
+  }
+
+  if (customPermissions && Object.keys(customPermissions).length > 0) {
+    // Merge: start with role defaults as base, overlay role-override, then apply custom permissions on top.
+    // This ensures any newly added modules get their role-default values even if the
+    // custom permissions object was saved before that module was added.
+    const base = { ...roleDefaults, ...(roleOverridePermissions || {}) };
+    return { ...base, ...customPermissions };
+  }
+
+  // No custom permissions — use role override if available, else role defaults
+  return roleOverridePermissions || roleDefaults;
+};
+
+const verifyPermission = (moduleName, action = 'view') => {
+  return async (req, res, next) => {
+    const user = req.session.user;
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    if (user.username === 'admin' || (user.role || '').toLowerCase() === 'admin') {
+      return next();
+    }
+
+    const resolvedPerms = await resolveUserPermissions(user.role, user.permissions);
+
+    if (resolvedPerms && resolvedPerms[moduleName] && resolvedPerms[moduleName][action]) {
+      return next();
+    }
+
+    return res.status(403).json({ message: `Forbidden: You do not have permission to ${action} in ${moduleName}` });
+  };
+};
+
 // IP Records APIs
 apiRouter.post('/api/ip-records', async (req, res) => {
   try {
@@ -1233,6 +1352,22 @@ apiRouter.delete('/api/metadata/:id', async (req, res) => {
   }
 });
 
+apiRouter.put('/api/metadata/:id', async (req, res) => {
+  try {
+    const { category, ...rest } = req.body;
+    const encryptedData = encryptData(rest);
+    const updated = await MetaData.findByIdAndUpdate(
+      req.params.id,
+      { category, data: encryptedData },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ message: 'Record not found' });
+    res.json({ ...rest, _id: updated._id, category: updated.category, createdAt: updated.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 apiRouter.get('/api/lc-management', async (req, res) => {
   try {
     const records = await LCManagement.find().sort({ createdAt: -1 });
@@ -1638,7 +1773,7 @@ const generatePassword = (length = 8) => {
 };
 
 // Employee APIs
-apiRouter.post('/api/employees', async (req, res) => {
+apiRouter.post('/api/employees', verifyPermission('employees', 'add'), async (req, res) => {
   try {
     const userSession = req.session.user;
     if (userSession && (userSession.role || '').toLowerCase() === 'accounts manager') {
@@ -1705,7 +1840,7 @@ apiRouter.post('/api/employees', async (req, res) => {
   }
 });
 
-apiRouter.delete('/api/employees/:id', async (req, res) => {
+apiRouter.delete('/api/employees/:id', verifyPermission('employees', 'delete'), async (req, res) => {
   try {
     const userSession = req.session.user;
     if (userSession && ['incharge', 'accounts manager'].includes((userSession.role || '').toLowerCase())) {
@@ -1732,7 +1867,7 @@ apiRouter.delete('/api/employees/:id', async (req, res) => {
   }
 });
 
-apiRouter.put('/api/employees/:id', async (req, res) => {
+apiRouter.put('/api/employees/:id', verifyPermission('employees', 'edit'), async (req, res) => {
   try {
     const userSession = req.session.user;
     if (userSession && (userSession.role || '').toLowerCase() === 'accounts manager') {
@@ -1808,7 +1943,46 @@ apiRouter.post('/api/employees/:id/reset-password', async (req, res) => {
   }
 });
 
-apiRouter.get('/api/employees', async (req, res) => {
+apiRouter.post('/api/employees/:id/change-password', async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    if (!userSession) return res.status(401).json({ message: 'Unauthorized' });
+
+    const isAdminUser = userSession.username === 'admin';
+    const isAdminRole = (userSession.role || '').toLowerCase() === 'admin';
+    if (!isAdminUser && !isAdminRole) {
+      return res.status(403).json({ message: 'Forbidden: Only admins can change passwords' });
+    }
+
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    let d = decryptData(employee.data);
+    if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
+      try { d = decryptData(d.data); } catch (e) { }
+    }
+    const { employeeId } = d;
+
+    const user = await User.findOne({ username: employeeId });
+    if (!user) return res.status(404).json({ message: 'User account not found' });
+
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.trim().length < 4) {
+      return res.status(400).json({ message: 'Password must be at least 4 characters long' });
+    }
+
+    const hashedPassword = CryptoJS.SHA256(newPassword).toString(CryptoJS.enc.Hex);
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('Password change error:', err);
+    res.status(500).json({ message: 'Server error during password change' });
+  }
+});
+
+apiRouter.get('/api/employees', verifyPermission('employees', 'view'), async (req, res) => {
   try {
     const records = await Employee.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
@@ -1845,8 +2019,10 @@ apiRouter.post('/api/auth/login', async (req, res) => {
     // For a production app, we would generate a JWT token here
     // Find employee name if exists
     let displayName = username === 'admin' ? 'Administrator' : username;
+    let permissions = null;
     if (username !== 'admin') {
       const employees = await Employee.find();
+      let isInactive = false;
       for (const emp of employees) {
         try {
           let decrypted = decryptData(emp.data);
@@ -1856,19 +2032,29 @@ apiRouter.post('/api/auth/login', async (req, res) => {
           }
           if (decrypted.employeeId === username) {
             displayName = decrypted.name;
+            permissions = decrypted.permissions || null;
+            if (decrypted.status === 'Inactive') {
+              isInactive = true;
+            }
             break;
           }
         } catch (e) {
           console.error('Error decrypting employee data during login:', e);
         }
       }
+      if (isInactive) {
+        return res.status(403).json({ message: 'Your account is deactivated. Please contact your system administrator.' });
+      }
     }
+
+    const resolvedPerms = username === 'admin' ? null : await resolveUserPermissions(user.role, permissions);
 
     const userData = {
       id: user._id,
       username: user.username,
       role: user.role,
-      name: displayName
+      name: displayName,
+      permissions: resolvedPerms
     };
 
     // Store user data in session
@@ -1891,12 +2077,47 @@ apiRouter.post('/api/auth/login', async (req, res) => {
 });
 
 // Check Session Status
-apiRouter.get('/api/auth/check', (req, res) => {
+apiRouter.get('/api/auth/check', async (req, res) => {
   if (req.session.user) {
-    res.json({
-      authenticated: true,
-      user: req.session.user
-    });
+    try {
+      if (req.session.user.username === 'admin') {
+        return res.json({
+          authenticated: true,
+          user: req.session.user
+        });
+      }
+
+      // Fetch fresh employee from MongoDB
+      const employee = await Employee.findOne({ employeeId: req.session.user.employeeId });
+      if (!employee) {
+        req.session.destroy();
+        return res.status(401).json({ authenticated: false, message: 'User no longer exists' });
+      }
+
+      const decryptedEmp = decryptData(employee.data);
+      
+      // If employee is deactivated, destroy session
+      if (decryptedEmp.status === 'Inactive') {
+        req.session.destroy();
+        return res.status(403).json({ authenticated: false, message: 'Account deactivated' });
+      }
+
+      // Update session with fresh details
+      req.session.user.role = decryptedEmp.role;
+      req.session.user.permissions = await resolveUserPermissions(decryptedEmp.role, decryptedEmp.permissions);
+      
+      res.json({
+        authenticated: true,
+        user: req.session.user
+      });
+    } catch (err) {
+      console.error('Session check error:', err);
+      // Fallback to existing session user if DB lookup fails
+      res.json({
+        authenticated: true,
+        user: req.session.user
+      });
+    }
   } else {
     res.status(401).json({
       authenticated: false,
