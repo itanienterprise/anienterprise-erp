@@ -2427,7 +2427,7 @@ function App() {
               </div>
             </div>
           )}
-          {hasPermission(currentUser, 'sales', 'view') && (
+          {hasPermission(currentUser, 'profitLoss', 'view') && (
             <button
               onClick={() => { setCurrentView('profit-loss-section'); setSidebarOpen(false); }}
               className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'profit-loss-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}

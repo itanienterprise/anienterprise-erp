@@ -5,6 +5,7 @@ import {
 } from '../../Icons';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
+import CustomDatePicker from '../../shared/CustomDatePicker';
 
 export default function ProfitLoss({ salesRecords, products }) {
   // Filters State
@@ -618,24 +619,19 @@ export default function ProfitLoss({ salesRecords, products }) {
 
                   {filterType === 'custom' && (
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">From Date</label>
-                        <input
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">To Date</label>
-                        <input
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        />
-                      </div>
+                      <CustomDatePicker
+                        label="From Date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        compact={true}
+                      />
+                      <CustomDatePicker
+                        label="To Date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        compact={true}
+                        rightAlign={true}
+                      />
                     </div>
                   )}
 

@@ -4723,7 +4723,7 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
 
         // Data Preparation
         const tableHeaders = [
-            ['Date', 'Exp Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Port', 'Product', 'Quantity', 'Total Value', 'LC Balance', 'Expense']
+            ['Date', 'Exp Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Port', 'Product', 'Quantity', 'LC Receive', 'LC Balance', 'Total Value', 'Expense']
         ];
 
         const tableRows = reportData.map(record => [
@@ -4736,16 +4736,18 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
             record.port || '-',
             record.product || '-',
             `${Math.round(record.qty).toLocaleString('en-US')} Kg`,
-            `${Math.round(record.val).toLocaleString('en-US')}`,
+            `${Math.round(record.received || 0).toLocaleString('en-US')} Kg`,
             `${Math.round(record.bal).toLocaleString('en-US')} Kg`,
+            `${Math.round(record.val).toLocaleString('en-US')}`,
             record.exp > 0 ? `${Math.round(record.exp).toLocaleString('en-US')}` : '—'
         ]);
 
         const footerRow = [
             { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: `${Math.round(totals.totalQty).toLocaleString('en-US')} Kg`, styles: { halign: 'right', fontStyle: 'bold' } },
-            { content: `${Math.round(totals.totalVal).toLocaleString('en-US')}`, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `${Math.round(totals.totalReceived || 0).toLocaleString('en-US')} Kg`, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: `${Math.round(totals.totalBal).toLocaleString('en-US')} Kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `${Math.round(totals.totalVal).toLocaleString('en-US')}`, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: totals.totalExp > 0 ? `${Math.round(totals.totalExp).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } }
         ];
 
@@ -4781,15 +4783,16 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
                 0: { cellWidth: 19, halign: 'center' }, // Date
                 1: { cellWidth: 19, halign: 'center' }, // Expire Date
                 2: { cellWidth: 24, halign: 'center', fontStyle: 'bold' }, // LC No
-                3: { cellWidth: 28, overflow: "hidden" }, // Importer
-                4: { cellWidth: 28, overflow: "hidden" }, // Exporter
-                5: { cellWidth: 28, overflow: "hidden" }, // Bank
+                3: { cellWidth: 24, overflow: "hidden" }, // Importer
+                4: { cellWidth: 20, overflow: "hidden" }, // Exporter
+                5: { cellWidth: 22, overflow: "hidden" }, // Bank
                 6: { cellWidth: 20, halign: 'center' }, // Port
-                7: { cellWidth: 25, halign: 'left' }, // Product
-                8: { cellWidth: 22, halign: 'right' }, // Qty
-                9: { cellWidth: 28, halign: 'right' }, // Val
-                10: { cellWidth: 22, halign: 'right' }, // Bal
-                11: { cellWidth: 24, halign: 'right' } // Exp
+                7: { cellWidth: 23, halign: 'left' }, // Product
+                8: { cellWidth: 23, halign: 'right' }, // Qty
+                9: { cellWidth: 23, halign: 'right' }, // LC Receive
+                10: { cellWidth: 23, halign: 'right' }, // LC Balance
+                11: { cellWidth: 24, halign: 'right' }, // Total Value
+                12: { cellWidth: 24, halign: 'right' } // Exp
             },
             margin: { left: margin, right: margin }
         });

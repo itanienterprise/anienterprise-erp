@@ -5111,6 +5111,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 return record.productName || '';
             case 'adjustedQtyKg':
                 return getAdjustedLcValues(record).adjustedQtyKg || 0;
+            case 'receivedQtyKg':
+                return getAdjustedLcValues(record).receivedQtyKg || 0;
             case 'adjustedTotalAmount':
                 return getAdjustedLcValues(record).adjustedTotalAmount || 0;
             case 'combinedRemKg':
@@ -5193,6 +5195,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 port: displayPort,
                 product: displayProducts,
                 qty: adj.adjustedQtyKg,
+                received: adj.receivedQtyKg,
                 val: adj.adjustedTotalAmount,
                 bal: adj.combinedRemKg,
                 exp: totalExpense
@@ -5200,11 +5203,12 @@ const LCManagement = ({ addNotification, currentUser }) => {
         });
 
         const totalQty = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedQtyKg || 0), 0);
+        const totalReceived = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).receivedQtyKg || 0), 0);
         const totalVal = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedTotalAmount || 0), 0);
         const totalBal = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).combinedRemKg || 0), 0);
         const totalExp = sortedRecords.reduce((sum, r) => sum + (getLcTotalPaidExpense(r) || 0), 0);
 
-        generateLCManagementReportPDF(reportData, { totalQty, totalVal, totalBal, totalExp }, searchQuery, lcFilters);
+        generateLCManagementReportPDF(reportData, { totalQty, totalReceived, totalVal, totalBal, totalExp }, searchQuery, lcFilters);
     };
 
     const amendmentDisplayProducts = selectedPiForAmendment
@@ -7460,8 +7464,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     {renderSortHeader('Port', 'port')}
                                     {renderSortHeader('Product', 'productName')}
                                     {renderSortHeader('Quantity (Kg)', 'adjustedQtyKg', 'text-right')}
-                                    {renderSortHeader('Total Value (৳)', 'adjustedTotalAmount', 'text-right')}
+                                    {renderSortHeader('LC Receive (Kg)', 'receivedQtyKg', 'text-right')}
                                     {renderSortHeader('LC Balance', 'combinedRemKg', 'text-right')}
+                                    {renderSortHeader('Total Value (৳)', 'adjustedTotalAmount', 'text-right')}
                                     {renderSortHeader('Expense', 'totalExpense', 'text-right')}
                                     <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
                                 </tr>
@@ -7469,7 +7474,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan="13" className="px-6 py-12 text-center text-sm text-gray-500">
+                                        <td colSpan="14" className="px-6 py-12 text-center text-sm text-gray-500">
                                             <div className="flex flex-col items-center gap-2">
                                                 <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                                                 <span className="font-medium text-gray-400">Loading records...</span>
@@ -7606,12 +7611,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
                                                         <span className="font-bold text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                     </td>
-                                                    <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{adj.adjustedTotalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
+                                                        <span className="font-bold text-gray-900">{receivedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                    </td>
                                                     <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
                                                         <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
                                                             {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Kg</span>
                                                         </span>
                                                     </td>
+                                                    <td className="px-3 py-4 text-sm text-right font-black text-gray-900 whitespace-nowrap">৳{adj.adjustedTotalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                                                     <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
                                                         {(() => {
                                                             const totalExpense = getLcTotalPaidExpense(record);
@@ -7668,7 +7676,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 {/* Expandable Sub-row containing Charges Breakdown */}
                                                 {expandedLcKey === record._id && (
                                                     <tr className="bg-gray-50/40">
-                                                        <td colSpan="13" className="px-6 py-4 border-b border-gray-100">
+                                                        <td colSpan="14" className="px-6 py-4 border-b border-gray-100">
                                                             <div className="flex flex-col gap-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-inner animate-in fade-in duration-300">
                                                                 {/* Radio Button for Enable Value and Quantity */}
                                                                 {record.piNo && record.quantity && record.totalAmount && (
@@ -8065,7 +8073,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan="13" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
+                                        <td colSpan="14" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
                                             No LC records found
                                         </td>
                                     </tr>
@@ -8305,18 +8313,24 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         <span className="font-bold text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal ml-0.5">Kg</span>
                                                     </div>
 
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Value</span>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-black text-gray-955 text-[11px]">৳{adj.adjustedTotalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-
-                                                    {/* Divider */}
-                                                    <div className="col-span-3 h-[1px] bg-gray-200/60 my-1"></div>
+                                                    <div className="text-[11px]">
+                                                        <span className="font-bold text-gray-900">{receivedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal ml-0.5">Kg</span>
+                                                    </div>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Balance</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <span className={`font-black text-[11px] ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
                                                         {combinedRemKg.toLocaleString('en-IN')} <span className="text-[10px] text-gray-400 font-medium ml-0.5">Kg</span>
                                                     </span>
+
+                                                    {/* Divider */}
+                                                    <div className="col-span-3 h-[1px] bg-gray-200/60 my-1"></div>
+
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Value</span>
+                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                    <span className="font-black text-gray-955 text-[11px]">৳{adj.adjustedTotalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Expense</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>

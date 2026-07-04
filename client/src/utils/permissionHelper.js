@@ -20,6 +20,7 @@ export const MODULES_LIST = [
     { key: 'warehouse', label: 'Warehouse & Damage' },
     { key: 'stock', label: 'Stock & Inventory' },
     { key: 'sales', label: 'Sales & Reports' },
+    { key: 'profitLoss', label: 'Profit & Loss' },
     { key: 'paymentCollection', label: 'Payment Collection' },
     { key: 'bank', label: 'Bank Management' },
     { key: 'insurance', label: 'Insurance Management' },
@@ -69,7 +70,7 @@ export const getDefaultPermissionsForRole = (role) => {
         });
     } else if (roleLower === 'sales manager') {
         // Sales Manager can access products, customers, sales, payment, bank, insurance, insurancePayment, returnProduct
-        const salesModules = ['product', 'customer', 'sales', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+        const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
         salesModules.forEach(key => {
             defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
         });
