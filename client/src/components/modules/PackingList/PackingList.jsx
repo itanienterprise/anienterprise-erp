@@ -695,8 +695,8 @@ function PackingList({
     };
 
     const handleDeleteClick = (id) => {
-        if (isDataEntry) {
-            alert('Forbidden: Data entry users are not allowed to delete Packing Lists');
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete Packing Lists');
             return;
         }
         onDeleteConfirm({
@@ -2070,7 +2070,7 @@ function PackingList({
                                                             >
                                                                 <EditIcon className="w-4 h-4" />
                                                             </button>
-                                                            {!isDataEntry && (
+                                                            {canDelete && (
                                                                 <button
                                                                     onClick={() => handleDeleteClick(rec._id)}
                                                                     title="Delete"
@@ -2165,7 +2165,7 @@ function PackingList({
                                                             >
                                                                 <EditIcon className="w-4 h-4" />
                                                             </button>
-                                                            {!isDataEntry && (
+                                                            {canDelete && (
                                                                 <button
                                                                     onClick={() => handleDeleteClick(rec._id)}
                                                                     className="p-2 text-red-600 bg-red-50 border border-red-100 rounded-lg"

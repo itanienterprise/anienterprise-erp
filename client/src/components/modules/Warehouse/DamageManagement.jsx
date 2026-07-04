@@ -3,8 +3,10 @@ import { EditIcon, TrashIcon, SearchIcon, XIcon, ChevronDownIcon, CheckIcon } fr
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, stockRecords, damages, fetchDamages, fetchStockRecords, addNotification }) => {
+    const canDelete = hasPermission(currentUser, 'warehouse', 'delete');
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -249,8 +251,8 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     };
 
     const handleDelete = async (id) => {
-        if (isDataEntry) {
-            alert('Forbidden: Data entry users are not allowed to delete damage records');
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete damage records');
             return;
         }
         if (window.confirm('Are you sure you want to delete this damage record?')) {
@@ -789,7 +791,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-center gap-2">
                                                     <button onClick={() => handleEdit(item)} className="p-1.5 hover:bg-blue-100 text-gray-400 hover:text-blue-600 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
-                                                    {!isDataEntry && (
+                                                    {canDelete && (
                                                         <button onClick={() => handleDelete(item._id)} className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-600 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
                                                     )}
                                                 </div>
@@ -883,7 +885,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                                     >
                                                         <EditIcon className="w-3.5 h-3.5" /> Edit
                                                     </button>
-                                                    {!isDataEntry && (
+                                                    {canDelete && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
                                                             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"

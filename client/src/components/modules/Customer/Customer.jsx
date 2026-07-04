@@ -39,7 +39,7 @@ const Customer = ({
     const [viewData, setViewData] = useState(null);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [activeHistoryTab, setActiveHistoryTab] = useState('sales'); // 'sales', 'payment', or 'gp'
-    const [historySortConfig, setHistorySortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [historySortConfig, setHistorySortConfig] = useState({ key: 'date', direction: 'asc' });
     const [status, setStatus] = useState('Active'); // status state for form
     const [formData, setFormData] = useState({
         customerId: '',

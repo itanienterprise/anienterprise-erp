@@ -157,9 +157,9 @@ const getDefaultPermissionsForRole = (role) => {
   const defaults = {};
 
   const modules = [
-    'employees', 'port', 'importerExporter', 'cnf', 'ipManagement', 'pi', 'packingList', 'trSetup', 
+    'employees', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 
     'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'paymentCollection', 'bank', 
-    'insurance', 'insurancePayment', 'lcManagement', 'returnProduct', 'backupRestore'
+    'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore'
   ];
 
   modules.forEach(m => {
@@ -177,7 +177,7 @@ const getDefaultPermissionsForRole = (role) => {
       }
     });
   } else if (roleLower === 'lc manager') {
-    const lcModules = ['port', 'importerExporter', 'cnf', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement'];
+    const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
     lcModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
     });
@@ -193,7 +193,7 @@ const getDefaultPermissionsForRole = (role) => {
     });
     defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false };
   } else if (roleLower === 'border manager') {
-    const borderModules = ['port', 'importerExporter', 'cnf', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement'];
+    const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
     borderModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
     });
@@ -2087,14 +2087,30 @@ apiRouter.get('/api/auth/check', async (req, res) => {
         });
       }
 
-      // Fetch fresh employee from MongoDB
-      const employee = await Employee.findOne({ employeeId: req.session.user.employeeId });
-      if (!employee) {
+      // Fetch all employees and find matching username (since employeeId is encrypted in data)
+      const employees = await Employee.find();
+      let matchedEmployee = null;
+      let decryptedEmp = null;
+      for (const emp of employees) {
+        try {
+          let decrypted = decryptData(emp.data);
+          if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
+            try { decrypted = decryptData(decrypted.data); } catch (e) { }
+          }
+          if (decrypted.employeeId === req.session.user.username) {
+            matchedEmployee = emp;
+            decryptedEmp = decrypted;
+            break;
+          }
+        } catch (e) {
+          console.error('Error decrypting employee in session check:', e);
+        }
+      }
+
+      if (!matchedEmployee) {
         req.session.destroy();
         return res.status(401).json({ authenticated: false, message: 'User no longer exists' });
       }
-
-      const decryptedEmp = decryptData(employee.data);
       
       // If employee is deactivated, destroy session
       if (decryptedEmp.status === 'Inactive') {

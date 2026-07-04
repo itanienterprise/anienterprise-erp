@@ -416,6 +416,10 @@ const ReturnProduct = ({ currentUser }) => {
     };
 
     const handleDelete = async (id) => {
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete return records');
+            return;
+        }
         if (window.confirm('Are you sure you want to delete this return record?')) {
             try {
                 const returnToDelete = returns.find(r => r._id === id);
@@ -1008,7 +1012,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                     >
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
-                                                    {isAdmin && (
+                                                    {canDelete && (
                                                         <button
                                                             onClick={() => handleDelete(ret._id)}
                                                             className="return-product-action-btn return-product-action-delete"
@@ -1102,7 +1106,7 @@ const ReturnProduct = ({ currentUser }) => {
                                                 >
                                                     <EditIcon className="w-4 h-4" /> Edit
                                                 </button>
-                                                {isAdmin && (
+                                                {canDelete && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleDelete(ret._id); }}
                                                         className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"

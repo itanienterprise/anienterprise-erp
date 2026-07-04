@@ -9,6 +9,7 @@ export const MODULES_LIST = [
     { key: 'port', label: 'Port Management' },
     { key: 'importerExporter', label: 'Importer / Exporter' },
     { key: 'cnf', label: 'C&F Management' },
+    { key: 'cnfPayment', label: 'C&F Payment' },
     { key: 'ipManagement', label: 'IP Management' },
     { key: 'pi', label: 'PI Management' },
     { key: 'packingList', label: 'Packing List' },
@@ -23,7 +24,9 @@ export const MODULES_LIST = [
     { key: 'bank', label: 'Bank Management' },
     { key: 'insurance', label: 'Insurance Management' },
     { key: 'insurancePayment', label: 'Insurance Payment' },
-    { key: 'lcManagement', label: 'LC & GatePass' },
+    { key: 'lcManagement', label: 'LC Management' },
+    { key: 'lcGp', label: 'LC GatePass' },
+    { key: 'lcExpense', label: 'LC Expense' },
     { key: 'returnProduct', label: 'Return Product' },
     { key: 'backupRestore', label: 'Backup & Restore' }
 ];
@@ -60,7 +63,7 @@ export const getDefaultPermissionsForRole = (role) => {
         });
     } else if (roleLower === 'lc manager') {
         // LC Manager can access port, cnf, ip, pi, packing list, tr, lc, warehouse, lcManagement
-        const lcModules = ['port', 'importerExporter', 'cnf', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement'];
+        const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
         lcModules.forEach(key => {
             defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
         });
@@ -79,7 +82,7 @@ export const getDefaultPermissionsForRole = (role) => {
         defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false };
     } else if (roleLower === 'border manager') {
         // Border Manager can access port, cnf, ip, lcReceive, warehouse, lcManagement
-        const borderModules = ['port', 'importerExporter', 'cnf', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement'];
+        const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
         borderModules.forEach(key => {
             defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
         });

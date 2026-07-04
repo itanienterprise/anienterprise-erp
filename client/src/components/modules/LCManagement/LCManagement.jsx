@@ -44,7 +44,7 @@ const getExpiryColorClass = (expiryDateStr) => {
     }
 };
 
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage, onRefresh }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage, canAddBill, onRefresh }) => {
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('history');
@@ -1007,7 +1007,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
                     {/* Right: Action Buttons */}
                     <div className="flex items-center gap-2 shrink-0">
-                        {showConsumption && activeTab === 'bill' && canManage && (
+                        {showConsumption && activeTab === 'bill' && canAddBill && (
                             <button
                                 onClick={() => setShowAddBillModal(true)}
                                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 transition-all transform active:scale-95"
@@ -1047,7 +1047,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                             </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                            {showConsumption && activeTab === 'bill' && canManage && (
+                            {showConsumption && activeTab === 'bill' && canAddBill && (
                                 <button
                                     onClick={() => setShowAddBillModal(true)}
                                     className="h-7 flex items-center justify-center gap-1 px-2.5 rounded-lg text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm transition-all transform active:scale-95 shrink-0 leading-none"
@@ -3333,9 +3333,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
     const [sortConfig, setSortConfig] = useState({ key: 'openingDate', direction: 'desc' });
 
-    const canAdd = hasPermission(currentUser, 'lcManagement', 'add');
-    const canEdit = hasPermission(currentUser, 'lcManagement', 'edit');
+    const canAdd    = hasPermission(currentUser, 'lcManagement', 'add');
+    const canEdit   = hasPermission(currentUser, 'lcManagement', 'edit');
     const canDelete = hasPermission(currentUser, 'lcManagement', 'delete');
+    const canSpecial = hasPermission(currentUser, 'lcManagement', 'special');
     const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
@@ -4264,8 +4265,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
     };
 
     const handleDelete = (id) => {
-        if (isDataEntry) {
-            alert('Forbidden: Data entry users are not allowed to delete LC records');
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete LC records');
             return;
         }
         setIdToDelete(id);
@@ -7650,7 +7651,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                     >
                                                                         <EditIcon className="w-5 h-5" />
                                                                     </button>
-                                                                    {!isDataEntry && (
+                                                                    {canDelete && (
                                                                         <button
                                                                             onClick={() => handleDelete(record._id)}
                                                                             className="text-gray-400 hover:text-red-600 transition-colors"
@@ -8606,7 +8607,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                 >
                                                                     <EditIcon className="w-4.5 h-4.5" />
                                                                 </button>
-                                                                {!isDataEntry && (
+                                                                {canDelete && (
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
                                                                         className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
@@ -8644,6 +8645,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     onEdit={handleEdit}
                     onEditAmendment={handleEditAmendment}
                     canManage={canManage}
+                    canAddBill={canSpecial}
                     onRefresh={fetchInitialData}
                 />
             )}

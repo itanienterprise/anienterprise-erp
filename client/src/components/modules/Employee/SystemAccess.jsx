@@ -99,8 +99,14 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
         setRole(emp.role || 'General Staff');
         setStatus(emp.status || 'Active');
         
-        // Load custom permissions or default to role defaults
-        setPermissions(emp.permissions || getDefaultPermissionsForRole(emp.role || 'General Staff'));
+        // Merge role defaults with stored custom permissions.
+        // This ensures newly-added modules get their role-default values
+        // even if the stored permissions object pre-dates those modules.
+        const roleDefaults = getDefaultPermissionsForRole(emp.role || 'General Staff');
+        const merged = emp.permissions && Object.keys(emp.permissions).length > 0
+            ? { ...roleDefaults, ...emp.permissions }
+            : roleDefaults;
+        setPermissions(merged);
         
         setSearchQuery(`${emp.name} (${emp.employeeId})`);
         setShowSuggestions(false);

@@ -1157,8 +1157,8 @@ function IPManagement({
     };
 
     const handleDelete = (id) => {
-        if (isDataEntry) {
-            alert('Forbidden: Data entry users are not allowed to delete IP records');
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete IP records');
             return;
         }
         onDeleteConfirm({ show: true, type: 'ip', id, isBulk: false });
@@ -1874,12 +1874,14 @@ function IPManagement({
                                 >
                                     Cancel
                                 </button>
+                                {canDelete && (
                                 <button
                                     onClick={() => onDeleteConfirm({ show: true, type: 'ip', id: null, isBulk: true })}
                                     className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors flex items-center"
                                 >
                                     <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
                                 </button>
+                                )}
                             </div>
                         </div>
                     )}
@@ -2023,7 +2025,7 @@ function IPManagement({
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(record); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit Record">
                                                                     <EditIcon className="w-5 h-5" />
                                                                 </button>
-                                                                {!isDataEntry && (
+                                                                {canDelete && (
                                                                     <button onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete Record">
                                                                         <TrashIcon className="w-5 h-5" />
                                                                     </button>
@@ -2173,7 +2175,7 @@ function IPManagement({
                                                                     </button>
                                                                 )}
                                                             </div>
-                                                            {canManage && !isDataEntry && (
+                                                            {canManage && canDelete && (
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
                                                                     className="w-full flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"

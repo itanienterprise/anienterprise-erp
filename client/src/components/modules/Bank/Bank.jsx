@@ -23,6 +23,7 @@ const Bank = ({ onDeleteConfirm }) => {
     const canDelete = hasPermission(currentUser, 'bank', 'delete');
     const cannotDelete = !canDelete;
     const cannotAddEdit = !canAdd && !canEdit;
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
     const [banks, setBanks] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [isLoading, setIsLoading] = useState(false);

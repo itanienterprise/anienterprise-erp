@@ -355,7 +355,7 @@ const InsurancePayment = () => {
     };
 
     const handleDeletePayment = (payment) => {
-        if (!isAdmin) {
+        if (!canDelete) {
             alert('Forbidden: You do not have permission to delete insurance payments');
             return;
         }

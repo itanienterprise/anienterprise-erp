@@ -48,11 +48,26 @@ export default function ProfitLoss({ salesRecords, products }) {
   }, []);
 
   const lcDropdownRef = useRef(null);
+  const filterPanelRef = useRef(null);
+  const filterButtonRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (lcDropdownRef.current && !lcDropdownRef.current.contains(event.target)) {
         setShowLcDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        filterPanelRef.current && !filterPanelRef.current.contains(event.target) &&
+        filterButtonRef.current && !filterButtonRef.current.contains(event.target)
+      ) {
+        setShowFilterPanel(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -498,16 +513,166 @@ export default function ProfitLoss({ salesRecords, products }) {
           </div>
         </div>
 
-        {/* Right column: Action buttons */}
+          {/* Right column: Action buttons */}
         <div className="flex items-center gap-2 justify-between sm:justify-end md:flex-1">
-          <button 
-            onClick={() => setShowFilterPanel(!showFilterPanel)} 
-            className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center border rounded-xl transition-all shadow-sm ${showFilterPanel ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white hover:bg-gray-50 text-gray-600 border-gray-200'}`}
-          >
-            <FunnelIcon className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={handlePrint} 
+          <div className="relative">
+            <button
+              ref={filterButtonRef}
+              onClick={() => setShowFilterPanel(!showFilterPanel)}
+              className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center gap-2 px-3 rounded-xl transition-all border font-medium text-sm ${
+                showFilterPanel || filterType !== 'monthly' || saleTypeFilter !== 'All' || selectedProduct !== 'All'
+                  ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                  : 'bg-white hover:bg-gray-50 text-gray-600 border-gray-200'
+              }`}
+            >
+              <FunnelIcon className={`w-4 h-4 ${showFilterPanel || filterType !== 'monthly' || saleTypeFilter !== 'All' || selectedProduct !== 'All' ? 'text-white' : 'text-gray-400'}`} />
+            </button>
+
+            {/* Floating Filter Panel */}
+            {showFilterPanel && (
+              <div
+                ref={filterPanelRef}
+                className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[420px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200"
+              >
+                <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-100">
+                  <h4 className="font-extrabold text-gray-900 text-base">Filter Report</h4>
+                  <button
+                    onClick={() => {
+                      setFilterType('monthly');
+                      setSelectedMonth(new Date().getMonth() + 1);
+                      setSelectedYear(new Date().getFullYear());
+                      setStartDate('');
+                      setEndDate('');
+                      setSaleTypeFilter('All');
+                      setSelectedProduct('All');
+                      setShowFilterPanel(false);
+                    }}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                  >
+                    RESET ALL
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Time Period */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Time Period</label>
+                    <select
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm bg-gray-50 hover:bg-gray-100/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                      <option value="custom">Custom Range</option>
+                      <option value="all">All Time</option>
+                    </select>
+                  </div>
+
+                  {/* Month / Year pickers */}
+                  {filterType === 'monthly' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Month</label>
+                        <select
+                          value={selectedMonth}
+                          onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          {Array.from({ length: 12 }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>
+                              {new Date(2026, i, 1).toLocaleString('en-US', { month: 'long' })}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Year</label>
+                        <select
+                          value={selectedYear}
+                          onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          {[2024, 2025, 2026, 2027, 2028].map(yr => (
+                            <option key={yr} value={yr}>{yr}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {filterType === 'yearly' && (
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Year</label>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                        className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        {[2024, 2025, 2026, 2027, 2028].map(yr => (
+                          <option key={yr} value={yr}>{yr}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {filterType === 'custom' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">From Date</label>
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">To Date</label>
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sale Type */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sale Type</label>
+                    <select
+                      value={saleTypeFilter}
+                      onChange={(e) => setSaleTypeFilter(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
+                    >
+                      <option value="All">All Types</option>
+                      <option value="General">General Sales Only</option>
+                      <option value="Border">Border Sales Only</option>
+                    </select>
+                  </div>
+
+                  {/* Product Filter */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Product</label>
+                    <select
+                      value={selectedProduct}
+                      onChange={(e) => setSelectedProduct(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
+                    >
+                      <option value="All">All Products</option>
+                      {uniqueProducts.map(pName => (
+                        <option key={pName} value={pName}>{pName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handlePrint}
             className="h-9 sm:h-10 px-4 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20 font-semibold text-xs tracking-wider transition-all"
           >
             <PrinterIcon className="w-4 h-4 text-white" />
@@ -530,126 +695,6 @@ export default function ProfitLoss({ salesRecords, products }) {
         </p>
       </div>
 
-      {/* Interactive Filters Panel */}
-      <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 print:hidden transition-all duration-300 ${showFilterPanel ? 'block opacity-100 animate-in fade-in duration-200' : 'hidden'}`}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          
-          {/* Quick Date Range */}
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Time Period</label>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="w-full px-3.5 py-2 text-sm bg-gray-50 hover:bg-gray-100/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
-            >
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-              <option value="custom">Custom Range</option>
-              <option value="all">All Time</option>
-            </select>
-          </div>
-
-          {/* Sub-date configurations */}
-          {filterType === 'monthly' && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Month</label>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                  className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <option key={i + 1} value={i + 1}>
-                      {new Date(2026, i, 1).toLocaleString('en-US', { month: 'long' })}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Year</label>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                  {[2024, 2025, 2026, 2027, 2028].map(yr => (
-                    <option key={yr} value={yr}>{yr}</option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-
-          {filterType === 'yearly' && (
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Year</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              >
-                {[2024, 2025, 2026, 2027, 2028].map(yr => (
-                  <option key={yr} value={yr}>{yr}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {filterType === 'custom' && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Start Date</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">End Date</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-            </>
-          )}
-
-          {/* Sale Type */}
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Sale Type</label>
-            <select
-              value={saleTypeFilter}
-              onChange={(e) => setSaleTypeFilter(e.target.value)}
-              className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
-            >
-              <option value="All">All Types</option>
-              <option value="General">General Sales Only</option>
-              <option value="Border">Border Sales Only</option>
-            </select>
-          </div>
-
-          {/* Product Filter */}
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Product</label>
-            <select
-              value={selectedProduct}
-              onChange={(e) => setSelectedProduct(e.target.value)}
-              className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
-            >
-              <option value="All">All Products</option>
-              {uniqueProducts.map(pName => (
-                <option key={pName} value={pName}>{pName}</option>
-              ))}
-            </select>
-          </div>
-
-        </div>
-      </div>
 
       {/* Metrics Grid Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

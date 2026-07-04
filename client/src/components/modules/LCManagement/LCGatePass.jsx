@@ -49,9 +49,9 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     const lcRef = useRef(null);
     const partyRef = useRef(null);
 
-    const canAdd = hasPermission(currentUser, 'lcManagement', 'add');
-    const canEdit = hasPermission(currentUser, 'lcManagement', 'edit');
-    const canDelete = hasPermission(currentUser, 'lcManagement', 'delete');
+    const canAdd = hasPermission(currentUser, 'lcGp', 'add');
+    const canEdit = hasPermission(currentUser, 'lcGp', 'edit');
+    const canDelete = hasPermission(currentUser, 'lcGp', 'delete');
     const canManage = canAdd || canEdit || canDelete;
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';

@@ -2068,7 +2068,7 @@ function App() {
               <span className="font-medium text-sm">Bank</span>
             </button>
           )}
-          {hasPermission(currentUser, 'cnf', 'view') && (
+          {(hasPermission(currentUser, 'cnf', 'view') || hasPermission(currentUser, 'cnfPayment', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('cnf')}
@@ -2082,20 +2082,25 @@ function App() {
               </button>
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${cnfDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
-                  <button
-                    onClick={() => { setCurrentView('indian-cnf-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Indian C&F</span>
-                  </button>
-                  <button
-                    onClick={() => { setCurrentView('bd-cnf-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bd-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                  >
-                    <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>BD C&F</span>
-                  </button>
+                  {hasPermission(currentUser, 'cnf', 'view') && (
+                    <>
+                      <button
+                        onClick={() => { setCurrentView('indian-cnf-section'); setSidebarOpen(false); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      >
+                        <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Indian C&F</span>
+                      </button>
+                      <button
+                        onClick={() => { setCurrentView('bd-cnf-section'); setSidebarOpen(false); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bd-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                      >
+                        <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>BD C&F</span>
+                      </button>
+                    </>
+                  )}
+                  {hasPermission(currentUser, 'cnfPayment', 'view') && (
                   <button
                     onClick={() => { setCurrentView('cnf-payment-section'); setSidebarOpen(false); }}
                     className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
@@ -2103,6 +2108,7 @@ function App() {
                     <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>C&F Payment</span>
                   </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -2132,7 +2138,7 @@ function App() {
               </div>
             </div>
           )}
-          {hasPermission(currentUser, 'pi', 'view') && (
+          {(hasPermission(currentUser, 'pi', 'view') || hasPermission(currentUser, 'packingList', 'view') || hasPermission(currentUser, 'trSetup', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('pi')}
@@ -2146,13 +2152,15 @@ function App() {
               </button>
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${piDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
-                  <button
-                    onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Proforma Invoice</span>
-                  </button>
+                  {hasPermission(currentUser, 'pi', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Proforma Invoice</span>
+                    </button>
+                  )}
                   {hasPermission(currentUser, 'packingList', 'view') && (
                     <button
                       onClick={() => { setCurrentView('packing-list-section'); setSidebarOpen(false); }}
@@ -2211,11 +2219,11 @@ function App() {
               </div>
             </div>
           )}
-          {hasPermission(currentUser, 'lcManagement', 'view') && (
+          {(hasPermission(currentUser, 'lcManagement', 'view') || hasPermission(currentUser, 'lcGp', 'view') || hasPermission(currentUser, 'lcExpense', 'view') || hasPermission(currentUser, 'lcReceive', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('lc')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'lc-management-section' || currentView === 'lc-gp-section' || currentView === 'lc-entry-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${['lc-management-section', 'lc-gp-section', 'lc-entry-section', 'lc-expense-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <div className="flex items-center">
                   <LCManagerIcon className="w-5 h-5 mr-3" />
@@ -2228,20 +2236,25 @@ function App() {
               </button>
               {lcDropdownOpen && (
                 <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
-                  <button
-                    onClick={() => { setCurrentView('lc-management-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-management-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <LCManagerIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>LC Open</span>
-                  </button>
-                  <button
-                    onClick={() => { setCurrentView('lc-gp-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-gp-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>LC G.P</span>
-                  </button>
+                  {hasPermission(currentUser, 'lcManagement', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('lc-management-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-management-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <LCManagerIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>LC Open</span>
+                    </button>
+                  )}
+                  {hasPermission(currentUser, 'lcGp', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('lc-gp-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-gp-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>LC G.P</span>
+                    </button>
+                  )}
+                  {hasPermission(currentUser, 'lcExpense', 'view') && (
                   <button
                     onClick={() => { setCurrentView('lc-expense-section'); setSidebarOpen(false); }}
                     className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-expense-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
@@ -2249,6 +2262,7 @@ function App() {
                     <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>LC Expense</span>
                   </button>
+                  )}
                   {hasPermission(currentUser, 'lcReceive', 'view') && (
                     <button
                       onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }}
@@ -2266,7 +2280,7 @@ function App() {
             </div>
           )}
 
-          {hasPermission(currentUser, 'stock', 'view') && (
+          {(hasPermission(currentUser, 'stock', 'view') || hasPermission(currentUser, 'product', 'view') || hasPermission(currentUser, 'warehouse', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('stock')}
@@ -2292,16 +2306,18 @@ function App() {
                       <span>Product</span>
                     </button>
                   )}
-                  <button
-                    onClick={() => { setCurrentView('stock-section'); setSidebarOpen(false); }}
-                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <div className="flex items-center">
-                      <BarChartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Stock Management</span>
-                    </div>
-                    {pendingModules.stockManagement && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                  </button>
+                  {hasPermission(currentUser, 'stock', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('stock-section'); setSidebarOpen(false); }}
+                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <div className="flex items-center">
+                        <BarChartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Stock Management</span>
+                      </div>
+                      {pendingModules.stockManagement && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                    </button>
+                  )}
                   {hasPermission(currentUser, 'warehouse', 'view') && (
                     <>
                       <button
@@ -2325,7 +2341,7 @@ function App() {
             </div>
           )}
 
-          {hasPermission(currentUser, 'customer', 'view') && (
+          {(hasPermission(currentUser, 'customer', 'view') || hasPermission(currentUser, 'paymentCollection', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('crm')}
@@ -2339,13 +2355,15 @@ function App() {
               </button>
               {crmDropdownOpen && (
                 <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
-                  <button
-                    onClick={() => { setCurrentView('customer-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Customer</span>
-                  </button>
+                  {hasPermission(currentUser, 'customer', 'view') && (
+                    <button
+                      onClick={() => { setCurrentView('customer-section'); setSidebarOpen(false); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Customer</span>
+                    </button>
+                  )}
                   {hasPermission(currentUser, 'paymentCollection', 'view') && (
                     <button
                       onClick={() => { setCurrentView('payment-collection-section'); setSidebarOpen(false); }}
@@ -2409,7 +2427,7 @@ function App() {
               </div>
             </div>
           )}
-          {hasPermission(currentUser, 'sales', 'special') && (
+          {hasPermission(currentUser, 'sales', 'view') && (
             <button
               onClick={() => { setCurrentView('profit-loss-section'); setSidebarOpen(false); }}
               className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'profit-loss-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}

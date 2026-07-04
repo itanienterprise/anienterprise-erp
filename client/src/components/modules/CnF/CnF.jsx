@@ -1099,7 +1099,13 @@ const CnF = ({
         setShowForm(true);
     };
 
-    const handleDelete = (id) => onDeleteConfirm({ show: true, type: 'cnf', id, isBulk: false });
+    const handleDelete = (id) => {
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete C&F records');
+            return;
+        }
+        onDeleteConfirm({ show: true, type: 'cnf', id, isBulk: false });
+    };
 
     const toggleSelection = (id) => {
         const newSelected = new Set(selectedItems);
@@ -1319,7 +1325,7 @@ const CnF = ({
                                                             {canManage && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="cnf-action-btn cnf-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                             )}
-                                                            {isAdmin && (
+                                                            {canDelete && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="cnf-action-btn cnf-action-delete"><TrashIcon className="w-5 h-5" /></button>
                                                             )}
                                                         </div>
@@ -1387,7 +1393,7 @@ const CnF = ({
                                                             {canManage && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(cnf); }} className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"><EditIcon className="w-4 h-4" /> Edit</button>
                                                             )}
-                                                            {isAdmin && (
+                                                            {canDelete && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(cnf._id); }} className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"><TrashIcon className="w-4 h-4" /></button>
                                                             )}
                                                         </div>

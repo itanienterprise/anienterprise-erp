@@ -5,6 +5,7 @@ import {
     SearchIcon, FunnelIcon, XIcon, BarChartIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, EyeIcon, CheckIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
+import { hasPermission } from '../../../utils/permissionHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './LCReceive.css';
@@ -481,12 +482,7 @@ function LCReceive({
     const brandRefs = useRef({});
     const portRef = useRef(null);
     const importerRef = useRef(null);
-    const canApprove = useMemo(() => {
-        if (!currentUser) return false;
-        if (currentUser.username === 'admin') return true;
-        const role = (currentUser.role || '').toLowerCase();
-        return ['admin', 'incharge', 'sales manager'].includes(role);
-    }, [currentUser]);
+    const canApprove = hasPermission(currentUser, 'lcReceive', 'special');
 
     // Only the system admin account or employees with the Admin role can edit/delete accepted entries
     const canEditDelete = useMemo(() => {
@@ -499,7 +495,6 @@ function LCReceive({
     const canEditRequestedStock = (entry) => {
         if (!currentUser) return false;
         const role = (currentUser.role || '').toLowerCase();
-        if (role === 'lc manager') return false;
         if (currentUser.username === 'admin') return true;
         if (role === 'admin') return true;
         const owner = entry?.entries?.[0]?.requestedByUsername || entry?.requestedByUsername;

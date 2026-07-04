@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon } from '../../Icons';
 import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
+import { hasPermission } from '../../../utils/permissionHelper';
 // import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
@@ -232,12 +233,12 @@ const SaleManagement = ({
         return (currentUser.role || '').toLowerCase() === 'border manager';
     }, [currentUser]);
 
-    const canApprove = useMemo(() => {
-        if (!currentUser) return false;
-        if (currentUser.username === 'admin') return true;
-        const role = (currentUser.role || '').toLowerCase();
-        return ['admin', 'incharge', 'sales manager'].includes(role);
-    }, [currentUser]);
+    const canApprove = hasPermission(currentUser, 'sales', 'special');
+
+    // Fine-grained permission flags from System Access
+    const canAdd    = hasPermission(currentUser, 'sales', 'add');
+    const canEdit   = hasPermission(currentUser, 'sales', 'edit');
+    const canDelete = hasPermission(currentUser, 'sales', 'delete');
 
     const canUserEditSale = (sale) => {
         if (isFullAdmin) return true;
@@ -2920,6 +2921,7 @@ const SaleManagement = ({
                             <span>Report</span>
                         </button>
 
+                            {canAdd && (
                             <button
                                 onClick={() => {
                                     resetForm();
@@ -2930,6 +2932,7 @@ const SaleManagement = ({
                             >
                                 <span className="flex items-center gap-2"><span className="text-xl leading-none">+</span> {saleType === 'Border' ? 'New G.P' : 'Add Sale'}</span>
                             </button>
+                            )}
                     </div>
                 )}
             </div>
@@ -4481,11 +4484,11 @@ const SaleManagement = ({
                                                                     <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                                 )}
                                                                 <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
-                                                                {isFullAdmin && (
-                                                                    <>
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
-                                                                    </>
+                                                                {canEdit && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                )}
+                                                                {canDelete && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
                                                                 )}
                                                             </>
                                                         )}
@@ -4664,11 +4667,11 @@ const SaleManagement = ({
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                             )}
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
-                                                            {isFullAdmin && (
-                                                                <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
-                                                                </>
+                                                            {canEdit && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                            )}
+                                                            {canDelete && (
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
                                                             )}
                                                         </>
                                                     )}
@@ -4784,11 +4787,11 @@ const SaleManagement = ({
                                                             {(isFullAdmin || isIncharge || isSalesManager || isBorderManager) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
                                                             )}
-                                                            {isFullAdmin && (
+                                                            {canEdit && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
                                                             )}
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
-                                                            {isFullAdmin && (
+                                                            {canDelete && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
                                                             )}
                                                         </>

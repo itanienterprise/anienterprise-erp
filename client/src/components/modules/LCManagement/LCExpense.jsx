@@ -6,9 +6,9 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
-    const canAdd = hasPermission(currentUser, 'lcManagement', 'add');
-    const canEdit = hasPermission(currentUser, 'lcManagement', 'edit');
-    const canDelete = hasPermission(currentUser, 'lcManagement', 'delete');
+    const canAdd = hasPermission(currentUser, 'lcExpense', 'add');
+    const canEdit = hasPermission(currentUser, 'lcExpense', 'edit');
+    const canDelete = hasPermission(currentUser, 'lcExpense', 'delete');
     const cannotDelete = !canDelete;
     const cannotAddEdit = !canAdd && !canEdit;
     const [expenses, setExpenses] = useState([]);
@@ -402,8 +402,8 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (cannotAddEdit) {
-            alert('Forbidden: Border managers are not allowed to add or edit LC expenses');
+        if (isEditMode ? !canEdit : !canAdd) {
+            alert(`Forbidden: You do not have permission to ${isEditMode ? 'edit' : 'add'} LC expenses`);
             return;
         }
         setIsSubmitting(true);
@@ -431,8 +431,8 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     };
 
     const handleEdit = (expense) => {
-        if (cannotAddEdit) {
-            alert('Forbidden: Border managers are not allowed to edit LC expenses');
+        if (!canEdit) {
+            alert('Forbidden: You do not have permission to edit LC expenses');
             return;
         }
         setFormData({
@@ -642,7 +642,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                             )}
                         </div>
 
-                        {!cannotAddEdit && (
+                        {canAdd && (
                             <button
                                 onClick={() => setShowAddModal(true)}
                                 className="w-full md:w-auto px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
@@ -707,7 +707,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-2">
-                                                    {!cannotAddEdit && (
+                                                    {canEdit && (
                                                         <button
                                                             onClick={() => handleEdit(exp)}
                                                             className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all active:scale-90"
@@ -812,7 +812,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                     <span className="font-semibold text-gray-600 text-[11px] break-words">{exp.remarks || '-'}</span>
 
                                                     <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
-                                                        {!cannotAddEdit && (
+                                                        {canEdit && (
                                                             <button
                                                                 onClick={() => handleEdit(exp)}
                                                                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"

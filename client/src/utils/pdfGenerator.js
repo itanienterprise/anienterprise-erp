@@ -3683,7 +3683,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
 
         // Right Side: Date Range, Printed On
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        const rightColX = pageWidth - margin - 50;
+        const rightColX = pageWidth - margin - 70;
 
         doc.setFont('helvetica', 'bold');
         doc.text("Printed on:", rightColX, yPos);

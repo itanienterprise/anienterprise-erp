@@ -135,8 +135,8 @@ function TRSetup({ onDeleteConfirm, currentUser }) {
     };
 
     const handleDelete = (id) => {
-        if (isDataEntry) {
-            alert('Forbidden: Data entry users are not allowed to delete TR records');
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete TR records');
             return;
         }
         onDeleteConfirm({ show: true, type: 'tr-setup', id, isBulk: false });
@@ -330,7 +330,7 @@ function TRSetup({ onDeleteConfirm, currentUser }) {
                                                     <EditIcon className="w-4 h-4" />
                                                     Edit
                                                 </button>
-                                                {!isDataEntry && (
+                                                {canDelete && (
                                                     <button
                                                         type="button"
                                                         onClick={() => handleDelete(record._id)}
