@@ -3768,11 +3768,11 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             margin: { left: tableMargin, right: tableMargin },
             columnStyles: {
                 0: { cellWidth: 18, halign: 'center' }, // Date
-                1: { cellWidth: 15, halign: 'center' }, // LC No
-                2: { cellWidth: 22, halign: 'left', overflow: 'hidden' }, // Importer
-                3: { cellWidth: 22, halign: 'left', overflow: 'hidden' },   // Exporter
-                4: { cellWidth: 16, halign: 'left' },   // Product
-                5: { cellWidth: 20, halign: 'center' }, // Port
+                1: { cellWidth: 14, halign: 'center' }, // LC No
+                2: { cellWidth: 21, halign: 'left', overflow: 'hidden' }, // Importer
+                3: { cellWidth: 21, halign: 'left', overflow: 'hidden' },   // Exporter
+                4: { cellWidth: 20, halign: 'left' },   // Product
+                5: { cellWidth: 20, halign: 'center', overflow: 'linebreak' }, // Port
                 6: { cellWidth: 12, halign: 'center' }, // Trucks
                 7: { cellWidth: 16, halign: 'center' }, // BOE No
                 8: { cellWidth: 20, halign: 'right' },  // QTY
