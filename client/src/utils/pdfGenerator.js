@@ -4785,14 +4785,14 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
                 2: { cellWidth: 24, halign: 'center', fontStyle: 'bold' }, // LC No
                 3: { cellWidth: 24, overflow: "hidden" }, // Importer
                 4: { cellWidth: 20, overflow: "hidden" }, // Exporter
-                5: { cellWidth: 22, overflow: "hidden" }, // Bank
+                5: { cellWidth: 27, overflow: "hidden" }, // Bank
                 6: { cellWidth: 20, halign: 'center' }, // Port
                 7: { cellWidth: 23, halign: 'left' }, // Product
                 8: { cellWidth: 23, halign: 'right' }, // Qty
                 9: { cellWidth: 23, halign: 'right' }, // LC Receive
                 10: { cellWidth: 23, halign: 'right' }, // LC Balance
-                11: { cellWidth: 24, halign: 'right' }, // Total Value
-                12: { cellWidth: 24, halign: 'right' } // Exp
+                11: { cellWidth: 22, halign: 'right' }, // Total Value
+                12: { cellWidth: 22, halign: 'right' } // Exp
             },
             margin: { left: margin, right: margin }
         });
