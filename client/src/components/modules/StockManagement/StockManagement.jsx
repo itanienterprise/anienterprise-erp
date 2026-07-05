@@ -248,7 +248,41 @@ const StockManagement = ({
                 const wTruck = normalizeStr(w.truckNo);
                 const wProd = normalizeStr(w.productName || w.product);
                 const wBrand = normalizeStr(w.brand);
-                return wLC === targetLC && wProd === targetProd && wBrand === targetBrand && (wTruck === targetTruck || (!wTruck && !targetTruck));
+                const isBasicMatch = wLC === targetLC && wProd === targetProd && wBrand === targetBrand && (wTruck === targetTruck || (!wTruck && !targetTruck));
+                if (!isBasicMatch) return false;
+
+                // Date-aware matching to prevent duplicate assignment when same LC/Truck/Brand/Prod has multiple arrival dates
+                const wDateVal = w.date || w.createdAt || w.updatedAt;
+                const wDate = wDateVal ? wDateVal.toString().split('T')[0] : '';
+                const itemDate = (item.date || '').split('T')[0];
+                if (wDate && itemDate && wDate < itemDate) return false;
+
+                // Find all matching stock arrivals
+                const otherMatchingStocks = filteredRaw.filter(s => {
+                    const sLC = normalizeStr(s.lcNo);
+                    const sTruck = normalizeStr(s.truckNo);
+                    const sProd = normalizeStr(s.productName || s.product);
+                    const sBrand = normalizeStr(s.brand);
+                    return sLC === wLC && sProd === wProd && sBrand === wBrand && (sTruck === wTruck || (!sTruck && !wTruck));
+                });
+
+                // Find the latest arrival that happened before or on the transfer date
+                let bestStock = null;
+                let bestStockDate = '';
+                for (const s of otherMatchingStocks) {
+                    const sDate = (s.date || '').split('T')[0];
+                    if (wDate && sDate && sDate <= wDate) {
+                        if (!bestStockDate || sDate > bestStockDate) {
+                            bestStock = s;
+                            bestStockDate = sDate;
+                        }
+                    }
+                }
+
+                if (bestStock) {
+                    return bestStock._id === item._id;
+                }
+                return true;
             });
 
             const whOnlyQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whQty) || 0), 0);
@@ -3219,24 +3253,8 @@ const StockManagement = ({
                                         return sum + (h.entries || []).reduce((eSum, e) => eSum + (parseFloat(e.inHousePacket) || 0), 0);
                                     }, 0);
 
-                                    // Sum warehouse entries only
-                                    const filteredWhOnly = (warehouseData || []).filter(w => {
-                                        if (w.recordType !== 'warehouse') return false;
-                                        
-                                        const wProd = (w.productName || w.product || '').trim().toLowerCase();
-                                        if (wProd !== productName) return false;
-                                        
-                                        const key = `${(w.lcNo || '').trim()}_${(w.truckNo || '').trim()}`;
-                                        if (!shownLCTrucks.has(key)) return false;
-
-                                        if (historyFilters.brand && (w.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return false;
-                                        if (historyFilters.warehouse && (w.whName || '').trim() !== historyFilters.warehouse) return false;
-                                        
-                                        return true;
-                                    });
-
-                                    const tIHQty = historyInHouseQty + filteredWhOnly.reduce((sum, r) => sum + (parseFloat(r.whQty) || 0), 0);
-                                    const tIHPkt = historyInHousePkt + filteredWhOnly.reduce((sum, r) => sum + (parseFloat(r.whPkt) || 0), 0);
+                                    const tIHQty = historyInHouseQty;
+                                    const tIHPkt = historyInHousePkt;
 
                                     return (
                                         <div className="space-y-6">
