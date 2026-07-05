@@ -4424,7 +4424,7 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
             columnStyles: {
                 0: { cellWidth: 18, halign: 'center' }, // Date
                 1: { cellWidth: 24, halign: 'center' }, // LC No
-                2: { cellWidth: 25, halign: 'left', overflow: 'visible', noWrap: true }, // Importer (No wrap)
+                2: { cellWidth: 25, halign: 'left', overflow: 'hidden' }, // Importer (Hide overlap)
                 3: { cellWidth: 20, halign: 'left' }, // Product
                 4: { cellWidth: 20, halign: 'center' }, // Port
                 5: { cellWidth: 20, halign: 'right' }, // QTY
