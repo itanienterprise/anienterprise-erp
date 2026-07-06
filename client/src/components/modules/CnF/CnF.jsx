@@ -1692,6 +1692,19 @@ const CnF = ({
                                                             placeholder={historyFilters.lcNo || "Select LC No..."}
                                                             className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
                                                         />
+                                                        {historyFilters.lcNo && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setHistoryFilters(prev => ({ ...prev, lcNo: '' }));
+                                                                    setHistoryFilterSearchInputs(prev => ({ ...prev, lcNo: '' }));
+                                                                }}
+                                                                className="absolute right-8 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200/50 transition-colors"
+                                                            >
+                                                                <XIcon className="w-3 h-3" />
+                                                            </button>
+                                                        )}
                                                         <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                                                     </div>
                                                     {historyFilterDropdownOpen.lcNo && (() => {
@@ -1740,6 +1753,19 @@ const CnF = ({
                                                             placeholder={historyFilters.productName || "Select Product..."}
                                                             className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
                                                         />
+                                                        {historyFilters.productName && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setHistoryFilters(prev => ({ ...prev, productName: '' }));
+                                                                    setHistoryFilterSearchInputs(prev => ({ ...prev, product: '' }));
+                                                                }}
+                                                                className="absolute right-8 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200/50 transition-colors"
+                                                            >
+                                                                <XIcon className="w-3 h-3" />
+                                                            </button>
+                                                        )}
                                                         <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                                                     </div>
                                                     {historyFilterDropdownOpen.product && (() => {
@@ -1788,6 +1814,19 @@ const CnF = ({
                                                             placeholder={historyFilters.port || "Select Port..."}
                                                             className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all pr-8"
                                                         />
+                                                        {historyFilters.port && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setHistoryFilters(prev => ({ ...prev, port: '' }));
+                                                                    setHistoryFilterSearchInputs(prev => ({ ...prev, port: '' }));
+                                                                }}
+                                                                className="absolute right-8 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200/50 transition-colors"
+                                                            >
+                                                                <XIcon className="w-3 h-3" />
+                                                            </button>
+                                                        )}
                                                         <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                                                     </div>
                                                     {historyFilterDropdownOpen.port && (() => {
