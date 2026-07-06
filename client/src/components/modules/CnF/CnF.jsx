@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon, BarChartIcon, ReceiptIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon, BarChartIcon, ReceiptIcon, TruckIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateCnFHistoryReportPDF, generateCnFAgentListReportPDF, generateCnFExpenseReportPDF, generateCnFPaymentReportPDF, generateCnFAllReportPDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
@@ -1827,102 +1827,133 @@ const CnF = ({
                         <div className="flex-1 overflow-auto p-4 md:p-8 pt-6 md:pt-8 hide-scrollbar min-h-0">
                             {historyLoading ? <div className="flex justify-center p-12"><div className="w-8 h-8 border-2 border-t-blue-600 rounded-full animate-spin"></div></div> : (
                                 <div className="space-y-6">
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                                        {/* Total Bill Card */}
-                                        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                                <div className="space-y-1 min-w-0 flex-1 w-full">
-                                                    <div className="flex items-center justify-between sm:block">
-                                                        <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest opacity-70 truncate">Total Bill</p>
-                                                        <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 sm:hidden shrink-0">
-                                                            <BarChartIcon className="w-4 h-4" />
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                        <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
-                                                            {(
-                                                                historyRecords.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0) +
-                                                                expenseRecords.reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0)
-                                                            ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                        </h3>
-                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
-                                                    </div>
-                                                </div>
-                                                <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-100 items-center justify-center text-purple-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
-                                                    <BarChartIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                                                </div>
-                                            </div>
-                                        </div>
+                                    {(() => {
+                                        const totalTrucks = filteredHistory.reduce((acc, row) => acc + (parseFloat(row.truck) || 0), 0);
+                                        const totalBill = filteredHistory.reduce((acc, row) => acc + (parseFloat(row.totalCommission) || 0), 0) +
+                                                          filteredExpenses.reduce((acc, exp) => acc + (parseFloat(exp.amount) || 0), 0);
+                                        const totalPaid = filteredPayments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
+                                        const totalDiscount = filteredPayments.reduce((acc, p) => acc + (parseFloat(p.discount) || 0), 0);
+                                        const currentBalance = totalBill - (totalPaid + totalDiscount);
 
-                                        {/* Total Paid Card */}
-                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                                <div className="space-y-1 min-w-0 flex-1 w-full">
-                                                    <div className="flex items-center justify-between sm:block">
-                                                        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70 truncate">Total Paid</p>
-                                                        <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 sm:hidden shrink-0">
-                                                            <DollarSignIcon className="w-4 h-4" />
+                                        return (
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+                                                {/* Total Truck Card */}
+                                                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
+                                                            <div className="flex items-center justify-between sm:block">
+                                                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70 truncate">Total Truck</p>
+                                                                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 sm:hidden shrink-0">
+                                                                    <TruckIcon className="w-4 h-4" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
+                                                                    {totalTrucks.toLocaleString('en-IN')}
+                                                                </h3>
+                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">Units</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                            <TruckIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                        <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
-                                                            {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0).toLocaleString('en-IN')}
-                                                        </h3>
-                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
-                                                    </div>
                                                 </div>
-                                                <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
-                                                    <DollarSignIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                                                </div>
-                                            </div>
-                                        </div>
 
-                                        {/* Total Discount Card */}
-                                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                                <div className="space-y-1 min-w-0 flex-1 w-full">
-                                                    <div className="flex items-center justify-between sm:block">
-                                                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70 truncate">Total Discount</p>
-                                                        <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 sm:hidden shrink-0">
-                                                            <ReceiptIcon className="w-4 h-4" />
+                                                {/* Total Bill Card */}
+                                                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
+                                                            <div className="flex items-center justify-between sm:block">
+                                                                <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest opacity-70 truncate">Total Bill</p>
+                                                                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 sm:hidden shrink-0">
+                                                                    <BarChartIcon className="w-4 h-4" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
+                                                                    {totalBill.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </h3>
+                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-100 items-center justify-center text-purple-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                            <BarChartIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                        <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
-                                                            {paymentRecords.reduce((acc, p) => acc + (parseFloat(p.discount) || 0), 0).toLocaleString('en-IN')}
-                                                        </h3>
-                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
-                                                    </div>
                                                 </div>
-                                                <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-100 items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
-                                                    <ReceiptIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                                                </div>
-                                            </div>
-                                        </div>
 
-                                        {/* Balance Card */}
-                                        <div className="bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
-                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                                                <div className="space-y-1 min-w-0 flex-1 w-full">
-                                                    <div className="flex items-center justify-between sm:block">
-                                                        <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70 truncate">Current Balance</p>
-                                                        <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 sm:hidden shrink-0">
-                                                            <TrendingUpIcon className="w-4 h-4" />
+                                                {/* Total Paid Card */}
+                                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
+                                                            <div className="flex items-center justify-between sm:block">
+                                                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest opacity-70 truncate">Total Paid</p>
+                                                                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 sm:hidden shrink-0">
+                                                                    <DollarSignIcon className="w-4 h-4" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
+                                                                    {totalPaid.toLocaleString('en-IN')}
+                                                                </h3>
+                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 items-center justify-center text-blue-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                            <DollarSignIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-baseline gap-0.5 sm:gap-1">
-                                                        <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
-                                                            {(viewData?.totalBalance || 0).toLocaleString('en-IN')}
-                                                        </h3>
-                                                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
+                                                </div>
+
+                                                {/* Total Discount Card */}
+                                                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
+                                                            <div className="flex items-center justify-between sm:block">
+                                                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest opacity-70 truncate">Total Discount</p>
+                                                                <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 sm:hidden shrink-0">
+                                                                    <ReceiptIcon className="w-4 h-4" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
+                                                                    {totalDiscount.toLocaleString('en-IN')}
+                                                                </h3>
+                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-100 items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                            <ReceiptIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-rose-100 items-center justify-center text-rose-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
-                                                    <TrendingUpIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+
+                                                {/* Balance Card */}
+                                                <div className="bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100/50 p-4 sm:p-5 rounded-2xl shadow-sm group hover:shadow-md transition-all duration-300">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                                        <div className="space-y-1 min-w-0 flex-1 w-full">
+                                                            <div className="flex items-center justify-between sm:block">
+                                                                <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest opacity-70 truncate">Current Balance</p>
+                                                                <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 sm:hidden shrink-0">
+                                                                    <TrendingUpIcon className="w-4 h-4" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                                <h3 className="text-sm xs:text-base sm:text-2xl font-black text-gray-900 leading-none truncate sm:truncate">
+                                                                    {currentBalance.toLocaleString('en-IN')}
+                                                                </h3>
+                                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">TK</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-rose-100 items-center justify-center text-rose-600 group-hover:scale-110 transition-transform shrink-0 ml-2">
+                                                            <TrendingUpIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
 
 
                                     {historyViewMode === 'earnings' ? (
