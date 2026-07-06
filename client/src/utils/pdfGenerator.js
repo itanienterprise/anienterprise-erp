@@ -3708,10 +3708,22 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             infoYOffset += 6;
         }
 
+        // Calculate trucks by port
+        const portTrucksMap = {};
+        reportData.forEach(row => {
+            const portName = (row.port || '-').trim();
+            const trucks = parseFloat(row.truck) || 0;
+            if (trucks > 0 && portName !== '-') {
+                portTrucksMap[portName] = (portTrucksMap[portName] || 0) + trucks;
+            }
+        });
+        const portTrucksList = Object.entries(portTrucksMap).sort((a, b) => b[1] - a[1]);
+
         // Draw Single Summary Card just below "Printed on" info row
         const cardY = yPos + 1;
-        const cardWidth = 50;
-        const cardHeight = 15;
+        const cardWidth = 60;
+        const cardLineHeight = 5;
+        const cardHeight = 15 + (portTrucksList.length * cardLineHeight);
         const cardX = (pageWidth - cardWidth) / 2;
 
         // Draw background/border for the card
@@ -3724,14 +3736,27 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         doc.setFontSize(9);
         doc.setTextColor(0);
         doc.setFont('helvetica', 'bold');
-        doc.text("Total Trucks", cardX + 3, cardY + 5.5);
-        doc.text("Total Balance", cardX + 3, cardY + 10.5);
 
-        doc.text(":", cardX + 26, cardY + 5.5);
-        doc.text(":", cardX + 26, cardY + 10.5);
+        // Draw Port breakdown inside the card first
+        let currentY = cardY + 0.5;
+        portTrucksList.forEach(([port, trucks]) => {
+            currentY += cardLineHeight;
+            const formattedPort = port.charAt(0).toUpperCase() + port.slice(1).toLowerCase();
+            doc.text(formattedPort, cardX + 3, currentY);
+            doc.text(":", cardX + 28, currentY);
+            doc.text(trucks.toString(), cardX + 31, currentY);
+        });
 
-        doc.text(totalTrucks.toString(), cardX + 29, cardY + 5.5);
-        doc.text(totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), cardX + 29, cardY + 10.5);
+        // Draw Total Trucks and Total Balance below
+        currentY += cardLineHeight;
+        doc.text("Total Trucks", cardX + 3, currentY);
+        doc.text(":", cardX + 28, currentY);
+        doc.text(totalTrucks.toString(), cardX + 31, currentY);
+
+        currentY += cardLineHeight;
+        doc.text("Total Balance", cardX + 3, currentY);
+        doc.text(":", cardX + 28, currentY);
+        doc.text(totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), cardX + 31, currentY);
 
         const totalTableWidth = 18 + 15 + 24 + 24 + 16 + 20 + 12 + 16 + 16 + 16 + 23; // 200mm (Fits well on portrait A4 width of 210mm)
         const tableMargin = (pageWidth - totalTableWidth) / 2;
@@ -3756,7 +3781,7 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 fontSize: 9.0,
                 cellPadding: 1.2,
                 lineColor: [0, 0, 0],
-                lineWidth: 0.15,
+                lineWidth: 0.35,
                 textColor: [0, 0, 0],
                 valign: 'middle'
             },
@@ -3766,13 +3791,13 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
                 fontStyle: 'bold',
                 halign: 'center',
                 valign: 'middle',
-                lineWidth: 0.15
+                lineWidth: 0.35
             },
             footStyles: {
                 fillColor: [240, 240, 240],
                 textColor: [0, 0, 0],
                 fontStyle: 'bold',
-                lineWidth: 0.15
+                lineWidth: 0.35
             },
             margin: { left: tableMargin, right: tableMargin },
             columnStyles: {
