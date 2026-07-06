@@ -3741,22 +3741,22 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
         let currentY = cardY + 0.5;
         portTrucksList.forEach(([port, trucks]) => {
             currentY += cardLineHeight;
-            const formattedPort = port.charAt(0).toUpperCase() + port.slice(1).toLowerCase();
+            const formattedPort = port.toUpperCase();
             doc.text(formattedPort, cardX + 3, currentY);
-            doc.text(":", cardX + 28, currentY);
-            doc.text(trucks.toString(), cardX + 31, currentY);
+            doc.text(":", cardX + 33, currentY);
+            doc.text(trucks.toString(), cardX + 36, currentY);
         });
 
         // Draw Total Trucks and Total Balance below
         currentY += cardLineHeight;
-        doc.text("Total Trucks", cardX + 3, currentY);
-        doc.text(":", cardX + 28, currentY);
-        doc.text(totalTrucks.toString(), cardX + 31, currentY);
+        doc.text("TOTAL TRUCKS", cardX + 3, currentY);
+        doc.text(":", cardX + 33, currentY);
+        doc.text(totalTrucks.toString(), cardX + 36, currentY);
 
         currentY += cardLineHeight;
-        doc.text("Total Balance", cardX + 3, currentY);
-        doc.text(":", cardX + 28, currentY);
-        doc.text(totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), cardX + 31, currentY);
+        doc.text("TOTAL BALANCE", cardX + 3, currentY);
+        doc.text(":", cardX + 33, currentY);
+        doc.text(totalCommissionVal.toLocaleString('en-IN', { minimumFractionDigits: 2 }), cardX + 36, currentY);
 
         const totalTableWidth = 18 + 15 + 24 + 24 + 16 + 20 + 12 + 16 + 16 + 16 + 23; // 200mm (Fits well on portrait A4 width of 210mm)
         const tableMargin = (pageWidth - totalTableWidth) / 2;
