@@ -1909,10 +1909,31 @@ const SaleManagement = ({
     const handleLcSelect = (lc) => {
         if (saleType === 'Border') {
             if (!lc) {
-                setFormData(prev => ({
-                    ...prev,
-                    lcNo: ''
-                }));
+                setFormData(prev => {
+                    const newData = {
+                        ...prev,
+                        lcNo: ''
+                    };
+                    if (newData.items.length === 1) {
+                        newData.items[0] = {
+                            ...newData.items[0],
+                            productId: '',
+                            productName: '',
+                            brand: '',
+                            brandEntries: [{
+                                brand: '',
+                                brandName: '',
+                                quantity: '',
+                                bag: '',
+                                bagSize: '',
+                                truck: '',
+                                unitPrice: '',
+                                totalAmount: ''
+                            }]
+                        };
+                    }
+                    return newData;
+                });
                 setLcSearch('');
             } else {
                 setFormData(prev => {
@@ -1926,18 +1947,31 @@ const SaleManagement = ({
                     if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
                     if (!newData.port && lc.port) newData.port = lc.port;
 
-                    // If items array is empty or has only one empty item, populate the first item's product
-                    if (newData.items.length === 1 && !newData.items[0].productId && lc.productName) {
+                    // Always overwrite product and reset brand according to the new LC
+                    if (newData.items.length === 1 && lc.productName) {
                         const productObj = products.find(p => p.name === lc.productName);
+                        const firstItem = {
+                            ...newData.items[0],
+                            brand: '',
+                            brandEntries: [{
+                                brand: '',
+                                brandName: '',
+                                quantity: '',
+                                bag: '',
+                                bagSize: '',
+                                truck: '',
+                                unitPrice: '',
+                                totalAmount: ''
+                            }]
+                        };
                         if (productObj) {
-                            newData.items[0] = {
-                                ...newData.items[0],
-                                productId: productObj._id,
-                                productName: productObj.name
-                            };
+                            firstItem.productId = productObj._id;
+                            firstItem.productName = productObj.name;
                         } else {
-                            newData.items[0].productName = lc.productName;
+                            firstItem.productId = '';
+                            firstItem.productName = lc.productName;
                         }
+                        newData.items[0] = firstItem;
                     }
 
                     return newData;
@@ -1952,7 +1986,20 @@ const SaleManagement = ({
                     const newItems = [...prev.items];
                     newItems[activeItemIndex] = {
                         ...newItems[activeItemIndex],
-                        lcNo: ''
+                        lcNo: '',
+                        productId: '',
+                        productName: '',
+                        brand: '',
+                        brandEntries: [{
+                            brand: '',
+                            brandName: '',
+                            quantity: '',
+                            bag: '',
+                            bagSize: '',
+                            truck: '',
+                            unitPrice: '',
+                            totalAmount: ''
+                        }]
                     };
                     return { ...prev, items: newItems };
                 });
@@ -1960,7 +2007,37 @@ const SaleManagement = ({
             } else {
                 setFormData(prev => {
                     const newItems = [...prev.items];
-                    const item = { ...newItems[activeItemIndex], lcNo: lc.lcNo };
+                    const item = { ...newItems[activeItemIndex] };
+                    
+                    item.lcNo = lc.lcNo;
+
+                    // Always overwrite product and reset brand according to the new LC
+                    if (lc.productName) {
+                        const productObj = products.find(p => p.name === lc.productName);
+                        if (productObj) {
+                            item.productId = productObj._id;
+                            item.productName = productObj.name;
+                        } else {
+                            item.productId = '';
+                            item.productName = lc.productName;
+                        }
+                    } else {
+                        item.productId = '';
+                        item.productName = '';
+                    }
+
+                    // Reset brand entries
+                    item.brand = '';
+                    item.brandEntries = [{
+                        brand: '',
+                        brandName: '',
+                        quantity: '',
+                        bag: '',
+                        bagSize: '',
+                        truck: '',
+                        unitPrice: '',
+                        totalAmount: ''
+                    }];
 
                     const newData = {
                         ...prev,
@@ -1970,17 +2047,6 @@ const SaleManagement = ({
                     if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
                     if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
                     if (!newData.port && lc.port) newData.port = lc.port;
-
-                    // Populate the active item's product
-                    if (!item.productId && lc.productName) {
-                        const productObj = products.find(p => p.name === lc.productName);
-                        if (productObj) {
-                            item.productId = productObj._id;
-                            item.productName = productObj.name;
-                        } else {
-                            item.productName = lc.productName;
-                        }
-                    }
 
                     newItems[activeItemIndex] = item;
                     return newData;
@@ -3750,6 +3816,7 @@ const SaleManagement = ({
                                                             setProductSearch(e.target.value);
                                                             setActiveDropdown('product');
                                                             setActiveItemIndex(index);
+                                                            setHighlightedIndex(-1);
                                                             handleItemInputChange(index, null, { target: { name: 'productName', value: e.target.value } });
                                                         }}
                                                         required
@@ -3759,6 +3826,7 @@ const SaleManagement = ({
                                                             setProductSearch(item.productName || '');
                                                             setActiveDropdown('product');
                                                             setActiveItemIndex(index);
+                                                            setHighlightedIndex(-1);
                                                         }}
                                                         onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.productName) && handleDropdownKeyDown(e, 'product', getFilteredProducts(), handleProductSelect)}
                                                         className={`sale-mgmt-input pr-14 ${item.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.productName) ? 'bg-gray-50' : ''}`}
@@ -3789,12 +3857,13 @@ const SaleManagement = ({
                                                     </div>
                                                     {activeDropdown === 'product' && activeItemIndex === index && getFilteredProducts().length > 0 && (
                                                         <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                            {getFilteredProducts().map((p) => (
+                                                            {getFilteredProducts().map((p, idx) => (
                                                                 <button
-                                                                    key={p._id}
+                                                                    key={p._id || `prod-${idx}`}
                                                                     type="button"
                                                                     onClick={() => handleProductSelect(p)}
-                                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 font-medium text-gray-700 transition-colors"
+                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors font-medium ${item.productName === p.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                 >
                                                                     {p.name}
                                                                 </button>
@@ -3932,6 +4001,7 @@ const SaleManagement = ({
                                                                         setActiveDropdown('brand');
                                                                         setActiveItemIndex(index);
                                                                         setActiveEntryIndex(entryIndex);
+                                                                        setHighlightedIndex(-1);
                                                                         handleItemInputChange(index, entryIndex, { target: { name: 'brandName', value: e.target.value } });
                                                                     }}
                                                                     autoComplete="off"
@@ -3941,6 +4011,7 @@ const SaleManagement = ({
                                                                         setActiveItemIndex(index);
                                                                         setActiveEntryIndex(entryIndex);
                                                                         setBrandSearch(entry.brandName || '');
+                                                                        setHighlightedIndex(-1);
                                                                     }}
                                                                     onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName) && handleDropdownKeyDown(e, 'brand', getFilteredBrands(), handleBrandSelect)}
                                                                     className={`sale-mgmt-input pr-10 !text-xs ${entry.brandName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.brandName) ? 'bg-gray-50' : ''}`}
@@ -3974,7 +4045,13 @@ const SaleManagement = ({
                                                             {activeDropdown === 'brand' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredBrands().length > 0 && (
                                                                 <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-1 duration-200">
                                                                     {getFilteredBrands().map((sb, idx) => (
-                                                                        <button key={idx} type="button" onClick={() => handleBrandSelect(sb)} className="w-full px-4 py-2 text-left text-xs hover:bg-blue-50 font-medium text-gray-700 transition-colors">
+                                                                        <button
+                                                                            key={idx}
+                                                                            type="button"
+                                                                            onClick={() => handleBrandSelect(sb)}
+                                                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                            className={`w-full px-4 py-2 text-left text-xs font-medium transition-colors ${entry.brandName === sb ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                        >
                                                                             {sb}
                                                                         </button>
                                                                     ))}
@@ -4006,6 +4083,7 @@ const SaleManagement = ({
                                                                             setActiveDropdown('warehouse');
                                                                             setActiveItemIndex(index);
                                                                             setActiveEntryIndex(entryIndex);
+                                                                            setHighlightedIndex(-1);
                                                                             handleItemInputChange(index, entryIndex, { target: { name: 'warehouseName', value: e.target.value } });
                                                                         }}
                                                                         autoComplete="off"
@@ -4015,6 +4093,7 @@ const SaleManagement = ({
                                                                             setActiveItemIndex(index);
                                                                             setActiveEntryIndex(entryIndex);
                                                                             setWarehouseSearch(entry.warehouseName || '');
+                                                                            setHighlightedIndex(-1);
                                                                         }}
                                                                         onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName) && handleDropdownKeyDown(e, 'warehouse', getFilteredWarehouses(), handleWarehouseSelect)}
                                                                         className={`sale-mgmt-input pr-10 !text-xs ${entry.warehouseName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.warehouseName) ? 'bg-gray-50' : ''}`}
@@ -4047,8 +4126,14 @@ const SaleManagement = ({
                                                                 </div>
                                                                 {activeDropdown === 'warehouse' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredWarehouses().length > 0 && (
                                                                     <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1">
-                                                                        {getFilteredWarehouses().map((w) => (
-                                                                            <button key={w._id} type="button" onClick={() => handleWarehouseSelect(w)} className="w-full px-4 py-2 text-left text-xs hover:bg-blue-50 font-medium text-gray-700">
+                                                                        {getFilteredWarehouses().map((w, idx) => (
+                                                                            <button
+                                                                                key={w._id || `wh-${idx}`}
+                                                                                type="button"
+                                                                                onClick={() => handleWarehouseSelect(w)}
+                                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                                className={`w-full px-4 py-2 text-left text-xs font-medium transition-colors ${entry.warehouseName === w.whName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                            >
                                                                                 {w.whName}
                                                                             </button>
                                                                         ))}
@@ -4334,6 +4419,12 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('lcNo')}>
                                             <div className="flex items-center">LC No {renderSortIcon('lcNo')}</div>
                                         </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('challanNo')}>
+                                            <div className="flex items-center">Challan No {renderSortIcon('challanNo')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group w-[100px] max-w-[100px] whitespace-normal" onClick={() => handleSort('truckNo')}>
+                                            <div className="flex items-center">Truck No {renderSortIcon('truckNo')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
                                             <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
                                         </th>
@@ -4520,6 +4611,12 @@ const SaleManagement = ({
                                                     </div>
                                                 )}
                                             </td>
+                                            <td className="px-3 py-4 whitespace-nowrap">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.challanNo || '-'}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-normal break-words w-[100px] max-w-[100px]">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.truckNo || '-'}</div>
+                                            </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
                                             </td>
@@ -4554,12 +4651,6 @@ const SaleManagement = ({
                                                         ))}
                                                     </div>
                                                 )}
-                                            </td>
-                                            <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.challanNo || '-'}</div>
-                                            </td>
-                                            <td className="px-3 py-4 whitespace-normal break-words w-[100px] max-w-[100px]">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.truckNo || '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 {isMultiple && !isExpanded ? (
