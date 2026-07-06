@@ -259,6 +259,241 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
     const lcNoClean = cleanLc(data.lcNo);
 
+    const toYYYYMMDD = (dateVal) => {
+        if (!dateVal) return '';
+        if (typeof dateVal === 'string') {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal;
+            if (dateVal.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
+                return dateVal.slice(0, 10);
+            }
+        }
+        const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return '';
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+
+    const calculateAgentPayments = (agentName) => {
+        const targetName = agentName.toLowerCase().trim();
+        const records = [];
+
+        // 1.1. Stock Arrivals
+        allStockRecords.forEach(record => {
+            const indCnF = (record.indianCnF || '').toLowerCase().trim();
+            const bdCnF = (record.bdCnF || '').toLowerCase().trim();
+            
+            const isMatch = indCnF === targetName || bdCnF === targetName;
+            const status = (record.status || '').toLowerCase();
+            const isAccepted = !status.includes('requested') && !status.includes('rejected');
+            
+            if (isMatch && isAccepted) {
+                const qty = !isNaN(parseFloat(record.totalLcQuantity)) ? parseFloat(record.totalLcQuantity) : (!isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0));
+                
+                let commissionRate = 0;
+                if (indCnF === targetName && record.indCnFComm !== undefined && record.indCnFComm !== null && record.indCnFComm !== '') {
+                    commissionRate = parseFloat(record.indCnFComm);
+                } else if (bdCnF === targetName && record.bdCnFComm !== undefined && record.bdCnFComm !== null && record.bdCnFComm !== '') {
+                    commissionRate = parseFloat(record.bdCnFComm);
+                }
+                
+                const rawUom = indCnF === targetName
+                    ? (record.indCnFUom || record.uom || 'QTY')
+                    : (record.bdCnFUom || record.uom || 'QTY');
+                const uom = typeof rawUom === 'string' ? rawUom.toUpperCase() : 'QTY';
+                
+                let totalCommission = 0;
+                if (indCnF === targetName && record.indCnFCost !== undefined && record.indCnFCost !== null && record.indCnFCost !== '') {
+                    totalCommission = parseFloat(record.indCnFCost);
+                } else if (bdCnF === targetName && record.bdCnFCost !== undefined && record.bdCnFCost !== null && record.bdCnFCost !== '') {
+                    totalCommission = parseFloat(record.bdCnFCost);
+                } else {
+                    if (uom === 'QTY') {
+                        totalCommission = qty * commissionRate;
+                    } else if (uom === 'BAG') {
+                        const bagQty = !isNaN(parseFloat(record.totalLcPacket)) ? parseFloat(record.totalLcPacket) : (!isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (record.inHousePacket || 0));
+                        totalCommission = bagQty * commissionRate;
+                    } else if (uom === 'TRUCK') {
+                        const truckCount = !isNaN(parseFloat(record.totalLcTruck)) ? parseFloat(record.totalLcTruck) : (parseFloat(record.truckNo) || 1);
+                        totalCommission = truckCount * commissionRate;
+                    } else {
+                        totalCommission = commissionRate;
+                    }
+                }
+                
+                records.push({
+                    id: record._id,
+                    lcNo: record.lcNo,
+                    type: 'stock',
+                    totalBill: parseFloat(totalCommission.toFixed(2)),
+                    remainingDue: parseFloat(totalCommission.toFixed(2)),
+                    date: record.date
+                });
+            }
+        });
+
+        // 1.2. Border Sales
+        allSalesRecords.forEach(sale => {
+            const sTypeLow = (sale.saleType || '').toLowerCase().trim();
+            const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (sale.invoiceNo || '').startsWith('BS');
+            if (!isBorder) return;
+            if (sale.status && sale.status.toLowerCase().includes('rejected')) return;
+            
+            const saleIndCnF = (sale.indianCnF || '').toLowerCase().trim();
+            const saleBdCnf = (sale.bdCnf || '').toLowerCase().trim();
+            
+            const isMatch = targetName === saleIndCnF || targetName === saleBdCnf;
+            if (!isMatch) return;
+            
+            const isIndianAgent = (saleIndCnF === targetName);
+            const savedTotalComm = isIndianAgent ? (parseFloat(sale.indCommissionTotal) || 0) : (parseFloat(sale.bdCommissionTotal) || 0);
+            
+            records.push({
+                id: sale._id,
+                lcNo: sale.lcNo,
+                type: 'sale',
+                totalBill: parseFloat(savedTotalComm.toFixed(2)),
+                remainingDue: parseFloat(savedTotalComm.toFixed(2)),
+                date: sale.date
+            });
+        });
+
+        // 1.3. Custom Bills (from lcExpenses)
+        lcExpenses.forEach(exp => {
+            const expCnF = (exp.cnfAgent || '').toLowerCase().trim();
+            if (expCnF === targetName && exp.type === 'bill' && exp.expenseHead === 'C&F Commission') {
+                records.push({
+                    id: exp._id,
+                    lcNo: exp.lcNo,
+                    type: 'custom_bill',
+                    totalBill: parseFloat(exp.amount) || 0,
+                    remainingDue: parseFloat(exp.amount) || 0,
+                    date: exp.date || exp.createdAt
+                });
+            }
+        });
+
+        // Sort bills by date ascending
+        records.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const payments = [];
+
+        // 2.1. Payments from cnf-payments
+        cnfPayments.forEach(p => {
+            if (p.cnfName && p.cnfName.toLowerCase().trim() === targetName) {
+                payments.push({
+                    id: p._id,
+                    amount: (parseFloat(p.amount) || 0) + (parseFloat(p.discount) || 0),
+                    remainingAmount: (parseFloat(p.amount) || 0) + (parseFloat(p.discount) || 0),
+                    reference: p.reference,
+                    billFrom: p.billFrom,
+                    billTo: p.billTo,
+                    date: p.date
+                });
+            }
+        });
+
+        // 2.2. Payments from lcExpenses (where expenseHead === 'C&F Commission' and type !== 'bill')
+        lcExpenses.forEach(exp => {
+            const expCnF = (exp.cnfAgent || '').toLowerCase().trim();
+            if (expCnF === targetName && exp.type !== 'bill' && exp.expenseHead === 'C&F Commission') {
+                payments.push({
+                    id: exp._id,
+                    amount: parseFloat(exp.amount) || 0,
+                    remainingAmount: parseFloat(exp.amount) || 0,
+                    reference: exp.lcNo,
+                    date: exp.date || exp.createdAt
+                });
+            }
+        });
+
+        // Sort payments by date ascending
+        payments.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // 3. Matching
+        const paymentAllocations = {};
+
+        const allocate = (p, r, amt) => {
+            r.remainingDue -= amt;
+            p.remainingAmount -= amt;
+            const rLcClean = cleanLc(r.lcNo);
+            if (rLcClean === lcNoClean) {
+                paymentAllocations[p.id] = (paymentAllocations[p.id] || 0) + amt;
+            }
+        };
+
+        // 3.1. Direct Date Range matching first
+        payments.forEach(p => {
+            if (p.billFrom && p.billTo) {
+                const fromStr = toYYYYMMDD(p.billFrom);
+                const toStr = toYYYYMMDD(p.billTo);
+                
+                records.forEach(r => {
+                    const rDateStr = toYYYYMMDD(r.date);
+                    if (rDateStr && rDateStr >= fromStr && rDateStr <= toStr) {
+                        const amt = r.remainingDue;
+                        allocate(p, r, amt);
+                    }
+                });
+            }
+        });
+
+        // 3.2. Direct LC reference matching
+        const normalizeLc = (lc) => String(lc || '').replace(/\s+/g, '').toLowerCase().trim();
+        payments.forEach(p => {
+            const refNorm = normalizeLc(p.reference);
+            if (refNorm) {
+                const matches = records.filter(r => normalizeLc(r.lcNo) === refNorm);
+                for (const r of matches) {
+                    if (r.remainingDue > 0 && p.remainingAmount > 0) {
+                        const amt = Math.min(r.remainingDue, p.remainingAmount);
+                        allocate(p, r, amt);
+                    }
+                }
+            }
+        });
+
+        // 3.3. FIFO matching for leftover payment amounts
+        payments.forEach(p => {
+            if (p.remainingAmount > 0) {
+                for (const r of records) {
+                    if (r.remainingDue > 0) {
+                        const amt = Math.min(r.remainingDue, p.remainingAmount);
+                        allocate(p, r, amt);
+                        if (p.remainingAmount <= 0) break;
+                    }
+                }
+            }
+        });
+
+        const paidMap = {};
+        records.forEach(r => {
+            paidMap[r.id] = r.totalBill - r.remainingDue;
+        });
+
+        return { paidMap, paymentAllocations };
+    };
+
+    const agentPaymentMaps = {};
+    const getAgentPaidMap = (agentName) => {
+        if (!agentName) return {};
+        const clean = agentName.toLowerCase().trim();
+        if (!agentPaymentMaps[clean]) {
+            agentPaymentMaps[clean] = calculateAgentPayments(agentName);
+        }
+        return agentPaymentMaps[clean].paidMap;
+    };
+
+    const getAgentAllocationsMap = (agentName) => {
+        if (!agentName) return {};
+        const clean = agentName.toLowerCase().trim();
+        if (!agentPaymentMaps[clean]) {
+            agentPaymentMaps[clean] = calculateAgentPayments(agentName);
+        }
+        return agentPaymentMaps[clean].paymentAllocations;
+    };
+
     // Calculate Consumptions
     const receiptsMap = {};
     allStockRecords
@@ -718,56 +953,119 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     }
 
     // 4. Expenses (C&F and Others)
-    const cnfAgentPaidMap = {};
-    lcExpenses
-        .filter(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'C&F Commission' && e.cnfAgent && e.type !== 'bill')
-        .forEach(e => {
-            const cleanAgent = e.cnfAgent.toLowerCase().trim();
-            cnfAgentPaidMap[cleanAgent] = (cnfAgentPaidMap[cleanAgent] || 0) + (parseFloat(e.amount) || 0);
-        });
-
-    const cnfAgentPaidRemaining = { ...cnfAgentPaidMap };
-
-    // Find all stock arrivals for this LC with C&F info
+    // Find all stock arrivals for this LC with C&F info (BD or Indian)
     const cnfArrivals = allStockRecords.filter(s => {
         const recordLcNoClean = cleanLc(s.lcNo);
         const status = (s.status || '').toLowerCase();
-        return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock') && s.bdCnF;
+        return recordLcNoClean === lcNoClean && 
+            (status === 'accepted' || status === 'in stock') && 
+            (s.bdCnF || s.indianCnF);
     });
-
-    const processedCnfAgents = new Set();
-    const lastCnfBillIdxMap = {};
 
     cnfArrivals.forEach(s => {
-        const billAmt = parseFloat(s.bdCnFCost) || 0;
-        if (billAmt <= 0) return;
+        // 1. Process BD C&F if exists
+        if (s.bdCnF) {
+            const billAmt = parseFloat(s.bdCnFCost) || 0;
+            if (billAmt > 0) {
+                const paidMap = getAgentPaidMap(s.bdCnF);
+                const paid = paidMap[s._id] || 0;
 
-        const cleanAgent = s.bdCnF.toLowerCase().trim();
-        processedCnfAgents.add(cleanAgent);
+                let billStatus = "Unpaid";
+                if (paid >= billAmt) billStatus = "Paid";
+                else if (paid > 0) billStatus = "Partial Paid";
 
-        const remainingPaid = cnfAgentPaidRemaining[cleanAgent] || 0;
-        const paid = Math.min(remainingPaid, billAmt);
-        if (cnfAgentPaidRemaining[cleanAgent] !== undefined) {
-            cnfAgentPaidRemaining[cleanAgent] -= paid;
+                bills.push({
+                    date: s.date || s.createdAt,
+                    billHead: "C&F Bill",
+                    name: s.bdCnF,
+                    totalBill: billAmt,
+                    paidBill: paid,
+                    billBalance: Math.max(0, billAmt - paid),
+                    status: billStatus
+                });
+            }
         }
 
-        let billStatus = "Unpaid";
-        if (paid >= billAmt) billStatus = "Paid";
-        else if (paid > 0) billStatus = "Partial Paid";
+        // 2. Process Indian C&F if exists
+        if (s.indianCnF) {
+            const billAmt = parseFloat(s.indCnFCost) || 0;
+            if (billAmt > 0) {
+                const paidMap = getAgentPaidMap(s.indianCnF);
+                const paid = paidMap[s._id] || 0;
 
-        bills.push({
-            date: s.date || s.createdAt,
-            billHead: "C&F Bill",
-            name: s.bdCnF,
-            totalBill: billAmt,
-            paidBill: paid,
-            billBalance: Math.max(0, billAmt - paid),
-            status: billStatus
-        });
-        lastCnfBillIdxMap[cleanAgent] = bills.length - 1;
+                let billStatus = "Unpaid";
+                if (paid >= billAmt) billStatus = "Paid";
+                else if (paid > 0) billStatus = "Partial Paid";
+
+                bills.push({
+                    date: s.date || s.createdAt,
+                    billHead: "C&F Bill",
+                    name: s.indianCnF,
+                    totalBill: billAmt,
+                    paidBill: paid,
+                    billBalance: Math.max(0, billAmt - paid),
+                    status: billStatus
+                });
+            }
+        }
     });
 
-    const lastCnfCustomBillIdxMap = {};
+    // 4.2. Process Border Sale Records for C&F Commission
+    allSalesRecords.forEach(sale => {
+        const sTypeLow = (sale.saleType || '').toLowerCase().trim();
+        const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (sale.invoiceNo || '').startsWith('BS');
+        if (!isBorder) return;
+        if (sale.status && sale.status.toLowerCase().includes('rejected')) return;
+
+        const recordLcNoClean = cleanLc(sale.lcNo);
+        if (recordLcNoClean !== lcNoClean) return;
+
+        // Process Indian C&F if exists in sale
+        if (sale.indianCnF) {
+            const billAmt = parseFloat(sale.indCommissionTotal) || 0;
+            if (billAmt > 0) {
+                const paidMap = getAgentPaidMap(sale.indianCnF);
+                const paid = paidMap[sale._id] || 0;
+
+                let billStatus = "Unpaid";
+                if (paid >= billAmt) billStatus = "Paid";
+                else if (paid > 0) billStatus = "Partial Paid";
+
+                bills.push({
+                    date: sale.date || sale.createdAt,
+                    billHead: "C&F Bill",
+                    name: sale.indianCnF,
+                    totalBill: billAmt,
+                    paidBill: paid,
+                    billBalance: Math.max(0, billAmt - paid),
+                    status: billStatus
+                });
+            }
+        }
+
+        // Process BD C&F if exists in sale
+        if (sale.bdCnf) {
+            const billAmt = parseFloat(sale.bdCommissionTotal) || 0;
+            if (billAmt > 0) {
+                const paidMap = getAgentPaidMap(sale.bdCnf);
+                const paid = paidMap[sale._id] || 0;
+
+                let billStatus = "Unpaid";
+                if (paid >= billAmt) billStatus = "Paid";
+                else if (paid > 0) billStatus = "Partial Paid";
+
+                bills.push({
+                    date: sale.date || sale.createdAt,
+                    billHead: "C&F Bill",
+                    name: sale.bdCnf,
+                    totalBill: billAmt,
+                    paidBill: paid,
+                    billBalance: Math.max(0, billAmt - paid),
+                    status: billStatus
+                });
+            }
+        }
+    });
 
     // Separate bills and payments (expenses)
     const registeredBills = lcExpenses.filter(e => cleanLc(e.lcNo) === lcNoClean && e.type === 'bill');
@@ -824,12 +1122,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
         let paid = 0;
         if (head === 'C&F Commission') {
-            const cleanAgent = String(bill.cnfAgent || '').toLowerCase().trim();
-            const remainingPaid = cnfAgentPaidRemaining[cleanAgent] || 0;
-            paid = Math.min(remainingPaid, billAmt);
-            if (cnfAgentPaidRemaining[cleanAgent] !== undefined) {
-                cnfAgentPaidRemaining[cleanAgent] -= paid;
-            }
+            const paidMap = getAgentPaidMap(bill.cnfAgent || '');
+            paid = paidMap[bill._id] || 0;
         } else {
             const remainingPaid = billPaymentsRemaining[head] || 0;
             paid = Math.min(remainingPaid, billAmt);
@@ -851,54 +1145,6 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             billBalance: Math.max(0, billAmt - paid),
             status: billStatus
         });
-
-        lastBillIdxByHead[head] = billRows.length - 1;
-        if (head === 'C&F Commission') {
-            const cleanAgent = String(bill.cnfAgent || '').toLowerCase().trim();
-            lastCnfCustomBillIdxMap[cleanAgent] = billRows.length - 1;
-        }
-    });
-
-    // If there is excess C&F paid, attribute to last custom bill row first, then last stock bill row
-    Object.keys(cnfAgentPaidRemaining).forEach(agentKey => {
-        let remaining = cnfAgentPaidRemaining[agentKey];
-        if (remaining > 0) {
-            const lastCustomIdx = lastCnfCustomBillIdxMap[agentKey];
-            if (lastCustomIdx !== undefined) {
-                billRows[lastCustomIdx].paidBill += remaining;
-                billRows[lastCustomIdx].billBalance = Math.max(0, billRows[lastCustomIdx].totalBill - billRows[lastCustomIdx].paidBill);
-                billRows[lastCustomIdx].status = billRows[lastCustomIdx].paidBill >= billRows[lastCustomIdx].totalBill ? "Paid" : "Partial Paid";
-                remaining = 0;
-                cnfAgentPaidRemaining[agentKey] = 0;
-            }
-        }
-        if (remaining > 0) {
-            const lastStockIdx = lastCnfBillIdxMap[agentKey];
-            if (lastStockIdx !== undefined) {
-                bills[lastStockIdx].paidBill += remaining;
-                bills[lastStockIdx].billBalance = Math.max(0, bills[lastStockIdx].totalBill - bills[lastStockIdx].paidBill);
-                bills[lastStockIdx].status = "Paid";
-                remaining = 0;
-                cnfAgentPaidRemaining[agentKey] = 0;
-            }
-        }
-    });
-
-    // If there are C&F agents with payments but no stock records and no custom bills, push them as fallback C&F Bill rows
-    Object.keys(cnfAgentPaidMap).forEach(agentKey => {
-        const remainingPaid = cnfAgentPaidRemaining[agentKey];
-        if (remainingPaid > 0 && !processedCnfAgents.has(agentKey) && lastCnfCustomBillIdxMap[agentKey] === undefined) {
-            const firstExp = lcExpenses.find(e => cleanLc(e.lcNo) === lcNoClean && e.expenseHead === 'C&F Commission' && e.cnfAgent && e.cnfAgent.toLowerCase().trim() === agentKey);
-            bills.push({
-                date: firstExp ? firstExp.date : (data.openingDate || data.createdAt),
-                billHead: "C&F Bill",
-                name: firstExp ? firstExp.cnfAgent : agentKey.toUpperCase(),
-                totalBill: 0,
-                paidBill: remainingPaid,
-                billBalance: 0,
-                status: "Paid"
-            });
-        }
     });
 
     // If there are excess payments remaining for a head, add to the last bill row of that head
@@ -935,13 +1181,160 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         }
     });
 
-    const filteredBills = bills.filter(b => {
+    // Group and merge C&F Bills by agent name
+    const cnfGroupMap = {};
+    const otherBills = [];
+
+    bills.forEach(b => {
+        const isCnf = b.billHead === 'C&F Bill' || b.billHead === 'C&F Commission';
+        if (isCnf && b.name) {
+            const cleanName = b.name.trim().toUpperCase();
+            if (!cnfGroupMap[cleanName]) {
+                cnfGroupMap[cleanName] = {
+                    date: b.date,
+                    billHead: 'C&F Bill',
+                    name: b.name,
+                    totalBill: 0,
+                    paidBill: 0,
+                    billBalance: 0,
+                    status: 'Unpaid'
+                };
+            }
+            const group = cnfGroupMap[cleanName];
+            group.totalBill += b.totalBill;
+            group.paidBill += b.paidBill;
+            // Keep the latest date
+            if (new Date(b.date) > new Date(group.date)) {
+                group.date = b.date;
+            }
+        } else {
+            otherBills.push(b);
+        }
+    });
+
+    // Recalculate balance and status for merged C&F bills
+    const mergedCnfBills = Object.values(cnfGroupMap).map(group => {
+        const total = parseFloat(group.totalBill.toFixed(2));
+        const paid = parseFloat(group.paidBill.toFixed(2));
+        const balance = Math.max(0, total - paid);
+        let status = 'Unpaid';
+        if (paid >= total && total > 0) status = 'Paid';
+        else if (paid > 0) status = 'Partial Paid';
+
+        return {
+            ...group,
+            totalBill: total,
+            paidBill: paid,
+            billBalance: balance,
+            status: status
+        };
+    });
+
+    const consolidatedBills = [...otherBills, ...mergedCnfBills];
+
+    const filteredBills = consolidatedBills.filter(b => {
         const q = (consumptionSearchQuery || "").toLowerCase();
         return !q ||
             b.billHead.toLowerCase().includes(q) ||
             b.name.toLowerCase().includes(q) ||
             b.status.toLowerCase().includes(q);
     });
+
+    const expenseTabRecords = useMemo(() => {
+        const cnfPaidList = [];
+        const processedPaymentIds = new Set();
+
+        // 1. Gather all C&F agents that have bills on this LC
+        const agentNames = new Set();
+        consolidatedBills.forEach(b => {
+            const isCnf = b.billHead === 'C&F Bill' || b.billHead === 'C&F Commission';
+            if (isCnf && b.name) {
+                agentNames.add(b.name.trim());
+            }
+        });
+
+        // 2. Map their payments and matched allocations to this LC
+        agentNames.forEach(agentName => {
+            const allocations = getAgentAllocationsMap(agentName);
+            const agentLower = agentName.toLowerCase().trim();
+
+            cnfPayments.forEach(p => {
+                if (!p.cnfName || p.cnfName.toLowerCase().trim() !== agentLower) return;
+                
+                const isDirectRef = cleanLc(p.reference) === lcNoClean;
+                const allocatedAmt = allocations[p._id] || 0;
+
+                if (isDirectRef || allocatedAmt > 0) {
+                    const amountToShow = isDirectRef ? (parseFloat(p.amount) || 0) : allocatedAmt;
+                    if (amountToShow > 0 && !processedPaymentIds.has(p._id)) {
+                        processedPaymentIds.add(p._id);
+                        cnfPaidList.push({
+                            _id: p._id,
+                            date: p.date,
+                            expenseHead: 'C&F Commission Paid',
+                            name: p.cnfName,
+                            amount: amountToShow,
+                            remarks: p.remarks || (p.billFrom && p.billTo ? `Bill Period: ${formatDate(p.billFrom)} to ${formatDate(p.billTo)}` : `Reference: ${p.reference || '-'}`)
+                        });
+                    }
+                }
+            });
+        });
+
+        const list = [
+            ...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill'),
+            ...insurancePayments.filter(p => p.lcNo === data.lcNo && p.type !== 'Return Collection').map(p => ({
+                _id: p._id,
+                date: p.date,
+                expenseHead: 'Insurance Premium',
+                name: p.companyName || 'Insurance',
+                amount: (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0),
+                remarks: p.remarks || 'Premium Payment'
+            })),
+            ...cnfPaidList
+        ];
+
+        // Check if original Margin is Paid
+        const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
+            const total = parseFloat(data.totalAmount) || 0;
+            const margin = parseFloat(data.bankMargin) || 0;
+            return total * (margin / 100);
+        })();
+        if (marginPaidAmt > 0) {
+            list.unshift({
+                _id: 'margin-paid-virtual',
+                date: data.openingDate || data.createdAt,
+                expenseHead: `Margin Paid (${data.bankMargin || 0}%)`,
+                bankName: data.bankName || 'Bank',
+                amount: marginPaidAmt,
+                remarks: 'Paid Margin'
+            });
+        }
+
+        // Check if amendment Margin is Paid
+        if (data.amendments && data.amendments.length > 0) {
+            data.amendments.forEach((amnd, idx) => {
+                if (amnd.amendmentNo === 'Original LC') return;
+                const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
+                const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
+                    const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
+                    return amndMarginBill * (margin / 100);
+                })();
+                if (amndMarginPaid > 0) {
+                    list.push({
+                        _id: `amnd-margin-paid-virtual-${idx}`,
+                        date: amnd.amendmentDate || data.openingDate,
+                        expenseHead: `Margin Paid (${margin}%) (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
+                        bankName: data.bankName || 'Bank',
+                        amount: amndMarginPaid,
+                        remarks: `Paid Margin for ${amnd.amendmentNo || `Amend #${idx + 1}`}`
+                    });
+                }
+            });
+        }
+
+        return list;
+    }, [data, lcExpenses, insurancePayments, cnfPayments, consolidatedBills, lcNoClean]);
 
     return createPortal(
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
@@ -1696,56 +2089,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
                                                 {(() => {
-                                                    const filtered = [
-                                                        ...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill'),
-                                                        ...insurancePayments.filter(p => p.lcNo === data.lcNo && p.type !== 'Return Collection').map(p => ({
-                                                            _id: p._id,
-                                                            date: p.date,
-                                                            expenseHead: 'Insurance Premium',
-                                                            name: p.companyName || 'Insurance',
-                                                            amount: (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0),
-                                                            remarks: p.remarks || 'Premium Payment'
-                                                        }))
-                                                    ];
-
-                                                    // Check if original Margin is Paid
-                                                    const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
-                                                        const total = parseFloat(data.totalAmount) || 0;
-                                                        const margin = parseFloat(data.bankMargin) || 0;
-                                                        return total * (margin / 100);
-                                                    })();
-                                                    if (marginPaidAmt > 0) {
-                                                        filtered.unshift({
-                                                            _id: 'margin-paid-virtual',
-                                                            date: data.openingDate || data.createdAt,
-                                                            expenseHead: `Margin Paid (${data.bankMargin || 0}%)`,
-                                                            bankName: data.bankName || 'Bank',
-                                                            amount: marginPaidAmt,
-                                                            remarks: 'Paid Margin'
-                                                        });
-                                                    }
-
-                                                    // Check if amendment Margin is Paid
-                                                    if (data.amendments && data.amendments.length > 0) {
-                                                        data.amendments.forEach((amnd, idx) => {
-                                                            if (amnd.amendmentNo === 'Original LC') return;
-                                                            const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
-                                                            const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
-                                                                const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
-                                                                return amndMarginBill * (margin / 100);
-                                                            })();
-                                                            if (amndMarginPaid > 0) {
-                                                                filtered.push({
-                                                                    _id: `amnd-margin-paid-virtual-${idx}`,
-                                                                    date: amnd.amendmentDate || data.openingDate,
-                                                                    expenseHead: `Margin Paid (${margin}%) (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
-                                                                    bankName: data.bankName || 'Bank',
-                                                                    amount: amndMarginPaid,
-                                                                    remarks: `Paid Margin for ${amnd.amendmentNo || `Amend #${idx + 1}`}`
-                                                                });
-                                                            }
-                                                        });
-                                                    }
+                                                    const filtered = expenseTabRecords;
 
                                                     return filtered.length > 0 ? (
                                                         filtered.map((exp, idx) => (
@@ -1773,35 +2117,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     <td colSpan="3" className="px-3 md:px-6 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Expense:</td>
                                                     <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right text-rose-600">
                                                         {(() => {
-                                                            const filtered = [
-                                                         ...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill'),
-                                                         ...insurancePayments.filter(p => p.lcNo === data.lcNo && p.type !== 'Return Collection').map(p => ({
-                                                             _id: p._id,
-                                                             date: p.date,
-                                                             expenseHead: 'Insurance Premium',
-                                                             name: p.companyName || 'Insurance',
-                                                             amount: (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0),
-                                                             remarks: p.remarks || 'Premium Payment'
-                                                         }))
-                                                     ];
-                                                            const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
-                                                                const total = parseFloat(data.totalAmount) || 0;
-                                                                const margin = parseFloat(data.bankMargin) || 0;
-                                                                return total * (margin / 100);
-                                                            })();
-                                                            let total = filtered.reduce((sum, exp) => sum + parseNum(exp.amount), 0);
-                                                            if (marginPaidAmt > 0) total += marginPaidAmt;
-                                                            if (data.amendments && data.amendments.length > 0) {
-                                                                data.amendments.forEach((amnd) => {
-                                                                    if (amnd.amendmentNo === 'Original LC') return;
-                                                                    const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
-                                                                    const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
-                                                                        const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
-                                                                        return amndMarginBill * (margin / 100);
-                                                                    })();
-                                                                    if (amndMarginPaid > 0) total += amndMarginPaid;
-                                                                });
-                                                            }
+                                                            const total = expenseTabRecords.reduce((sum, exp) => sum + parseNum(exp.amount), 0);
                                                             return `৳${total.toLocaleString('en-IN')}`;
                                                         })()}
                                                     </td>
@@ -1813,56 +2129,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     {/* Mobile View */}
                                     <div className="md:hidden">
                                         {(() => {
-                                            const filtered = [
-                                                ...lcExpenses.filter(exp => exp.lcNo === data.lcNo && exp.type !== 'bill'),
-                                                ...insurancePayments.filter(p => p.lcNo === data.lcNo && p.type !== 'Return Collection').map(p => ({
-                                                    _id: p._id,
-                                                    date: p.date,
-                                                    expenseHead: 'Insurance Premium',
-                                                    name: p.companyName || 'Insurance',
-                                                    amount: (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0),
-                                                    remarks: p.remarks || 'Premium Payment'
-                                                }))
-                                            ];
-
-                                            // Check if original Margin is Paid
-                                            const marginPaidAmt = parseFloat(data.marginPaid) || (() => {
-                                                const total = parseFloat(data.totalAmount) || 0;
-                                                const margin = parseFloat(data.bankMargin) || 0;
-                                                return total * (margin / 100);
-                                            })();
-                                            if (marginPaidAmt > 0) {
-                                                filtered.unshift({
-                                                    _id: 'margin-paid-virtual',
-                                                    date: data.openingDate || data.createdAt,
-                                                    expenseHead: `Margin Paid (${data.bankMargin || 0}%)`,
-                                                    bankName: data.bankName || 'Bank',
-                                                    amount: marginPaidAmt,
-                                                    remarks: 'Paid Margin'
-                                                });
-                                            }
-
-                                            // Check if amendment Margin is Paid
-                                            if (data.amendments && data.amendments.length > 0) {
-                                                data.amendments.forEach((amnd, idx) => {
-                                                    if (amnd.amendmentNo === 'Original LC') return;
-                                                    const margin = amnd.amendmentMargin !== undefined ? (parseFloat(amnd.amendmentMargin) || 0) : (data.bankMargin !== undefined ? parseFloat(data.bankMargin) : 0);
-                                                    const amndMarginPaid = parseFloat(amnd.amendmentMarginPaid) || (() => {
-                                                        const amndMarginBill = parseFloat(amnd.amendmentMarginBill) || 0;
-                                                        return amndMarginBill * (margin / 100);
-                                                    })();
-                                                    if (amndMarginPaid > 0) {
-                                                        filtered.push({
-                                                            _id: `amnd-margin-paid-virtual-${idx}`,
-                                                            date: amnd.amendmentDate || data.openingDate,
-                                                            expenseHead: `Margin Paid (${margin}%) (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
-                                                            bankName: data.bankName || 'Bank',
-                                                            amount: amndMarginPaid,
-                                                            remarks: `Paid Margin for ${amnd.amendmentNo || `Amend #${idx + 1}`}`
-                                                        });
-                                                    }
-                                                });
-                                            }
+                                            const filtered = expenseTabRecords;
 
                                             return filtered.length > 0 ? (
                                                 <>

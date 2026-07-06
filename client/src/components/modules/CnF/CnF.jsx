@@ -8,6 +8,22 @@ import './CnF.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CnFReport from './CnFReport';
 
+const toYYYYMMDD = (dateVal) => {
+    if (!dateVal) return '';
+    if (typeof dateVal === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal;
+        if (dateVal.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
+            return dateVal.slice(0, 10);
+        }
+    }
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
+
 const CnF = ({
     moduleType,
     currentUser,
@@ -221,7 +237,78 @@ const CnF = ({
         }
     };
 
-    const filteredHistory = historyRecords.filter(row => {
+    const historyRecordsWithStatus = useMemo(() => {
+        // Initialize remaining due for each history record
+        const records = historyRecords.map(row => ({
+            ...row,
+            remainingDue: parseFloat(row.totalCommission) || 0
+        }));
+
+        // Sort by date ascending to process chronologically
+        records.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Create a copy of payment records with remaining amount
+        const payments = paymentRecords.map(p => ({
+            ...p,
+            remainingAmount: (parseFloat(p.amount) || 0) + (parseFloat(p.discount) || 0)
+        })).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const normalizeLc = (lc) => String(lc || '').replace(/\s+/g, '').toLowerCase().trim();
+
+        // 0. Direct Date Range matching
+        payments.forEach(p => {
+            if (p.billFrom && p.billTo) {
+                const fromDateStr = toYYYYMMDD(p.billFrom);
+                const toDateStr = toYYYYMMDD(p.billTo);
+
+                let totalCleared = 0;
+                records.forEach(r => {
+                    const rDateStr = toYYYYMMDD(r.date);
+                    if (rDateStr && rDateStr >= fromDateStr && rDateStr <= toDateStr) {
+                        totalCleared += r.remainingDue;
+                        r.remainingDue = 0;
+                    }
+                });
+                p.remainingAmount = Math.max(0, p.remainingAmount - totalCleared);
+            }
+        });
+
+        // 1. Direct LC reference matching
+        payments.forEach(p => {
+            const refNorm = normalizeLc(p.reference);
+            if (refNorm) {
+                const matches = records.filter(r => normalizeLc(r.lcNo) === refNorm);
+                for (const r of matches) {
+                    if (r.remainingDue > 0 && p.remainingAmount > 0) {
+                        const allocated = Math.min(r.remainingDue, p.remainingAmount);
+                        r.remainingDue -= allocated;
+                        p.remainingAmount -= allocated;
+                    }
+                }
+            }
+        });
+
+        // 2. FIFO matching for leftover payment amounts
+        payments.forEach(p => {
+            if (p.remainingAmount > 0) {
+                for (const r of records) {
+                    if (r.remainingDue > 0) {
+                        const allocated = Math.min(r.remainingDue, p.remainingAmount);
+                        r.remainingDue -= allocated;
+                        p.remainingAmount -= allocated;
+                        if (p.remainingAmount <= 0) break;
+                    }
+                }
+            }
+        });
+
+        return records.map(r => ({
+            ...r,
+            paymentStatus: r.remainingDue <= 0.01 ? 'Paid' : 'Due'
+        }));
+    }, [historyRecords, paymentRecords]);
+
+    const filteredHistory = historyRecordsWithStatus.filter(row => {
         const q = historySearchQuery.toLowerCase();
 
         // Date Filtering
@@ -1858,6 +1945,7 @@ const CnF = ({
                                                             <th className="cnf-table-header text-right">Commission</th>
                                                             <th className="cnf-table-header text-right">Total</th>
                                                             <th className="cnf-table-header text-center whitespace-nowrap">Source</th>
+                                                            <th className="cnf-table-header text-center whitespace-nowrap">Status</th>
                                                             <th className="cnf-table-header text-center">Action</th>
                                                         </tr>
                                                     </thead>
@@ -1901,6 +1989,11 @@ const CnF = ({
                                                                 <td className="cnf-table-cell text-center">
                                                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} border ${row.source === 'Sale' ? 'border-amber-200' : 'border-blue-200'}`}>
                                                                         {row.source || 'LC'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="cnf-table-cell text-center">
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-200'} border`}>
+                                                                        {row.paymentStatus}
                                                                     </span>
                                                                 </td>
                                                                 <td className="cnf-table-cell text-center">
@@ -1967,6 +2060,9 @@ const CnF = ({
                                                                                 <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${row.source === 'Sale' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
                                                                                     {row.source || 'LC'}
                                                                                 </span>
+                                                                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${row.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-200'} border`}>
+                                                                                    {row.paymentStatus}
+                                                                                </span>
                                                                                 {row.source === 'Sale' ? (
                                                                                     (row.cnfType === 'Indian' ? row.indCommissionEdited : row.bdCommissionEdited) && (
                                                                                         <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0 sm:inline-block hidden">Sale Edited</span>
@@ -1988,6 +2084,12 @@ const CnF = ({
                                                                             <div className="flex items-center gap-2 text-xs md:block md:space-y-1">
                                                                                 <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Port<span className="md:hidden"> :</span></span>
                                                                                 <span className="font-semibold text-gray-700 md:text-xs md:font-medium">{row.port || '-'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 text-xs md:block md:space-y-1 md:text-right">
+                                                                                <span className="text-gray-500 font-medium md:text-[10px] md:font-bold md:text-gray-400 md:uppercase md:tracking-wider">Status<span className="md:hidden"> :</span></span>
+                                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${row.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-200'} border inline-block`}>
+                                                                                    {row.paymentStatus}
+                                                                                </span>
                                                                             </div>
                                                                         </div>
                                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2.5 bg-gray-50/70 rounded-xl px-4 mt-2">

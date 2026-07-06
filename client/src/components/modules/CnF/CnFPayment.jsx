@@ -1,9 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
+
+const toYYYYMMDD = (dateVal) => {
+    if (!dateVal) return '';
+    if (typeof dateVal === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal;
+        if (dateVal.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
+            return dateVal.slice(0, 10);
+        }
+    }
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
 
 const CnFPayment = () => {
     const [payments, setPayments] = useState([]);
@@ -82,6 +98,10 @@ const CnFPayment = () => {
     const methodDropdownRef = useRef(null);
     const bankDropdownRef = useRef(null);
     const [banks, setBanks] = useState([]);
+    const [rawStock, setRawStock] = useState([]);
+    const [rawSales, setRawSales] = useState([]);
+    const [rawPayments, setRawPayments] = useState([]);
+    const [rawExpenses, setRawExpenses] = useState([]);
 
     const [newPayment, setNewPayment] = useState({
         cnfId: '',
@@ -91,13 +111,266 @@ const CnFPayment = () => {
         discount: '',
         reference: '',
         bankName: '',
-        remarks: ''
+        remarks: '',
+        billFrom: '',
+        billTo: ''
     });
 
     useEffect(() => {
         fetchPayments();
         fetchCnFs();
     }, []);
+
+    const getAgentEarningsAndPayments = (cnfId, cnfName, cnfType, commissionRateDefault) => {
+        if (!cnfId || !cnfName) return { historyRecords: [], paymentRecords: [] };
+        const targetName = cnfName.toLowerCase().trim();
+
+        const rows = [];
+        // 1. Process Stock (LC) Records
+        rawStock.forEach(record => {
+            const indCnF = (record.indianCnF || '').toLowerCase().trim();
+            const bdCnF = (record.bdCnF || '').toLowerCase().trim();
+
+            const isMatch = cnfType === 'Indian'
+                ? indCnF === targetName
+                : cnfType === 'BD'
+                    ? bdCnF === targetName
+                    : (indCnF === targetName || bdCnF === targetName);
+
+            const status = (record.status || '').toLowerCase();
+            const isAccepted = !status.includes('requested') && !status.includes('rejected');
+
+            if (isMatch && isAccepted) {
+                const qty = !isNaN(parseFloat(record.totalLcQuantity)) ? parseFloat(record.totalLcQuantity) : (!isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0));
+
+                let commissionRate = parseFloat(commissionRateDefault) || 0;
+                if (indCnF === targetName && record.indCnFComm !== undefined && record.indCnFComm !== null && record.indCnFComm !== '') {
+                    commissionRate = parseFloat(record.indCnFComm);
+                } else if (bdCnF === targetName && record.bdCnFComm !== undefined && record.bdCnFComm !== null && record.bdCnFComm !== '') {
+                    commissionRate = parseFloat(record.bdCnFComm);
+                }
+
+                const rawUom = indCnF === targetName
+                    ? (record.indCnFUom || record.uom || 'QTY')
+                    : (record.bdCnFUom || record.uom || 'QTY');
+                const uom = typeof rawUom === 'string' ? rawUom.toUpperCase() : 'QTY';
+
+                let totalCommission = 0;
+                if (indCnF === targetName && record.indCnFCost !== undefined && record.indCnFCost !== null && record.indCnFCost !== '') {
+                    totalCommission = parseFloat(record.indCnFCost);
+                } else if (bdCnF === targetName && record.bdCnFCost !== undefined && record.bdCnFCost !== null && record.bdCnFCost !== '') {
+                    totalCommission = parseFloat(record.bdCnFCost);
+                } else {
+                    if (uom === 'QTY') {
+                        totalCommission = qty * commissionRate;
+                    } else if (uom === 'BAG') {
+                        const bagQty = !isNaN(parseFloat(record.totalLcPacket)) ? parseFloat(record.totalLcPacket) : (!isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (record.inHousePacket || 0));
+                        totalCommission = bagQty * commissionRate;
+                    } else if (uom === 'TRUCK') {
+                        const truckCount = !isNaN(parseFloat(record.totalLcTruck)) ? parseFloat(record.totalLcTruck) : (parseFloat(record.truckNo) || 1);
+                        totalCommission = truckCount * commissionRate;
+                    } else {
+                        totalCommission = commissionRate;
+                    }
+                }
+                totalCommission = parseFloat(totalCommission.toFixed(2));
+
+                rows.push({
+                    _id: record._id,
+                    date: record.date,
+                    lcNo: record.lcNo,
+                    totalCommission: totalCommission,
+                    type: 'earning'
+                });
+            }
+        });
+
+        // 2. Process Border Sale Records
+        rawSales.forEach(sale => {
+            const sTypeLow = (sale.saleType || '').toLowerCase().trim();
+            const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (sale.invoiceNo || '').startsWith('BS');
+            if (!isBorder) return;
+            if (sale.status && sale.status.toLowerCase().includes('rejected')) return;
+
+            const saleIndCnF = (sale.indianCnF || '').toLowerCase().trim();
+            const saleBdCnf = (sale.bdCnf || '').toLowerCase().trim();
+
+            const isMatch = targetName === saleIndCnF || targetName === saleBdCnf;
+            if (!isMatch) return;
+
+            const isIndianAgent = (saleIndCnF === targetName);
+            const commissionFactor = isIndianAgent
+                ? (parseFloat(sale.indCommissionRate) || parseFloat(commissionRateDefault) || 0)
+                : (parseFloat(sale.bdCommissionRate) || parseFloat(commissionRateDefault) || 0);
+
+            const uom = isIndianAgent
+                ? (sale.indCommissionUom || 'QTY').toUpperCase()
+                : (sale.bdCommissionUom || 'QTY').toUpperCase();
+
+            const savedTotalComm = isIndianAgent ? (parseFloat(sale.indCommissionTotal) || 0) : (parseFloat(sale.bdCommissionTotal) || 0);
+
+            let rawTotalMath = 0;
+            (sale.items || []).forEach(item => {
+                (item.brandEntries || []).forEach(entry => {
+                    const qty = parseFloat(entry.quantity) || 0;
+                    const truck = parseFloat(entry.truck) || 0;
+                    if (uom === 'QTY') rawTotalMath += qty;
+                    else if (uom === 'TRUCK') rawTotalMath += truck || 0;
+                    else rawTotalMath += 1;
+                });
+            });
+
+            (sale.items || []).forEach(item => {
+                (item.brandEntries || []).forEach(entry => {
+                    let totalEntryComm = 0;
+                    const qty = parseFloat(entry.quantity) || 0;
+                    const truck = parseFloat(entry.truck) || 0;
+
+                    let mathVal = 0;
+                    if (uom === 'QTY') mathVal = qty;
+                    else if (uom === 'TRUCK') mathVal = truck || 0;
+                    else mathVal = 1;
+
+                    if (savedTotalComm > 0 && rawTotalMath > 0) {
+                         totalEntryComm = (mathVal / rawTotalMath) * savedTotalComm;
+                    } else if (savedTotalComm > 0 && rawTotalMath === 0) {
+                         totalEntryComm = savedTotalComm; 
+                    } else if (savedTotalComm === 0 && sale.indCommissionTotal === undefined && sale.bdCommissionTotal === undefined) {
+                         if (uom === 'QTY') totalEntryComm = qty * commissionFactor;
+                         else if (uom === 'TRUCK') totalEntryComm = (truck || 1) * commissionFactor;
+                         else totalEntryComm = commissionFactor;
+                    }
+
+                    rows.push({
+                        _id: `${sale._id}-${entry.brand}-${entry.warehouseName}`,
+                        date: sale.date,
+                        lcNo: sale.lcNo || '-',
+                        totalCommission: parseFloat(totalEntryComm.toFixed(2)),
+                        type: 'earning'
+                    });
+                });
+            });
+        });
+
+        // 3. Process LC Expense Records (Earned from LC Expenses)
+        rawExpenses.forEach(exp => {
+            const expCnF = (exp.cnfAgent || '').toLowerCase().trim();
+            if (expCnF === targetName && exp.type === 'bill') {
+                rows.push({
+                    _id: exp._id,
+                    date: exp.date || exp.createdAt,
+                    lcNo: exp.lcNo || '-',
+                    totalCommission: parseFloat(exp.amount) || 0,
+                    type: 'expense'
+                });
+            }
+        });
+
+        // Process Payments for this C&F
+        const paymentsFiltered = rawPayments.filter(p => p.cnfId === cnfId);
+
+        return { historyRecords: rows, paymentRecords: paymentsFiltered };
+    };
+
+    const getEarningsWithStatus = (historyRecords, paymentRecords) => {
+        // Initialize remaining due for each history record
+        const records = historyRecords.map(row => ({
+            ...row,
+            remainingDue: parseFloat(row.totalCommission) || 0
+        }));
+
+        // Sort by date ascending to process chronologically
+        records.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Create a copy of payment records with remaining amount
+        const payments = paymentRecords.map(p => ({
+            ...p,
+            remainingAmount: (parseFloat(p.amount) || 0) + (parseFloat(p.discount) || 0)
+        })).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const normalizeLc = (lc) => String(lc || '').replace(/\s+/g, '').toLowerCase().trim();
+
+        // 0. Direct Date Range matching
+        payments.forEach(p => {
+            if (p.billFrom && p.billTo) {
+                const fromDateStr = toYYYYMMDD(p.billFrom);
+                const toDateStr = toYYYYMMDD(p.billTo);
+
+                let totalCleared = 0;
+                records.forEach(r => {
+                    const rDateStr = toYYYYMMDD(r.date);
+                    if (rDateStr && rDateStr >= fromDateStr && rDateStr <= toDateStr) {
+                        totalCleared += r.remainingDue;
+                        r.remainingDue = 0;
+                    }
+                });
+                p.remainingAmount = Math.max(0, p.remainingAmount - totalCleared);
+            }
+        });
+
+        // 1. Direct LC reference matching
+        payments.forEach(p => {
+            const refNorm = normalizeLc(p.reference);
+            if (refNorm) {
+                const matches = records.filter(r => normalizeLc(r.lcNo) === refNorm);
+                for (const r of matches) {
+                    if (r.remainingDue > 0 && p.remainingAmount > 0) {
+                        const allocated = Math.min(r.remainingDue, p.remainingAmount);
+                        r.remainingDue -= allocated;
+                        p.remainingAmount -= allocated;
+                    }
+                }
+            }
+        });
+
+        // 2. FIFO matching for leftover payment amounts
+        payments.forEach(p => {
+            if (p.remainingAmount > 0) {
+                for (const r of records) {
+                    if (r.remainingDue > 0) {
+                        const allocated = Math.min(r.remainingDue, p.remainingAmount);
+                        r.remainingDue -= allocated;
+                        p.remainingAmount -= allocated;
+                        if (p.remainingAmount <= 0) break;
+                    }
+                }
+            }
+        });
+
+        return records;
+    };
+
+    const displayBalance = useMemo(() => {
+        if (!newPayment.cnfId) return 0;
+        const selectedCnf = cnfs.find(c => c._id === newPayment.cnfId);
+        if (!selectedCnf) return 0;
+
+        if (!newPayment.billFrom || !newPayment.billTo) {
+            return selectedCnf.totalBalance || 0;
+        }
+
+        const { historyRecords, paymentRecords } = getAgentEarningsAndPayments(
+            selectedCnf._id,
+            selectedCnf.name,
+            selectedCnf.type,
+            selectedCnf.commission
+        );
+
+        const recordsWithStatus = getEarningsWithStatus(historyRecords, paymentRecords);
+
+        const fromDateStr = toYYYYMMDD(newPayment.billFrom);
+        const toDateStr = toYYYYMMDD(newPayment.billTo);
+
+        const rangeDue = recordsWithStatus
+            .filter(r => {
+                const rDateStr = toYYYYMMDD(r.date);
+                if (!rDateStr || !fromDateStr || !toDateStr) return false;
+                return rDateStr >= fromDateStr && rDateStr <= toDateStr;
+            })
+            .reduce((sum, r) => sum + r.remainingDue, 0);
+
+        return rangeDue;
+    }, [newPayment.cnfId, newPayment.billFrom, newPayment.billTo, cnfs, rawStock, rawSales, rawPayments, rawExpenses]);
 
     const fetchCnFs = async () => {
         try {
@@ -239,6 +512,10 @@ const CnFPayment = () => {
                 return { ...cnf, totalBalance: stockEarned + salesEarned + expenseEarned - paid };
             });
 
+            setRawStock(allStock);
+            setRawSales(allSales);
+            setRawPayments(allPayments);
+            setRawExpenses(allExpenses);
             setCnfs(cnfsWithBalance);
         } catch (error) {
             console.error('Error fetching C&Fs:', error);
@@ -359,7 +636,9 @@ const CnFPayment = () => {
             discount: '',
             reference: '',
             bankName: '',
-            remarks: ''
+            remarks: '',
+            billFrom: '',
+            billTo: ''
         });
         setCnfSearchQuery('');
         setIsEditMode(false);
@@ -377,7 +656,9 @@ const CnFPayment = () => {
             discount: (payment.discount || 0).toString(),
             reference: payment.reference || '',
             bankName: payment.bankName || '',
-            remarks: payment.remarks || ''
+            remarks: payment.remarks || '',
+            billFrom: payment.billFrom || '',
+            billTo: payment.billTo || ''
         });
         const cnf = cnfs.find(c => c._id === payment.cnfId);
         setCnfSearchQuery(cnf?.name || '');
@@ -565,7 +846,7 @@ const CnFPayment = () => {
 
                         <form onSubmit={handleAddPayment} className="p-8 space-y-6">
                             {/* Row 1: Basic Info */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-6 border-b border-gray-50">
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 pb-6 border-b border-gray-50">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Date</label>
                                     <CustomDatePicker value={newPayment.date} onChange={(e) => setNewPayment({ ...newPayment, date: e.target.value })} compact />
@@ -630,6 +911,16 @@ const CnFPayment = () => {
                                 </div>
 
                                 <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Bill From (Optional)</label>
+                                    <CustomDatePicker value={newPayment.billFrom || ''} onChange={(e) => setNewPayment({ ...newPayment, billFrom: e.target.value })} compact />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Bill To (Optional)</label>
+                                    <CustomDatePicker value={newPayment.billTo || ''} onChange={(e) => setNewPayment({ ...newPayment, billTo: e.target.value })} compact />
+                                </div>
+
+                                <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Current Balance</label>
                                     <div className="relative">
                                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -638,8 +929,8 @@ const CnFPayment = () => {
                                         <input
                                             type="text"
                                             readOnly
-                                            value={newPayment.cnfId ? (cnfs.find(c => c._id === newPayment.cnfId)?.totalBalance || 0).toLocaleString('en-IN') : '0.00'}
-                                            className={`w-full pl-8 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-black shadow-sm outline-none cursor-not-allowed transition-colors ${newPayment.cnfId ? ((cnfs.find(c => c._id === newPayment.cnfId)?.totalBalance || 0) > 0 ? 'text-amber-600' : 'text-emerald-600') : 'text-gray-400'}`}
+                                            value={newPayment.cnfId ? displayBalance.toLocaleString('en-IN') : '0.00'}
+                                            className={`w-full pl-8 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-black shadow-sm outline-none cursor-not-allowed transition-colors ${newPayment.cnfId ? (displayBalance > 0 ? 'text-amber-600' : 'text-emerald-600') : 'text-gray-400'}`}
                                         />
                                     </div>
                                 </div>
@@ -870,7 +1161,24 @@ const CnFPayment = () => {
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.cnfType}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.bankName || p.reference || '-'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">
+                                                    {p.bankName || p.reference ? (
+                                                        <div>
+                                                            <div className="text-gray-900 font-medium">{p.bankName || p.reference}</div>
+                                                            {p.billFrom && p.billTo && (
+                                                                <div className="text-[10px] text-gray-400 font-medium">
+                                                                    {formatDate(p.billFrom)} to {formatDate(p.billTo)}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        p.billFrom && p.billTo ? (
+                                                            <div className="text-gray-900 font-medium text-xs">
+                                                                {formatDate(p.billFrom)} to {formatDate(p.billTo)}
+                                                            </div>
+                                                        ) : '-'
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-right font-black text-gray-900">৳{p.amount.toLocaleString('en-IN')}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-emerald-600">
                                                     {p.discount > 0 ? `৳${p.discount.toLocaleString('en-IN')}` : '-'}
@@ -934,6 +1242,14 @@ const CnFPayment = () => {
                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Agent Type</span>
                                                             <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                             <span className="font-semibold text-gray-900 text-[11px] uppercase">{p.cnfType}</span>
+
+                                                            {p.billFrom && p.billTo && (
+                                                                <>
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bill Period</span>
+                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                    <span className="font-semibold text-gray-900 text-[11px]">{formatDate(p.billFrom)} to {formatDate(p.billTo)}</span>
+                                                                </>
+                                                            )}
 
                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reference / Bank</span>
                                                             <span className="text-gray-400 font-bold text-[10px]">:</span>
