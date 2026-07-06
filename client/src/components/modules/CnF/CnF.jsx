@@ -436,7 +436,7 @@ const CnF = ({
 
     const handlePrintHistory = () => {
         if (!viewData) return;
-        const agentInfo = { name: viewData.name, cnfId: viewData.cnfId };
+        const agentInfo = { name: viewData.name, cnfId: viewData.cnfId, phone: viewData.phone };
 
         if (historyViewMode === 'earnings') {
             generateCnFHistoryReportPDF(filteredHistory, agentInfo, historyFilters);
@@ -1213,8 +1213,8 @@ const CnF = ({
     };
 
     const sortData = (data) => {
-        if (!sortConfig.cnf) return data;
-        const { key, direction } = sortConfig.cnf;
+        const config = sortConfig.cnf || { key: 'cnfId', direction: 'asc' };
+        const { key, direction } = config;
         return [...data].sort((a, b) => {
             const aVal = (a[key] || '').toString().toLowerCase();
             const bVal = (b[key] || '').toString().toLowerCase();

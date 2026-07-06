@@ -3627,36 +3627,43 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
 
         // Agent Info (Box Style)
         doc.setFont('helvetica', 'bold');
-        doc.text("Agent Name:", margin, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(agentInfo.name || '-', margin + 22, yPos);
+        doc.text("Agent ID", margin, yPos);
+        doc.text("Agent Name", margin, yPos + 5);
+        doc.text("Contact No.", margin, yPos + 10);
 
-        doc.setFont('helvetica', 'bold');
-        doc.text("Agent ID:", margin, yPos + 6);
-        doc.setFont('helvetica', 'normal');
-        doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
+        doc.text(":", margin + 23, yPos);
+        doc.text(":", margin + 23, yPos + 5);
+        doc.text(":", margin + 23, yPos + 10);
 
-        let yOffset = 6;
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.cnfId || '-', margin + 26, yPos);
+        doc.text(agentInfo.name || '-', margin + 26, yPos + 5);
+        doc.text(agentInfo.phone || '-', margin + 26, yPos + 10);
+
+        let yOffset = 10;
         if (filters && filters.port) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("Port:", margin, yPos + yOffset);
+            doc.text("Port", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.port, margin + 22, yPos + yOffset);
+            doc.text(filters.port, margin + 26, yPos + yOffset);
         }
         if (filters && filters.lcNo) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("LC No:", margin, yPos + yOffset);
+            doc.text("LC No", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.lcNo, margin + 22, yPos + yOffset);
+            doc.text(filters.lcNo, margin + 26, yPos + yOffset);
         }
         if (filters && filters.productName) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("Product:", margin, yPos + yOffset);
+            doc.text("Product", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.productName, margin + 22, yPos + yOffset);
+            doc.text(filters.productName, margin + 26, yPos + yOffset);
         }
 
         // --- Data Preparation & Totals ---
@@ -3683,27 +3690,29 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
 
         // Right Side: Date Range, Printed On
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        const rightColX = pageWidth - margin - 70;
+        const rightColX = pageWidth - margin - 60;
 
         doc.setFont('helvetica', 'bold');
-        doc.text("Printed on:", rightColX, yPos);
+        doc.text("Printed on", rightColX, yPos);
+        doc.text(":", rightColX + 20, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+        doc.text(dateStr, rightColX + 23, yPos);
 
         let infoYOffset = 6;
         if (filters.startDate || filters.endDate) {
             doc.setFont('helvetica', 'bold');
-            doc.text("Date Range:", rightColX, yPos + 6);
+            doc.text("Date Range", rightColX, yPos + 6);
+            doc.text(":", rightColX + 20, yPos + 6);
             doc.setFont('helvetica', 'normal');
-            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, rightColX + 23, yPos + 6);
             infoYOffset += 6;
         }
 
         // Draw Single Summary Card just below "Printed on" info row
-        const cardY = yPos + infoYOffset;
+        const cardY = yPos + 1;
         const cardWidth = 50;
         const cardHeight = 15;
-        const cardX = pageWidth - margin - cardWidth;
+        const cardX = (pageWidth - cardWidth) / 2;
 
         // Draw background/border for the card
         doc.setFillColor(255, 255, 255);
@@ -3769,14 +3778,14 @@ export const generateCnFHistoryReportPDF = (reportData, agentInfo, filters) => {
             columnStyles: {
                 0: { cellWidth: 18, halign: 'center' }, // Date
                 1: { cellWidth: 14, halign: 'center' }, // LC No
-                2: { cellWidth: 21, halign: 'left', overflow: 'hidden' }, // Importer
-                3: { cellWidth: 21, halign: 'left', overflow: 'hidden' },   // Exporter
-                4: { cellWidth: 20, halign: 'left' },   // Product
+                2: { cellWidth: 20, halign: 'left', overflow: 'hidden' }, // Importer
+                3: { cellWidth: 20, halign: 'left', overflow: 'hidden' },   // Exporter
+                4: { cellWidth: 26, halign: 'left' },   // Product
                 5: { cellWidth: 20, halign: 'center', overflow: 'linebreak' }, // Port
                 6: { cellWidth: 12, halign: 'center' }, // Trucks
                 7: { cellWidth: 16, halign: 'center' }, // BOE No
-                8: { cellWidth: 20, halign: 'right' },  // QTY
-                9: { cellWidth: 16, halign: 'right' }, // Commission
+                8: { cellWidth: 19, halign: 'right' },  // QTY
+                9: { cellWidth: 14, halign: 'right' }, // Commission
                 10: { cellWidth: 23, halign: 'right', fontStyle: 'bold' }  // Total
             }
         });
@@ -3848,56 +3857,65 @@ export const generateCnFExpenseReportPDF = (reportData, agentInfo, filters) => {
         doc.setFontSize(9);
 
         doc.setFont('helvetica', 'bold');
-        doc.text("Agent Name:", margin, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(agentInfo.name || '-', margin + 22, yPos);
+        doc.text("Agent ID", margin, yPos);
+        doc.text("Agent Name", margin, yPos + 5);
+        doc.text("Contact No.", margin, yPos + 10);
 
-        doc.setFont('helvetica', 'bold');
-        doc.text("Agent ID:", margin, yPos + 6);
-        doc.setFont('helvetica', 'normal');
-        doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
+        doc.text(":", margin + 23, yPos);
+        doc.text(":", margin + 23, yPos + 5);
+        doc.text(":", margin + 23, yPos + 10);
 
-        let yOffset = 6;
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.cnfId || '-', margin + 26, yPos);
+        doc.text(agentInfo.name || '-', margin + 26, yPos + 5);
+        doc.text(agentInfo.phone || '-', margin + 26, yPos + 10);
+
+        let yOffset = 10;
         if (filters && filters.port) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("Port:", margin, yPos + yOffset);
+            doc.text("Port", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.port, margin + 22, yPos + yOffset);
+            doc.text(filters.port, margin + 26, yPos + yOffset);
         }
         if (filters && filters.lcNo) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("LC No:", margin, yPos + yOffset);
+            doc.text("LC No", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.lcNo, margin + 22, yPos + yOffset);
+            doc.text(filters.lcNo, margin + 26, yPos + yOffset);
         }
         if (filters && filters.productName) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("Product:", margin, yPos + yOffset);
+            doc.text("Product", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.productName, margin + 22, yPos + yOffset);
+            doc.text(filters.productName, margin + 26, yPos + yOffset);
         }
 
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        const rightColX = pageWidth - margin - 70;
+        const rightColX = pageWidth - margin - 60;
 
         doc.setFont('helvetica', 'bold');
-        doc.text("Printed on:", rightColX, yPos);
+        doc.text("Printed on", rightColX, yPos);
+        doc.text(":", rightColX + 20, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+        doc.text(dateStr, rightColX + 23, yPos);
 
         if (filters.startDate || filters.endDate) {
             doc.setFont('helvetica', 'bold');
-            doc.text("Date Range:", rightColX, yPos + 6);
+            doc.text("Date Range", rightColX, yPos + 6);
+            doc.text(":", rightColX + 20, yPos + 6);
             doc.setFont('helvetica', 'normal');
-            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, rightColX + 23, yPos + 6);
         }
 
         const tableRows = reportData.map((row) => [
             formatDate(row.date),
-            row.lcNo || '-',
+            row.lcNo ? (row.lcNo.toString().length > 5 ? row.lcNo.toString().slice(-5) : row.lcNo.toString()) : '-',
             row.importer || '-',
             row.product || '-',
             row.port || '-',
@@ -4143,51 +4161,60 @@ export const generateCnFPaymentReportPDF = (reportData, agentInfo, filters) => {
         doc.setFontSize(9);
 
         doc.setFont('helvetica', 'bold');
-        doc.text("Agent Name:", margin, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(agentInfo.name || '-', margin + 22, yPos);
+        doc.text("Agent ID", margin, yPos);
+        doc.text("Agent Name", margin, yPos + 5);
+        doc.text("Contact No.", margin, yPos + 10);
 
-        doc.setFont('helvetica', 'bold');
-        doc.text("Agent ID:", margin, yPos + 6);
-        doc.setFont('helvetica', 'normal');
-        doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
+        doc.text(":", margin + 23, yPos);
+        doc.text(":", margin + 23, yPos + 5);
+        doc.text(":", margin + 23, yPos + 10);
 
-        let yOffset = 6;
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.cnfId || '-', margin + 26, yPos);
+        doc.text(agentInfo.name || '-', margin + 26, yPos + 5);
+        doc.text(agentInfo.phone || '-', margin + 26, yPos + 10);
+
+        let yOffset = 10;
         if (filters && filters.port) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("Port:", margin, yPos + yOffset);
+            doc.text("Port", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.port, margin + 22, yPos + yOffset);
+            doc.text(filters.port, margin + 26, yPos + yOffset);
         }
         if (filters && filters.lcNo) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("LC No:", margin, yPos + yOffset);
+            doc.text("LC No", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.lcNo, margin + 22, yPos + yOffset);
+            doc.text(filters.lcNo, margin + 26, yPos + yOffset);
         }
         if (filters && filters.productName) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("Product:", margin, yPos + yOffset);
+            doc.text("Product", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.productName, margin + 22, yPos + yOffset);
+            doc.text(filters.productName, margin + 26, yPos + yOffset);
         }
 
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        const rightColX = pageWidth - margin - 70;
+        const rightColX = pageWidth - margin - 60;
 
         doc.setFont('helvetica', 'bold');
-        doc.text("Printed on:", rightColX, yPos);
+        doc.text("Printed on", rightColX, yPos);
+        doc.text(":", rightColX + 20, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+        doc.text(dateStr, rightColX + 23, yPos);
 
         if (filters.startDate || filters.endDate) {
             doc.setFont('helvetica', 'bold');
-            doc.text("Date Range:", rightColX, yPos + 6);
+            doc.text("Date Range", rightColX, yPos + 6);
+            doc.text(":", rightColX + 20, yPos + 6);
             doc.setFont('helvetica', 'normal');
-            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, rightColX + 23, yPos + 6);
         }
 
         const tableRows = reportData.map((row) => [
@@ -4308,56 +4335,65 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
         doc.setFontSize(9);
 
         doc.setFont('helvetica', 'bold');
-        doc.text("Agent Name:", margin, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(agentInfo.name || '-', margin + 22, yPos);
+        doc.text("Agent ID", margin, yPos);
+        doc.text("Agent Name", margin, yPos + 5);
+        doc.text("Contact No.", margin, yPos + 10);
 
-        doc.setFont('helvetica', 'bold');
-        doc.text("Agent ID:", margin, yPos + 6);
-        doc.setFont('helvetica', 'normal');
-        doc.text(agentInfo.cnfId || '-', margin + 22, yPos + 6);
+        doc.text(":", margin + 23, yPos);
+        doc.text(":", margin + 23, yPos + 5);
+        doc.text(":", margin + 23, yPos + 10);
 
-        let yOffset = 6;
+        doc.setFont('helvetica', 'normal');
+        doc.text(agentInfo.cnfId || '-', margin + 26, yPos);
+        doc.text(agentInfo.name || '-', margin + 26, yPos + 5);
+        doc.text(agentInfo.phone || '-', margin + 26, yPos + 10);
+
+        let yOffset = 10;
         if (filters && filters.port) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("Port:", margin, yPos + yOffset);
+            doc.text("Port", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.port, margin + 22, yPos + yOffset);
+            doc.text(filters.port, margin + 26, yPos + yOffset);
         }
         if (filters && filters.lcNo) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("LC No:", margin, yPos + yOffset);
+            doc.text("LC No", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.lcNo, margin + 22, yPos + yOffset);
+            doc.text(filters.lcNo, margin + 26, yPos + yOffset);
         }
         if (filters && filters.productName) {
-            yOffset += 6;
+            yOffset += 5;
             doc.setFont('helvetica', 'bold');
-            doc.text("Product:", margin, yPos + yOffset);
+            doc.text("Product", margin, yPos + yOffset);
+            doc.text(":", margin + 23, yPos + yOffset);
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.productName, margin + 22, yPos + yOffset);
+            doc.text(filters.productName, margin + 26, yPos + yOffset);
         }
 
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        const rightColX = pageWidth - margin - 70;
+        const rightColX = pageWidth - margin - 60;
 
         doc.setFont('helvetica', 'bold');
-        doc.text("Printed on:", rightColX, yPos);
+        doc.text("Printed on", rightColX, yPos);
+        doc.text(":", rightColX + 20, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(dateStr, pageWidth - margin, yPos, { align: 'right' });
+        doc.text(dateStr, rightColX + 23, yPos);
 
         if (filters.startDate || filters.endDate) {
             doc.setFont('helvetica', 'bold');
-            doc.text("Date Range:", rightColX, yPos + 6);
+            doc.text("Date Range", rightColX, yPos + 6);
+            doc.text(":", rightColX + 20, yPos + 6);
             doc.setFont('helvetica', 'normal');
-            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, pageWidth - margin, yPos + 6, { align: 'right' });
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, rightColX + 23, yPos + 6);
         }
 
         const tableRows = reportData.map((row) => [
             formatDate(row.date),
-            row.lcNo || '-',
+            row.lcNo ? (row.lcNo.toString().length > 5 ? row.lcNo.toString().slice(-5) : row.lcNo.toString()) : '-',
             row.importer || '-',
             row.product || '-',
             row.port || '-',
@@ -4399,7 +4435,7 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
             theme: 'plain',
             showFoot: 'lastPage',
             styles: {
-                fontSize: 8,
+                fontSize: 9,
                 cellPadding: 1.5,
                 lineColor: [0, 0, 0],
                 lineWidth: 0.1,
@@ -4422,16 +4458,16 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
             },
             margin: { left: tableMargin, right: tableMargin },
             columnStyles: {
-                0: { cellWidth: 18, halign: 'center' }, // Date
-                1: { cellWidth: 24, halign: 'center' }, // LC No
+                0: { cellWidth: 20, halign: 'center' }, // Date
+                1: { cellWidth: 15, halign: 'center' }, // LC No
                 2: { cellWidth: 25, halign: 'left', overflow: 'hidden' }, // Importer (Hide overlap)
-                3: { cellWidth: 20, halign: 'left' }, // Product
+                3: { cellWidth: 26, halign: 'left' }, // Product
                 4: { cellWidth: 20, halign: 'center' }, // Port
                 5: { cellWidth: 20, halign: 'right' }, // QTY
                 6: { cellWidth: 12, halign: 'center' }, // Truck
                 7: { cellWidth: 20, halign: 'right' }, // Billing Amt
                 8: { cellWidth: 18, halign: 'center' }, // Method
-                9: { cellWidth: 44, halign: 'left' }, // Reference / Bank
+                9: { cellWidth: 50, halign: 'left' }, // Reference / Bank
                 10: { cellWidth: 20, halign: 'right' }, // Amount
                 11: { cellWidth: 20, halign: 'right' }, // Discount
                 12: { cellWidth: 20, halign: 'right', fontStyle: 'bold' } // Balance

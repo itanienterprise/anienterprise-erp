@@ -685,7 +685,8 @@ function App() {
     port: { key: 'name', direction: 'asc' },
     ip: { key: 'openingDate', direction: 'desc' },
     customer: { key: 'customerId', direction: 'asc' },
-    employee: { key: 'employeeId', direction: 'asc' }
+    employee: { key: 'employeeId', direction: 'asc' },
+    cnf: { key: 'cnfId', direction: 'asc' }
   });
 
   const [showLcReport, setShowLcReport] = useState(false);
