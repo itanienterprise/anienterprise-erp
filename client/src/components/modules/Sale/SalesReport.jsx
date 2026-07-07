@@ -803,12 +803,16 @@ const SalesReport = ({
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-900">
-                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[4%]`}>SL</th>
-                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[7%]`}>Date</th>
+                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[4%] whitespace-nowrap`}>SL</th>
+                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap`}>Date</th>
                                         {saleType !== 'Border' && (
-                                            <th className="border-r border-gray-900 px-1 py-1.5 text-center text-[11px] font-bold text-gray-900 uppercase w-[7%]">LC No</th>
+                                            <>
+                                                <th className="border-r border-gray-900 px-1 py-1.5 text-center text-[11px] font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap">LC No</th>
+                                                <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap">Challan No</th>
+                                                <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap">Truck No</th>
+                                            </>
                                         )}
-                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[12%]`}>{saleType === 'Border' ? 'LC No' : 'Invoice'}</th>
+                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[12%] whitespace-nowrap`}>{saleType === 'Border' ? 'LC No' : 'Invoice'}</th>
                                         {saleType === 'Border' ? (
                                             <>
                                                 <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">Importer</th>
@@ -818,29 +822,23 @@ const SalesReport = ({
                                                 <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">Party Name</th>
                                             </>
                                         ) : (
-                                            <th className="border-r border-gray-900 px-2 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[10%]">Company</th>
+                                            <th className="border-r border-gray-900 px-2 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[10%] whitespace-nowrap">Company</th>
                                         )}
-                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-left ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[7%]`}>Product</th>
+                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-left ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap`}>Product</th>
                                         {saleType !== 'Border' && (
-                                            <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[10%]">Brand</th>
+                                            <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[10%] whitespace-nowrap">Brand</th>
                                         )}
-                                        {saleType !== 'Border' && (
-                                            <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[7%]">Challan No</th>
-                                        )}
-                                        {saleType !== 'Border' && (
-                                            <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[7%]">Truck No</th>
-                                        )}
-                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[7%]`}>QTY</th>
+                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap`}>QTY</th>
                                         {saleType === 'Border' && (
-                                            <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase w-[5%]">Truck</th>
+                                            <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase w-[5%] whitespace-nowrap">Truck</th>
                                         )}
-                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-right ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[5%]`}>Price</th>
-                                        <th className={`${saleType === 'Border' ? '' : 'border-r'} border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-right ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[10%]`}>Total</th>
+                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-right ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[5%] whitespace-nowrap`}>Price</th>
+                                        <th className={`${saleType === 'Border' ? '' : 'border-r'} border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-right ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[10%] whitespace-nowrap`}>Total</th>
                                         {saleType !== 'Border' && (
                                             <>
-                                                <th className="border-r border-gray-900 px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[6%]">Disc</th>
-                                                <th className="border-r border-gray-900 px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[9%]">Truck Fare</th>
-                                                <th className="px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[10%]">Balance</th>
+                                                <th className="border-r border-gray-900 px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[6%] whitespace-nowrap">Disc</th>
+                                                <th className="border-r border-gray-900 px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[9%] whitespace-nowrap">Truck Fare</th>
+                                                <th className="px-1 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase w-[10%] whitespace-nowrap">Balance</th>
                                             </>
                                         )}
                                     </tr>
@@ -895,14 +893,20 @@ const SalesReport = ({
                                                             {item.isFirstInProduct && (
                                                                 <>
                                                                     {saleType !== 'Border' ? (
-                                                                        <td rowSpan={item.productSpan} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 text-center">
+                                                                        <td rowSpan={item.productSpan} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">
                                                                             {item.lcNo && item.lcNo !== '-' ? item.lcNo.slice(-4) : '-'}
                                                                         </td>
                                                                     ) : (
-                                                                        <td rowSpan={item.productSpan} className="border-r border-gray-900 px-0.5 py-1 text-[12px] font-bold text-gray-900 text-center">
+                                                                        <td rowSpan={item.productSpan} className="border-r border-gray-900 px-0.5 py-1 text-[12px] font-bold text-gray-900 text-center whitespace-nowrap">
                                                                             {item.lcNo || '-'}
                                                                         </td>
                                                                     )}
+                                                                </>
+                                                            )}
+                                                            {saleType !== 'Border' && idx === 0 && (
+                                                                <>
+                                                                    <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 whitespace-nowrap text-center">{sale.challanNo || '-'}</td>
+                                                                    <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 whitespace-nowrap text-center">{sale.truckNo || '-'}</td>
                                                                 </>
                                                             )}
                                                             {idx === 0 && (
@@ -928,12 +932,6 @@ const SalesReport = ({
                                                         )}
                                                         {saleType !== 'Border' && (
                                                             <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 truncate">{item.brand}</td>
-                                                        )}
-                                                        {saleType !== 'Border' && idx === 0 && (
-                                                            <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900">{sale.challanNo || '-'}</td>
-                                                        )}
-                                                        {saleType !== 'Border' && idx === 0 && (
-                                                            <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900">{sale.truckNo || '-'}</td>
                                                         )}
                                                         <td className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-right font-bold text-gray-900`}>{parseFloat(item.quantity).toLocaleString('en-US')}</td>
                                                         {saleType === 'Border' && (

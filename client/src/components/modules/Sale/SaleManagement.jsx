@@ -4422,7 +4422,7 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('challanNo')}>
                                             <div className="flex items-center">Challan No {renderSortIcon('challanNo')}</div>
                                         </th>
-                                        <th className="sale-mgmt-th cursor-pointer group w-[100px] max-w-[100px] whitespace-normal" onClick={() => handleSort('truckNo')}>
+                                        <th className="sale-mgmt-th cursor-pointer group whitespace-nowrap" onClick={() => handleSort('truckNo')}>
                                             <div className="flex items-center">Truck No {renderSortIcon('truckNo')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
@@ -4436,12 +4436,6 @@ const SaleManagement = ({
                                         </th>
                                         <th className="sale-mgmt-th">Product</th>
                                         <th className="sale-mgmt-th">Brand</th>
-                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('challanNo')}>
-                                            <div className="flex items-center">Challan No {renderSortIcon('challanNo')}</div>
-                                        </th>
-                                        <th className="sale-mgmt-th cursor-pointer group w-[100px] max-w-[100px] whitespace-normal" onClick={() => handleSort('truckNo')}>
-                                            <div className="flex items-center">Truck No {renderSortIcon('truckNo')}</div>
-                                        </th>
                                         <th className="sale-mgmt-th text-center font-bold">Quantity</th>
                                         <th className="sale-mgmt-th text-center font-bold">Rate</th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('discount')} style={{ display: 'none' }}>
@@ -4614,7 +4608,7 @@ const SaleManagement = ({
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.challanNo || '-'}</div>
                                             </td>
-                                            <td className="px-3 py-4 whitespace-normal break-words w-[100px] max-w-[100px]">
+                                            <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.truckNo || '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">

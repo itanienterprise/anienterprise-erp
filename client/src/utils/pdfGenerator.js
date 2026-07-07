@@ -2227,6 +2227,13 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             doc.setFont('helvetica', 'normal');
             doc.text(filters.lcNo, margin + 25, yPos);
         }
+        if (filters.warehouse) {
+            yPos += 7;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Warehouse:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.warehouse, margin + 25, yPos);
+        }
 
         let currentY = yPos + 10;
 
@@ -2650,6 +2657,11 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     }
                 }
 
+                if (saleType !== 'Border' && idx === 0) {
+                    row.push({ content: (sale.challanNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                    row.push({ content: (sale.truckNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                }
+
                 if (idx === 0) {
                     if (saleType !== 'Border') {
                         row.push({ content: (sale.invoiceNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
@@ -2672,11 +2684,6 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
                 if (saleType !== 'Border') {
                     row.push(item.brand);
-                }
-
-                if (saleType !== 'Border' && idx === 0) {
-                    row.push({ content: (sale.challanNo || '-'), rowSpan: flatItems.length });
-                    row.push({ content: (sale.truckNo || '-'), rowSpan: flatItems.length });
                 }
 
                 if (saleType !== 'Border' && item.uom === 'BAG') {
@@ -2718,7 +2725,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
         const headRow = saleType === 'Border'
             ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
-            : [['SL', 'Date', 'LC No', 'Invoice', 'Company', 'Product', 'Brand', 'Challan No', 'Truck No', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
+            : [['SL', 'Date', 'LC No', 'CH No', 'Truck No', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
 
         const footRow = [[
             { content: 'GRAND TOTAL', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -2777,12 +2784,12 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 0: { cellWidth: 8, halign: 'center' },     // SL
                 1: { cellWidth: 18, halign: 'center' },    // Date
                 2: { cellWidth: 15, halign: 'center' },    // LC No
-                3: { cellWidth: 17, halign: 'center' },    // Invoice
-                4: { cellWidth: 31 },                       // Company
-                5: { cellWidth: 24, overflow: 'linebreak' }, // Product
-                6: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand
-                7: { cellWidth: 18, overflow: 'linebreak' }, // Challan No
-                8: { cellWidth: 20, overflow: 'linebreak' }, // Truck No
+                3: { cellWidth: 15, overflow: 'linebreak' }, // Challan No (moved)
+                4: { cellWidth: 22, overflow: 'linebreak' }, // Truck No (moved)
+                5: { cellWidth: 17, halign: 'center' },    // Invoice (moved)
+                6: { cellWidth: 31 },                       // Company (moved)
+                7: { cellWidth: 24, overflow: 'linebreak' }, // Product (moved)
+                8: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand (moved)
                 9: { cellWidth: 20, halign: 'right' },     // Qty
                 10: { cellWidth: 14, halign: 'right' },    // Price
                 11: { cellWidth: 24, halign: 'right' },    // Total
@@ -3249,6 +3256,20 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         const isParty = customerType.includes('party');
 
         if (isAll) {
+            if (summary.isFiltered) {
+                const openingBalanceRow = [
+                    "—",
+                    {
+                        content: "Opening Balance",
+                        colSpan: isParty ? 8 : 7,
+                        styles: { halign: 'center', fontStyle: 'bold' }
+                    },
+                    "—",
+                    `${(summary.openingBalance || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                ];
+                tableRows.push(openingBalanceRow);
+            }
+
             let grandQty = 0;
             let grandAmt = 0;
             let grandPaid = 0;

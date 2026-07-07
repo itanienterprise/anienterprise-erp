@@ -11,12 +11,13 @@ const ProductHistoryReport = ({
 }) => {
     const [activeTab, setActiveTab] = useState('total');
     const [showFilterPanel, setShowFilterPanel] = useState(false);
-    const [modalFilters, setModalFilters] = useState({ startDate: '', endDate: '', party: '', brand: '', lcNo: '' });
-    const [dropdownOpen, setDropdownOpen] = useState({ party: false, brand: false, lcNo: false });
-    const [dropdownSearch, setDropdownSearch] = useState({ party: '', brand: '', lcNo: '' });
+    const [modalFilters, setModalFilters] = useState({ startDate: '', endDate: '', party: '', brand: '', lcNo: '', warehouse: '' });
+    const [dropdownOpen, setDropdownOpen] = useState({ party: false, brand: false, lcNo: false, warehouse: false });
+    const [dropdownSearch, setDropdownSearch] = useState({ party: '', brand: '', lcNo: '', warehouse: '' });
     const partyDropdownRef = useRef(null);
     const brandDropdownRef = useRef(null);
     const lcNoDropdownRef = useRef(null);
+    const warehouseDropdownRef = useRef(null);
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
 
@@ -40,6 +41,11 @@ const ProductHistoryReport = ({
                 setDropdownOpen(d => ({ ...d, lcNo: false }));
                 setDropdownSearch(s => ({ ...s, lcNo: '' }));
             }
+            // Check if click is outside warehouse dropdown
+            if (warehouseDropdownRef.current && !warehouseDropdownRef.current.contains(e.target)) {
+                setDropdownOpen(d => ({ ...d, warehouse: false }));
+                setDropdownSearch(s => ({ ...s, warehouse: '' }));
+            }
             // Check if click is outside main filter panel AND not on the toggle button
             if (showFilterPanel &&
                 filterPanelRef.current && !filterPanelRef.current.contains(e.target) &&
@@ -59,7 +65,8 @@ const ProductHistoryReport = ({
                 endDate: reportData.filters.endDate || '',
                 brand: reportData.filters.brand || '',
                 party: reportData.filters.party || '',
-                lcNo: reportData.filters.lcNo || ''
+                lcNo: reportData.filters.lcNo || '',
+                warehouse: reportData.filters.warehouse || ''
             }));
         }
     }, [reportData]);
@@ -89,12 +96,18 @@ const ProductHistoryReport = ({
         ...(rawSaleHistory || []).map(s => s.lcNo),
         ...(rawDamageHistory || []).map(d => d.lcNo)
     ].filter(Boolean))].sort();
+    const warehouseOptions = [...new Set([
+        ...(rawPurchaseHistory || []).map(p => p.warehouse || p.whName),
+        ...(rawSaleHistory || []).map(s => s.itemWarehouse),
+        ...(rawDamageHistory || []).map(d => d.warehouse || d.whName)
+    ].filter(Boolean))].sort();
 
     const purchaseHistory = (rawPurchaseHistory || []).filter(p => {
         if (modalFilters.startDate && p.date < modalFilters.startDate) return false;
         if (modalFilters.endDate && p.date > modalFilters.endDate) return false;
         if (modalFilters.brand && (p.itemBrand || '').toLowerCase() !== modalFilters.brand.toLowerCase()) return false;
         if (modalFilters.lcNo && (p.lcNo || '').trim() !== modalFilters.lcNo) return false;
+        if (modalFilters.warehouse && (p.warehouse || p.whName || '').trim().toLowerCase() !== modalFilters.warehouse.toLowerCase()) return false;
         return true;
     });
     const saleHistory = (rawSaleHistory || []).filter(s => {
@@ -103,6 +116,7 @@ const ProductHistoryReport = ({
         if (modalFilters.party && (s.companyName || '') !== modalFilters.party) return false;
         if (modalFilters.brand && (s.itemBrand || '').toLowerCase() !== modalFilters.brand.toLowerCase()) return false;
         if (modalFilters.lcNo && (s.lcNo || '').trim() !== modalFilters.lcNo) return false;
+        if (modalFilters.warehouse && (s.itemWarehouse || '').trim().toLowerCase() !== modalFilters.warehouse.toLowerCase()) return false;
         return true;
     });
     const damageHistory = (rawDamageHistory || []).filter(d => {
@@ -110,6 +124,7 @@ const ProductHistoryReport = ({
         if (modalFilters.endDate && d.date > modalFilters.endDate) return false;
         if (modalFilters.brand && (d.brand || '').toLowerCase() !== modalFilters.brand.toLowerCase()) return false;
         if (modalFilters.lcNo && (d.lcNo || '').trim() !== modalFilters.lcNo) return false;
+        if (modalFilters.warehouse && (d.warehouse || d.whName || '').trim().toLowerCase() !== modalFilters.warehouse.toLowerCase()) return false;
         return true;
     });
 
@@ -212,7 +227,7 @@ const ProductHistoryReport = ({
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-0 md:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
-            <div className="bg-white w-full max-w-7xl h-full md:max-h-[90vh] overflow-hidden md:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
+            <div className="bg-white w-full max-w-[95vw] xl:max-w-[1400px] h-full md:max-h-[90vh] overflow-hidden md:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar */}
                 <div className="flex flex-col px-4 md:px-8 py-3 md:py-4 border-b border-gray-100 print:hidden gap-4 flex-shrink-0">
                     {/* Row 1: Title and Action Buttons */}
@@ -253,8 +268,8 @@ const ProductHistoryReport = ({
                                             <h4 className="font-bold text-gray-900">Advanced Filters</h4>
                                             <button
                                                 onClick={() => {
-                                                    setModalFilters({ startDate: '', endDate: '', party: '', brand: '', lcNo: '' });
-                                                    setDropdownOpen({ party: false, brand: false, lcNo: false });
+                                                    setModalFilters({ startDate: '', endDate: '', party: '', brand: '', lcNo: '', warehouse: '' });
+                                                    setDropdownOpen({ party: false, brand: false, lcNo: false, warehouse: false });
                                                 }}
                                                 className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
                                             >
@@ -348,7 +363,7 @@ const ProductHistoryReport = ({
                                                 </div>
                                             </div>
 
-                                            {/* LC No Dropdown */}
+                                            {/* LC No and Warehouse Dropdowns */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 <div ref={lcNoDropdownRef} className="space-y-1.5 relative">
                                                     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">LC No</label>
@@ -357,7 +372,7 @@ const ProductHistoryReport = ({
                                                             type="text"
                                                             value={dropdownOpen.lcNo ? dropdownSearch.lcNo : modalFilters.lcNo}
                                                             onFocus={() => {
-                                                                setDropdownOpen({ party: false, brand: false, lcNo: true });
+                                                                setDropdownOpen({ party: false, brand: false, lcNo: true, warehouse: false });
                                                                 setDropdownSearch(s => ({ ...s, lcNo: '' }));
                                                             }}
                                                             onChange={e => setDropdownSearch(s => ({ ...s, lcNo: e.target.value }))}
@@ -367,11 +382,40 @@ const ProductHistoryReport = ({
                                                         <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                                         {dropdownOpen.lcNo && (
                                                             <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, lcNo: '' }); setDropdownOpen({ party: false, brand: false, lcNo: false }); setDropdownSearch(s => ({ ...s, lcNo: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All LCs</button>
+                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, lcNo: '' }); setDropdownOpen({ party: false, brand: false, lcNo: false, warehouse: false }); setDropdownSearch(s => ({ ...s, lcNo: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All LCs</button>
                                                                 {lcOptions.filter(lc => lc.toLowerCase().includes(dropdownSearch.lcNo.toLowerCase())).map(lc => (
-                                                                    <button key={lc} type="button" onClick={() => { setModalFilters({ ...modalFilters, lcNo: lc }); setDropdownOpen({ party: false, brand: false, lcNo: false }); setDropdownSearch(s => ({ ...s, lcNo: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.lcNo === lc ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{lc}</button>
+                                                                    <button key={lc} type="button" onClick={() => { setModalFilters({ ...modalFilters, lcNo: lc }); setDropdownOpen({ party: false, brand: false, lcNo: false, warehouse: false }); setDropdownSearch(s => ({ ...s, lcNo: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.lcNo === lc ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{lc}</button>
                                                                 ))}
                                                                 {lcOptions.filter(lc => lc.toLowerCase().includes(dropdownSearch.lcNo.toLowerCase())).length === 0 && (
+                                                                    <p className="px-4 py-3 text-sm text-gray-400 italic">No results found</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div ref={warehouseDropdownRef} className="space-y-1.5 relative">
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Warehouse</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={dropdownOpen.warehouse ? dropdownSearch.warehouse : modalFilters.warehouse}
+                                                            onFocus={() => {
+                                                                setDropdownOpen({ party: false, brand: false, lcNo: false, warehouse: true });
+                                                                setDropdownSearch(s => ({ ...s, warehouse: '' }));
+                                                            }}
+                                                            onChange={e => setDropdownSearch(s => ({ ...s, warehouse: e.target.value }))}
+                                                            placeholder={modalFilters.warehouse || 'Search Warehouse...'}
+                                                            className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm ${modalFilters.warehouse && !dropdownOpen.warehouse ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                        />
+                                                        <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                                        {dropdownOpen.warehouse && (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                <button type="button" onClick={() => { setModalFilters({ ...modalFilters, warehouse: '' }); setDropdownOpen({ party: false, brand: false, lcNo: false, warehouse: false }); setDropdownSearch(s => ({ ...s, warehouse: '' })); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Warehouses</button>
+                                                                {warehouseOptions.filter(wh => wh.toLowerCase().includes(dropdownSearch.warehouse.toLowerCase())).map(wh => (
+                                                                    <button key={wh} type="button" onClick={() => { setModalFilters({ ...modalFilters, warehouse: wh }); setDropdownOpen({ party: false, brand: false, lcNo: false, warehouse: false }); setDropdownSearch(s => ({ ...s, warehouse: '' })); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${modalFilters.warehouse === wh ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{wh}</button>
+                                                                ))}
+                                                                {warehouseOptions.filter(wh => wh.toLowerCase().includes(dropdownSearch.warehouse.toLowerCase())).length === 0 && (
                                                                     <p className="px-4 py-3 text-sm text-gray-400 italic">No results found</p>
                                                                 )}
                                                             </div>
@@ -442,7 +486,7 @@ const ProductHistoryReport = ({
 
                 {/* Printable Content */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-12 print:p-4 print:overflow-visible bg-white">
-                    <div className="max-w-[1000px] mx-auto space-y-8">
+                    <div className="max-w-[1300px] mx-auto space-y-8">
                         {/* Header */}
                         <div className="text-center space-y-1">
                             <h1 className="text-2xl md:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
@@ -466,6 +510,7 @@ const ProductHistoryReport = ({
                                 {modalFilters.party && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Party:</span> <span className="truncate">{modalFilters.party}</span></div>}
                                 {modalFilters.brand && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Brand:</span> <span className="truncate">{modalFilters.brand}</span></div>}
                                 {modalFilters.lcNo && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">LC No:</span> <span className="truncate">{modalFilters.lcNo}</span></div>}
+                                {modalFilters.warehouse && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Warehouse:</span> <span className="truncate">{modalFilters.warehouse}</span></div>}
                             </div>
                             <div className="font-bold text-[10px] md:text-sm whitespace-nowrap"><span className="text-gray-900">Printed:</span> <span className="text-gray-900">{formatDate(new Date())}</span></div>
                         </div>

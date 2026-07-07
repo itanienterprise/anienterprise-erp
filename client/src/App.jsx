@@ -152,6 +152,18 @@ function App() {
     localStorage.setItem('currentUser', JSON.stringify(user));
     setCurrentView('dashboard');
     localStorage.setItem('currentView', 'dashboard');
+    
+    // Collapse all sidebar dropdowns on login
+    setStockDropdownOpen(false);
+    setSaleDropdownOpen(false);
+    setHrmsDropdownOpen(false);
+    setImporterDropdownOpen(false);
+    setCnfDropdownOpen(false);
+    setCrmDropdownOpen(false);
+    setLcDropdownOpen(false);
+    setInsuranceDropdownOpen(false);
+    setIpDropdownOpen(false);
+    setPiDropdownOpen(false);
   };
 
   const handleLogout = async () => {
@@ -166,6 +178,18 @@ function App() {
       localStorage.removeItem('currentUser');
       localStorage.setItem('isAuthenticated', 'false');
       localStorage.removeItem('currentView');
+
+      // Collapse all sidebar dropdowns on logout
+      setStockDropdownOpen(false);
+      setSaleDropdownOpen(false);
+      setHrmsDropdownOpen(false);
+      setImporterDropdownOpen(false);
+      setCnfDropdownOpen(false);
+      setCrmDropdownOpen(false);
+      setLcDropdownOpen(false);
+      setInsuranceDropdownOpen(false);
+      setIpDropdownOpen(false);
+      setPiDropdownOpen(false);
     }
   };
 
@@ -558,53 +582,16 @@ function App() {
   const [currentView, setCurrentView] = useState(() => {
     return localStorage.getItem('currentView') || 'dashboard';
   });
-  const [stockDropdownOpen, setStockDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView.includes('stock') || initialView === 'products-section' || initialView === 'warehouse-section' || initialView === 'damage-section';
-  });
-  const [saleDropdownOpen, setSaleDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView.includes('sale-section');
-  });
-
-  const [hrmsDropdownOpen, setHrmsDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'employee-section' || initialView === 'role-creation' || initialView === 'system-access';
-  });
-
-  const [importerDropdownOpen, setImporterDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'importer-section' || initialView === 'exporter-section';
-  });
-
-  const [cnfDropdownOpen, setCnfDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'indian-cnf-section' || initialView === 'bd-cnf-section' || initialView === 'cnf-payment-section';
-  });
-
-  const [crmDropdownOpen, setCrmDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'customer-section';
-  });
-  const [lcDropdownOpen, setLcDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'lc-management-section' || initialView === 'lc-gp-section' || initialView === 'lc-entry-section';
-  });
-
-  const [insuranceDropdownOpen, setInsuranceDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'insurance-section' || initialView === 'insurance-payment-section';
-  });
-
-  const [ipDropdownOpen, setIpDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'ip-section';
-  });
-
-  const [piDropdownOpen, setPiDropdownOpen] = useState(() => {
-    const initialView = localStorage.getItem('currentView') || 'dashboard';
-    return initialView === 'pi-section' || initialView === 'packing-list-section' || initialView === 'tr-setup-section';
-  });
+  const [stockDropdownOpen, setStockDropdownOpen] = useState(false);
+  const [saleDropdownOpen, setSaleDropdownOpen] = useState(false);
+  const [hrmsDropdownOpen, setHrmsDropdownOpen] = useState(false);
+  const [importerDropdownOpen, setImporterDropdownOpen] = useState(false);
+  const [cnfDropdownOpen, setCnfDropdownOpen] = useState(false);
+  const [crmDropdownOpen, setCrmDropdownOpen] = useState(false);
+  const [lcDropdownOpen, setLcDropdownOpen] = useState(false);
+  const [insuranceDropdownOpen, setInsuranceDropdownOpen] = useState(false);
+  const [ipDropdownOpen, setIpDropdownOpen] = useState(false);
+  const [piDropdownOpen, setPiDropdownOpen] = useState(false);
 
   const toggleSidebarDropdown = (dropdownName) => {
     setStockDropdownOpen(dropdownName === 'stock' ? !stockDropdownOpen : false);

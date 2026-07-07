@@ -79,7 +79,7 @@ const StockManagement = ({
     const [viewRecord, setViewRecord] = useState(null);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
-    const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', warehouse: '', brand: '' });
+    const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', warehouse: '' });
     const [historyTab, setHistoryTab] = useState('purchase'); // 'purchase' or 'sale'
 
     // Dropdown & Selection State
@@ -205,7 +205,7 @@ const StockManagement = ({
 
             if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
-            if (historyFilters.warehouse && (item.warehouse || '').trim() !== historyFilters.warehouse) return false;
+            if (historyFilters.warehouse && (item.warehouse || item.whName || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return false;
             if (historyFilters.lcNo && (item.lcNo || '').trim() !== historyFilters.lcNo) return false;
             if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
             if (historyFilters.brand) {
@@ -428,6 +428,7 @@ const StockManagement = ({
                 }
                 (item.brandEntries || []).forEach(entry => {
                     if (historyFilters.brand && (entry.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return;
+                    if (historyFilters.warehouse && (entry.warehouseName || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return;
                     if (searchLower) {
                         const matchesEnv = (sale.invoiceNo || '').toLowerCase().includes(searchLower) ||
                             (sale.companyName || '').toLowerCase().includes(searchLower) ||
@@ -462,6 +463,7 @@ const StockManagement = ({
                         itemQty: qty,
                         itemPrice: parseFloat(entry.unitPrice) || 0,
                         itemTotal: parseFloat(entry.totalAmount) || 0,
+                        itemWarehouse: entry.warehouseName || '',
                         unit: 'kg'
                     });
                 });
@@ -1282,7 +1284,7 @@ const StockManagement = ({
 
     // Generate History Options
     const historyOptions = useMemo(() => {
-        if (!viewRecord) return { lcNos: [], ports: [], brands: [] };
+        if (!viewRecord) return { lcNos: [], ports: [], brands: [], warehouses: [] };
 
         const productHistory = stockRecords.filter(item =>
             (item.productName || '').trim().toLowerCase() === (viewRecord.data.productName || '').trim().toLowerCase()
@@ -1307,10 +1309,19 @@ const StockManagement = ({
                 });
             }
         });
-        const brands = Array.from(brandsSet).filter(Boolean).sort();
 
-        return { lcNos, ports, brands };
-    }, [viewRecord, stockRecords]);
+        const productName = (viewRecord.data.productName || '').trim().toLowerCase();
+        const whFromStock = productHistory.map(r => r.warehouse || r.whName).filter(Boolean);
+        const whFromWh = (warehouseData || []).filter(w => (w.productName || w.product || '').trim().toLowerCase() === productName).map(w => w.whName || w.warehouse).filter(Boolean);
+        const warehouses = [...new Set([...whFromStock, ...whFromWh])].sort();
+
+        return {
+            lcNos,
+            ports,
+            brands: [...brandsSet].sort(),
+            warehouses
+        };
+    }, [viewRecord, stockRecords, warehouseData]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -3054,7 +3065,7 @@ const StockManagement = ({
                                                     <h4 className="font-bold text-gray-900">Advanced Filters</h4>
                                                     <button
                                                         onClick={() => {
-                                                            setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' });
+                                                            setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', warehouse: '' });
                                                             setShowHistoryFilterPanel(false);
                                                         }}
                                                         className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
@@ -3137,27 +3148,52 @@ const StockManagement = ({
                                                         </div>
                                                     </div>
 
-                                                    {/* Brand Filter */}
-                                                    <div className="space-y-1.5 relative" ref={brandFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                readOnly
-                                                                value={historyFilters.brand}
-                                                                onClick={() => { setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand }); }}
-                                                                placeholder="Select Brand..."
-                                                                className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer ${historyFilters.brand ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
-                                                            />
-                                                            <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                                                            {filterDropdownOpen.brand && (
-                                                                <div className="absolute z-[70] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    <button type="button" onClick={() => { setHistoryFilters({ ...historyFilters, brand: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Brands</button>
-                                                                    {historyOptions.brands.map(brand => (
-                                                                        <button key={brand} type="button" onClick={() => { setHistoryFilters({ ...historyFilters, brand: brand }); setFilterDropdownOpen(initialFilterDropdownState); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${historyFilters.brand === brand ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{brand}</button>
-                                                                    ))}
-                                                                </div>
-                                                            )}
+                                                    {/* Brand and Warehouse Filters */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        <div className="space-y-1.5 relative" ref={brandFilterRef}>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    readOnly
+                                                                    value={historyFilters.brand}
+                                                                    onClick={() => { setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand }); }}
+                                                                    placeholder="Select Brand..."
+                                                                    className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer ${historyFilters.brand ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                                />
+                                                                <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                                                {filterDropdownOpen.brand && (
+                                                                    <div className="absolute z-[70] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                        <button type="button" onClick={() => { setHistoryFilters({ ...historyFilters, brand: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Brands</button>
+                                                                        {historyOptions.brands.map(brand => (
+                                                                            <button key={brand} type="button" onClick={() => { setHistoryFilters({ ...historyFilters, brand: brand }); setFilterDropdownOpen(initialFilterDropdownState); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${historyFilters.brand === brand ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{brand}</button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="space-y-1.5 relative" ref={warehouseFilterRef}>
+                                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Warehouse</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    readOnly
+                                                                    value={historyFilters.warehouse}
+                                                                    onClick={() => { setFilterDropdownOpen({ ...initialFilterDropdownState, warehouse: !filterDropdownOpen.warehouse }); }}
+                                                                    placeholder="Select Warehouse..."
+                                                                    className={`w-full px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer ${historyFilters.warehouse ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+                                                                />
+                                                                <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                                                {filterDropdownOpen.warehouse && (
+                                                                    <div className="absolute z-[70] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                        <button type="button" onClick={() => { setHistoryFilters({ ...historyFilters, warehouse: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 font-medium border-b border-gray-50">All Warehouses</button>
+                                                                        {historyOptions.warehouses.map(wh => (
+                                                                            <button key={wh} type="button" onClick={() => { setHistoryFilters({ ...historyFilters, warehouse: wh }); setFilterDropdownOpen(initialFilterDropdownState); }} className={`w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${historyFilters.warehouse === wh ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600'}`}>{wh}</button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
 
@@ -3185,7 +3221,7 @@ const StockManagement = ({
                                         onClick={() => {
                                             setViewRecord(null);
                                             setHistorySearchQuery('');
-                                            setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '' });
+                                            setHistoryFilters({ startDate: '', endDate: '', lcNo: '', port: '', brand: '', warehouse: '' });
                                             setShowHistoryFilterPanel(false);
                                             setExpandedHistoryId(null);
                                             setExpandedSaleId(null);

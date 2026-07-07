@@ -654,6 +654,76 @@ const Customer = ({
         });
     }, [viewData, historySearchQuery, historyFilters, historySortConfig]);
 
+    const openingBalance = useMemo(() => {
+        if (!viewData) return 0;
+
+        const sales = (viewData.salesHistory || []).map(s => ({
+            ...s,
+            type: 'sale',
+            sortDate: new Date(s.date)
+        }));
+        const payments = (viewData.paymentHistory || []).map(p => ({
+            ...p,
+            type: 'payment',
+            sortDate: new Date(p.date)
+        }));
+        const all = [...sales, ...payments].sort((a, b) => a.sortDate - b.sortDate);
+
+        let currentBalance = 0;
+        const historyWithBalance = all.map(item => {
+            if (item.type === 'sale') {
+                const amt = parseFloat(item.amount) || 0;
+                const pd = parseFloat(item.paid) || 0;
+                const disc = parseFloat(item.discount) || 0;
+                currentBalance += (amt - pd - disc);
+            } else {
+                const amt = parseFloat(item.amount) || 0;
+                const disc = parseFloat(item.discount) || 0;
+                currentBalance -= (amt + disc);
+            }
+            return { ...item, runningBalance: currentBalance };
+        });
+
+        // Apply filters only (do not sort)
+        const visibleChrono = historyWithBalance.filter(item => {
+            const matchesSearch = !historySearchQuery ||
+                ((item.invoiceNo || item.lcNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.product || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.reference || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
+
+            const matchesFilters =
+                (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
+                (!historyFilters.endDate || new Date(item.date) <= new Date(historyFilters.endDate)) &&
+                (!historyFilters.lcNo || (item.invoiceNo === historyFilters.lcNo || item.lcNo === historyFilters.lcNo)) &&
+                (!historyFilters.product || item.product === historyFilters.product) &&
+                (!historyFilters.method || item.method === historyFilters.method);
+
+            return matchesSearch && matchesFilters;
+        });
+
+        if (visibleChrono.length === 0) return 0;
+
+        const firstVisibleItem = visibleChrono[0];
+        const firstIdx = historyWithBalance.indexOf(firstVisibleItem);
+
+        if (firstIdx > 0) {
+            return historyWithBalance[firstIdx - 1].runningBalance;
+        }
+        return 0;
+    }, [viewData, historySearchQuery, historyFilters]);
+
+    const isFiltered = useMemo(() => {
+        return !!(
+            historyFilters.startDate ||
+            historyFilters.endDate ||
+            historyFilters.lcNo ||
+            historyFilters.product ||
+            historyFilters.method ||
+            historySearchQuery
+        );
+    }, [historyFilters, historySearchQuery]);
+
     const filteredGatePasses = useMemo(() => {
         if (!viewData) return [];
         const filtered = (gatePasses || []).filter(item => {
@@ -1070,8 +1140,8 @@ const Customer = ({
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <span className={`customer-status-badge ${isExpanded
-                                                                    ? (c.status === 'Active' ? 'active' : 'inactive')
-                                                                    : (custTotalDue > 0 ? 'inactive' : 'active')
+                                                                ? (c.status === 'Active' ? 'active' : 'inactive')
+                                                                : (custTotalDue > 0 ? 'inactive' : 'active')
                                                                 } flex items-center justify-center`}>
                                                                 {isExpanded ? (
                                                                     <span className="shrink-0">{c.status}</span>
@@ -1217,7 +1287,7 @@ const Customer = ({
                                             onClick={() => generateCustomerHistoryPDF(
                                                 viewData,
                                                 activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
-                                                { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated },
+                                                { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
                                                 historyFilters,
                                                 activeHistoryTab
                                             )}
@@ -2428,6 +2498,14 @@ const Customer = ({
                                                             </tr>
                                                         </thead>
                                                         <tbody>
+                                                            {isFiltered && combinedHistory && combinedHistory.length > 0 && (
+                                                                <tr className="border-b border-gray-100 bg-gray-50/30 font-medium">
+                                                                    <td colSpan={viewData.customerType?.includes('Party') ? 9 : 8} className="px-4 py-3 text-gray-950 font-bold text-center">
+                                                                        Opening Balance
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-left font-black text-orange-600">৳{openingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                </tr>
+                                                            )}
                                                             {combinedHistory && combinedHistory.length > 0 ? (
                                                                 combinedHistory.reduce((acc, item) => {
                                                                     const invoice = item.invoiceNo || item.lcNo;
