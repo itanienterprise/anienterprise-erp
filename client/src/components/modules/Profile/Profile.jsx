@@ -40,15 +40,9 @@ const Profile = ({ currentUser, onClose }) => {
 
     const fetchEmployeeDetails = async (isMounted) => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const response = await axios.get(`${API_BASE_URL}/api/profile`);
             if (response.data && isMounted) {
-                const employees = response.data;
-
-                // Find current logged in employee
-                const currentEmp = employees.find(e => e.employeeId === currentUser.username);
-                if (currentEmp) {
-                    setEmployeeData(currentEmp);
-                }
+                setEmployeeData(response.data);
             }
         } catch (error) {
             console.error('Error fetching employee details:', error);

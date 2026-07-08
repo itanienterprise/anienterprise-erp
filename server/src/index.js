@@ -113,7 +113,7 @@ app.post('/v', (req, res, next) => {
   if (!p || !m) return res.status(400).json({ message: 'Invalid gateway request' });
 
   // Internal dispatching
-  req.url = p; 
+  req.url = p;
   req.method = m;
   req.body = d;
 
@@ -159,8 +159,8 @@ const getDefaultPermissionsForRole = (role) => {
   const defaults = {};
 
   const modules = [
-    'employees', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 
-    'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'paymentCollection', 'bank', 
+    'employees', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup',
+    'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'bank',
     'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore'
   ];
 
@@ -179,17 +179,17 @@ const getDefaultPermissionsForRole = (role) => {
       }
     });
   } else if (roleLower === 'lc manager') {
-    const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
+    const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods'];
     lcModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
     });
   } else if (roleLower === 'sales manager') {
-    const salesModules = ['product', 'customer', 'sales', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+    const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
     salesModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
     });
   } else if (roleLower === 'accounts manager') {
-    const accModules = ['paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+    const accModules = ['paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods'];
     accModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
     });
@@ -856,7 +856,7 @@ apiRouter.put('/api/customers/:id', async (req, res) => {
     for (const s of sales) {
       let d = decryptData(s.data);
       if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
-        try { d = decryptData(d.data); } catch(e) {}
+        try { d = decryptData(d.data); } catch (e) { }
       }
 
       if (d.customerId === req.params.id || (d.customer && d.customer._id === req.params.id)) {
@@ -1053,10 +1053,10 @@ apiRouter.post('/api/sales', async (req, res) => {
     if (rateMissing) saleData.rateMissing = true;
 
     const encryptedData = encryptData(saleData);
-    const newSale = new Sale({ 
+    const newSale = new Sale({
       invoiceNo: newInvoiceNo,
       saleType: sType,
-      data: encryptedData 
+      data: encryptedData
     });
     const savedSale = await newSale.save();
     res.status(201).json({ ...saleData, _id: savedSale._id, createdAt: savedSale.createdAt });
@@ -1150,10 +1150,10 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
     }
 
     const encryptedData = encryptData(req.body);
-    const updatedSale = await Sale.findByIdAndUpdate(req.params.id, { 
+    const updatedSale = await Sale.findByIdAndUpdate(req.params.id, {
       invoiceNo: req.body.invoiceNo,
       saleType: req.body.saleType,
-      data: encryptedData 
+      data: encryptedData
     }, { returnDocument: 'after' });
     res.json({ ...req.body, _id: updatedSale._id, createdAt: updatedSale.createdAt });
   } catch (err) {
@@ -1406,7 +1406,7 @@ apiRouter.put('/api/lc-management/:id', async (req, res) => {
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
-    }
+  }
 });
 
 // MetaData APIs (Generic Reference Values)
@@ -1695,9 +1695,9 @@ apiRouter.post('/api/pi', async (req, res) => {
   try {
     const { piNumber } = req.body;
     const encryptedData = encryptData(req.body);
-    const newRecord = new PI({ 
+    const newRecord = new PI({
       piNumber: piNumber ? piNumber.trim() : undefined,
-      data: encryptedData 
+      data: encryptedData
     });
     const savedRecord = await newRecord.save();
     res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
@@ -1755,9 +1755,9 @@ apiRouter.post('/api/packing-lists', async (req, res) => {
   try {
     const { packingListNumber } = req.body;
     const encryptedData = encryptData(req.body);
-    const newRecord = new PackingList({ 
+    const newRecord = new PackingList({
       packingListNumber: packingListNumber ? packingListNumber.trim() : undefined,
-      data: encryptedData 
+      data: encryptedData
     });
     const savedRecord = await newRecord.save();
     res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
@@ -2207,7 +2207,7 @@ apiRouter.get('/api/auth/check', async (req, res) => {
         req.session.destroy();
         return res.status(401).json({ authenticated: false, message: 'User no longer exists' });
       }
-      
+
       // If employee is deactivated, destroy session
       if (decryptedEmp.status === 'Inactive') {
         req.session.destroy();
@@ -2217,7 +2217,7 @@ apiRouter.get('/api/auth/check', async (req, res) => {
       // Update session with fresh details
       req.session.user.role = decryptedEmp.role;
       req.session.user.permissions = await resolveUserPermissions(decryptedEmp.role, decryptedEmp.permissions);
-      
+
       res.json({
         authenticated: true,
         user: req.session.user
@@ -2235,6 +2235,51 @@ apiRouter.get('/api/auth/check', async (req, res) => {
       authenticated: false,
       message: 'Not authenticated'
     });
+  }
+});
+
+apiRouter.get('/api/profile', async (req, res) => {
+  try {
+    const user = req.session.user;
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    if (user.username === 'admin') {
+      return res.json({
+        name: 'Administrator',
+        role: 'Admin',
+        department: 'Management',
+        email: 'admin@ani-enterprise.com',
+        phone: '+880XXXXXXXXXX',
+        designation: 'System Administrator',
+        employeeId: 'ADMIN-001',
+        joiningDate: '2024-01-01'
+      });
+    }
+
+    const employees = await Employee.find();
+    let matchedEmployee = null;
+    for (const emp of employees) {
+      try {
+        let decrypted = decryptData(emp.data);
+        if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
+          try { decrypted = decryptData(decrypted.data); } catch (e) { }
+        }
+        if (decrypted.employeeId === user.username) {
+          matchedEmployee = { ...decrypted, _id: emp._id, createdAt: emp.createdAt };
+          break;
+        }
+      } catch (e) {
+        console.error('Error decrypting employee in profile route:', e);
+      }
+    }
+
+    if (!matchedEmployee) {
+      return res.status(404).json({ message: 'Profile not found' });
+    }
+
+    res.json(matchedEmployee);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -2359,7 +2404,7 @@ apiRouter.post('/api/restore-database', adminOnly, async (req, res) => {
       if (Array.isArray(documents)) {
         // Delete all existing documents in the collection
         await Model.deleteMany({});
-        
+
         // Insert backup documents if any exist
         if (documents.length > 0) {
           await Model.insertMany(documents, { validateBeforeSave: false });

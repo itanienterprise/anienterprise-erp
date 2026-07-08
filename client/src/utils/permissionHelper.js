@@ -21,6 +21,7 @@ export const MODULES_LIST = [
     { key: 'stock', label: 'Stock & Inventory' },
     { key: 'sales', label: 'Sales & Reports' },
     { key: 'profitLoss', label: 'Profit & Loss' },
+    { key: 'costOfGoods', label: 'Cost of Goods' },
     { key: 'paymentCollection', label: 'Payment Collection' },
     { key: 'bank', label: 'Bank Management' },
     { key: 'insurance', label: 'Insurance Management' },
@@ -64,19 +65,19 @@ export const getDefaultPermissionsForRole = (role) => {
         });
     } else if (roleLower === 'lc manager') {
         // LC Manager can access port, cnf, ip, pi, packing list, tr, lc, warehouse, lcManagement
-        const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
+        const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods'];
         lcModules.forEach(key => {
             defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
         });
     } else if (roleLower === 'sales manager') {
         // Sales Manager can access products, customers, sales, payment, bank, insurance, insurancePayment, returnProduct
-        const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+        const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
         salesModules.forEach(key => {
             defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
         });
     } else if (roleLower === 'accounts manager') {
         // Accounts Manager can access paymentCollection, bank, insurance, insurancePayment, returnProduct
-        const accModules = ['paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+        const accModules = ['paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods'];
         accModules.forEach(key => {
             defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
         });
