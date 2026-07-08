@@ -171,6 +171,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                 <thead>
                                     <tr className="bg-gray-100/50">
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter">Product</th>
+                                        <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter">Invoice No</th>
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter">Brand</th>
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-center">Truck</th>
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-center">Bag</th>
@@ -216,6 +217,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                                         {item.productName}
                                                     </td>
                                                 )}
+                                                <td className="px-4 py-3 text-sm text-gray-700 font-semibold">{item.invoiceNo || '-'}</td>
                                                 <td className="px-4 py-3 text-sm text-purple-700 font-semibold">{item.brand || '-'}</td>
                                                 {isTruckFirst && (
                                                     <td rowSpan={truckSpan} className="px-4 py-3 text-sm text-gray-600 text-center font-medium align-middle border-l border-gray-100">
@@ -232,7 +234,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-white/80 border-t border-gray-200">
-                                        <td colSpan="3" className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Grand Totals</td>
+                                        <td colSpan="4" className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Grand Totals</td>
                                         <td className="px-4 py-3 text-sm text-gray-900 text-center font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-US')}</td>
                                         <td className="px-4 py-3 text-sm text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString('en-US')} kg</td>
                                         <td className="px-4 py-3 text-sm text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-US')} kg</td>
@@ -287,6 +289,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                                     <div className="divide-y divide-gray-100">
                                                         {tg.brands.map((item, idx) => (
                                                             <div key={idx} className="p-3 space-y-2">
+                                                                {item.invoiceNo && <p className="text-[11px] text-gray-500 font-semibold mb-0.5">Invoice: {item.invoiceNo}</p>}
                                                                 {item.brand && <p className="text-xs text-purple-700 font-semibold">{item.brand}</p>}
                                                                 <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 pt-1.5 border-t border-gray-100 text-xs items-baseline text-left">
                                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag</span>
@@ -401,6 +404,7 @@ function LCReceive({
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [searchQuery, setSearchQuery] = useState('');
     const [lcRecords, setLcRecords] = useState([]);
+    const [costOfGoods, setCostOfGoods] = useState([]);
 
     const fetchCnFs = async () => {
         try {
@@ -411,9 +415,19 @@ function LCReceive({
         }
     };
 
+    const fetchCostOfGoods = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/cost-of-goods`);
+            setCostOfGoods(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            console.error('Error fetching cost of goods:', error);
+        }
+    };
+
     useEffect(() => {
         fetchCnFs();
         fetchLCRecords();
+        fetchCostOfGoods();
     }, []);
 
     const fetchLCRecords = async () => {
@@ -739,7 +753,7 @@ function LCReceive({
                 isMultiBrand: true,
                 productName: '',
                 truckNo: '',
-                brandEntries: [{ brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }]
+                brandEntries: [{ invoiceNo: '', brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }]
             }]
         });
         setEditingId(null);
@@ -925,7 +939,7 @@ function LCReceive({
                     isMultiBrand: true,
                     productName: '',
                     truckNo: '',
-                    brandEntries: [{ brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }]
+                    brandEntries: [{ invoiceNo: '', brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }]
                 }
             ];
             const summaries = calculateSummaries(updatedProducts, prev);
@@ -955,7 +969,7 @@ function LCReceive({
             const product = { ...updatedProducts[pIndex] };
             product.brandEntries = [
                 ...product.brandEntries,
-                { brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }
+                { invoiceNo: '', brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }
             ];
             updatedProducts[pIndex] = product;
             const summaries = calculateSummaries(updatedProducts, prev);
@@ -1256,6 +1270,7 @@ function LCReceive({
                             requestedByUsername: stockFormData.requestedByUsername || (currentUser ? currentUser.username : ''),
                             productName: product.productName,
                             truckNo: product.truckNo,
+                            invoiceNo: brandEntry.invoiceNo || '',
                             brand: brandEntry.brand,
                             purchasedPrice: brandEntry.purchasedPrice,
                             packet: brandEntry.packet,
@@ -1309,6 +1324,7 @@ function LCReceive({
                             requestedByUsername: stockFormData.requestedByUsername || (currentUser ? currentUser.username : ''),
                             productName: product.productName,
                             truckNo: product.truckNo,
+                            invoiceNo: brandEntry.invoiceNo || '',
                             brand: brandEntry.brand,
                             purchasedPrice: brandEntry.purchasedPrice,
                             packet: brandEntry.packet,
@@ -1477,6 +1493,7 @@ function LCReceive({
                     truckNo: prodEntries[0]?.truckNo || '',
                     brandEntries: prodEntries.map(e => ({
                         _id: e._id,
+                        invoiceNo: e.invoiceNo || '',
                         brand: e.brand,
                         purchasedPrice: e.purchasedPrice,
                         packet: e.packet,
@@ -1544,6 +1561,7 @@ function LCReceive({
                     truckNo: record.truckNo,
                     brandEntries: [{
                         _id: record._id,
+                        invoiceNo: record.invoiceNo || '',
                         brand: record.brand,
                         purchasedPrice: record.purchasedPrice,
                         packet: record.packet,
@@ -1659,6 +1677,16 @@ function LCReceive({
         const brandsArr = Array.from(allBrands).sort();
         if (!input) return brandsArr;
         return brandsArr.filter(b => b.toLowerCase().includes(input.toLowerCase()));
+    };
+
+    const getFilteredInvoices = (input) => {
+        if (!stockFormData.lcNo) return [];
+        const matched = costOfGoods.filter(cog => {
+            return (cog.lcNo || '').trim().toLowerCase() === stockFormData.lcNo.trim().toLowerCase();
+        });
+        const uniqueInvoices = [...new Set(matched.map(cog => cog.invoiceNo).filter(Boolean))];
+        if (!input) return uniqueInvoices;
+        return uniqueInvoices.filter(inv => inv.toLowerCase().includes(input.toLowerCase()));
     };
 
     const [showLcFilterPanel, setShowLcFilterPanel] = useState(false);
@@ -2902,7 +2930,8 @@ function LCReceive({
                                                 {product.isMultiBrand && (
                                                     <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-gray-50/50 p-2 md:p-4 rounded-xl border border-gray-100 mx-[-4px] md:mx-0">
                                                         <div className="hidden md:flex items-center gap-2 mb-1 px-3">
-                                                            <div className="flex-1 grid grid-cols-6 gap-2">
+                                                            <div className="flex-1 grid grid-cols-7 gap-2">
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">INVOICE NO</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRICE</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BAG</div>
@@ -2916,7 +2945,55 @@ function LCReceive({
                                                             {product.brandEntries.map((entry, bIndex) => (
                                                                 <div key={bIndex} className="p-2 md:p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-4 group/brand">
                                                                     <div className="flex items-center gap-2">
-                                                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-6 lg:grid-cols-6 gap-2">
+                                                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-7 lg:grid-cols-7 gap-2">
+                                                                            <div className="relative w-full col-span-1">
+                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Invoice No</label>
+                                                                                <div className="relative flex-1">
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        value={entry.invoiceNo || ''}
+                                                                                        placeholder="Search invoice..."
+                                                                                        onChange={(e) => { handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', e.target.value); setActiveDropdown(`lcr-invoice-${pIndex}-${bIndex}`); setHighlightedIndex(-1); }}
+                                                                                        onFocus={() => {
+                                                                                            setActiveDropdown(`lcr-invoice-${pIndex}-${bIndex}`);
+                                                                                            setHighlightedIndex(-1);
+                                                                                        }}
+                                                                                        onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-invoice-${pIndex}-${bIndex}`, (field, val) => { handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', val); setActiveDropdown(null); }, 'invoiceNo', getFilteredInvoices(entry.invoiceNo || ''))}
+                                                                                        className={`w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-12 ${entry.invoiceNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                                    />
+                                                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                                        {entry.invoiceNo && (
+                                                                                            <button type="button" onClick={() => { handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', ''); setActiveDropdown(null); }} className="text-gray-400 hover:text-gray-600">
+                                                                                                <XIcon className="w-3.5 h-3.5" />
+                                                                                            </button>
+                                                                                        )}
+                                                                                        <SearchIcon className="w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+                                                                                    </div>
+                                                                                </div>
+                                                                                {activeDropdown === `lcr-invoice-${pIndex}-${bIndex}` && (
+                                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto py-1">
+                                                                                        {getFilteredInvoices(entry.invoiceNo || '').map((inv, idx) => (
+                                                                                            <button
+                                                                                                key={idx}
+                                                                                                type="button"
+                                                                                                onMouseDown={(e) => {
+                                                                                                    e.preventDefault();
+                                                                                                    e.stopPropagation();
+                                                                                                    handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', inv);
+                                                                                                    setActiveDropdown(null);
+                                                                                                }}
+                                                                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                                                className={`w-full text-left px-3 py-2 text-sm transition-colors font-medium ${entry.invoiceNo === inv ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                                            >
+                                                                                                {inv}
+                                                                                            </button>
+                                                                                        ))}
+                                                                                        {getFilteredInvoices(entry.invoiceNo || '').length === 0 && (
+                                                                                            <div className="px-3 py-2 text-sm text-gray-500 italic">No invoices found</div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
                                                                             <div className="relative w-full col-span-1" ref={el => brandRefs.current[`${pIndex}-${bIndex}`] = el}>
                                                                                 <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Brand</label>
                                                                                 <div className="flex items-center gap-1">

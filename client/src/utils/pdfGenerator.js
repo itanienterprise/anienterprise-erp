@@ -4911,3 +4911,181 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
         alert(`Failed to generate PDF: ${error.message}`);
     }
 };
+
+export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
+    try {
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 32, pageWidth - margin, 32);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("COST OF GOODS REPORT", pageWidth / 2, 34, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 47;
+        doc.setFontSize(10);
+
+        // Left Side: Date Range
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
+
+        if (filters.lcNo) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 25, yPos);
+        }
+
+        if (filters.supplier) {
+            const recordWithExporter = records.find(r => r.supplier === filters.supplier && r.exporter);
+            const exporterName = recordWithExporter ? recordWithExporter.exporter : '';
+            if (exporterName) {
+                yPos += 5;
+                doc.setFont('helvetica', 'bold');
+                doc.text("Exporter:", margin, yPos);
+                doc.setFont('helvetica', 'normal');
+                doc.text(exporterName, margin + 25, yPos);
+            }
+
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Supplier:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.supplier, margin + 25, yPos);
+        }
+
+        // Right Side: Printed On
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
+
+        // Prepare columns & rows
+        const tableHeaders = [
+            ['Date', 'LC No', 'Supplier', 'Invoice No', 'Truck No', 'Product', 'Brand', 'Quantity (kg)', 'Invoice Value (RS)', 'Net Bill (RS)', 'Rate / KG (BDT)', 'C&F & Other (BDT) ', 'Net Costing/kg (BDT)']
+        ];
+
+        const totals = { quantity: 0, amount: 0, netBill: 0 };
+
+        const tableRows = records.map(record => {
+            const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
+            const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
+            const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+            const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
+            const qtyVal = parseFloat(record.quantity) || 0;
+            const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+            const dollarRateVal = parseFloat(record.rsToDollar) || 0;
+            const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+            const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
+            const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+            const cfExpVal = parseFloat(record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9') || 0;
+            const costingKgVal = rateKgBdtVal + cfExpVal;
+
+            totals.quantity += qtyVal;
+            totals.amount += parseFloat(record.amount) || 0;
+            totals.netBill += parseFloat(netBillVal) || 0;
+
+            return [
+                record.date ? formatDate(record.date) : '-',
+                record.lcNo ? record.lcNo.slice(-5) : '-',
+                record.supplier || '-',
+                record.invoiceNo || '-',
+                record.truckNo || '-',
+                record.product || '-',
+                record.brand || '-',
+                qtyVal ? `${Math.round(qtyVal).toLocaleString('en-US')}` : '—',
+                record.amount ? `${Math.round(record.amount).toLocaleString('en-US')}` : '—',
+                netBillVal ? `${Math.round(netBillVal).toLocaleString('en-US')}` : '—',
+                rateKgBdtVal ? `${Number(rateKgBdtVal).toFixed(2)}` : '—',
+                cfExpVal ? `${Number(cfExpVal).toFixed(2)}` : '—',
+                costingKgVal ? `${Number(costingKgVal).toFixed(2)}` : '—'
+            ];
+        });
+
+        const footerRow = [
+            { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.quantity ? `${Math.round(totals.quantity).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.amount ? `${Math.round(totals.amount).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.netBill ? `${Math.round(totals.netBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: '', colSpan: 3 }
+        ];
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: tableHeaders,
+            body: tableRows,
+            foot: [footerRow],
+            theme: 'grid',
+            styles: {
+                fontSize: 9,
+                cellPadding: 1.5,
+                textColor: [0, 0, 0],
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.1
+            },
+            footStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 19, halign: 'center' }, // Date
+                1: { cellWidth: 12, halign: 'center' }, // LC No
+                2: { cellWidth: 36, overflow: 'hidden' }, // Supplier
+                3: { cellWidth: 28 }, // Invoice No
+                4: { cellWidth: 25 }, // Truck No
+                5: { cellWidth: 28 }, // Product
+                6: { cellWidth: 30 }, // Brand
+                7: { cellWidth: 16, halign: 'right' }, // Quantity
+                8: { cellWidth: 20, halign: 'right' }, // Invoice Value
+                9: { cellWidth: 20, halign: 'right' }, // Net Bill
+                10: { cellWidth: 15, halign: 'right' }, // Rate/KG BDT
+                11: { cellWidth: 15, halign: 'right' }, // C&F & Other
+                12: { cellWidth: 21, halign: 'right', fontStyle: 'bold' } // Costing/kg
+            },
+            margin: { left: margin, right: margin },
+        });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("Error generating Cost of Goods report PDF:", error);
+    }
+};
