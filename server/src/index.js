@@ -69,6 +69,8 @@ const Employee = require('./models/Employee');
 const Notification = require('./models/Notification');
 const Bank = require('./models/Bank');
 const Exporter = require('./models/Exporter');
+const Supplier = require('./models/Supplier');
+const CostOfGoods = require('./models/CostOfGoods');
 const CnF = require('./models/CnF');
 const Insurance = require('./models/Insurance');
 const LCManagement = require('./models/LCManagement');
@@ -405,6 +407,100 @@ apiRouter.put('/api/exporters/:id', adminOrLcManager, async (req, res) => {
 apiRouter.get('/api/exporters', async (req, res) => {
   try {
     const records = await Exporter.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Supplier APIs
+apiRouter.post('/api/suppliers', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newSupplier = new Supplier({ data: encryptedData });
+    const savedSupplier = await newSupplier.save();
+    res.status(201).json({ ...req.body, _id: savedSupplier._id, createdAt: savedSupplier.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Delete Supplier
+apiRouter.delete('/api/suppliers/:id', adminOnly, async (req, res) => {
+  try {
+    const deletedSupplier = await Supplier.findByIdAndDelete(req.params.id);
+    if (!deletedSupplier) return res.status(404).json({ message: 'Supplier not found' });
+    res.json({ message: 'Supplier deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Update Supplier
+apiRouter.put('/api/suppliers/:id', adminOrLcManager, async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedSupplier = await Supplier.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
+    if (!updatedSupplier) return res.status(404).json({ message: 'Supplier not found' });
+    res.json({ ...req.body, _id: updatedSupplier._id, createdAt: updatedSupplier.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/suppliers', async (req, res) => {
+  try {
+    const records = await Supplier.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      const d = decryptData(r.data);
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Cost of Goods APIs
+apiRouter.post('/api/cost-of-goods', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const newRecord = new CostOfGoods({ data: encryptedData });
+    const savedRecord = await newRecord.save();
+    res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/cost-of-goods/:id', async (req, res) => {
+  try {
+    const deletedRecord = await CostOfGoods.findByIdAndDelete(req.params.id);
+    if (!deletedRecord) return res.status(404).json({ message: 'Record not found' });
+    res.json({ message: 'Record deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/cost-of-goods/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedRecord = await CostOfGoods.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
+    if (!updatedRecord) return res.status(404).json({ message: 'Record not found' });
+    res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/cost-of-goods', async (req, res) => {
+  try {
+    const records = await CostOfGoods.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
       return { ...d, _id: r._id, createdAt: r.createdAt };

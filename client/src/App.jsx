@@ -3,7 +3,7 @@ import axios from './utils/api';
 import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
-  ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon,
+  ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon, TruckIcon,
   GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon
 } from './components/Icons';
 
@@ -12,6 +12,7 @@ import { API_BASE_URL, formatDate, parseDate, SortIcon } from './utils/helpers';
 import CustomDatePicker from './components/shared/CustomDatePicker';
 import Importer from './components/modules/Importer/Importer';
 import Exporter from './components/modules/Exporter/Exporter';
+import Supplier from './components/modules/Supplier/Supplier';
 import CnF from './components/modules/CnF/CnF';
 import Port from './components/modules/Port/Port';
 import IPManagement from './components/modules/IPManagement/IPManagement';
@@ -68,6 +69,7 @@ import Profile from './components/modules/Profile/Profile';
 import NotificationMenu from './components/modules/Notification/NotificationMenu';
 import ReturnProduct from './components/modules/ReturnProduct/ReturnProduct';
 import BackupRestore from './components/modules/BackupRestore/BackupRestore';
+import CostOfGoods from './components/modules/CostOfGoods/CostOfGoods';
 import { hasPermission } from './utils/permissionHelper';
 
 
@@ -610,6 +612,7 @@ function App() {
   const [submitStatus, setSubmitStatus] = useState(null);
   const [importers, setImporters] = useState([]);
   const [exporters, setExporters] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [cnfs, setCnfs] = useState([]);
   const [ports, setPorts] = useState([]);
   const [showStockForm, setShowStockForm] = useState(false);
@@ -865,9 +868,10 @@ function App() {
       fetchExporters();
       fetchPorts(); // Fetch ports to populate the dropdown
       fetchProducts(); // Fetch products to populate the dropdown
-    } else if (currentView === 'importer-section' || currentView === 'exporter-section' || currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section') {
+    } else if (currentView === 'importer-section' || currentView === 'exporter-section' || currentView === 'supplier-section' || currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section') {
       fetchImporters();
       fetchExporters();
+      fetchSuppliers();
       fetchCnFs();
     } else if (currentView === 'port-section') {
       fetchPorts();
@@ -998,7 +1002,8 @@ function App() {
         type === 'ip' ? 'ip-records' :
           type === 'importer' ? 'importers' :
             type === 'exporter' ? 'exporters' :
-              type === 'port' ? 'ports' :
+              type === 'supplier' ? 'suppliers' :
+                type === 'port' ? 'ports' :
                 type === 'product' ? 'products' :
                   type === 'employees' ? 'employees' :
                     type === 'customer' ? 'customers' :
@@ -1118,12 +1123,13 @@ function App() {
 
         if (type === 'importer') fetchImporters();
         else if (type === 'exporter') fetchExporters();
+        else if (type === 'supplier') fetchSuppliers();
         else if (type === 'port') fetchPorts();
         else if (type === 'product') fetchProducts();
         else if (type === 'stock') fetchStockRecords();
         else if (type === 'sales') fetchSales();
 
-        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup'].includes(type) || type.includes('cnf')) {
+        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
@@ -1133,6 +1139,7 @@ function App() {
           'ip': 'IP Record',
           'importer': 'Importer',
           'exporter': 'Exporter',
+          'supplier': 'Supplier',
           'port': 'Port',
           'product': 'Product',
           'employees': 'Employee Account',
@@ -1262,6 +1269,18 @@ function App() {
       setExporters(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching exporters:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchSuppliers = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/suppliers`);
+      setSuppliers(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching suppliers:', error);
     } finally {
       setIsLoading(false);
     }
@@ -1622,6 +1641,26 @@ function App() {
             isLongPressTriggered={isLongPressTriggered}
           />
         );
+      case 'supplier-section':
+        return (
+          <Supplier
+            key={refreshKey}
+            exporters={exporters}
+            currentUser={currentUser}
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            sortConfig={sortConfig}
+            setSortConfig={setSortConfig}
+            onDeleteConfirm={setDeleteConfirm}
+            startLongPress={startLongPress}
+            endLongPress={endLongPress}
+            isLongPressTriggered={isLongPressTriggered}
+          />
+        );
       case 'indian-cnf-section':
         return (
           <CnF
@@ -1892,6 +1931,21 @@ function App() {
         return <ReturnProduct currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />;
       case 'profit-loss-section':
         return <ProfitLoss salesRecords={salesRecords} products={products} />;
+      case 'cost-of-goods-section':
+        return (
+          <CostOfGoods
+            key={refreshKey}
+            currentUser={currentUser}
+            isSelectionMode={isSelectionMode}
+            setIsSelectionMode={setIsSelectionMode}
+            selectedItems={selectedItems}
+            setSelectedItems={setSelectedItems}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            onDeleteConfirm={setDeleteConfirm}
+            addNotification={addNotification}
+          />
+        );
       case 'backup-restore-section': {
         const isAdminUser = currentUser?.username === 'admin';
         const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
@@ -2016,13 +2070,11 @@ function App() {
               <AnchorIcon className="w-5 h-5 mr-3" />
               <span className="font-medium text-sm">Port</span>
             </button>
-          )}
-
-          {hasPermission(currentUser, 'importerExporter', 'view') && (
+          )}          {hasPermission(currentUser, 'importerExporter', 'view') && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('importer')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' || currentView === 'supplier-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <div className="flex items-center">
                   <GlobeIcon className="w-5 h-5 mr-3" />
@@ -2030,21 +2082,28 @@ function App() {
                 </div>
                 <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${importerDropdownOpen ? 'transform rotate-180' : ''}`} />
               </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${importerDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${importerDropdownOpen ? 'max-h-60 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
                   <button
                     onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>Importer</span>
                   </button>
                   <button
                     onClick={() => { setCurrentView('exporter-section'); setSidebarOpen(false); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'exporter-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'exporter-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>Exporter</span>
+                  </button>
+                  <button
+                    onClick={() => { setCurrentView('supplier-section'); setSidebarOpen(false); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'supplier-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                  >
+                    <TruckIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Supplier</span>
                   </button>
                 </div>
               </div>
@@ -2422,6 +2481,16 @@ function App() {
             >
               <BarChartIcon className="w-5 h-5 mr-3" />
               <span className="font-medium text-sm">Profit & Loss</span>
+            </button>
+          )}
+
+          {hasPermission(currentUser, 'costOfGoods', 'view') && (
+            <button
+              onClick={() => { setCurrentView('cost-of-goods-section'); setSidebarOpen(false); }}
+              className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'cost-of-goods-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <TrendingUpIcon className="w-5 h-5 mr-3" />
+              <span className="font-medium text-sm">Cost of Goods</span>
             </button>
           )}
 
