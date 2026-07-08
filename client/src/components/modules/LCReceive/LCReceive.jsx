@@ -900,6 +900,50 @@ function LCReceive({
 
             entry[field] = value;
 
+            if (field === 'invoiceNo') {
+                if (!value) {
+                    entry.brand = '';
+                    entry.purchasedPrice = '';
+                } else {
+                    const matchedCog = costOfGoods.find(cog => {
+                        const lcMatch = !prev.lcNo || String(cog.lcNo || '').trim().toLowerCase() === String(prev.lcNo).trim().toLowerCase();
+                        const invoiceMatch = String(cog.invoiceNo || '').trim().toLowerCase() === String(value).trim().toLowerCase();
+                        return lcMatch && invoiceMatch;
+                    });
+                    if (matchedCog) {
+                        if (matchedCog.brand) {
+                            entry.brand = matchedCog.brand;
+                            const productDef = products.find(p => p.name === product.productName);
+                            if (productDef && productDef.brands) {
+                                const brandData = productDef.brands.find(b => b.brand === matchedCog.brand);
+                                if (brandData) {
+                                    entry.packetSize = brandData.packetSize || entry.packetSize;
+                                }
+                            }
+                        }
+
+                        const billSum = matchedCog.totalBill !== undefined ? matchedCog.totalBill : ((parseFloat(matchedCog.amount) || 0) + (parseFloat(matchedCog.indTruckFare) || 0) + (parseFloat(matchedCog.slofCf) || 0));
+                        const rebatePct = matchedCog.rebate !== undefined ? matchedCog.rebate : (matchedCog.redate !== undefined ? matchedCog.redate : '2.9');
+                        const rebateVal = matchedCog.rebateAmount !== undefined ? matchedCog.rebateAmount : (matchedCog.redateAmount !== undefined ? matchedCog.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                        const netBillVal = matchedCog.netBill !== undefined ? matchedCog.netBill : (billSum - rebateVal);
+                        const qtyVal = parseFloat(matchedCog.quantity) || 0;
+                        const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                        const dollarRateVal = parseFloat(matchedCog.rsToDollar) || 0;
+                        const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                        const bdtRateVal = parseFloat(matchedCog.dollarRateBdt) || 0;
+                        const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                        const cfExpVal = parseFloat(matchedCog.cfOtherExpense !== undefined ? matchedCog.cfOtherExpense : '9') || 0;
+                        const costingKgVal = rateKgBdtVal + cfExpVal;
+
+                        const finalPrice = matchedCog.costingKg || costingKgVal || 0;
+                        entry.purchasedPrice = Number(finalPrice).toFixed(2);
+                    } else {
+                        entry.brand = '';
+                        entry.purchasedPrice = '';
+                    }
+                }
+            }
+
             if (field === 'brand') {
                 const productDef = products.find(p => p.name === product.productName);
                 if (productDef && productDef.brands) {
@@ -1107,28 +1151,55 @@ function LCReceive({
         setStockFormData(prev => {
             const newData = { ...prev, [field]: value };
 
-            if (field === 'lcNo' && value) {
-                const selectedLc = lcRecords.find(lc => lc.lcNo === value);
-                if (selectedLc) {
-                    if (selectedLc.port) newData.port = selectedLc.port;
-                    if (selectedLc.importerName) newData.importer = selectedLc.importerName;
-                    if (selectedLc.exporterName) newData.exporter = selectedLc.exporterName;
+            if (field === 'lcNo') {
+                if (!value) {
+                    newData.port = '';
+                    newData.importer = '';
+                    newData.exporter = '';
+                    newData.productEntries = [{
+                        isMultiBrand: true,
+                        productName: '',
+                        truckNo: '',
+                        brandEntries: [{
+                            invoiceNo: '',
+                            brand: '',
+                            purchasedPrice: '',
+                            packet: '',
+                            packetSize: '',
+                            quantity: '',
+                            unit: 'kg',
+                            sweepedPacket: '',
+                            sweepedQuantity: '',
+                            inHousePacket: '',
+                            inHouseQuantity: ''
+                        }]
+                    }];
+                } else {
+                    const selectedLc = lcRecords.find(lc => lc.lcNo === value);
+                    if (selectedLc) {
+                        newData.port = selectedLc.port || '';
+                        newData.importer = selectedLc.importerName || '';
+                        newData.exporter = selectedLc.exporterName || '';
 
-                    // Also auto-fill first product if empty
-                    if (selectedLc.productName && prev.productEntries.length === 1 && !prev.productEntries[0].productName) {
-                        const updatedProducts = [...prev.productEntries];
                         const resolvedName = resolveProductName(selectedLc.productName);
-                        updatedProducts[0] = {
-                            ...updatedProducts[0],
-                            productName: resolvedName
-                        };
-                        // Standard logic: in single mode, auto-fill brand too
-                        if (!updatedProducts[0].isMultiBrand && updatedProducts[0].brandEntries[0]) {
-                            updatedProducts[0].brandEntries = [
-                                { ...updatedProducts[0].brandEntries[0], brand: resolvedName }
-                            ];
-                        }
-                        newData.productEntries = updatedProducts;
+                        newData.productEntries = [{
+                            isMultiBrand: true,
+                            productName: resolvedName,
+                            truckNo: '',
+                            brandEntries: [{
+                                invoiceNo: '',
+                                brand: '',
+                                purchasedPrice: '',
+                                packet: '',
+                                packetSize: '',
+                                quantity: '',
+                                unit: 'kg',
+                                sweepedPacket: '',
+                                sweepedQuantity: '',
+                                inHousePacket: '',
+                                inHouseQuantity: ''
+                            }]
+                        }];
                     }
                 }
             }
@@ -1682,11 +1753,11 @@ function LCReceive({
     const getFilteredInvoices = (input) => {
         if (!stockFormData.lcNo) return [];
         const matched = costOfGoods.filter(cog => {
-            return (cog.lcNo || '').trim().toLowerCase() === stockFormData.lcNo.trim().toLowerCase();
+            return String(cog.lcNo || '').trim().toLowerCase() === String(stockFormData.lcNo).trim().toLowerCase();
         });
-        const uniqueInvoices = [...new Set(matched.map(cog => cog.invoiceNo).filter(Boolean))];
+        const uniqueInvoices = [...new Set(matched.map(cog => String(cog.invoiceNo || '')).filter(Boolean))];
         if (!input) return uniqueInvoices;
-        return uniqueInvoices.filter(inv => inv.toLowerCase().includes(input.toLowerCase()));
+        return uniqueInvoices.filter(inv => inv.toLowerCase().includes(String(input).toLowerCase()));
     };
 
     const [showLcFilterPanel, setShowLcFilterPanel] = useState(false);
@@ -2620,7 +2691,7 @@ function LCReceive({
                             </div>
 
                             {/* Total LC Truck/Quantity Row */}
-                            <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
+                            <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 pb-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700">Total LC Truck</label>
                                     <input
@@ -2644,6 +2715,32 @@ function LCReceive({
                                         autoComplete="off"
                                         className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
                                     />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Total LC Price</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={(() => {
+                                                let total = 0;
+                                                stockFormData.productEntries.forEach(prod => {
+                                                    prod.brandEntries.forEach(entry => {
+                                                        const price = parseFloat(entry.purchasedPrice) || 0;
+                                                        const qty = parseFloat(entry.quantity) || 0;
+                                                        total += price * qty;
+                                                    });
+                                                });
+                                                return total > 0 ? total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
+                                            })()}
+                                            readOnly
+                                            placeholder="Total LC Price"
+                                            autoComplete="off"
+                                            className="w-full px-4 py-2 pr-12 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default backdrop-blur-sm"
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
+                                            TK
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2830,7 +2927,7 @@ function LCReceive({
 
                                                 {/* Product Info - Multi Brand Mode */}
                                                 {product.isMultiBrand && (
-                                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in duration-300">
+                                                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 animate-in fade-in duration-300">
                                                         <div className="space-y-2">
                                                             <label className="text-sm font-medium text-gray-700">Entry Mode</label>
                                                             <div className="h-[42px] flex items-center gap-1 p-1 bg-gray-100/50 rounded-lg w-full">
@@ -2869,7 +2966,7 @@ function LCReceive({
                                                                     onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-product-${pIndex}`, (field, val) => handleProductSelect(pIndex, val), 'name', getFilteredProducts(product.productName))}
                                                                     placeholder="Search product..."
                                                                     autoComplete="off"
-                                                                    className={`w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm pr-14 ${product.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
+                                                                    className={`w-full h-[42px] px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm text-sm pr-14 ${product.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                 />
                                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                                                     {product.productName && (
@@ -2920,6 +3017,27 @@ function LCReceive({
                                                                 />
                                                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
                                                                     {product.brandEntries[0]?.unit || 'kg'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <label className="text-sm font-medium text-gray-700">Total Price</label>
+                                                            <div className="relative h-[42px]">
+                                                                <input
+                                                                    type="text"
+                                                                    value={(() => {
+                                                                        const total = product.brandEntries.reduce((sum, entry) => {
+                                                                            const price = parseFloat(entry.purchasedPrice) || 0;
+                                                                            const qty = parseFloat(entry.quantity) || 0;
+                                                                            return sum + (price * qty);
+                                                                        }, 0);
+                                                                        return total > 0 ? total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+                                                                    })()}
+                                                                    readOnly
+                                                                    className="w-full h-full px-4 py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-gray-600 font-semibold outline-none cursor-default"
+                                                                />
+                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
+                                                                    TK
                                                                 </span>
                                                             </div>
                                                         </div>
