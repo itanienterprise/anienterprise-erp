@@ -17,18 +17,18 @@ const CostOfGoods = ({
     onDeleteConfirm,
     addNotification,
 }) => {
-    const canEdit   = hasPermission(currentUser, 'costOfGoods', 'edit');
+    const canEdit = hasPermission(currentUser, 'costOfGoods', 'edit');
     const canDelete = hasPermission(currentUser, 'costOfGoods', 'delete');
     const canCreate = hasPermission(currentUser, 'costOfGoods', 'create');
 
-    const [showForm,    setShowForm]    = useState(false);
+    const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
-    const [records,     setRecords]     = useState([]);
-    const [isLoading,   setIsLoading]   = useState(false);
-    const [viewData,    setViewData]    = useState(null);
+    const [records, setRecords] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [viewData, setViewData] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortConfig,  setSortConfig]  = useState({ key: null, direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
     // Relational options states
     const [lcs, setLcs] = useState([]);
@@ -63,6 +63,7 @@ const CostOfGoods = ({
         exporter: '',
         supplier: '',
         invoiceNo: '',
+        truckNo: '',
         product: '',
         brand: '',
         quantity: '',
@@ -377,7 +378,7 @@ const CostOfGoods = ({
                 ? `${API_BASE_URL}/api/cost-of-goods/${editingId}`
                 : `${API_BASE_URL}/api/cost-of-goods`;
             if (editingId) await axios.put(url, payload);
-            else           await axios.post(url, payload);
+            else await axios.post(url, payload);
             setSubmitStatus('success');
             fetchRecords();
             setTimeout(() => { setShowForm(false); setEditingId(null); resetForm(); setSubmitStatus(null); }, 2000);
@@ -396,6 +397,7 @@ const CostOfGoods = ({
             exporter: '',
             supplier: '',
             invoiceNo: '',
+            truckNo: '',
             product: '',
             brand: '',
             quantity: '',
@@ -424,29 +426,30 @@ const CostOfGoods = ({
 
     const handleEdit = (record) => {
         setFormData({
-            lcNo:        record.lcNo        || '',
-            importer:    record.importer    || '',
-            exporter:    record.exporter    || '',
-            supplier:    record.supplier    || '',
-            invoiceNo:   record.invoiceNo   || '',
-            product:     record.product     || '',
-            brand:       record.brand       || '',
-            quantity:    record.quantity    || '',
-            amount:      record.amount      || '',
-            indTruckFare:record.indTruckFare || '',
-            slofCf:      record.slofCf      || '',
-            totalBill:   record.totalBill   || '',
-            rebate:      record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9'),
-            rebateAmount:record.rebateAmount || record.redateAmount || '',
-            netBill:     record.netBill     || '',
-            rateKg:      record.rateKg      || '',
-            rsToDollar:  record.rsToDollar  || '',
-            rateKgUsd:   record.rateKgUsd   || '',
-            dollarRateBdt:record.dollarRateBdt || '',
-            rateKgBdt:   record.rateKgBdt   || '',
-            cfOtherExpense:record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9',
-            costingKg:   record.costingKg   || '',
-            date:        record.date        || '',
+            lcNo: record.lcNo || '',
+            importer: record.importer || '',
+            exporter: record.exporter || '',
+            supplier: record.supplier || '',
+            invoiceNo: record.invoiceNo || '',
+            truckNo: record.truckNo || '',
+            product: record.product || '',
+            brand: record.brand || '',
+            quantity: record.quantity || '',
+            amount: record.amount || '',
+            indTruckFare: record.indTruckFare || '',
+            slofCf: record.slofCf || '',
+            totalBill: record.totalBill || '',
+            rebate: record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9'),
+            rebateAmount: record.rebateAmount || record.redateAmount || '',
+            netBill: record.netBill || '',
+            rateKg: record.rateKg || '',
+            rsToDollar: record.rsToDollar || '',
+            rateKgUsd: record.rateKgUsd || '',
+            dollarRateBdt: record.dollarRateBdt || '',
+            rateKgBdt: record.rateKgBdt || '',
+            cfOtherExpense: record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9',
+            costingKg: record.costingKg || '',
+            date: record.date || '',
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -486,6 +489,7 @@ const CostOfGoods = ({
         (r.exporter || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (r.supplier || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (r.invoiceNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (r.truckNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (r.product || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (r.brand || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (r.quantity || '').toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -560,7 +564,7 @@ const CostOfGoods = ({
                     </div>
                 ) : sortedRecords.length > 0 ? (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto pb-3">
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-100">
@@ -580,17 +584,14 @@ const CostOfGoods = ({
                                         <th onClick={() => requestSort('lcNo')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
                                             <div className="flex items-center gap-1">LC No <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="lcNo" /></div>
                                         </th>
-                                        <th onClick={() => requestSort('importer')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">Importer <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="importer" /></div>
-                                        </th>
-                                        <th onClick={() => requestSort('exporter')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">Exporter <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="exporter" /></div>
-                                        </th>
                                         <th onClick={() => requestSort('supplier')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
                                             <div className="flex items-center gap-1">Supplier <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="supplier" /></div>
                                         </th>
                                         <th onClick={() => requestSort('invoiceNo')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
                                             <div className="flex items-center gap-1">Invoice No <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="invoiceNo" /></div>
+                                        </th>
+                                        <th onClick={() => requestSort('truckNo')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
+                                            <div className="flex items-center gap-1">Truck No <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="truckNo" /></div>
                                         </th>
                                         <th onClick={() => requestSort('product')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
                                             <div className="flex items-center gap-1">Product <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="product" /></div>
@@ -604,41 +605,14 @@ const CostOfGoods = ({
                                         <th onClick={() => requestSort('amount')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
                                             <div className="flex items-center gap-1">Invoice Value <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="amount" /></div>
                                         </th>
-                                        <th onClick={() => requestSort('indTruckFare')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">IND Truck Fare <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="indTruckFare" /></div>
-                                        </th>
-                                        <th onClick={() => requestSort('slofCf')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">SLOF / CF <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="slofCf" /></div>
-                                        </th>
-                                        <th onClick={() => requestSort('totalBill')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">Total BILL <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="totalBill" /></div>
-                                        </th>
-                                        <th onClick={() => requestSort('rebate')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">Rebate % <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="rebate" /></div>
-                                        </th>
-                                        <th onClick={() => requestSort('rebateAmount')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">Rebate <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="rebateAmount" /></div>
-                                        </th>
                                         <th onClick={() => requestSort('netBill')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
                                             <div className="flex items-center gap-1">Net Bill <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="netBill" /></div>
-                                        </th>
-                                        <th onClick={() => requestSort('rateKg')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">Rate/KG <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="rateKg" /></div>
-                                        </th>
-                                        <th onClick={() => requestSort('rsToDollar')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">Rs to Dollar Rate <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="rsToDollar" /></div>
-                                        </th>
-                                        <th onClick={() => requestSort('rateKgUsd')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">Rate/Kg USD <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="rateKgUsd" /></div>
-                                        </th>
-                                        <th onClick={() => requestSort('dollarRateBdt')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">Dollar rate BDT <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="dollarRateBdt" /></div>
                                         </th>
                                         <th onClick={() => requestSort('rateKgBdt')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
                                             <div className="flex items-center gap-1">Rate/KG BDT <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="rateKgBdt" /></div>
                                         </th>
                                         <th onClick={() => requestSort('cfOtherExpense')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
-                                            <div className="flex items-center gap-1">C&F & Other Expance <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="cfOtherExpense" /></div>
+                                            <div className="flex items-center gap-1">C&F & Other <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="cfOtherExpense" /></div>
                                         </th>
                                         <th onClick={() => requestSort('costingKg')} className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
                                             <div className="flex items-center gap-1">Costing/kg <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="costingKg" /></div>
@@ -683,27 +657,17 @@ const CostOfGoods = ({
                                                     </td>
                                                 )}
                                                 <td className="px-4 py-3 text-sm text-gray-600">{record.date ? formatDate(record.date) : '—'}</td>
-                                                <td className="px-4 py-3 text-sm font-semibold text-gray-900">{record.lcNo}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-600">{record.importer || '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-600">{record.exporter || '—'}</td>
+                                                <td className="px-4 py-3 text-sm font-semibold text-gray-900">{record.lcNo ? record.lcNo.slice(-5) : '—'}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-600">{record.supplier || '—'}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-600">{record.invoiceNo || '—'}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-600">{record.truckNo || '—'}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-600">{record.product || '—'}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-600">{record.brand || '—'}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-600">{record.quantity || '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{record.amount ? `${Number(record.amount).toLocaleString()} RS` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{record.indTruckFare ? `${Number(record.indTruckFare).toLocaleString()} RS` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{record.slofCf ? `${Number(record.slofCf).toLocaleString()} RS` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{billSum ? `${Number(billSum).toLocaleString()} RS` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{rebatePct !== undefined && rebatePct !== null && rebatePct !== '' ? `${rebatePct}%` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{rebateVal !== undefined && rebateVal !== null && rebateVal !== '' ? `${Number(rebateVal).toLocaleString()} RS` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString()} RS` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{rateKgVal !== undefined && rateKgVal !== null && rateKgVal !== '' ? `${Number(rateKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{record.rsToDollar !== undefined && record.rsToDollar !== null && record.rsToDollar !== '' ? record.rsToDollar : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{rateKgUsdVal !== undefined && rateKgUsdVal !== null && rateKgUsdVal !== '' ? `${Number(rateKgUsdVal).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} USD` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{record.dollarRateBdt !== undefined && record.dollarRateBdt !== null && record.dollarRateBdt !== '' ? `${Number(record.dollarRateBdt).toLocaleString()} BDT` : '—'}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-700">{record.amount ? `${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-700">{netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-700">{rateKgBdtVal !== undefined && rateKgBdtVal !== null && rateKgBdtVal !== '' ? `${Number(rateKgBdtVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-700">{cfExpVal !== undefined && cfExpVal !== null && cfExpVal !== '' ? `${Number(cfExpVal).toLocaleString()} BDT` : '—'}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-700">{cfExpVal !== undefined && cfExpVal !== null && cfExpVal !== '' ? `${Number(cfExpVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-700">{costingKgVal !== undefined && costingKgVal !== null && costingKgVal !== '' ? `${Number(costingKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
                                                 <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                                                     <div className="flex items-center justify-end gap-1">
@@ -750,7 +714,7 @@ const CostOfGoods = ({
                         </button>
                     </div>
 
-                    <form 
+                    <form
                         onSubmit={handleSubmit}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
@@ -805,13 +769,12 @@ const CostOfGoods = ({
                                                     type="button"
                                                     onMouseEnter={() => setHighlightedLcIndex(idx)}
                                                     onClick={() => handleLcSelect(lc)}
-                                                    className={`w-full px-5 py-3 text-left text-sm transition-colors group ${
-                                                        highlightedLcIndex === idx
-                                                            ? 'bg-blue-50'
-                                                            : formData.lcNo === lc.lcNo
+                                                    className={`w-full px-5 py-3 text-left text-sm transition-colors group ${highlightedLcIndex === idx
+                                                        ? 'bg-blue-50'
+                                                        : formData.lcNo === lc.lcNo
                                                             ? 'bg-blue-50/60'
                                                             : 'hover:bg-blue-50'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <div className="font-bold text-blue-600 group-hover:text-blue-700">{lc.lcNo}</div>
                                                     <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">
@@ -875,9 +838,8 @@ const CostOfGoods = ({
                                         onKeyDown={handleSupplierKeyDown}
                                         autoComplete="off"
                                         disabled={!formData.exporter}
-                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10 ${
-                                            !formData.exporter ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-100' : ''
-                                        }`}
+                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10 ${!formData.exporter ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-100' : ''
+                                            }`}
                                         required
                                     />
                                     <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -896,13 +858,12 @@ const CostOfGoods = ({
                                                         setSupplierSearchQuery('');
                                                         setHighlightedSupplierIndex(-1);
                                                     }}
-                                                    className={`w-full px-5 py-3 text-left text-sm transition-colors group ${
-                                                        highlightedSupplierIndex === idx
-                                                            ? 'bg-blue-50'
-                                                            : formData.supplier === sup.name
+                                                    className={`w-full px-5 py-3 text-left text-sm transition-colors group ${highlightedSupplierIndex === idx
+                                                        ? 'bg-blue-50'
+                                                        : formData.supplier === sup.name
                                                             ? 'bg-blue-50/60'
                                                             : 'hover:bg-blue-50'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <div className="font-bold text-blue-600 group-hover:text-blue-700">{sup.name}</div>
                                                     <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">
@@ -933,6 +894,19 @@ const CostOfGoods = ({
                                 />
                             </div>
 
+                            {/* Truck No */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Truck No</label>
+                                <input
+                                    type="text"
+                                    name="truckNo"
+                                    value={formData.truckNo}
+                                    onChange={handleInputChange}
+                                    placeholder="Enter Truck No..."
+                                    className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                />
+                            </div>
+
                             {/* Product Auto Fill or Dropdown Select */}
                             <div className="space-y-1.5 relative" ref={productDropdownRef}>
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Product</label>
@@ -959,13 +933,12 @@ const CostOfGoods = ({
                                                         type="button"
                                                         onMouseEnter={() => setHighlightedProductIndex(idx)}
                                                         onClick={() => handleProductSelect(prod)}
-                                                        className={`w-full px-5 py-3 text-left text-sm transition-colors group ${
-                                                            highlightedProductIndex === idx
-                                                                ? 'bg-blue-50'
-                                                                : formData.product === prod
+                                                        className={`w-full px-5 py-3 text-left text-sm transition-colors group ${highlightedProductIndex === idx
+                                                            ? 'bg-blue-50'
+                                                            : formData.product === prod
                                                                 ? 'bg-blue-50/60'
                                                                 : 'hover:bg-blue-50'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <div className="font-bold text-blue-600 group-hover:text-blue-700">{prod}</div>
                                                     </button>
@@ -1006,9 +979,8 @@ const CostOfGoods = ({
                                         onKeyDown={handleBrandKeyDown}
                                         autoComplete="off"
                                         disabled={!formData.product}
-                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10 ${
-                                            !formData.product ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-100' : ''
-                                        }`}
+                                        className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10 ${!formData.product ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-100' : ''
+                                            }`}
                                         required
                                     />
                                     <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1027,13 +999,12 @@ const CostOfGoods = ({
                                                         setBrandSearchQuery('');
                                                         setHighlightedBrandIndex(-1);
                                                     }}
-                                                    className={`w-full px-5 py-3 text-left text-sm transition-colors group ${
-                                                        highlightedBrandIndex === idx
-                                                            ? 'bg-blue-50'
-                                                            : formData.brand === b
+                                                    className={`w-full px-5 py-3 text-left text-sm transition-colors group ${highlightedBrandIndex === idx
+                                                        ? 'bg-blue-50'
+                                                        : formData.brand === b
                                                             ? 'bg-blue-50/60'
                                                             : 'hover:bg-blue-50'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <div className="font-bold text-blue-600 group-hover:text-blue-700">{b}</div>
                                                 </button>
@@ -1324,7 +1295,7 @@ const CostOfGoods = ({
 
                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
                             {submitStatus === 'success' && <span className="flex items-center gap-1.5 text-emerald-600 text-sm font-semibold"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>Saved!</span>}
-                            {submitStatus === 'error'   && <span className="text-red-500 text-sm font-semibold">Failed. Try again.</span>}
+                            {submitStatus === 'error' && <span className="text-red-500 text-sm font-semibold">Failed. Try again.</span>}
                             <button type="button" onClick={() => { setShowForm(false); resetForm(); }} className="px-5 py-2 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-all">Cancel</button>
                             <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                                 {isSubmitting ? 'Saving...' : editingId ? 'Update Record' : 'Save Record'}
@@ -1349,40 +1320,41 @@ const CostOfGoods = ({
                         </div>
                         <div className="p-8 grid grid-cols-2 gap-5">
                             {[
-                                ['Date',        viewData.date ? formatDate(viewData.date) : '—'],
-                                ['LC No',       viewData.lcNo],
-                                ['Importer',    viewData.importer],
-                                ['Exporter',    viewData.exporter],
-                                ['Supplier',    viewData.supplier],
-                                ['Invoice No',  viewData.invoiceNo],
-                                ['Product',     viewData.product],
-                                ['Brand',       viewData.brand],
-                                ['Quantity',    viewData.quantity],
+                                ['Date', viewData.date ? formatDate(viewData.date) : '—'],
+                                ['LC No', viewData.lcNo],
+                                ['Importer', viewData.importer],
+                                ['Exporter', viewData.exporter],
+                                ['Supplier', viewData.supplier],
+                                ['Invoice No', viewData.invoiceNo],
+                                ['Truck No', viewData.truckNo || '—'],
+                                ['Product', viewData.product],
+                                ['Brand', viewData.brand],
+                                ['Quantity', viewData.quantity],
                                 ['Invoice Value', viewData.amount ? `${Number(viewData.amount).toLocaleString()} RS` : '—'],
                                 ['IND Truck Fare', viewData.indTruckFare ? `${Number(viewData.indTruckFare).toLocaleString()} RS` : '—'],
-                                ['SLOF / CF',   viewData.slofCf ? `${Number(viewData.slofCf).toLocaleString()} RS` : '—'],
-                                ['Total BILL',  (() => {
+                                ['SLOF / CF', viewData.slofCf ? `${Number(viewData.slofCf).toLocaleString()} RS` : '—'],
+                                ['Total BILL', (() => {
                                     const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     return sumVal ? `${Number(sumVal).toLocaleString()} RS` : '—';
                                 })()],
-                                ['Rebate %',    (() => {
+                                ['Rebate %', (() => {
                                     const pct = viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9');
                                     return pct !== undefined && pct !== null && pct !== '' ? `${pct}%` : '—';
                                 })()],
-                                ['Rebate',      (() => {
+                                ['Rebate', (() => {
                                     const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
                                     return rebateVal !== undefined && rebateVal !== null && rebateVal !== '' ? `${Number(rebateVal).toLocaleString()} RS` : '—';
                                 })()],
-                                ['Net Bill',    (() => {
+                                ['Net Bill', (() => {
                                     const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
                                     const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
                                     return netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString()} RS` : '—';
                                 })()],
-                                ['Rate/KG',     (() => {
+                                ['Rate/KG', (() => {
                                     const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
@@ -1392,7 +1364,7 @@ const CostOfGoods = ({
                                     return rateKgVal !== undefined && rateKgVal !== null && rateKgVal !== '' ? `${Number(rateKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—';
                                 })()],
                                 ['Rs to Dollar Rate', viewData.rsToDollar || '—'],
-                                ['Rate/Kg USD',     (() => {
+                                ['Rate/Kg USD', (() => {
                                     const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
@@ -1404,7 +1376,7 @@ const CostOfGoods = ({
                                     return rateKgUsdVal !== undefined && rateKgUsdVal !== null && rateKgUsdVal !== '' ? `${Number(rateKgUsdVal).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} USD` : '—';
                                 })()],
                                 ['Dollar rate BDT', viewData.dollarRateBdt ? `${Number(viewData.dollarRateBdt).toLocaleString()} BDT` : '—'],
-                                ['Rate/KG BDT',     (() => {
+                                ['Rate/KG BDT', (() => {
                                     const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
@@ -1421,7 +1393,7 @@ const CostOfGoods = ({
                                     const val = viewData.cfOtherExpense !== undefined ? viewData.cfOtherExpense : '9';
                                     return val ? `${Number(val).toLocaleString()} BDT` : '—';
                                 })()],
-                                ['Costing/kg',     (() => {
+                                ['Costing/kg', (() => {
                                     const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
@@ -1447,7 +1419,7 @@ const CostOfGoods = ({
                 </div>
             )}
 
-            <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } table th, table td { white-space: nowrap; }`}</style>
         </div>
     );
 };

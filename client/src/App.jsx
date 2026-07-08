@@ -1014,7 +1014,8 @@ function App() {
                               type === 'lc-expense' ? 'lc-expenses' :
                                 type === 'packing-list' ? 'packing-lists' :
                                   type === 'tr-setup' ? 'tr-setups' :
-                                    'stock';
+                                    type === 'cost-of-goods' ? 'cost-of-goods' :
+                                      'stock';
 
 
     try {
@@ -1129,7 +1130,7 @@ function App() {
         else if (type === 'stock') fetchStockRecords();
         else if (type === 'sales') fetchSales();
 
-        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup'].includes(type) || type.includes('cnf')) {
+        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
@@ -1151,7 +1152,8 @@ function App() {
           'lc-expense': 'LC Expense',
           'stock': 'Stock Record',
           'packing-list': 'Packing List',
-          'tr-setup': 'TR Setup'
+          'tr-setup': 'TR Setup',
+          'cost-of-goods': 'Cost of Goods Entry'
         };
         const label = labels[type] || type.toUpperCase();
         addNotification(
