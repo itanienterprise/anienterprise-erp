@@ -215,6 +215,45 @@ const getDefaultPermissionsForRole = (role) => {
   return defaults;
 };
 
+const resolveRoleToStore = async (roleName) => {
+  if (!roleName) return 'staff';
+  try {
+    const MetaData = require('./models/MetaData');
+    const records = await MetaData.find({ category: 'roles' });
+    const match = records.find(r => {
+      try {
+        const d = decryptData(r.data);
+        return d && d.name && d.name.toLowerCase() === roleName.toLowerCase();
+      } catch (e) {
+        return false;
+      }
+    });
+    return match ? match._id.toString() : roleName;
+  } catch (e) {
+    console.error('Error resolving role to store:', e);
+    return roleName;
+  }
+};
+
+const resolveRoleToDisplay = async (roleVal) => {
+  if (!roleVal) return 'General Staff';
+  if (/^[0-9a-fA-F]{24}$/.test(roleVal)) {
+    try {
+      const MetaData = require('./models/MetaData');
+      const record = await MetaData.findById(roleVal);
+      if (record) {
+        const d = decryptData(record.data);
+        if (d && d.name) {
+          return d.name;
+        }
+      }
+    } catch (e) {
+      console.error('Error translating role ID to name:', e);
+    }
+  }
+  return roleVal;
+};
+
 const resolveUserPermissions = async (role, customPermissions) => {
   // Build full role defaults (includes all known modules)
   const roleDefaults = getDefaultPermissionsForRole(role);
@@ -227,7 +266,11 @@ const resolveUserPermissions = async (role, customPermissions) => {
     const match = records.find(r => {
       try {
         const d = decryptData(r.data);
-        return d && d.name && d.name.toLowerCase() === (role || '').toLowerCase();
+        const roleStr = (role || '').toString().toLowerCase();
+        return d && (
+          (r._id.toString() === role) ||
+          (d.name && d.name.toLowerCase() === roleStr)
+        );
       } catch (e) {
         return false;
       }
@@ -1877,7 +1920,9 @@ apiRouter.post('/api/employees', verifyPermission('employees', 'add'), async (re
     }
     const employeeData = req.body; // Already decrypted by securityMiddleware
     const { role } = employeeData;
-    const empRole = role ? role.toLowerCase() : 'staff';
+    const resolvedRole = await resolveRoleToStore(role);
+    employeeData.role = resolvedRole;
+    const empRole = resolvedRole ? resolvedRole.toLowerCase() : 'staff';
 
     // Auto-generate ID logic
     const prefix = empRole === 'admin' ? 'A-' : 'E-';
@@ -1982,8 +2027,17 @@ apiRouter.put('/api/employees/:id', verifyPermission('employees', 'edit'), async
     const employeeData = req.body; // Already decrypted by securityMiddleware
     const { employeeId: newId, role } = employeeData;
 
+    // Preserve permissions if they were not supplied in the request body
+    if (!employeeData.hasOwnProperty('permissions') && oldDec.hasOwnProperty('permissions')) {
+      employeeData.permissions = oldDec.permissions;
+    }
+
+    const resolvedRole = await resolveRoleToStore(role);
+    employeeData.role = resolvedRole;
+
     if (userSession && (userSession.role || '').toLowerCase() === 'incharge') {
-      if (role && oldDec.role && role.toLowerCase() !== oldDec.role.toLowerCase()) {
+      const oldResolvedRole = await resolveRoleToStore(oldDec.role);
+      if (resolvedRole && oldResolvedRole && resolvedRole.toLowerCase() !== oldResolvedRole.toLowerCase()) {
         return res.status(403).json({ message: 'Forbidden: Incharge users cannot edit employee roles' });
       }
     }
@@ -1991,7 +2045,7 @@ apiRouter.put('/api/employees/:id', verifyPermission('employees', 'edit'), async
     const user = await User.findOne({ username: oldId });
     if (user) {
       user.username = newId;
-      if (role) user.role = role.toLowerCase();
+      if (resolvedRole) user.role = resolvedRole.toLowerCase();
       await user.save();
     }
 
@@ -2081,14 +2135,17 @@ apiRouter.post('/api/employees/:id/change-password', async (req, res) => {
 apiRouter.get('/api/employees', verifyPermission('employees', 'view'), async (req, res) => {
   try {
     const records = await Employee.find().sort({ createdAt: -1 });
-    const decrypted = records.map(r => {
+    const decrypted = await Promise.all(records.map(async (r) => {
       let d = decryptData(r.data);
       // Fallback for double-encrypted
       if (d && d.data && typeof d.data === 'string' && !d.employeeId) {
         try { d = decryptData(d.data); } catch (e) { }
       }
+      if (d && d.role) {
+        d.role = await resolveRoleToDisplay(d.role);
+      }
       return { ...d, _id: r._id, createdAt: r.createdAt };
-    });
+    }));
     res.json(decrypted);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -2143,12 +2200,13 @@ apiRouter.post('/api/auth/login', async (req, res) => {
       }
     }
 
+    const displayRole = await resolveRoleToDisplay(user.role);
     const resolvedPerms = username === 'admin' ? null : await resolveUserPermissions(user.role, permissions);
 
     const userData = {
       id: user._id,
       username: user.username,
-      role: user.role,
+      role: displayRole,
       name: displayName,
       permissions: resolvedPerms
     };
@@ -2215,7 +2273,8 @@ apiRouter.get('/api/auth/check', async (req, res) => {
       }
 
       // Update session with fresh details
-      req.session.user.role = decryptedEmp.role;
+      const displayRole = await resolveRoleToDisplay(decryptedEmp.role);
+      req.session.user.role = displayRole;
       req.session.user.permissions = await resolveUserPermissions(decryptedEmp.role, decryptedEmp.permissions);
 
       res.json({
@@ -2265,7 +2324,8 @@ apiRouter.get('/api/profile', async (req, res) => {
           try { decrypted = decryptData(decrypted.data); } catch (e) { }
         }
         if (decrypted.employeeId === user.username) {
-          matchedEmployee = { ...decrypted, _id: emp._id, createdAt: emp.createdAt };
+          const displayRole = await resolveRoleToDisplay(decrypted.role);
+          matchedEmployee = { ...decrypted, role: displayRole, _id: emp._id, createdAt: emp.createdAt };
           break;
         }
       } catch (e) {
