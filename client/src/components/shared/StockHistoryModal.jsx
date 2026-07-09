@@ -72,6 +72,7 @@ const StockHistoryModal = ({
         if (!viewRecord) return [];
         const searchLower = historySearchQuery.toLowerCase().trim();
         const productName = (viewRecord.productName || viewRecord.name || '').trim().toLowerCase();
+        const consumedWhIds = new Set();
 
         const filteredRaw = (stockRecords || []).filter(item => {
             const status = (item.status || '').toLowerCase();
@@ -153,8 +154,11 @@ const StockHistoryModal = ({
                 }
 
                 if (bestStock) {
-                    return bestStock._id === item._id;
+                    const matches = bestStock._id === item._id;
+                    if (matches) consumedWhIds.add(w._id);
+                    return matches;
                 }
+                consumedWhIds.add(w._id);
                 return true;
             });
 
@@ -232,6 +236,75 @@ const StockHistoryModal = ({
             return acc;
         }, {});
 
+        // Include unmatched warehouse records
+        const unmatchedWhRecords = (warehouseData || []).filter(w => {
+            if (w.recordType !== 'warehouse') return false;
+            if (consumedWhIds.has(w._id)) return false;
+
+            const wProd = (w.productName || w.product || '').trim().toLowerCase();
+            if (wProd !== productName) return false;
+
+            // Apply filters
+            const wDateVal = w.date || w.createdAt || w.updatedAt;
+            const wDate = wDateVal ? wDateVal.toString().split('T')[0] : '';
+            if (historyFilters.startDate && wDate < historyFilters.startDate) return false;
+            if (historyFilters.endDate && wDate > historyFilters.endDate) return false;
+            if (historyFilters.lcNo && (w.lcNo || '').trim() !== historyFilters.lcNo) return false;
+            if (historyFilters.port && (w.port || '').trim() !== historyFilters.port) return false;
+            if (historyFilters.warehouse && (w.whName || w.warehouse || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return false;
+            if (historyFilters.brand && (w.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return false;
+
+            if (searchLower) {
+                const matchesLC = (w.lcNo || '').trim().toLowerCase().includes(searchLower);
+                const matchesWh = (w.whName || w.warehouse || '').trim().toLowerCase().includes(searchLower);
+                const matchesBrand = (w.brand || '').trim().toLowerCase().includes(searchLower);
+                if (!matchesLC && !matchesWh && !matchesBrand) return false;
+            }
+
+            return true;
+        });
+
+        unmatchedWhRecords.forEach(w => {
+            const wDateVal = w.date || w.createdAt || w.updatedAt;
+            const wDate = wDateVal ? wDateVal.toString().split('T')[0] : new Date().toISOString().split('T')[0];
+            const wBrand = w.brand || 'No Brand';
+            const key = `${wDate}_${w.lcNo || 'adjustment'}_wh_${w._id}`;
+
+            const whQty = parseFloat(w.whQty) || parseFloat(w.quantity) || 0;
+            const whPkt = parseFloat(w.whPkt) || parseFloat(w.packet) || 0;
+
+            groupedMap[key] = {
+                ...w,
+                _id: w._id,
+                date: wDate,
+                lcNo: w.lcNo || '-',
+                truckNo: w.truckNo || '-',
+                allIds: [w._id],
+                brandsProcessed: new Set([wBrand.trim().toLowerCase()]),
+                totalQuantity: whQty,
+                totalPacket: whPkt,
+                totalInHousePacket: whPkt,
+                totalInHouseQuantity: whQty,
+                totalShortage: 0,
+                totalSaleQuantity: 0,
+                totalSalePacket: 0,
+                entries: [{
+                    brand: wBrand,
+                    purchasedPrice: w.purchasedPrice || '',
+                    packet: whPkt,
+                    packetSize: w.packetSize || 30,
+                    quantity: whQty,
+                    inHousePacket: whPkt,
+                    inHouseQuantity: whQty,
+                    sweepedPacket: 0,
+                    sweepedQuantity: 0,
+                    saleQuantity: 0,
+                    salePacket: 0,
+                    unit: w.unit || 'kg'
+                }]
+            };
+        });
+
         return Object.values(groupedMap).sort((a, b) => {
             const aVal = a[sortConfig.key];
             const bVal = b[sortConfig.key];
@@ -248,7 +321,7 @@ const StockHistoryModal = ({
 
         const filteredSales = (salesRecords || []).filter(sale => {
             const status = (sale.status || '').toLowerCase();
-            if (status !== 'accepted') return false;
+            if (status !== 'accepted' && status !== 'pending') return false;
 
             const hasMatchingProduct = (sale.items || []).some(item =>
                 (item.productName || '').trim().toLowerCase() === productName
