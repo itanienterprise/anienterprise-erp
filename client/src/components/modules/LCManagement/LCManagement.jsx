@@ -5,7 +5,7 @@ import {
     PlusIcon, XIcon, EditIcon, TrashIcon, SearchIcon,
     LCManagerIcon, ShieldIcon, BuildingIcon, GlobeIcon,
     DollarSignIcon, CalendarIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, FileTextIcon, CheckIcon,
-    FunnelIcon, PDFIcon, BarChartIcon
+    FunnelIcon, PDFIcon, BarChartIcon, BoxIcon
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
@@ -52,6 +52,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const [activeMilestoneIndex, setActiveMilestoneIndex] = useState(0);
     const [insurancePayments, setInsurancePayments] = useState([]);
     const [cnfPayments, setCnfPayments] = useState([]);
+    const [costOfGoodsRecords, setCostOfGoodsRecords] = useState([]);
 
     // States for Add Bill inside modal
     const [showAddBillModal, setShowAddBillModal] = useState(false);
@@ -181,12 +182,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     useEffect(() => {
         const fetchPaymentsData = async () => {
             try {
-                const [insPayRes, cnfPayRes] = await Promise.all([
+                const [insPayRes, cnfPayRes, cogRes] = await Promise.all([
                     axios.get(`${API_BASE_URL}/api/insurance-payments`),
-                    axios.get(`${API_BASE_URL}/api/cnf-payments`)
+                    axios.get(`${API_BASE_URL}/api/cnf-payments`),
+                    axios.get(`${API_BASE_URL}/api/cost-of-goods`).catch(() => ({ data: [] }))
                 ]);
                 setInsurancePayments(Array.isArray(insPayRes.data) ? insPayRes.data : []);
                 setCnfPayments(Array.isArray(cnfPayRes.data) ? cnfPayRes.data : []);
+                setCostOfGoodsRecords(Array.isArray(cogRes.data) ? cogRes.data : []);
             } catch (error) {
                 console.error("Error fetching payments in modal:", error);
             }
@@ -744,6 +747,25 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             isEnabled
         };
     }, [data, allStockRecords, allSalesRecords, lcNoClean]);
+
+    const cogTabRecords = useMemo(() => {
+        return costOfGoodsRecords.filter(cog => cleanLc(cog.lcNo) === lcNoClean);
+    }, [costOfGoodsRecords, lcNoClean]);
+
+    const filteredCogRecords = useMemo(() => {
+        return cogTabRecords.filter(record => {
+            if (!consumptionSearchQuery.trim()) return true;
+            const q = consumptionSearchQuery.toLowerCase().trim();
+            return (
+                (formatDate(record.date) || '').toLowerCase().includes(q) ||
+                (record.supplier || '').toLowerCase().includes(q) ||
+                (record.invoiceNo || '').toLowerCase().includes(q) ||
+                (record.product || '').toLowerCase().includes(q) ||
+                (record.brand || '').toLowerCase().includes(q) ||
+                String(record.quantity || '').includes(q)
+            );
+        });
+    }, [cogTabRecords, consumptionSearchQuery]);
 
     const totalLcQtyTons = products.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
     const totalLcQtyKg = totalLcQtyTons * 1000;
@@ -1339,7 +1361,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     return createPortal(
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-[95vw] md:max-w-[92vw] lg:max-w-8xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
                 {/* Desktop Header */}
                 <div className="hidden md:flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                     {/* Left: LC Info */}
@@ -1382,7 +1404,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                             </div>
                             {/* Tab Buttons */}
                             <div className="flex items-center gap-2">
-                                {['history', 'gp', 'bill', 'expense'].map(tab => (
+                                {['history', 'cog', 'gp', 'bill', 'expense'].map(tab => (
                                     <button
                                         key={tab}
                                         onClick={() => { setActiveTab(tab); setConsumptionSearchQuery(''); setExpandedSubRowKey(null); }}
@@ -1391,7 +1413,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                                             }`}
                                     >
-                                        {tab === 'history' ? 'LC History' : tab === 'gp' ? 'G.P List' : tab === 'bill' ? 'LC Bill' : 'Expense'}
+                                        {tab === 'history' ? 'LC History' : tab === 'cog' ? 'CoG' : tab === 'gp' ? 'G.P List' : tab === 'bill' ? 'LC Bill' : 'Expense'}
                                     </button>
                                 ))}
                             </div>
@@ -1497,7 +1519,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                     {showConsumption && (
                         <div className="flex items-center justify-between gap-3 w-full">
                             <div className="flex items-center justify-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1 flex-1">
-                                {['history', 'gp', 'bill', 'expense'].map(tab => (
+                                {['history', 'cog', 'gp', 'bill', 'expense'].map(tab => (
                                     <button
                                         key={tab}
                                         onClick={() => { setActiveTab(tab); setConsumptionSearchQuery(''); setExpandedSubRowKey(null); }}
@@ -1506,7 +1528,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                                             }`}
                                     >
-                                        {tab === 'history' ? 'LC History' : tab === 'gp' ? 'G.P List' : tab === 'bill' ? 'LC Bill' : 'Expense'}
+                                        {tab === 'history' ? 'LC History' : tab === 'cog' ? 'CoG' : tab === 'gp' ? 'G.P List' : tab === 'bill' ? 'LC Bill' : 'Expense'}
                                     </button>
                                 ))}
                             </div>
@@ -1517,12 +1539,12 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
                     {showConsumption ? (
-                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 w-full flex flex-col">
                             {/* Summary Cards */}
                             {activeTab === 'bill' ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-8">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-0 mb-8 w-full border border-gray-100 rounded-2xl shadow-sm divide-x divide-gray-100 overflow-hidden bg-white">
                                     <div 
-                                        className="col-span-full md:col-span-1 bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
+                                        className="col-span-full md:col-span-1 bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
                                     >
                                         <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
@@ -1537,7 +1559,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
                                         <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
                                                 <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
@@ -1551,7 +1573,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-rose-100 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
                                         <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-rose-50 text-rose-600 rounded-lg md:rounded-xl group-hover:bg-rose-600 group-hover:text-white transition-colors shrink-0">
                                                 <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
@@ -1570,37 +1592,162 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                     </div>
                                 </div>
+                            ) : activeTab === 'cog' ? (
+                                (() => {
+                                    const totalInvoiceQty = filteredCogRecords.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0);
+
+                                    const totalReceiveQty = filteredCogRecords.reduce((sum, record) => {
+                                        const matchingStocks = allStockRecords.filter(s => {
+                                            const status = (s.status || '').toLowerCase();
+                                            const isAccepted = status === 'accepted' || status === 'in stock';
+                                            return isAccepted &&
+                                                   cleanLc(s.lcNo) === lcNoClean &&
+                                                   String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                   String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                        });
+                                        return sum + matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.quantity) || 0), 0);
+                                    }, 0);
+
+                                    const totalShort = filteredCogRecords.reduce((sum, record) => {
+                                        const matchingStocks = allStockRecords.filter(s => {
+                                            const status = (s.status || '').toLowerCase();
+                                            const isAccepted = status === 'accepted' || status === 'in stock';
+                                            return isAccepted &&
+                                                   cleanLc(s.lcNo) === lcNoClean &&
+                                                   String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                   String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                        });
+                                        return sum + matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.sweepedQuantity) || 0), 0);
+                                    }, 0);
+
+                                    const grandTotalBdt = filteredCogRecords.reduce((sum, r) => {
+                                        const billSum = r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.slofCf) || 0));
+                                        const rebatePct = r.rebate !== undefined ? r.rebate : (r.redate !== undefined ? r.redate : '2.9');
+                                        const rebateVal = r.rebateAmount !== undefined ? r.rebateAmount : (r.redateAmount !== undefined ? r.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                        const netBillVal = r.netBill !== undefined ? r.netBill : (billSum - rebateVal);
+                                        const qtyVal = parseFloat(r.quantity) || 0;
+                                        const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                        const dollarRateVal = parseFloat(r.rsToDollar) || 0;
+                                        const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                        const bdtRateVal = parseFloat(r.dollarRateBdt) || 0;
+                                        const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                        const cfExpVal = r.cfOtherExpense !== undefined ? r.cfOtherExpense : '9';
+                                        const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+                                        return sum + (costingKgVal * qtyVal);
+                                    }, 0);
+
+                                    const avgCostingPerKg = totalInvoiceQty > 0 ? (grandTotalBdt / totalInvoiceQty) : 0;
+
+                                    return (
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-0 mb-8 w-full border border-gray-100 rounded-2xl shadow-sm divide-x divide-gray-100 overflow-hidden bg-white">
+                                            {/* Card 1: Total Invoice Qty */}
+                                            <div className="col-span-full md:col-span-1 bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
+                                                    <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
+                                                        <BoxIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                                    </div>
+                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Invoice Qty</span>
+                                                </div>
+                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
+                                                    <span className="text-lg md:text-2xl font-black text-blue-600">
+                                                        {totalInvoiceQty.toLocaleString('en-IN')} <span className="text-xs font-bold">KG</span>
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Card 2: Total Receive Qty */}
+                                            <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
+                                                    <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
+                                                        <CheckIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                                    </div>
+                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Receive Qty</span>
+                                                </div>
+                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
+                                                    <span className="text-lg md:text-2xl font-black text-emerald-600">
+                                                        {totalReceiveQty.toLocaleString('en-IN')} <span className="text-xs font-bold">KG</span>
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Card 3: Total Short */}
+                                            <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
+                                                    <div className="p-1.5 md:p-2 bg-rose-50 text-rose-600 rounded-lg md:rounded-xl group-hover:bg-rose-600 group-hover:text-white transition-colors shrink-0">
+                                                        <XIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                                    </div>
+                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Short</span>
+                                                </div>
+                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
+                                                    <span className="text-lg md:text-2xl font-black text-rose-600">
+                                                        {totalShort.toLocaleString('en-IN')} <span className="text-xs font-bold">KG</span>
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Card 4: Grand Total BDT */}
+                                            <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
+                                                    <div className="p-1.5 md:p-2 bg-amber-50 text-amber-600 rounded-lg md:rounded-xl group-hover:bg-amber-600 group-hover:text-white transition-colors shrink-0">
+                                                        <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                                    </div>
+                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Grand Total BDT</span>
+                                                </div>
+                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
+                                                    <span className="text-lg md:text-2xl font-black text-amber-600">
+                                                        ৳{grandTotalBdt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Card 5: Avg Costing/KG */}
+                                            <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                                <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
+                                                    <div className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg md:rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
+                                                        <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                                    </div>
+                                                    <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Avg Costing/KG</span>
+                                                </div>
+                                                <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
+                                                    <span className="text-lg md:text-2xl font-black text-indigo-600">
+                                                        ৳{avgCostingPerKg.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/KG
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()
                             ) : (
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100 group text-left">
-                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 w-full border border-gray-100 rounded-2xl shadow-sm divide-x divide-gray-100 overflow-hidden bg-white">
+                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
                                                 <LCManagerIcon className="w-4 h-4 md:w-5 md:h-5" />
                                             </div>
                                             <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC Quantity</span>
                                         </div>
-                                        <div className="flex items-baseline gap-0.5 md:gap-1">
+                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
                                             <span className="text-lg md:text-2xl font-black text-gray-900">{totalLcQtyKg.toLocaleString('en-US')}</span>
                                             <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
                                         </div>
                                     </div>
 
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100 group text-left">
-                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg md:rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
                                                 <GlobeIcon className="w-4 h-4 md:w-5 md:h-5" />
                                             </div>
                                             <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Consumption</span>
                                         </div>
-                                        <div className="flex items-baseline gap-0.5 md:gap-1">
+                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
                                             <span className="text-lg md:text-2xl font-black text-gray-900">{consumedQtyKg.toLocaleString('en-US')}</span>
                                             <span className="text-[10px] md:text-xs font-bold text-gray-400">Kg</span>
                                         </div>
                                     </div>
 
                                     {data.enableValueQtyAdjustment ? (
-                                        <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-left">
-                                            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                        <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                            <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                                 <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
                                                     <PlusIcon className="w-4 h-4 md:w-5 md:h-5" />
                                                 </div>
@@ -1619,14 +1766,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-emerald-100 group text-left">
-                                            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                        <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                            <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                                 <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
                                                     <ShieldIcon className="w-4 h-4 md:w-5 md:h-5" />
                                                 </div>
                                                 <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rem. Quantity</span>
                                             </div>
-                                            <div className="flex items-baseline gap-0.5 md:gap-1">
+                                            <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
                                                 <span className={`text-lg md:text-2xl font-black ${remQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
                                                     {remQtyKg.toLocaleString('en-US')}
                                                 </span>
@@ -1635,14 +1782,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                     )}
 
-                                    <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-gray-200 group text-left">
-                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start">
+                                        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-gray-50 text-gray-600 rounded-lg md:rounded-xl group-hover:bg-gray-800 group-hover:text-white transition-colors shrink-0">
                                                 <BuildingIcon className="w-4 h-4 md:w-5 md:h-5" />
                                             </div>
                                             <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Truck</span>
                                         </div>
-                                        <div className="flex items-baseline gap-0.5 md:gap-1">
+                                        <div className="flex items-baseline justify-center md:justify-start gap-0.5 md:gap-1">
                                             <span className="text-lg md:text-2xl font-black text-gray-900">{truckCount}</span>
                                             <span className="text-[10px] md:text-xs font-bold text-gray-400">Units</span>
                                         </div>
@@ -1655,7 +1802,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                 <>
                                     {/* Desktop View */}
                                     <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
-                                        <table className="w-full text-left border-collapse min-w-[750px] md:min-w-0">
+                                        <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="bg-gray-50/50 border-b border-gray-100">
                                                     <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
@@ -1784,11 +1931,269 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
                                     </div>
                                 </>
+                            ) : activeTab === 'cog' ? (
+                                <>
+                                    {/* Desktop View */}
+                                    <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Date</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Supplier</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invoice No</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Product</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Brand</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">QTY</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Invoice Bill (Rs)</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Net Bill (Rs)</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Costing/kg (BDT)</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Total BDT</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Lc Receive Qty</th>
+                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Receive Total Price</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
+                                                {filteredCogRecords.length > 0 ? (
+                                                    filteredCogRecords.map((record, idx) => {
+                                                        const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
+                                                        const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
+                                                        const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                                        const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
+                                                        const qtyVal = parseFloat(record.quantity) || 0;
+                                                        const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                                        const dollarRateVal = parseFloat(record.rsToDollar) || 0;
+                                                        const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                                        const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
+                                                        const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                                        const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
+                                                        const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+
+                                                        const matchingStocks = allStockRecords.filter(s => {
+                                                            const status = (s.status || '').toLowerCase();
+                                                            const isAccepted = status === 'accepted' || status === 'in stock';
+                                                            return isAccepted &&
+                                                                   cleanLc(s.lcNo) === lcNoClean &&
+                                                                   String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                   String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                        });
+
+                                                        const lcReceiveQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
+                                                        const receiveTotalQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.inHouseQuantity) || 0), 0);
+
+                                                        return (
+                                                            <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-gray-600 whitespace-nowrap">
+                                                                    {formatDate(record.date)}
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-bold text-gray-900">
+                                                                    {record.supplier || '—'}
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-gray-650">
+                                                                    {record.invoiceNo || '—'}
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-gray-900 font-semibold">
+                                                                    {record.product || '—'}
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-gray-500 font-bold">
+                                                                    {record.brand || '—'}
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-gray-900 whitespace-nowrap">
+                                                                    {qtyVal.toLocaleString('en-IN')}
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-right text-gray-600 whitespace-nowrap">
+                                                                    {parseFloat(record.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-semibold text-right text-gray-700 whitespace-nowrap">
+                                                                    {netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-bold text-right text-blue-600 whitespace-nowrap">
+                                                                    ৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-emerald-600 whitespace-nowrap">
+                                                                    ৳{(costingKgVal * qtyVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-gray-900 whitespace-nowrap">
+                                                                    {lcReceiveQty.toLocaleString('en-IN')}
+                                                                </td>
+                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-emerald-600 whitespace-nowrap">
+                                                                    ৳{(costingKgVal * receiveTotalQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan="12" className="px-3 md:px-4 py-12 text-center text-gray-400 font-bold">
+                                                            {consumptionSearchQuery ? 'No CoG records match your search.' : 'No Cost of Goods records found for this LC.'}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                            <tfoot className="bg-gray-50/30">
+                                                <tr>
+                                                    <td colSpan="5" className="px-3 md:px-4 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total:</td>
+                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-gray-900">
+                                                        {filteredCogRecords.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString('en-IN')}
+                                                    </td>
+                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-semibold text-right text-gray-600">
+                                                        {filteredCogRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS
+                                                    </td>
+                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-semibold text-right text-gray-600">
+                                                        {filteredCogRecords.reduce((sum, r) => {
+                                                            const billSum = r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.slofCf) || 0));
+                                                            const rebatePct = r.rebate !== undefined ? r.rebate : (r.redate !== undefined ? r.redate : '2.9');
+                                                            const rebateVal = r.rebateAmount !== undefined ? r.rebateAmount : (r.redateAmount !== undefined ? r.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                                            return sum + (billSum - rebateVal);
+                                                        }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS
+                                                    </td>
+                                                    <td></td>
+                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-emerald-600">
+                                                        ৳{filteredCogRecords.reduce((sum, r) => {
+                                                            const billSum = r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.slofCf) || 0));
+                                                            const rebatePct = r.rebate !== undefined ? r.rebate : (r.redate !== undefined ? r.redate : '2.9');
+                                                            const rebateVal = r.rebateAmount !== undefined ? r.rebateAmount : (r.redateAmount !== undefined ? r.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                                            const netBillVal = r.netBill !== undefined ? r.netBill : (billSum - rebateVal);
+                                                            const qtyVal = parseFloat(r.quantity) || 0;
+                                                            const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                                            const dollarRateVal = parseFloat(r.rsToDollar) || 0;
+                                                            const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                                            const bdtRateVal = parseFloat(r.dollarRateBdt) || 0;
+                                                            const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                                            const cfExpVal = r.cfOtherExpense !== undefined ? r.cfOtherExpense : '9';
+                                                            const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+                                                            return sum + (costingKgVal * qtyVal);
+                                                        }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-gray-900">
+                                                        {filteredCogRecords.reduce((sum, record) => {
+                                                            const matchingStocks = allStockRecords.filter(s => {
+                                                                const status = (s.status || '').toLowerCase();
+                                                                const isAccepted = status === 'accepted' || status === 'in stock';
+                                                                return isAccepted &&
+                                                                       cleanLc(s.lcNo) === lcNoClean &&
+                                                                       String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                       String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                            });
+                                                            return sum + matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.quantity) || 0), 0);
+                                                        }, 0).toLocaleString('en-IN')}
+                                                    </td>
+                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-emerald-600">
+                                                        ৳{filteredCogRecords.reduce((sum, record) => {
+                                                            const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
+                                                            const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
+                                                            const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                                            const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
+                                                            const qtyVal = parseFloat(record.quantity) || 0;
+                                                            const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                                            const dollarRateVal = parseFloat(record.rsToDollar) || 0;
+                                                            const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                                            const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
+                                                            const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                                            const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
+                                                            const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+
+                                                            const matchingStocks = allStockRecords.filter(s => {
+                                                                const status = (s.status || '').toLowerCase();
+                                                                const isAccepted = status === 'accepted' || status === 'in stock';
+                                                                return isAccepted &&
+                                                                       cleanLc(s.lcNo) === lcNoClean &&
+                                                                       String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                       String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                            });
+                                                            const receiveTotalQty = matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.inHouseQuantity) || 0), 0);
+                                                            return sum + (costingKgVal * receiveTotalQty);
+                                                        }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    {/* Mobile View */}
+                                    <div className="md:hidden">
+                                        {filteredCogRecords.length > 0 ? (
+                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
+                                                {filteredCogRecords.map((record, idx) => {
+                                                    const key = `cog_${idx}`;
+                                                    const isExpanded = expandedSubRowKey === key;
+
+                                                    const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
+                                                    const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
+                                                    const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                                    const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
+                                                    const qtyVal = parseFloat(record.quantity) || 0;
+                                                    const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                                    const dollarRateVal = parseFloat(record.rsToDollar) || 0;
+                                                    const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                                    const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
+                                                    const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                                    const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
+                                                    const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+
+                                                    return (
+                                                        <div key={idx} className="transition-all hover:bg-gray-50/35">
+                                                            {/* Collapsed View Header */}
+                                                            <div
+                                                                onClick={() => setExpandedSubRowKey(isExpanded ? null : key)}
+                                                                className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
+                                                            >
+                                                                <div className="p-2 rounded-xl shrink-0 bg-blue-50 text-blue-600">
+                                                                    <BoxIcon className="w-4 h-4" />
+                                                                </div>
+                                                                <div className="flex-1 min-w-0 text-left">
+                                                                    <p className="text-xs font-bold text-gray-900 truncate">{record.supplier || '-'}</p>
+                                                                    <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(record.date)} • Inv: {record.invoiceNo || '-'}</p>
+                                                                </div>
+                                                                <div className="text-right shrink-0">
+                                                                    <p className="text-xs font-black text-emerald-600">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg</p>
+                                                                    <p className="text-[10px] text-gray-500 font-semibold mt-0.5">{qtyVal.toLocaleString('en-IN')} KG</p>
+                                                                </div>
+                                                                <div className="shrink-0 text-gray-400 pl-1">
+                                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Expanded Content */}
+                                                            {isExpanded && (
+                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
+                                                                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product & Brand</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-900 uppercase text-[11px]">{record.product || '—'} ({record.brand || '—'})</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice Value</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 text-[11px]">{record.amount ? `${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Bill</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 text-[11px]">{netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rate/KG (BDT)</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-blue-600 text-[11px]">{rateKgBdtVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 text-[11px]">{record.truckNo || '—'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="p-8 text-center text-gray-400 font-bold bg-white border border-gray-100 rounded-2xl shadow-sm">
+                                                {consumptionSearchQuery ? 'No CoG records match your search.' : 'No Cost of Goods records found for this LC.'}
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
                             ) : activeTab === 'gp' ? (
                                 <>
                                     {/* Desktop View */}
                                     <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
-                                        <table className="w-full text-left border-collapse min-w-[700px] md:min-w-0">
+                                        <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="bg-gray-50/50 border-b border-gray-100">
                                                     <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
@@ -1921,7 +2326,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                 <>
                                     {/* Desktop View */}
                                     <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
-                                        <table className="w-full text-left border-collapse min-w-[750px] md:min-w-0">
+                                        <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="bg-gray-50/50 border-b border-gray-100">
                                                     <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
@@ -2077,7 +2482,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                 <>
                                     {/* Desktop View */}
                                     <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
-                                        <table className="w-full text-left border-collapse min-w-[650px] md:min-w-0">
+                                        <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="bg-gray-50/50 border-b border-gray-100">
                                                     <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
