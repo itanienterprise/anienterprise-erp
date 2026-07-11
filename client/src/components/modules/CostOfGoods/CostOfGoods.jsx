@@ -203,7 +203,10 @@ const CostOfGoods = ({
 
         let autoBrand = '';
         if (autoProduct) {
-            const selectedProductObj = products.find(p => p.name === autoProduct);
+            const selectedProductObj = products.find(p => 
+                (p.name || '').trim().toLowerCase() === autoProduct.trim().toLowerCase() ||
+                (p.ipName || '').trim().toLowerCase() === autoProduct.trim().toLowerCase()
+            );
             const availableBrands = selectedProductObj ? [
                 ...(selectedProductObj.brands || []).map(b => b.brand).filter(Boolean),
                 selectedProductObj.brand
@@ -228,7 +231,10 @@ const CostOfGoods = ({
     };
 
     const handleProductSelect = (prodName) => {
-        const selectedProductObj = products.find(p => p.name === prodName);
+        const selectedProductObj = products.find(p => 
+            (p.name || '').trim().toLowerCase() === prodName.trim().toLowerCase() ||
+            (p.ipName || '').trim().toLowerCase() === prodName.trim().toLowerCase()
+        );
         const availableBrands = selectedProductObj ? [
             ...(selectedProductObj.brands || []).map(b => b.brand).filter(Boolean),
             selectedProductObj.brand
@@ -268,7 +274,10 @@ const CostOfGoods = ({
     // Get unique brand options for selected product from database
     const getProductBrands = () => {
         if (!formData.product) return [];
-        const selectedProductObj = products.find(p => p.name === formData.product);
+        const selectedProductObj = products.find(p => 
+            (p.name || '').trim().toLowerCase() === formData.product.trim().toLowerCase() ||
+            (p.ipName || '').trim().toLowerCase() === formData.product.trim().toLowerCase()
+        );
         const availableBrands = selectedProductObj ? [
             ...(selectedProductObj.brands || []).map(b => b.brand).filter(Boolean),
             selectedProductObj.brand
