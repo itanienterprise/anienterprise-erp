@@ -3,7 +3,7 @@ import { SearchIcon, XIcon, BarChartIcon, FunnelIcon, PrinterIcon } from '../../
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateStockReportPDF } from '../../../utils/pdfGenerator';
 import { formatDate } from '../../../utils/helpers';
-import { calculateStockData, calculatePktRemainder } from '../../../utils/stockHelpers';
+import { calculateStockData, calculatePktRemainder, getGroupedBrandList } from '../../../utils/stockHelpers';
 
 const StockReport = ({
     isOpen,
@@ -26,9 +26,17 @@ const StockReport = ({
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, brand: false, product: false, category: false });
     const initialFilterDropdownState = { warehouse: false, brand: false, product: false, category: false };
 
+    // --- Local Stock Data Recalculation for Price Report ---
+    const activeStockData = React.useMemo(() => {
+        if (reportType === 'price') {
+            return calculateStockData(stockRecords, { ...stockFilters, reportType: 'price' }, '', warehouseData, salesRecords, products, damages);
+        }
+        return stockData;
+    }, [stockData, reportType, stockRecords, stockFilters, warehouseData, salesRecords, products, damages]);
+
     // --- Search & Filter Logic ---
     const filteredRecords = React.useMemo(() => {
-        let records = stockData.displayRecords;
+        let records = activeStockData.displayRecords;
 
         // Apply brand filter from Advanced Filter panel
         if (stockFilters.brand) {
@@ -38,8 +46,9 @@ const StockReport = ({
                     (b.brand || '').toLowerCase().trim() === brandFilter
                 );
                 if (filteredBrands.length > 0) {
-                    const inHouseQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
-                    const totalInHouseQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
+                    const groupedBrands = getGroupedBrandList(filteredBrands);
+                    const inHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                    const totalInHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
                     const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
                     const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
                     return {
@@ -72,8 +81,9 @@ const StockReport = ({
 
             if (filteredBrands.length > 0) {
                 // IMPORTANT: Recalculate item-level totals for the filtered brands
-                const inHouseQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
-                const totalInHouseQuantity = filteredBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
+                const groupedBrands = getGroupedBrandList(filteredBrands);
+                const inHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                const totalInHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
                 const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
                 const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
 
@@ -89,7 +99,7 @@ const StockReport = ({
             }
             return null;
         }).filter(Boolean);
-    }, [stockData.displayRecords, searchQuery, stockFilters.brand]);
+    }, [activeStockData.displayRecords, searchQuery, stockFilters.brand]);
 
     // Recalculate totals based on filteredRecords
     const totals = React.useMemo(() => {
@@ -113,7 +123,7 @@ const StockReport = ({
     }, [filteredRecords]);
 
     const filteredStockData = React.useMemo(() => ({
-        ...stockData,
+        ...activeStockData,
         displayRecords: filteredRecords,
         totalTotalInHouseQty: totals.totalTotalInHouseQty,
         totalSaleQty: totals.totalSaleQty,
@@ -121,7 +131,7 @@ const StockReport = ({
         totalSalePkt: totals.totalSalePkt,
         totalShortage: totals.totalShortage,
         totalDamageQty: totals.totalDamageQty
-    }), [stockData, filteredRecords, totals]);
+    }), [activeStockData, filteredRecords, totals]);
 
     const warehouseOptions = React.useMemo(() => {
         const fromStock = stockRecords.map(item => (item.warehouse || item.whName || '').trim()).filter(Boolean);
@@ -137,7 +147,7 @@ const StockReport = ({
     const multiWarehouseData = React.useMemo(() => {
         if (stockFilters.warehouse !== "All Warehouses") return null;
         return warehouseOptions.map(wh => {
-            const filters = { ...stockFilters, warehouse: wh };
+            const filters = { ...stockFilters, warehouse: wh, reportType };
             // For per-warehouse calculation, we don't apply the global searchQuery here 
             // as it's already applied to displayRecords if we were to use that, 
             // but calculateStockData does its own filtering.
@@ -147,7 +157,7 @@ const StockReport = ({
                 data: calculateStockData(stockRecords, filters, searchQuery, warehouseData, salesRecords, products, damages)
             };
         }).filter(item => item.data.displayRecords.length > 0);
-    }, [stockFilters.warehouse, warehouseOptions, stockRecords, searchQuery, warehouseData, salesRecords, products, damages]);
+    }, [stockFilters.warehouse, warehouseOptions, stockRecords, searchQuery, warehouseData, salesRecords, products, damages, reportType]);
 
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
@@ -223,6 +233,12 @@ const StockReport = ({
                                 <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[4%] text-center" rowSpan={2}>SL</th>
                                 <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[22%]" rowSpan={2}>Product & Quality</th>
                                 <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[15%]" rowSpan={2}>Brand</th>
+                                {reportType === 'price' && (
+                                    <>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[15%]" rowSpan={2}>LC No</th>
+                                        <th className="border-r border-gray-900 px-2 py-1 text-right text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[12%]" rowSpan={2}>Costing</th>
+                                    </>
+                                )}
                                 {reportType === 'detailed' && (
                                     <>
                                         <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={2}>Opening Stock</th>
@@ -250,50 +266,81 @@ const StockReport = ({
                                     const brands = item.brandList;
                                     const totalRows = brands.length + 1; // +1 for Sub Total row
                                     
-                                    // Pre-calculate quality spans
-                                    const qualitySpans = [];
-                                    let lastQ = null;
-                                    let lastIdx = -1;
-                                    brands.forEach((b, i) => {
-                                        const q = (b.quality && b.quality !== '-') ? b.quality : 'NO QUALITY';
-                                        if (q !== lastQ) {
-                                            lastQ = q;
-                                            lastIdx = i;
-                                            qualitySpans[i] = { name: q, span: 1 };
-                                        } else {
-                                            qualitySpans[lastIdx].span++;
-                                            qualitySpans[i] = { name: q, span: 0 };
-                                        }
-                                    });
+                                     // Pre-calculate quality spans
+                                     const qualitySpans = [];
+                                     let lastQ = null;
+                                     let lastIdx = -1;
+                                     brands.forEach((b, i) => {
+                                         const q = (b.quality && b.quality !== '-') ? b.quality : 'NO QUALITY';
+                                         if (q !== lastQ) {
+                                             lastQ = q;
+                                             lastIdx = i;
+                                             qualitySpans[i] = { name: q, span: 1 };
+                                         } else {
+                                             qualitySpans[lastIdx].span++;
+                                             qualitySpans[i] = { name: q, span: 0 };
+                                         }
+                                     });
 
-                                    return (
-                                        <React.Fragment key={index}>
-                                            {brands.map((ent, i) => {
-                                                const { whole: openWhole, remainder: openRem } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                const { whole: closeWhole, remainder: closeRem } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
-                                                const sPkt = parseFloat(ent.salePacket) || 0;
-                                                const qInfo = qualitySpans[i];
-
-                                                return (
-                                                    <tr key={`${index}-${i}`} className="hover:bg-gray-50 transition-colors border-b border-gray-900 last:border-b-0">
-                                                        {i === 0 && (
-                                                            <td rowSpan={totalRows} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 text-center align-top font-bold">
-                                                                {index + 1}
-                                                            </td>
+                                     // Pre-calculate brand spans within consecutive matching brand names and quality groups
+                                     const brandSpans = [];
+                                     let lastBrand = null;
+                                     let lastBrandIdx = -1;
+                                     brands.forEach((b, i) => {
+                                         const q = (b.quality && b.quality !== '-') ? b.quality : 'NO QUALITY';
+                                         const brandName = (b.brand || 'No Brand').trim().toUpperCase();
+                                         const brandKey = `${q}_${brandName}`;
+                                         if (brandKey !== lastBrand) {
+                                             lastBrand = brandKey;
+                                             lastBrandIdx = i;
+                                             brandSpans[i] = { name: b.brand, span: 1 };
+                                         } else {
+                                             brandSpans[lastBrandIdx].span++;
+                                             brandSpans[i] = { name: b.brand, span: 0 };
+                                         }
+                                     });
+ 
+                                     return (
+                                         <React.Fragment key={index}>
+                                             {brands.map((ent, i) => {
+                                                 const { whole: openWhole, remainder: openRem } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
+                                                 const { whole: closeWhole, remainder: closeRem } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                 const sPkt = parseFloat(ent.salePacket) || 0;
+                                                 const qInfo = qualitySpans[i];
+                                                 const bInfo = brandSpans[i];
+ 
+                                                 return (
+                                                     <tr key={`${index}-${i}`} className="hover:bg-gray-50 transition-colors border-b border-gray-900 last:border-b-0">
+                                                         {i === 0 && (
+                                                             <td rowSpan={totalRows} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 text-center align-top font-bold">
+                                                                 {index + 1}
+                                                             </td>
+                                                         )}
+                                                         {qInfo.span > 0 && (
+                                                             <td rowSpan={qInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
+                                                                 {i === 0 && <div className="font-black uppercase mb-1 underline decoration-gray-400">{item.productName}</div>}
+                                                                 {qInfo.name !== 'NO QUALITY' && (
+                                                                     <div className="font-bold uppercase text-blue-700 bg-blue-50/50 px-1 py-0.5 rounded text-[12px] inline-block mt-1">
+                                                                         {qInfo.name}
+                                                                     </div>
+                                                                 )}
+                                                             </td>
+                                                         )}
+                                                         {bInfo.span > 0 && (
+                                                             <td rowSpan={bInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
+                                                                 <div className="leading-tight uppercase font-medium">{ent.brand || 'No Brand'}</div>
+                                                             </td>
+                                                         )}
+                                                        {reportType === 'price' && (
+                                                            <>
+                                                                <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top uppercase">
+                                                                    {ent.lcNo || '—'}
+                                                                </td>
+                                                                <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top font-bold whitespace-nowrap">
+                                                                    {ent.purchasedPrice ? `৳${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                                </td>
+                                                            </>
                                                         )}
-                                                        {qInfo.span > 0 && (
-                                                            <td rowSpan={qInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
-                                                                {i === 0 && <div className="font-black uppercase mb-1 underline decoration-gray-400">{item.productName}</div>}
-                                                                {qInfo.name !== 'NO QUALITY' && (
-                                                                    <div className="font-bold uppercase text-blue-700 bg-blue-50/50 px-1 py-0.5 rounded text-[12px] inline-block mt-1">
-                                                                        {qInfo.name}
-                                                                    </div>
-                                                                )}
-                                                            </td>
-                                                        )}
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
-                                                            <div className="leading-tight uppercase font-medium">{ent.brand || 'No Brand'}</div>
-                                                        </td>
                                                         {reportType === 'detailed' ? (
                                                             <>
                                                                 <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap">
@@ -321,7 +368,7 @@ const StockReport = ({
                                             })}
                                             {/* Sub Total Row */}
                                             <tr className="bg-gray-100/50 border-b-2 border-gray-900 font-bold">
-                                                <td className="border-r border-gray-900 px-2 py-1.5 text-[11px] font-black text-gray-400 align-top uppercase" colSpan={2}>
+                                                <td className="border-r border-gray-900 px-2 py-1.5 text-[11px] font-black text-gray-400 align-top uppercase" colSpan={reportType === 'price' ? 4 : 2}>
                                                     SUB TOTAL
                                                 </td>
                                                 {reportType === 'detailed' ? (
@@ -359,7 +406,7 @@ const StockReport = ({
                                     );
                                 })
                             ) : (
-                                <tr><td colSpan={reportType === 'detailed' ? 9 : 5} className="px-4 py-8 text-center text-gray-500 italic text-[14px]">No records found for the selected criteria.</td></tr>
+                                <tr><td colSpan={reportType === 'detailed' ? 9 : (reportType === 'price' ? 7 : 5)} className="px-4 py-8 text-center text-gray-500 italic text-[14px]">No records found for the selected criteria.</td></tr>
                             )}
                         </tbody>
                         {records.length > 0 && (
@@ -367,12 +414,15 @@ const StockReport = ({
                                 <tr className="bg-gray-100 border-t-2 border-gray-900">
                                     <td className="border-r border-gray-900 px-2 py-1.5" colSpan={2}></td>
                                     <td className="px-2 py-1.5 text-[14px] font-black text-gray-900 text-center uppercase tracking-wider border-r border-gray-900">Grand Total</td>
+                                    {reportType === 'price' && (
+                                        <td className="border-r border-gray-900 px-2 py-1.5" colSpan={2}></td>
+                                    )}
                                     {reportType === 'detailed' && (
                                         <>
                                             <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                                 {(() => {
-                                                    const totalWhole = records.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                    const totalRem = records.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                    const totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                    const totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
                                                     return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-IN')} kg` : ''}`;
                                                 })()}
                                             </td>
@@ -389,8 +439,8 @@ const StockReport = ({
                                     )}
                                     <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                         {(() => {
-                                            const totalWhole = records.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                            const totalRem = records.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                            const totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
+                                            const totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
                                             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-IN')} kg` : ''}`;
                                         })()}
                                     </td>
@@ -418,23 +468,40 @@ const StockReport = ({
                                                 <span className="text-lg sm:text-xl font-black text-blue-600 text-center">{ent.brand}</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                                                <div className="space-y-0.5">
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Inhouse</p>
-                                                    <p className="text-xs font-bold text-gray-700">
-                                                        {(() => {
-                                                            const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                            return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                        })()} BAG
-                                                    </p>
-                                                    <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity).toLocaleString('en-US')} kg</p>
-                                                </div>
-                                                <div className="space-y-0.5 text-right">
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sale</p>
-                                                    <p className="text-xs font-bold text-gray-700">
-                                                        {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG
-                                                    </p>
-                                                    <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity).toLocaleString('en-US')} kg</p>
-                                                </div>
+                                                {reportType === 'price' ? (
+                                                    <>
+                                                        <div className="space-y-0.5">
+                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</p>
+                                                            <p className="text-sm font-black text-gray-900 uppercase">{ent.lcNo || '—'}</p>
+                                                        </div>
+                                                        <div className="space-y-0.5 text-right">
+                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Costing</p>
+                                                            <p className="text-sm font-black text-emerald-600">
+                                                                {ent.purchasedPrice ? `৳${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                            </p>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="space-y-0.5">
+                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Inhouse</p>
+                                                            <p className="text-xs font-bold text-gray-700">
+                                                                {(() => {
+                                                                    const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
+                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                })()} BAG
+                                                            </p>
+                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity).toLocaleString('en-US')} kg</p>
+                                                        </div>
+                                                        <div className="space-y-0.5 text-right">
+                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sale</p>
+                                                            <p className="text-xs font-bold text-gray-700">
+                                                                {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG
+                                                            </p>
+                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity).toLocaleString('en-US')} kg</p>
+                                                        </div>
+                                                    </>
+                                                )}
                                                 <div className="col-span-full w-full pt-3 pb-2 border-t border-gray-100 flex flex-col items-center justify-center text-center">
                                                     <p className="text-[10px] sm:text-xs font-bold text-blue-400 uppercase tracking-[0.1em] mb-1">Remaining Inhouse</p>
                                                     <div className="flex flex-col items-center justify-center w-full space-y-0.5">
@@ -542,6 +609,7 @@ const StockReport = ({
                             >
                                 <option value="short">Short Report</option>
                                 <option value="detailed">Details Report</option>
+                                <option value="price">Price Report</option>
                             </select>
                             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
                                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -830,8 +898,8 @@ const StockReport = ({
                                         <div className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Inhouse Stock</div>
                                         <div className="text-xs sm:text-sm font-bold text-gray-700 w-full break-words">
                                             BAG: {(() => {
-                                                const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                const totalRem = filteredRecords.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
                                                 return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                                             })()}
                                         </div>
@@ -866,8 +934,8 @@ const StockReport = ({
                                         <div className="text-[10px] sm:text-[11px] font-bold text-blue-500 uppercase tracking-wider">Current Inhouse</div>
                                         <div className="text-xs sm:text-sm font-bold text-gray-700 w-full break-words">
                                             BAG: {(() => {
-                                                const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
-                                                const totalRem = filteredRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
+                                                const totalWhole = filteredRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).whole, 0), 0);
+                                                const totalRem = filteredRecords.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity, ent.packetSize).remainder, 0), 0);
                                                 return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                                             })()}
                                         </div>

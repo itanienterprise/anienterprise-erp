@@ -1938,18 +1938,21 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Date</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Supplier</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invoice No</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Product</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Brand</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">QTY</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Invoice Bill (Rs)</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Net Bill (Rs)</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Costing/kg (BDT)</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Total BDT</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Lc Receive Qty</th>
-                                                    <th className="px-3 md:px-4 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Receive Total Price</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Date</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invoice No</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Truck No</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Supplier</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Product</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Brand</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">QTY</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Invoice Bill (Rs)</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Net Bill (Rs)</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Costing/kg (BDT)</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Total BDT</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Lc Receive Qty</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Receive Total Price</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Inhouse QTY</th>
+                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Stock Price</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50 font-medium text-gray-700">
@@ -1978,52 +1981,34 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                         });
 
                                                         const lcReceiveQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
-                                                        const receiveTotalQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.inHouseQuantity) || 0), 0);
+                                                        const inhouseQty = matchingStocks.reduce((sum, s) => {
+                                                            const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
+                                                            return sum + (!isNaN(val) ? val : ((parseFloat(s.quantity) || 0) - (parseFloat(s.sweepedQuantity) || 0)));
+                                                        }, 0);
 
                                                         return (
                                                             <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-gray-600 whitespace-nowrap">
-                                                                    {formatDate(record.date)}
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-bold text-gray-900">
-                                                                    {record.supplier || '—'}
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-gray-650">
-                                                                    {record.invoiceNo || '—'}
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-gray-900 font-semibold">
-                                                                    {record.product || '—'}
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-gray-500 font-bold">
-                                                                    {record.brand || '—'}
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-gray-900 whitespace-nowrap">
-                                                                    {qtyVal.toLocaleString('en-IN')}
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm text-right text-gray-600 whitespace-nowrap">
-                                                                    {parseFloat(record.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-semibold text-right text-gray-700 whitespace-nowrap">
-                                                                    {netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-bold text-right text-blue-600 whitespace-nowrap">
-                                                                    ৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-emerald-600 whitespace-nowrap">
-                                                                    ৳{(costingKgVal * qtyVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-gray-900 whitespace-nowrap">
-                                                                    {lcReceiveQty.toLocaleString('en-IN')}
-                                                                </td>
-                                                                <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-emerald-600 whitespace-nowrap">
-                                                                    ৳{(costingKgVal * receiveTotalQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                </td>
+                                                                <td className="px-1 py-1.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(record.date)}</td>
+                                                                <td className="px-1 py-1.5 text-sm text-gray-650 whitespace-nowrap">{record.invoiceNo || '—'}</td>
+                                                                <td className="px-1 py-1.5 text-sm text-gray-500 whitespace-nowrap">{record.truckNo || '—'}</td>
+                                                                <td className="px-1 py-1.5 text-sm font-bold text-gray-900 whitespace-nowrap">{record.supplier || '—'}</td>
+                                                                <td className="px-1 py-1.5 text-sm text-gray-900 font-semibold whitespace-nowrap">{record.product || '—'}</td>
+                                                                <td className="px-1 py-1.5 text-sm text-gray-500 font-bold whitespace-nowrap">{record.brand || '—'}</td>
+                                                                <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900 whitespace-nowrap">{qtyVal.toLocaleString('en-IN')}</td>
+                                                                <td className="px-1 py-1.5 text-sm text-right text-gray-600 whitespace-nowrap">{parseFloat(record.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS</td>
+                                                                <td className="px-1 py-1.5 text-sm font-semibold text-right text-gray-700 whitespace-nowrap">{netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS</td>
+                                                                <td className="px-1 py-1.5 text-sm font-bold text-right text-blue-600 whitespace-nowrap">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600 whitespace-nowrap">৳{(costingKgVal * qtyVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900 whitespace-nowrap">{lcReceiveQty.toLocaleString('en-IN')}</td>
+                                                                <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600 whitespace-nowrap">৳{(costingKgVal * lcReceiveQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900 whitespace-nowrap">{inhouseQty.toLocaleString('en-IN')}</td>
+                                                                <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600 whitespace-nowrap">৳{(costingKgVal * inhouseQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                             </tr>
                                                         );
                                                     })
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan="12" className="px-3 md:px-4 py-12 text-center text-gray-400 font-bold">
+                                                        <td colSpan="15" className="px-1 py-1.5 text-center text-gray-400 font-bold">
                                                             {consumptionSearchQuery ? 'No CoG records match your search.' : 'No Cost of Goods records found for this LC.'}
                                                         </td>
                                                     </tr>
@@ -2031,14 +2016,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             </tbody>
                                             <tfoot className="bg-gray-50/30">
                                                 <tr>
-                                                    <td colSpan="5" className="px-3 md:px-4 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total:</td>
-                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-gray-900">
+                                                    <td colSpan="6" className="px-1 py-1.5 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total:</td>
+                                                    <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900">
                                                         {filteredCogRecords.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString('en-IN')}
                                                     </td>
-                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-semibold text-right text-gray-600">
+                                                    <td className="px-1 py-1.5 text-sm font-semibold text-right text-gray-600">
                                                         {filteredCogRecords.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS
                                                     </td>
-                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-semibold text-right text-gray-600">
+                                                    <td className="px-1 py-1.5 text-sm font-semibold text-right text-gray-600">
                                                         {filteredCogRecords.reduce((sum, r) => {
                                                             const billSum = r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.slofCf) || 0));
                                                             const rebatePct = r.rebate !== undefined ? r.rebate : (r.redate !== undefined ? r.redate : '2.9');
@@ -2047,7 +2032,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                         }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS
                                                     </td>
                                                     <td></td>
-                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-emerald-600">
+                                                    <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600">
                                                         ৳{filteredCogRecords.reduce((sum, r) => {
                                                             const billSum = r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.slofCf) || 0));
                                                             const rebatePct = r.rebate !== undefined ? r.rebate : (r.redate !== undefined ? r.redate : '2.9');
@@ -2064,7 +2049,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                             return sum + (costingKgVal * qtyVal);
                                                         }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </td>
-                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-gray-900">
+                                                    <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900">
                                                         {filteredCogRecords.reduce((sum, record) => {
                                                             const matchingStocks = allStockRecords.filter(s => {
                                                                 const status = (s.status || '').toLowerCase();
@@ -2077,7 +2062,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                             return sum + matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.quantity) || 0), 0);
                                                         }, 0).toLocaleString('en-IN')}
                                                     </td>
-                                                    <td className="px-3 md:px-4 py-3 md:py-4 text-sm font-black text-right text-emerald-600">
+                                                    <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600">
                                                         ৳{filteredCogRecords.reduce((sum, record) => {
                                                             const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
                                                             const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
@@ -2100,8 +2085,55 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                        String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
                                                                        String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                                             });
-                                                            const receiveTotalQty = matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.inHouseQuantity) || 0), 0);
-                                                            return sum + (costingKgVal * receiveTotalQty);
+                                                            const lcRecQty = matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.quantity) || 0), 0);
+                                                            return sum + (costingKgVal * lcRecQty);
+                                                        }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900">
+                                                        {filteredCogRecords.reduce((sum, record) => {
+                                                            const matchingStocks = allStockRecords.filter(s => {
+                                                                const status = (s.status || '').toLowerCase();
+                                                                const isAccepted = status === 'accepted' || status === 'in stock';
+                                                                return isAccepted &&
+                                                                       cleanLc(s.lcNo) === lcNoClean &&
+                                                                       String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                       String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                            });
+                                                            const ihQty = matchingStocks.reduce((sSum, s) => {
+                                                                const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
+                                                                return sSum + (!isNaN(val) ? val : ((parseFloat(s.quantity) || 0) - (parseFloat(s.sweepedQuantity) || 0)));
+                                                            }, 0);
+                                                            return sum + ihQty;
+                                                        }, 0).toLocaleString('en-IN')}
+                                                    </td>
+                                                    <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600">
+                                                        ৳{filteredCogRecords.reduce((sum, record) => {
+                                                            const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
+                                                            const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
+                                                            const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                                            const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
+                                                            const qtyVal = parseFloat(record.quantity) || 0;
+                                                            const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                                            const dollarRateVal = parseFloat(record.rsToDollar) || 0;
+                                                            const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                                            const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
+                                                            const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                                            const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
+                                                            const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+
+                                                            const matchingStocks = allStockRecords.filter(s => {
+                                                                const status = (s.status || '').toLowerCase();
+                                                                const isAccepted = status === 'accepted' || status === 'in stock';
+                                                                return isAccepted &&
+                                                                       cleanLc(s.lcNo) === lcNoClean &&
+                                                                       String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                       String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                            });
+                                                            const ihQty = matchingStocks.reduce((sSum, s) => {
+                                                                const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
+                                                                return sSum + (!isNaN(val) ? val : ((parseFloat(s.quantity) || 0) - (parseFloat(s.sweepedQuantity) || 0)));
+                                                            }, 0);
+                                                            return sum + (costingKgVal * ihQty);
                                                         }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </td>
                                                 </tr>
@@ -2128,6 +2160,21 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
                                                     const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
                                                     const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+
+                                                    const matchingStocks = allStockRecords.filter(s => {
+                                                        const status = (s.status || '').toLowerCase();
+                                                        const isAccepted = status === 'accepted' || status === 'in stock';
+                                                        return isAccepted &&
+                                                               cleanLc(s.lcNo) === lcNoClean &&
+                                                               String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                               String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                    });
+
+                                                    const lcReceiveQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
+                                                    const inhouseQty = matchingStocks.reduce((sum, s) => {
+                                                        const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
+                                                        return sum + (!isNaN(val) ? val : ((parseFloat(s.quantity) || 0) - (parseFloat(s.sweepedQuantity) || 0)));
+                                                    }, 0);
 
                                                     return (
                                                         <div key={idx} className="transition-all hover:bg-gray-50/35">
@@ -2175,6 +2222,22 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                                         <span className="font-semibold text-gray-700 text-[11px]">{record.truckNo || '—'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive Qty</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 text-[11px]">{lcReceiveQty.toLocaleString('en-IN')} kg</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Receive Total Price</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-emerald-600 text-[11px]">৳{(costingKgVal * lcReceiveQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Inhouse QTY</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 text-[11px]">{inhouseQty.toLocaleString('en-IN')} kg</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stock Price</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-emerald-600 text-[11px]">৳{(costingKgVal * inhouseQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                                     </div>
                                                                 </div>
                                                             )}

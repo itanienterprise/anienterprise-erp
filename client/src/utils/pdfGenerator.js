@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { calculateStockData } from './stockHelpers';
+import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -435,6 +435,55 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
         doc.setFont('helvetica', 'normal');
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
+        // Calculate Totals for the Summary Card and Footer
+        const totalIHQuantity = reportData.reduce((sum, item) => sum + Math.max(0, getIHQty(item)), 0);
+        const totalIHPackets = reportData.reduce((sum, item) => sum + Math.max(0, getIHPkt(item)), 0);
+        const totalShortage = reportData.reduce((sum, item) => sum + Math.max(0, parseFloat(item.sweepedQuantity) || 0), 0);
+
+        // Draw Single Summary Card just below info row
+        const cardWidth = 80;
+        const cardLineHeight = 6;
+        const cardHeight = 30;
+        const cardX = (pageWidth - cardWidth) / 2;
+        const cardY = yPos + 3;
+
+        // Draw background/border for the card
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.2);
+        doc.rect(cardX, cardY, cardWidth, cardHeight, 'S');
+
+        // Draw card content
+        doc.setFontSize(9);
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'bold');
+
+        let currentY = cardY + 2;
+
+        // Line 1: TOTAL TRUCKS
+        currentY += cardLineHeight;
+        doc.text("TOTAL TRUCKS", cardX + 5, currentY);
+        doc.text(":", cardX + 43, currentY);
+        doc.text((summary.totalTrucks || '0').toString(), cardX + 46, currentY);
+
+        // Line 2: TOTAL QUANTITY
+        currentY += cardLineHeight;
+        doc.text("TOTAL QUANTITY", cardX + 5, currentY);
+        doc.text(":", cardX + 43, currentY);
+        doc.text(`${Math.round(summary.totalQuantity).toLocaleString('en-US')} ${summary.unit || 'Kg'}`, cardX + 46, currentY);
+
+        // Line 3: TOTAL SHORT
+        currentY += cardLineHeight;
+        doc.text("TOTAL SHORT", cardX + 5, currentY);
+        doc.text(":", cardX + 43, currentY);
+        doc.text(`${Math.round(totalShortage).toLocaleString('en-US')} ${summary.unit || 'Kg'}`, cardX + 46, currentY);
+
+        // Line 4: TOTAL STOCK QTY
+        currentY += cardLineHeight;
+        doc.text("TOTAL STOCK QTY", cardX + 5, currentY);
+        doc.text(":", cardX + 43, currentY);
+        doc.text(`${Math.round(totalIHQuantity).toLocaleString('en-US')} ${summary.unit || 'Kg'}`, cardX + 46, currentY);
+
         // --- Data Preparation ---
         // 1. Group by Date + LC No (matches UI logic but adds Date for safer merging)
         const lcGroups = Object.values(reportData.reduce((acc, item) => {
@@ -533,14 +582,9 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
             });
         });
 
-        // --- Totals for Footer ---
-        const totalIHQuantity = reportData.reduce((sum, item) => sum + Math.max(0, getIHQty(item)), 0);
-        const totalIHPackets = reportData.reduce((sum, item) => sum + Math.max(0, getIHPkt(item)), 0);
-        const totalShortage = reportData.reduce((sum, item) => sum + Math.max(0, parseFloat(item.sweepedQuantity) || 0), 0);
-
         // --- Table ---
         autoTable(doc, {
-            startY: yPos + 10,
+            startY: cardY + cardHeight + 6,
             head: [['Date', 'LC No', 'Importer', 'BOE No', 'Truck', 'Product', 'Brand', 'Bag', 'QTY', 'SHORT', 'Stock QTY', 'Stock Bag']],
             body: tableRows,
             foot: [[
@@ -605,56 +649,12 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
             }
         });
 
-        // --- Summary Section ---
-        let finalY = doc.lastAutoTable.finalY + 10;
-
-        // Avoid page break issues for summary
-        if (finalY + 40 > pageHeight) {
-            doc.addPage();
-            finalY = 20;
-        }
-
-        const boxWidth = 50;
-        const boxHeight = 20;
-        const boxGap = 10;
-        // Calculate total width of the 3 boxes + 2 gaps
-        const totalSummaryWidth = (boxWidth * 3) + (boxGap * 2);
-        // Center the summary block
-        const startX = (pageWidth - totalSummaryWidth) / 2;
-
-        // Box 1: Total Bags
-        doc.setDrawColor(0); // Pure Black Border
-        doc.roundedRect(startX, finalY, boxWidth, boxHeight, 2, 2);
-        doc.setFontSize(8);
-        doc.setTextColor(0); // Pure Black Text
-        doc.setFont('helvetica', 'bold');
-        doc.text("TOTAL BAGS", startX + boxWidth / 2, finalY + 7, { align: 'center' });
-        doc.setFontSize(12);
-        doc.setTextColor(0); // Pure Black Value
-        doc.text(summary.totalPackets.toString(), startX + boxWidth / 2, finalY + 15, { align: 'center' });
-
-        // Box 2: Total Trucks
-        doc.setDrawColor(0); // Pure Black Border
-        doc.roundedRect(startX + boxWidth + boxGap, finalY, boxWidth, boxHeight, 2, 2);
-        doc.setFontSize(8);
-        doc.setTextColor(0); // Pure Black Text
-        doc.text("TOTAL TRUCKS", startX + boxWidth + boxGap + boxWidth / 2, finalY + 7, { align: 'center' });
-        doc.setFontSize(12);
-        doc.setTextColor(0); // Pure Black Value
-        doc.text(summary.totalTrucks.toString(), startX + boxWidth + boxGap + boxWidth / 2, finalY + 15, { align: 'center' });
-
-        // Box 3: Total Quantity
-        doc.setDrawColor(0); // Pure Black Border
-        doc.roundedRect(startX + (boxWidth + boxGap) * 2, finalY, boxWidth, boxHeight, 2, 2);
-        doc.setFontSize(8);
-        doc.setTextColor(0); // Deep Blue (DarkBlue)
-        doc.text("TOTAL QUANTITY", startX + (boxWidth + boxGap) * 2 + boxWidth / 2, finalY + 7, { align: 'center' });
-        doc.setFontSize(12);
-        doc.setTextColor(0); // Deep Blue Value
-        doc.text(`${summary.totalQuantity} ${summary.unit}`, startX + (boxWidth + boxGap) * 2 + boxWidth / 2, finalY + 15, { align: 'center' });
-
         // --- Signatures ---
-        const sigY = finalY + 40;
+        let sigY = doc.lastAutoTable.finalY + 20;
+        if (sigY + 15 > pageHeight) {
+            doc.addPage();
+            sigY = 25;
+        }
         const sigWidth = 35;
         const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
 
@@ -854,6 +854,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             // --- Data Preparation ---
             const tableRows = [];
             const boldBottomRowIndices = new Set();
+            const qualityEndRowIndices = new Set();
             const customLinesToDraw = [];
 
 
@@ -899,7 +900,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         styles: { fillColor: [248, 248, 248] }
                     });
                     // Numeric placeholders
-                    const emptyDataColsCount = reportType === 'detailed' ? 6 : 2;
+                    const emptyDataColsCount = reportType === 'detailed' ? 6 : (reportType === 'price' ? 4 : 2);
                     for (let i = 0; i < emptyDataColsCount; i++) {
                         headRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
                     }
@@ -911,6 +912,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 // --- 2. DETAIL ROWS ---
                 qEntries.forEach(([quality, brands], qIdx) => {
                     let isFirstRowOfQuality = true;
+                    let lastBrand = null;
 
                     brands.forEach((ent, bIdx) => {
                         const row = [];
@@ -956,10 +958,19 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         }
 
                         // Column 2: Brand
-                        row.push({
-                            content: ent.brand || '-',
-                            styles: { halign: 'left' }
-                        });
+                        const brandName = ent.brand || '-';
+                        if (brandName !== lastBrand) {
+                            lastBrand = brandName;
+                            row.push({
+                                content: brandName,
+                                styles: { halign: 'left' }
+                            });
+                        } else {
+                            row.push({
+                                content: '',
+                                styles: { halign: 'left' }
+                            });
+                        }
 
                         // Detailed Numeric Data
                         if (reportType === 'detailed') {
@@ -976,6 +987,12 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                             row.push({ content: Math.round(sQty).toLocaleString('en-US'), styles: { halign: 'right' } });
                         }
 
+                        // Price Report Columns
+                        if (reportType === 'price') {
+                            row.push({ content: ent.lcNo || '—', styles: { halign: 'left' } });
+                            row.push({ content: ent.purchasedPrice ? `TK ${parseFloat(ent.purchasedPrice).toFixed(2)}` : '—', styles: { halign: 'right' } });
+                        }
+
                         // Closing Data
                         const rQty = parseFloat(ent.inHouseQuantity) || 0;
                         const rSize = parseFloat(ent.packetSize) || 0;
@@ -988,6 +1005,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                             if (!hasQualSubTotals && (!isLastQualityOfProduct || !hasSubTotal)) {
                                 boldBottomRowIndices.add(tableRows.length);
                             }
+                            qualityEndRowIndices.add(tableRows.length);
                             row.isQualityEnd = true;
                         }
                         tableRows.push(row);
@@ -1006,7 +1024,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         // Column 1 & 2: Quality TOTAL (colSpan: 2)
                         qualSubRow.push({
                             content: `${quality} TOTAL`,
-                            colSpan: 2,
+                            colSpan: reportType === 'price' ? 4 : 2,
                             styles: { fontStyle: 'bolditalic', halign: 'right', fillColor: [245, 245, 250], lineWidth: 0 }
                         });
 
@@ -1046,7 +1064,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     // Column 1 & 2: SUB TOTAL
                     subRow.push({
                         content: 'SUB TOTAL',
-                        colSpan: 2,
+                        colSpan: reportType === 'price' ? 4 : 2,
                         styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], lineWidth: 0 }
                     });
 
@@ -1074,26 +1092,26 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
             // Per-Warehouse Summary for Table Grand Total
             const whGrandTotalPktStr = (() => {
-                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
-                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)), 0), 0);
+                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.totalInHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.totalInHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
                 return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
             })();
 
             const whInHousePktStr = (() => {
-                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0), 0);
-                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)), 0), 0);
+                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
                 return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
             })();
 
             const whTotalSalePktStr = (() => {
-                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + item.brandList.reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
-                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + item.brandList.reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
+                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + (parseFloat(ent.saleQuantity) || 0) - (Math.floor(parseFloat(ent.salePacket) || 0) * (parseFloat(ent.packetSize) || 0)), 0), 0));
                 return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
             })();
 
             // Append Grand Total Row
             const grandTotalRow = [
-                { content: 'GRAND TOTAL', colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], lineWidth: 0 } } // SL + Product Name + Brand
+                { content: 'GRAND TOTAL', colSpan: reportType === 'price' ? 5 : 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [240, 240, 240], lineWidth: 0 } } // SL + Product Name + Brand
             ];
 
             if (reportType === 'detailed') {
@@ -1113,7 +1131,9 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             // --- Table ---
             const pdfHead = reportType === 'detailed'
                 ? [['SL', 'PRODUCT NAME', 'BRAND', 'Opening Stock BAG', 'Opening Stock QTY', 'SALE BAG', 'SALE QTY', 'Closing Stock BAG', 'Closing Stock QTY']]
-                : [['SL', 'PRODUCT NAME', 'BRAND', 'BAG', 'QUANTITY']];
+                : (reportType === 'price'
+                    ? [['SL', 'PRODUCT NAME', 'BRAND', 'LC NO', 'COSTING', 'BAG', 'QUANTITY']]
+                    : [['SL', 'PRODUCT NAME', 'BRAND', 'BAG', 'QUANTITY']]);
 
             autoTable(doc, {
                 startY: yPos + 1,
@@ -1122,7 +1142,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 theme: 'plain',
                 rowPageBreak: 'auto',
                 styles: {
-                    fontSize: reportType === 'detailed' ? 8 : 8.7,
+                    fontSize: reportType === 'detailed' ? 8 : (reportType === 'price' ? 9 : 8.7),
                     cellPadding: reportType === 'detailed' ? 1.2 : 1.3,
                     lineColor: [0, 0, 0],
                     lineWidth: 0.1,
@@ -1139,20 +1159,28 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 columnStyles: reportType === 'detailed' ? {
                     0: { cellWidth: 8, halign: 'center', lineWidth: 0 }, // SL
                     1: { cellWidth: 32, lineWidth: 0 }, // Product Name / Quality
-                    2: { cellWidth: 40 }, // Brand
+                    2: { cellWidth: 40, lineWidth: 0 }, // Brand
                     3: { cellWidth: 18, halign: 'right' }, // Opening Stock BAG
                     4: { cellWidth: 18, halign: 'right' }, // Opening Stock QTY
                     5: { cellWidth: 18, halign: 'right' }, // Sale BAG
                     6: { cellWidth: 18, halign: 'right' }, // Sale QTY
                     7: { cellWidth: 18, halign: 'right' }, // Closing Stock BAG
                     8: { cellWidth: 18, halign: 'right' }  // Closing Stock QTY
+                } : (reportType === 'price' ? {
+                    0: { cellWidth: 10, halign: 'center', lineWidth: 0 }, // SL
+                    1: { cellWidth: 35, lineWidth: 0 }, // Product Name / Quality
+                    2: { cellWidth: 35, lineWidth: 0 }, // Brand
+                    3: { cellWidth: 35 }, // LC NO
+                    4: { cellWidth: 25, halign: 'right' }, // COSTING
+                    5: { cellWidth: 30, halign: 'right' }, // BAG
+                    6: { cellWidth: 30, halign: 'right' }  // QUANTITY
                 } : {
                     0: { cellWidth: 10, halign: 'center', lineWidth: 0 }, // SL
                     1: { cellWidth: 45, lineWidth: 0 }, // Product Name / Quality
-                    2: { cellWidth: 75 }, // Brand
+                    2: { cellWidth: 75, lineWidth: 0 }, // Brand
                     3: { cellWidth: 35, halign: 'right' }, // BAG
                     4: { cellWidth: 35, halign: 'right' }  // QUANTITY
-                },
+                }),
                 margin: { left: margin, right: margin },
                 didParseCell: (data) => {
                     if (data.row.section === 'body') {
@@ -1163,7 +1191,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         // Disable default borders for SL, Product/Quality, and Brand columns on subtotal/grand total rows
                         // to prevent vertical lines from cutting through colSpan/spanned cells.
                         if (data.row.raw && data.row.raw.isSubTotal) {
-                            if (data.column.index === 0 || data.column.index === 1 || data.column.index === 2) {
+                            const maxColIdx = reportType === 'price' ? 4 : 2;
+                            if (data.column.index <= maxColIdx) {
                                 data.cell.styles.lineWidth = 0;
                             }
                         }
@@ -1177,7 +1206,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     const isSubTotal = row.raw && row.raw.isSubTotal;
                     const isLastRow = row.index === data.table.body.length - 1;
 
-                    if (column.index === 0 || column.index === 1) {
+                    if (column.index === 0 || column.index === 1 || column.index === 2) {
                         // Left vertical line for SL (outer table border)
                         if (column.index === 0) {
                             customLinesToDraw.push({
@@ -1198,9 +1227,20 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                             lineWidth: 0.1
                         });
 
-                        // Bottom horizontal line (only for boundary rows, last row, or the product header row)
+                        // Bottom horizontal line (only for boundary rows, last row, or the product header row, or end of brand block, or end of quality group)
                         const isProductHeaderRow = cell.raw && cell.raw.styles && cell.raw.styles.fillColor && cell.raw.styles.fillColor[0] === 248;
-                        if (isBoundaryRow || isLastRow || isProductHeaderRow) {
+                        let drawBottom = isBoundaryRow || isLastRow || isProductHeaderRow || qualityEndRowIndices.has(row.index);
+                        if (column.index === 2 && !drawBottom) {
+                            // Check if next row starts a new brand name or is a subtotal row
+                            const nextRow = data.table.body[row.index + 1];
+                            const nextCell = nextRow ? nextRow.cells[2] : null;
+                            const isNextBrandStart = nextCell && nextCell.text && nextCell.text.join('').trim() !== '';
+                            if (isNextBrandStart || (nextRow && nextRow.raw && nextRow.raw.isSubTotal)) {
+                                drawBottom = true;
+                            }
+                        }
+
+                        if (drawBottom) {
                             customLinesToDraw.push({
                                 x1: cell.x,
                                 y1: cell.y + cell.height,
@@ -1210,10 +1250,17 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                             });
                         }
 
-                        // Top horizontal line (only for subtotal rows or if it's the start of a new product block)
-                        // If cell content has value (i.e. not empty spacer row), draw a top line to separate it from the previous subtotal.
-                        const isProductStart = cell.text && cell.text.join('').trim() !== '';
-                        if (isSubTotal || isProductStart) {
+                        // Top horizontal line (only for subtotal rows or if it's the start of a new product / brand block)
+                        let drawTop = isSubTotal;
+                        if (column.index === 2) {
+                            const isBrandStart = cell.text && cell.text.join('').trim() !== '';
+                            if (isBrandStart) drawTop = true;
+                        } else {
+                            const isProductStart = cell.text && cell.text.join('').trim() !== '';
+                            if (isProductStart) drawTop = true;
+                        }
+
+                        if (drawTop) {
                             customLinesToDraw.push({
                                 x1: cell.x,
                                 y1: cell.y,
@@ -1223,8 +1270,8 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                             });
                         }
                     } else {
-                        // For other columns (>= 2):
-                        // Draw bottom border if it's a boundary row or if it's the product header row (to get the line under the product row across all columns)
+                        // For other columns (>= 3):
+                        // Draw bottom border if it's a boundary row or if it's the product header row
                         const isProductHeaderRow = cell.raw && cell.raw.styles && cell.raw.styles.fillColor && cell.raw.styles.fillColor[0] === 248;
                         if (isBoundaryRow || isProductHeaderRow) {
                             customLinesToDraw.push({

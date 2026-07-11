@@ -5,6 +5,49 @@ const safeParse = (val) => {
     return isNaN(parsed) ? 0 : parsed;
 };
 
+// Helper to group split brand entries by quality & brand name to avoid split-induced inflation in subtotals/totals
+export const getGroupedBrandList = (brandList) => {
+    if (!Array.isArray(brandList)) return [];
+    const groups = {};
+    brandList.forEach(b => {
+        const key = `${b.quality || '-'}_${b.brand || 'No Brand'}`;
+        if (!groups[key]) {
+            groups[key] = {
+                ...b,
+                openingQuantity: 0,
+                openingPacket: 0,
+                periodArrivalQuantity: 0,
+                periodArrivalPacket: 0,
+                saleQuantity: 0,
+                salePacket: 0,
+                sweepedQuantity: 0,
+                sweepedPacket: 0,
+                damageQuantity: 0,
+                damagePacket: 0,
+                inHouseQuantity: 0,
+                inHousePacket: 0,
+                totalInHouseQuantity: 0,
+                totalInHousePacket: 0
+            };
+        }
+        groups[key].openingQuantity += b.openingQuantity || 0;
+        groups[key].openingPacket += b.openingPacket || 0;
+        groups[key].periodArrivalQuantity += b.periodArrivalQuantity || 0;
+        groups[key].periodArrivalPacket += b.periodArrivalPacket || 0;
+        groups[key].saleQuantity += b.saleQuantity || 0;
+        groups[key].salePacket += b.salePacket || 0;
+        groups[key].sweepedQuantity += b.sweepedQuantity || 0;
+        groups[key].sweepedPacket += b.sweepedPacket || 0;
+        groups[key].damageQuantity += b.damageQuantity || 0;
+        groups[key].damagePacket += b.damagePacket || 0;
+        groups[key].inHouseQuantity += b.inHouseQuantity || 0;
+        groups[key].inHousePacket += b.inHousePacket || 0;
+        groups[key].totalInHouseQuantity += b.totalInHouseQuantity || 0;
+        groups[key].totalInHousePacket += b.totalInHousePacket || 0;
+    });
+    return Object.values(groups);
+};
+
 // Helper for robust packet and weight remainder calculation (fixing 4,999 - 60 kg issue)
 export const calculatePktRemainder = (totalQty, pktSize) => {
     const qty = safeParse(totalQty);
@@ -54,6 +97,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     const rawExpanded = [];
     const seenRecords = new Set();
     const consumedSales = new Set(); // Track consumed sale entries to prevent double-counting across quality grades
+    const consumedDamages = new Set(); // Track consumed damages to prevent double-counting
 
     // 1. Process Primary Stock Records (LC Receive)
     stockRecords.forEach(item => {
@@ -83,6 +127,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     inHouseQuantity: safeParse(entry.inHouseQuantity ?? entry.inhouseQty ?? item.inHouseQuantity),
                     sweepedPacket: safeParse(entry.sweepedPacket) || safeParse(entry.shortagePkt) || safeParse(item.sweepedPacket),
                     sweepedQuantity: safeParse(entry.sweepedQuantity) || safeParse(entry.shortageQty) || safeParse(item.sweepedQuantity),
+                    purchasedPrice: safeParse(entry.purchasedPrice ?? item.purchasedPrice ?? entry.rate ?? item.rate),
                     unit: entry.unit || item.unit,
                     recordType: 'stock'
                 });
@@ -98,6 +143,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     ...item,
                     recordType: 'stock',
                     quality: q,
+                    purchasedPrice: safeParse(item.purchasedPrice ?? item.rate),
                     // InHouse quantity is already net (Quantity - Shortage)
                     inHouseQuantity: safeParse(item.inHouseQuantity ?? item.inhouseQty ?? item.quantity),
                     inHousePacket: safeParse(item.inHousePacket ?? item.inhousePkt ?? item.packet)
@@ -131,6 +177,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const rq = resolveQuality(whItem.productName || whItem.product, whItem.brand);
                 return rq !== '-' ? rq : (whItem.quality || '-');
             })(),
+            purchasedPrice: safeParse(whItem.purchasedPrice ?? whItem.rate),
             quantity: safeParse(whItem.whQty ?? whItem.quantity),
             packet: safeParse(whItem.whPkt ?? whItem.packet),
             inHouseQuantity: safeParse(whItem.whQty ?? whItem.inHouseQuantity),
@@ -196,7 +243,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         const normBrand = (item.brand || 'No Brand').trim().toLowerCase();
         const normQuality = (item.quality || '-').trim().toLowerCase();
-        const subKey = `${normQuality}_${normBrand}`;
+        const isPriceReport = stockFilters && stockFilters.reportType === 'price';
+        const subKey = isPriceReport
+            ? `${normQuality}_${normBrand}_${(item.lcNo || 'no-lc').trim().toLowerCase()}_${item.purchasedPrice || 0}`
+            : `${normQuality}_${normBrand}`;
 
         if (!acc[key].brands[subKey]) {
             acc[key].brands[subKey] = {
@@ -211,7 +261,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 packetSize: safeParse(item.packetSize),
                 _salesResolved: false,
                 _damagesResolved: false,
-                lcNos: item.lcNo ? [item.lcNo] : []
+                lcNos: item.lcNo ? [item.lcNo] : [],
+                lcNo: item.lcNo || '',
+                purchasedPrice: item.purchasedPrice || 0
             };
         } else {
             if (item.lcNo && !acc[key].brands[subKey].lcNos.includes(item.lcNo)) {
@@ -245,6 +297,12 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             }
 
                             if (beBrand === normBrand && beQuality === normQuality) {
+                                if (isPriceReport) {
+                                    const saleLc = (sale.lcNo || be.lcNo || si.lcNo || '').trim().toLowerCase();
+                                    const stockLc = (item.lcNo || '').trim().toLowerCase();
+                                    if (saleLc !== stockLc) return;
+                                }
+
                                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
                                 if (consumedSales.has(saleEntryId)) return;
 
@@ -293,12 +351,21 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const dWh = (damage.warehouse || '').trim().toLowerCase();
 
                 if (dProdName === keyLower && dBrand === normBrand) {
+                    if (isPriceReport) {
+                        const damageLc = (damage.lcNo || '').trim().toLowerCase();
+                        const stockLc = (item.lcNo || '').trim().toLowerCase();
+                        if (damageLc !== stockLc) return;
+                    }
                     if (stockFilters.lcNo && (damage.lcNo || '').trim() !== stockFilters.lcNo) return;
                     if (isWhFilter) {
                         const filterWH = stockFilters.warehouse.toLowerCase();
                         // Skip damage if it has no warehouse or warehouse doesn't match the filter
                         if (!dWh || (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh))) return;
                     }
+
+                    const damageEntryId = `${damage._id}`;
+                    if (consumedDamages.has(damageEntryId)) return;
+                    consumedDamages.add(damageEntryId);
 
                     const dq = safeParse(damage.quantity);
                     let dp = safeParse(damage.packet);
@@ -391,7 +458,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const rq = resolveQuality(sProdName, be.brand);
                 const resolvedQ = rq !== '-' ? rq : (be.quality || '-');
                 const normQuality = resolvedQ.trim().toLowerCase();
-                const subKey = `${normQuality}_${normBrand}`;
+                const beLc = (sale.lcNo || be.lcNo || si.lcNo || '').trim();
+                const bePrice = parseFloat(be.purchasedPrice) || 0;
+
+                const isPriceReport = stockFilters && stockFilters.reportType === 'price';
+                const subKey = isPriceReport
+                    ? `${normQuality}_${normBrand}_${beLc.toLowerCase()}_${bePrice}`
+                    : `${normQuality}_${normBrand}`;
                 
                 if (!group.brands[subKey]) {
                     let resolvedPktSize = safeParse(be.packetSize);
@@ -413,7 +486,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         inHousePacket: 0, inHouseQuantity: 0, packetSize: resolvedPktSize,
                         _salesResolved: false,
                         _damagesResolved: false,
-                        lcNos: (sale.lcNo || be.lcNo || si.lcNo) ? [sale.lcNo || be.lcNo || si.lcNo] : []
+                        lcNos: beLc ? [beLc] : [],
+                        lcNo: beLc,
+                        purchasedPrice: bePrice
                     };
                 } else {
                     const saleLC = sale.lcNo || be.lcNo || si.lcNo;
@@ -433,12 +508,22 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
                         const dWh = (damage.warehouse || '').trim().toLowerCase();
                         if (dProdName === sProdName.toLowerCase() && dBrand === normBrand) {
+                            if (isPriceReport) {
+                                const damageLc = (damage.lcNo || '').trim().toLowerCase();
+                                const stockLc = beLc.toLowerCase();
+                                if (damageLc !== stockLc) return;
+                            }
                             if (stockFilters.lcNo && (damage.lcNo || '').trim() !== stockFilters.lcNo) return;
                             if (isWhFilter) {
                                 const filterWH = stockFilters.warehouse.toLowerCase();
                                 // Skip damage if it has no warehouse or warehouse doesn't match the filter
                                 if (!dWh || (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh))) return;
                             }
+
+                            const damageEntryId = `${damage._id}`;
+                            if (consumedDamages.has(damageEntryId)) return;
+                            consumedDamages.add(damageEntryId);
+
                             const dq = safeParse(damage.quantity);
                             let dp = safeParse(damage.packet) || (brandObj.packetSize > 0 ? dq / brandObj.packetSize : 0);
                             if (isBefore) {
@@ -521,12 +606,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         if (brandList.length === 0) return null;
 
-        const openingQty = brandList.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
-        const inHouseQty = brandList.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
+        const groupedBrands = getGroupedBrandList(brandList);
+        const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
+        const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
         const saleQty = brandList.reduce((sum, b) => sum + b.saleQuantity, 0);
         const damageQty = brandList.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
-        const openingPkt = brandList.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
-        const inHousePkt = brandList.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
+        const openingPkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
+        const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
         const salePkt = brandList.reduce((sum, b) => sum + b.salePacket, 0);
         const damagePkt = brandList.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
 

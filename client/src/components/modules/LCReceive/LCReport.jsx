@@ -905,20 +905,31 @@ const LCReport = ({
                         </div>
 
                         {/* Summary Info Cards for Print */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 pt-4 md:pt-6 px-1 md:px-2 print:grid">
-                            <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
-                                <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total BAGs</div>
-                                <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{(parseFloat(lcReceiveSummary.totalBAGs) || 0).toFixed(2)}</div>
-                            </div>
-                            <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
-                                <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Quantity</div>
-                                <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{Math.round(lcReceiveSummary.totalQuantity)} <span className="text-sm md:text-lg font-bold">{lcReceiveSummary.unit}</span></div>
-                            </div>
-                            <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
-                                <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Truck</div>
-                                <div className="text-xl md:text-3xl font-black text-gray-900 md:text-black">{lcReceiveSummary.totalTrucks || '0'}</div>
-                            </div>
-                        </div>
+                        {(() => {
+                            const totalShort = lcReceiveRecords.reduce((sum, item) => sum + (parseFloat(item.sweepedQuantity) || 0), 0);
+                            const totalStockQty = lcReceiveRecords.reduce((sum, item) => sum + getIHQty(item), 0) || 0;
+
+                            return (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 pt-4 md:pt-6 px-1 md:px-2 print:grid">
+                                    <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
+                                        <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Truck</div>
+                                        <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{lcReceiveSummary.totalTrucks || '0'}</div>
+                                    </div>
+                                    <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
+                                        <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Quantity</div>
+                                        <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{Math.round(lcReceiveSummary.totalQuantity)} <span className="text-sm md:text-lg font-bold">{lcReceiveSummary.unit || 'Kg'}</span></div>
+                                    </div>
+                                    <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
+                                        <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Short</div>
+                                        <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{Math.round(totalShort)} <span className="text-sm md:text-lg font-bold">{lcReceiveSummary.unit || 'Kg'}</span></div>
+                                    </div>
+                                    <div className="border-2 border-gray-100 p-4 md:p-6 rounded-2xl md:rounded-3xl bg-white shadow-sm print:border-gray-200 text-center">
+                                        <div className="text-[11px] md:text-[13px] font-bold text-gray-500 md:text-black uppercase tracking-wider mb-1 md:mb-2">Total Stock QTY</div>
+                                        <div className="text-xl md:text-2xl font-black text-gray-900 md:text-black">{Math.round(totalStockQty)} <span className="text-sm md:text-lg font-bold">{lcReceiveSummary.unit || 'Kg'}</span></div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Footer Signatures */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 pt-16 md:pt-24 px-4 pb-12">

@@ -1156,35 +1156,10 @@ function LCReceive({
                     newData.port = '';
                     newData.importer = '';
                     newData.exporter = '';
-                    newData.productEntries = [{
-                        isMultiBrand: true,
-                        productName: '',
-                        truckNo: '',
-                        brandEntries: [{
-                            invoiceNo: '',
-                            brand: '',
-                            purchasedPrice: '',
-                            packet: '',
-                            packetSize: '',
-                            quantity: '',
-                            unit: 'kg',
-                            sweepedPacket: '',
-                            sweepedQuantity: '',
-                            inHousePacket: '',
-                            inHouseQuantity: ''
-                        }]
-                    }];
-                } else {
-                    const selectedLc = lcRecords.find(lc => lc.lcNo === value);
-                    if (selectedLc) {
-                        newData.port = selectedLc.port || '';
-                        newData.importer = selectedLc.importerName || '';
-                        newData.exporter = selectedLc.exporterName || '';
-
-                        const resolvedName = resolveProductName(selectedLc.productName);
+                    if (!editingId) {
                         newData.productEntries = [{
                             isMultiBrand: true,
-                            productName: resolvedName,
+                            productName: '',
                             truckNo: '',
                             brandEntries: [{
                                 invoiceNo: '',
@@ -1200,6 +1175,35 @@ function LCReceive({
                                 inHouseQuantity: ''
                             }]
                         }];
+                    }
+                } else {
+                    const selectedLc = lcRecords.find(lc => lc.lcNo === value);
+                    if (selectedLc) {
+                        newData.port = selectedLc.port || '';
+                        newData.importer = selectedLc.importerName || '';
+                        newData.exporter = selectedLc.exporterName || '';
+ 
+                        if (!editingId) {
+                            const resolvedName = resolveProductName(selectedLc.productName);
+                            newData.productEntries = [{
+                                isMultiBrand: true,
+                                productName: resolvedName,
+                                truckNo: '',
+                                brandEntries: [{
+                                    invoiceNo: '',
+                                    brand: '',
+                                    purchasedPrice: '',
+                                    packet: '',
+                                    packetSize: '',
+                                    quantity: '',
+                                    unit: 'kg',
+                                    sweepedPacket: '',
+                                    sweepedQuantity: '',
+                                    inHousePacket: '',
+                                    inHouseQuantity: ''
+                                }]
+                            }];
+                        }
                     }
                 }
             }
