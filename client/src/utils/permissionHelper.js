@@ -112,6 +112,9 @@ export const getDefaultPermissionsForRole = (role) => {
 export const hasPermission = (currentUser, moduleName, action = 'view') => {
     if (!currentUser) return false;
     
+    let checkAction = action;
+    if (action === 'create') checkAction = 'add';
+    
     const username = currentUser.username;
     const roleLower = (currentUser.role || '').toLowerCase();
 
@@ -122,13 +125,13 @@ export const hasPermission = (currentUser, moduleName, action = 'view') => {
 
     // 2. Custom permission check
     if (currentUser.permissions && currentUser.permissions[moduleName]) {
-        return !!currentUser.permissions[moduleName][action];
+        return !!currentUser.permissions[moduleName][checkAction];
     }
 
     // 3. Fallback to legacy role-based rules
     const defaults = getDefaultPermissionsForRole(currentUser.role);
     if (defaults[moduleName]) {
-        return !!defaults[moduleName][action];
+        return !!defaults[moduleName][checkAction];
     }
 
     return false;

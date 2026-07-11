@@ -20,7 +20,7 @@ const CostOfGoods = ({
 }) => {
     const canEdit = hasPermission(currentUser, 'costOfGoods', 'edit');
     const canDelete = hasPermission(currentUser, 'costOfGoods', 'delete');
-    const canCreate = hasPermission(currentUser, 'costOfGoods', 'create');
+    const canCreate = hasPermission(currentUser, 'costOfGoods', 'add');
 
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -327,6 +327,9 @@ const CostOfGoods = ({
                 setFormData(prev => ({ ...prev, supplier: sup.name }));
                 setSupplierDropdownOpen(false);
                 setSupplierSearchQuery('');
+                setHighlightedSupplierIndex(-1);
+            } else {
+                setSupplierDropdownOpen(false);
                 setHighlightedSupplierIndex(-1);
             }
         } else if (e.key === 'Escape') {
@@ -1037,7 +1040,9 @@ const CostOfGoods = ({
                                         placeholder={formData.exporter ? "Search & Select Supplier..." : "Select LC / Exporter first"}
                                         value={supplierDropdownOpen ? supplierSearchQuery : (formData.supplier || '')}
                                         onChange={(e) => {
-                                            setSupplierSearchQuery(e.target.value);
+                                            const val = e.target.value;
+                                            setSupplierSearchQuery(val);
+                                            setFormData(prev => ({ ...prev, supplier: val }));
                                             setHighlightedSupplierIndex(-1);
                                             if (!supplierDropdownOpen) setSupplierDropdownOpen(true);
                                         }}
@@ -1193,7 +1198,6 @@ const CostOfGoods = ({
                                         disabled={!formData.product}
                                         className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none pr-10 ${!formData.product ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-100' : ''
                                             }`}
-                                        required
                                     />
                                     <SearchIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 </div>
