@@ -498,19 +498,13 @@ function LCReceive({
     const importerRef = useRef(null);
     const canApprove = hasPermission(currentUser, 'lcReceive', 'special');
 
-    // Only the system admin account or employees with the Admin role can edit/delete accepted entries
-    const canEditDelete = useMemo(() => {
-        if (!currentUser) return false;
-        if (currentUser.username === 'admin') return true;
-        const role = (currentUser.role || '').toLowerCase();
-        return role === 'admin';
-    }, [currentUser]);
+    const canAdd = useMemo(() => hasPermission(currentUser, 'lcReceive', 'add'), [currentUser]);
+    const canEdit = useMemo(() => hasPermission(currentUser, 'lcReceive', 'edit'), [currentUser]);
+    const canDelete = useMemo(() => hasPermission(currentUser, 'lcReceive', 'delete'), [currentUser]);
 
     const canEditRequestedStock = (entry) => {
         if (!currentUser) return false;
-        const role = (currentUser.role || '').toLowerCase();
-        if (currentUser.username === 'admin') return true;
-        if (role === 'admin') return true;
+        if (canEdit) return true;
         const owner = entry?.entries?.[0]?.requestedByUsername || entry?.requestedByUsername;
         return owner === currentUser.username;
     };
@@ -1266,8 +1260,10 @@ function LCReceive({
 
     const handleStockSubmit = async (e) => {
         e.preventDefault();
-        if (isAccountManager) {
-            alert('Forbidden: Account managers are not allowed to add or manage LC Receive records');
+        const isEditing = !!editingId;
+        const hasAccess = isEditing ? canEdit : canAdd;
+        if (!hasAccess) {
+            alert(`Forbidden: You do not have permission to ${isEditing ? 'edit' : 'add'} LC Receive records`);
             return;
         }
         setValidationErrors([]);
@@ -2322,7 +2318,7 @@ function LCReceive({
                                 <span>Report</span>
                             </button>
                         </div>
-                        {!isAccountManager && (
+                        {canAdd && (
                             <div className="flex-1 md:flex-none">
                                 <button
                                     onClick={() => setShowStockForm(!showStockForm)}
@@ -3789,20 +3785,20 @@ function LCReceive({
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    {canEditDelete && (
-                                                                        <>
-                                                                            <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
-                                                                                <EditIcon className="w-5 h-5" />
-                                                                            </button>
-                                                                            <button onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                const ids = entry.allIds || entry.ids;
-                                                                                setSelectedItems(new Set(ids));
-                                                                                onDelete('stock', null, true, entry);
-                                                                            }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete">
-                                                                                <TrashIcon className="w-5 h-5" />
-                                                                            </button>
-                                                                        </>
+                                                                    {canEdit && (
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
+                                                                            <EditIcon className="w-5 h-5" />
+                                                                        </button>
+                                                                    )}
+                                                                    {canDelete && (
+                                                                        <button onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const ids = entry.allIds || entry.ids;
+                                                                            setSelectedItems(new Set(ids));
+                                                                            onDelete('stock', null, true, entry);
+                                                                        }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete">
+                                                                            <TrashIcon className="w-5 h-5" />
+                                                                        </button>
                                                                     )}
                                                                 </>
                                                             )}
@@ -3945,28 +3941,28 @@ function LCReceive({
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    {canEditDelete && (
-                                                                        <>
-                                                                            <button
-                                                                                onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
-                                                                                className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
-                                                                                title="Edit"
-                                                                            >
-                                                                                <EditIcon className="w-4 h-4" />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    const ids = entry.allIds || entry.entries.map(e => e._id);
-                                                                                    setSelectedItems(new Set(ids));
-                                                                                    onDelete('stock', null, true, entry);
-                                                                                }}
-                                                                                className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
-                                                                                title="Delete"
-                                                                            >
-                                                                                <TrashIcon className="w-4 h-4" />
-                                                                            </button>
-                                                                        </>
+                                                                    {canEdit && (
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }}
+                                                                            className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                                            title="Edit"
+                                                                        >
+                                                                            <EditIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
+                                                                    {canDelete && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                const ids = entry.allIds || entry.entries.map(e => e._id);
+                                                                                setSelectedItems(new Set(ids));
+                                                                                onDelete('stock', null, true, entry);
+                                                                            }}
+                                                                            className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
+                                                                            title="Delete"
+                                                                        >
+                                                                            <TrashIcon className="w-4 h-4" />
+                                                                        </button>
                                                                     )}
                                                                 </>
                                                             )}

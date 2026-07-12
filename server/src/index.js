@@ -720,6 +720,20 @@ apiRouter.get('/api/ports', async (req, res) => {
 // Stock APIs
 apiRouter.post('/api/stock', async (req, res) => {
   try {
+    const userSession = req.session.user;
+    const hasAddPermission = userSession && (
+      userSession.username === 'admin' ||
+      (userSession.role || '').toLowerCase() === 'admin' ||
+      (userSession.permissions && (
+        (userSession.permissions.lcReceive && userSession.permissions.lcReceive.add === true) ||
+        (userSession.permissions.stock && userSession.permissions.stock.add === true)
+      ))
+    );
+
+    if (!hasAddPermission) {
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to add stock/LC Receive records.' });
+    }
+
     const encryptedData = encryptData(req.body);
     const newStock = new Stock({ data: encryptedData });
     const savedStock = await newStock.save();
@@ -732,7 +746,14 @@ apiRouter.post('/api/stock', async (req, res) => {
 apiRouter.delete('/api/stock/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
-    const isAdmin = userSession && (userSession.username === 'admin' || (userSession.role || '').toLowerCase() === 'admin');
+    const hasDeletePermission = userSession && (
+      userSession.username === 'admin' ||
+      (userSession.role || '').toLowerCase() === 'admin' ||
+      (userSession.permissions && (
+        (userSession.permissions.lcReceive && userSession.permissions.lcReceive.delete === true) ||
+        (userSession.permissions.stock && userSession.permissions.stock.delete === true)
+      ))
+    );
 
     const existingStock = await Stock.findById(req.params.id);
     if (!existingStock) return res.status(404).json({ message: 'Item not found' });
@@ -745,12 +766,12 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
     if (existingData && existingData.status === 'Requested') {
       const ownerUsername = existingData.requestedByUsername;
       const currentUsername = userSession ? userSession.username : null;
-      if (!isAdmin && currentUsername !== ownerUsername) {
-        return res.status(403).json({ message: 'Forbidden: Only the owner of the requested stock entry can delete it.' });
+      if (!hasDeletePermission && currentUsername !== ownerUsername) {
+        return res.status(403).json({ message: 'Forbidden: Only the owner of the requested stock entry or an authorized user can delete it.' });
       }
     } else {
-      if (!isAdmin) {
-        return res.status(403).json({ message: 'Forbidden: Admin access required to delete accepted stock entries.' });
+      if (!hasDeletePermission) {
+        return res.status(403).json({ message: 'Forbidden: You do not have permission to delete accepted stock entries.' });
       }
     }
 
@@ -764,7 +785,14 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
 apiRouter.put('/api/stock/:id', async (req, res) => {
   try {
     const userSession = req.session.user;
-    const isAdmin = userSession && (userSession.username === 'admin' || (userSession.role || '').toLowerCase() === 'admin');
+    const hasEditPermission = userSession && (
+      userSession.username === 'admin' ||
+      (userSession.role || '').toLowerCase() === 'admin' ||
+      (userSession.permissions && (
+        (userSession.permissions.lcReceive && userSession.permissions.lcReceive.edit === true) ||
+        (userSession.permissions.stock && userSession.permissions.stock.edit === true)
+      ))
+    );
 
     const existingStock = await Stock.findById(req.params.id);
     if (!existingStock) return res.status(404).json({ message: 'Item not found' });
@@ -777,16 +805,27 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
     if (existingData && existingData.status === 'Requested') {
       const isStatusChange = req.body.status !== existingData.status;
       if (isStatusChange) {
-        const canApprove = userSession && (['admin', 'incharge', 'sales manager'].includes((userSession.role || '').toLowerCase()) || userSession.username === 'admin');
+        const canApprove = userSession && (
+          ['admin', 'incharge', 'sales manager'].includes((userSession.role || '').toLowerCase()) ||
+          userSession.username === 'admin' ||
+          (userSession.permissions && (
+            (userSession.permissions.lcReceive && userSession.permissions.lcReceive.special === true) ||
+            (userSession.permissions.stock && userSession.permissions.stock.special === true)
+          ))
+        );
         if (!canApprove) {
           return res.status(403).json({ message: 'Forbidden: You do not have permission to approve/reject requested entries.' });
         }
       } else {
         const ownerUsername = existingData.requestedByUsername;
         const currentUsername = userSession ? userSession.username : null;
-        if (!isAdmin && currentUsername !== ownerUsername) {
+        if (!hasEditPermission && currentUsername !== ownerUsername) {
           return res.status(403).json({ message: 'Forbidden: Only the owner of the requested stock entry can edit it.' });
         }
+      }
+    } else {
+      if (!hasEditPermission) {
+        return res.status(403).json({ message: 'Forbidden: You do not have permission to edit accepted stock entries.' });
       }
     }
 
