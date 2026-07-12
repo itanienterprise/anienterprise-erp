@@ -65,6 +65,15 @@ const CnF = ({
     const canEdit = hasPermission(effectiveUser, 'cnf', 'edit');
     const canDelete = hasPermission(effectiveUser, 'cnf', 'delete');
     const canManage = canAdd || canEdit || canDelete;
+    const canUserEditRecord = (row) => {
+        if (!canEdit) return false;
+        if (isAdmin) return true;
+        if (row.source !== 'Sale') {
+            return !row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited;
+        } else {
+            return row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited;
+        }
+    };
     const showToast = (type, message, duration = 3000) => {
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ type, message });
@@ -864,6 +873,10 @@ const CnF = ({
     };
 
     const handleSaveHistory = async () => {
+        if (!canEdit) {
+            alert('Forbidden: You do not have permission to edit C&F records');
+            return;
+        }
         if (!editRecord || !editRecord._id) return;
         setIsSavingHistory(true);
         try {
@@ -966,9 +979,7 @@ const CnF = ({
         const row = filteredHistory.find(r => r._id === id);
         if (!row) return;
 
-        const isEditable = (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
-            (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)));
-
+        const isEditable = canUserEditRecord(row);
         if (!isEditable) return;
 
         setSelectedHistoryIds(prev => {
@@ -985,8 +996,7 @@ const CnF = ({
 
     const toggleSelectAllHistory = () => {
         const editableIds = filteredHistory
-            .filter(row => (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
-                (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited))))
+            .filter(row => canUserEditRecord(row))
             .map(row => row._id);
 
         if (selectedHistoryIds.size === editableIds.length && editableIds.length > 0) {
@@ -2067,8 +2077,7 @@ const CnF = ({
                                                                     </span>
                                                                 </td>
                                                                 <td className="cnf-table-cell text-center">
-                                                                    {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
-                                                                        (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
+                                                                    {canUserEditRecord(row) ? (
                                                                         <button onClick={(e) => { e.stopPropagation(); handleEditHistory(row); }} className="hover:bg-gray-100 p-1.5 rounded-md transition-colors">
                                                                             <EditIcon className="w-4 h-4 text-gray-400 hover:text-gray-900" />
                                                                         </button>
@@ -2105,8 +2114,7 @@ const CnF = ({
                                                                         return;
                                                                     }
                                                                     if (isHistorySelectionMode) {
-                                                                        const isEditable = (row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
-                                                                            (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)));
+                                                                        const isEditable = canUserEditRecord(row);
                                                                         if (isEditable) {
                                                                             toggleHistorySelection(row._id);
                                                                         }
@@ -2117,8 +2125,7 @@ const CnF = ({
                                                             >
                                                                 <div className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors">
                                                                     <div className="flex-1 min-w-0 pr-4 flex items-center gap-3">
-                                                                        {isHistorySelectionMode && ((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
-                                                                            (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) && (
+                                                                        {isHistorySelectionMode && canUserEditRecord(row) && (
                                                                                 <input type="checkbox" checked={isSelected} readOnly className="w-5 h-5 accent-gray-900 shrink-0" onClick={(e) => e.stopPropagation()} />
                                                                             )}
                                                                         <div className="min-w-0">
@@ -2199,8 +2206,7 @@ const CnF = ({
                                                                             </div>
                                                                         </div>
                                                                         <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
-                                                                            {((row.source !== 'Sale' && (isAdmin || (!row.indCnFEdited && !row.bdCnFEdited && !row.indCnFBulkEdited && !row.bdCnFBulkEdited))) ||
-                                                                                (row.source === 'Sale' && (isAdmin || (row.cnfType === 'Indian' ? !row.indCommissionEdited : !row.bdCommissionEdited)))) ? (
+                                                                            {canUserEditRecord(row) ? (
                                                                                 <button onClick={() => handleEditHistory(row)} className="flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-black flex-1 active:scale-95 shadow-lg shadow-gray-900/20"><EditIcon className="w-4 h-4" /> Edit Record</button>
                                                                             ) : (
                                                                                 <div className="flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-500 rounded-xl text-[10px] font-black flex-1 uppercase tracking-widest">

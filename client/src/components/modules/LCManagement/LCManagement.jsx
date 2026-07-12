@@ -5847,7 +5847,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             case 'adjustedQtyKg':
                 return getAdjustedLcValues(record).adjustedQtyKg || 0;
             case 'receivedQtyKg':
-                return getAdjustedLcValues(record).receivedQtyKg || 0;
+                return getAdjustedLcValues(record).totalReceivedQtyKg || 0;
             case 'adjustedTotalAmount':
                 return getAdjustedLcValues(record).adjustedTotalAmount || 0;
             case 'combinedRemKg':
@@ -5930,7 +5930,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 port: displayPort,
                 product: displayProducts,
                 qty: adj.adjustedQtyKg,
-                received: adj.receivedQtyKg,
+                received: adj.totalReceivedQtyKg,
                 val: adj.adjustedTotalAmount,
                 bal: adj.combinedRemKg,
                 exp: totalExpense
@@ -5938,7 +5938,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         });
 
         const totalQty = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedQtyKg || 0), 0);
-        const totalReceived = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).receivedQtyKg || 0), 0);
+        const totalReceived = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).totalReceivedQtyKg || 0), 0);
         const totalVal = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedTotalAmount || 0), 0);
         const totalBal = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).combinedRemKg || 0), 0);
         const totalExp = sortedRecords.reduce((sum, r) => sum + (getLcTotalPaidExpense(r) || 0), 0);
@@ -8347,7 +8347,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         <span className="font-bold text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                     </td>
                                                     <td className="px-3 py-4 text-sm text-right text-gray-600 whitespace-nowrap">
-                                                        <span className="font-bold text-gray-900">{receivedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
+                                                        <span className="font-bold text-gray-900">{adj.totalReceivedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal">Kg</span>
                                                     </td>
                                                     <td className="px-3 py-4 text-sm text-right whitespace-nowrap">
                                                         <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
@@ -9051,7 +9051,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <div className="text-[11px]">
-                                                        <span className="font-bold text-gray-900">{receivedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal ml-0.5">Kg</span>
+                                                        <span className="font-bold text-gray-900">{adj.totalReceivedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal ml-0.5">Kg</span>
                                                     </div>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Balance</span>

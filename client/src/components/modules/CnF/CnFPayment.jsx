@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { decryptData, encryptData } from '../../../utils/encryption';
+import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 
@@ -35,6 +36,10 @@ const CnFPayment = () => {
         }
     });
 
+    const canAdd = hasPermission(currentUser, 'cnfPayment', 'add');
+    const canEdit = hasPermission(currentUser, 'cnfPayment', 'edit');
+    const canDelete = hasPermission(currentUser, 'cnfPayment', 'delete');
+    const canManage = canEdit || canDelete;
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
 
@@ -588,8 +593,9 @@ const CnFPayment = () => {
 
     const handleAddPayment = async (e) => {
         e.preventDefault();
-        if (isBorderManager) {
-            alert('Forbidden: Border managers are not allowed to add or manage C&F payments');
+        const hasAccess = isEditMode ? canEdit : canAdd;
+        if (!hasAccess) {
+            alert(`Forbidden: You do not have permission to ${isEditMode ? 'edit' : 'add'} C&F payments`);
             return;
         }
         if (!newPayment.cnfId || !newPayment.amount || parseFloat(newPayment.amount) <= 0) return;
@@ -666,6 +672,10 @@ const CnFPayment = () => {
     };
 
     const handleDeletePayment = (payment) => {
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete C&F payments');
+            return;
+        }
         setPaymentToDelete(payment);
         setShowDeleteConfirm(true);
     };
@@ -817,7 +827,7 @@ const CnFPayment = () => {
                             )}
                         </div>
                     )}
-                    {!showAddModal && !isBorderManager && (
+                    {!showAddModal && canAdd && (
                         <button
                             onClick={() => setShowAddModal(true)}
                             className="h-10 border border-transparent flex items-center justify-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-sm hover:shadow-blue-500/30"
@@ -1144,14 +1154,14 @@ const CnFPayment = () => {
                                             </div>
                                         </th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Discount</th>
-                                        {isAdmin && <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Actions</th>}
+                                        {canManage && <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoading ? (
-                                        <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
+                                        <tr><td colSpan={canManage ? 8 : 7} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
                                     ) : filteredPayments.length === 0 ? (
-                                        <tr><td colSpan={isAdmin ? 8 : 7} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
+                                        <tr><td colSpan={canManage ? 8 : 7} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
                                     ) : (
                                         filteredPayments.map((p) => (
                                             <tr key={p._id} className="hover:bg-gray-50/50 transition-colors group">
@@ -1183,11 +1193,11 @@ const CnFPayment = () => {
                                                 <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-emerald-600">
                                                     {p.discount > 0 ? `৳${p.discount.toLocaleString('en-IN')}` : '-'}
                                                 </td>
-                                                {isAdmin && (
+                                                {canManage && (
                                                     <td className="px-4 py-3 whitespace-nowrap text-center">
                                                         <div className="flex items-center justify-center gap-2">
-                                                            <button onClick={() => handleEditPayment(p)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleDeletePayment(p)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                            {canEdit && <button onClick={() => handleEditPayment(p)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>}
+                                                            {canDelete && <button onClick={() => handleDeletePayment(p)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>}
                                                         </div>
                                                     </td>
                                                 )}
@@ -1273,22 +1283,24 @@ const CnFPayment = () => {
                                                         </div>
 
                                                     {/* Action Buttons in Expanded View */}
-                                                    {isAdmin && (
-                                                        <div className="flex items-center gap-3 pt-2">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleEditPayment(p); }}
-                                                                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-600 rounded-xl text-xs font-black transition-all active:scale-95"
-                                                            >
-                                                                <EditIcon className="w-4 h-4" />
-                                                                <span>EDIT RECORD</span>
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDeletePayment(p); }}
-                                                                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-black transition-all active:scale-95"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                                <span>DELETE</span>
-                                                            </button>
+                                                    {canManage && (
+                                                        <div className="col-span-2 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
+                                                            {canEdit && (
+                                                                <button
+                                                                    onClick={() => handleEditPayment(p)}
+                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                                >
+                                                                    <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                                </button>
+                                                            )}
+                                                            {canDelete && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeletePayment(p); }}
+                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                                >
+                                                                    <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>

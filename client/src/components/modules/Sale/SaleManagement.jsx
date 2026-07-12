@@ -241,9 +241,18 @@ const SaleManagement = ({
     const canDelete = hasPermission(currentUser, 'sales', 'delete');
 
     const canUserEditSale = (sale) => {
+        if (!canEdit) return false;
         if (isFullAdmin) return true;
         // Non-admin can only edit if rate was missing and it hasn't been edited yet
         return sale.rateMissing === true && sale.isEdited !== true;
+    };
+
+    const canUserDeleteSale = (sale) => {
+        return canDelete;
+    };
+
+    const canViewSale = (sale) => {
+        return true;
     };
 
     const canEditRequestedSale = (sale) => {
@@ -252,6 +261,7 @@ const SaleManagement = ({
         if (role === 'lc manager') return false;
         if (currentUser.username === 'admin') return true;
         if (role === 'admin') return true;
+        if (canEdit) return true;
         const owner = sale.requestedByUsername;
         return owner === currentUser.username;
     };
@@ -1279,6 +1289,11 @@ const SaleManagement = ({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        const hasAccess = editingId ? canEdit : canAdd;
+        if (!hasAccess) {
+            alert(`Forbidden: You do not have permission to ${editingId ? 'edit' : 'add'} sales`);
+            return;
+        }
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
@@ -1582,6 +1597,10 @@ const SaleManagement = ({
     };
 
     const handleDelete = (sale) => {
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete sales');
+            return;
+        }
         onDeleteConfirm({
             show: true,
             type: 'sales',
@@ -4495,7 +4514,7 @@ const SaleManagement = ({
                                             >
                                                 <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                     {isSelectionMode ? (
-                                                        (isFullAdmin || canUserEditSale(sale)) ? (
+                                                        canUserEditSale(sale) ? (
                                                             <input autoComplete="off"
                                                                 type="checkbox"
                                                                 checked={selectedItems.has(sale._id)}
@@ -4565,14 +4584,14 @@ const SaleManagement = ({
                                                             </>
                                                         ) : (
                                                             <>
-                                                                {(isFullAdmin || isIncharge || isSalesManager || isBorderManager) && (
+                                                                {canViewSale(sale) && (
                                                                     <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                                 )}
                                                                 <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
-                                                                {canEdit && (
+                                                                {canUserEditSale(sale) && (
                                                                     <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                                 )}
-                                                                {canDelete && (
+                                                                {canUserDeleteSale(sale) && (
                                                                     <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
                                                                 )}
                                                             </>
@@ -4748,14 +4767,14 @@ const SaleManagement = ({
                                                         </>
                                                     ) : (
                                                         <>
-                                                            {(isFullAdmin || isIncharge || isSalesManager || isBorderManager) && (
+                                                            {canViewSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                             )}
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
-                                                            {canEdit && (
+                                                            {canUserEditSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                             )}
-                                                            {canDelete && (
+                                                            {canUserDeleteSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
                                                             )}
                                                         </>
@@ -4814,7 +4833,7 @@ const SaleManagement = ({
                                         <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
                                             {isSelectionMode && saleType === 'Border' && (
                                                 <div className="flex-shrink-0 pr-1" onClick={(e) => e.stopPropagation()}>
-                                                    {(isFullAdmin || canUserEditSale(sale)) ? (
+                                                    {canUserEditSale(sale) ? (
                                                         <input autoComplete="off"
                                                             type="checkbox"
                                                             checked={selectedItems.has(sale._id)}
@@ -4869,14 +4888,14 @@ const SaleManagement = ({
                                                         </>
                                                     ) : (
                                                         <>
-                                                            {(isFullAdmin || isIncharge || isSalesManager || isBorderManager) && (
+                                                            {canViewSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
                                                             )}
-                                                            {canEdit && (
+                                                            {canUserEditSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
                                                             )}
                                                             <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
-                                                            {canDelete && (
+                                                            {canUserDeleteSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
                                                             )}
                                                         </>

@@ -958,7 +958,7 @@ const ReturnProduct = ({ currentUser }) => {
                                         <th className="return-product-table-header text-center">Quantity</th>
                                         <th className="return-product-table-header text-center">Bags</th>
                                         <th className="return-product-table-header text-right">Return Price</th>
-                                        {isAdmin && <th className="return-product-table-header text-right">Actions</th>}
+                                        {canManage && <th className="return-product-table-header text-right">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1006,12 +1006,14 @@ const ReturnProduct = ({ currentUser }) => {
                                             {canManage && (
                                             <td className="return-product-table-cell">
                                                 <div className="return-product-table-actions justify-end">
-                                                    <button
-                                                        onClick={() => handleEdit(ret)}
-                                                        className="return-product-action-btn return-product-action-edit"
-                                                    >
-                                                        <EditIcon className="w-5 h-5" />
-                                                    </button>
+                                                    {canEdit && (
+                                                        <button
+                                                            onClick={() => handleEdit(ret)}
+                                                            className="return-product-action-btn return-product-action-edit"
+                                                        >
+                                                            <EditIcon className="w-5 h-5" />
+                                                        </button>
+                                                    )}
                                                     {canDelete && (
                                                         <button
                                                             onClick={() => handleDelete(ret._id)}
@@ -1027,7 +1029,7 @@ const ReturnProduct = ({ currentUser }) => {
                                     ))}
                                     {filteredReturns.length === 0 && (
                                         <tr>
-                                            <td colSpan={(isAdmin || isSalesManager) ? 9 : 8} className="py-20 text-center text-gray-400">
+                                            <td colSpan={(canManage) ? 9 : 8} className="py-20 text-center text-gray-400">
                                                 <RotateCcwIcon className="w-12 h-12 mx-auto mb-4 opacity-20" />
                                                 <p className="text-sm">No return records found</p>
                                             </td>
@@ -1100,12 +1102,14 @@ const ReturnProduct = ({ currentUser }) => {
 
                                             {canManage && (
                                             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleEdit(ret); }}
-                                                    className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
-                                                >
-                                                    <EditIcon className="w-4 h-4" /> Edit
-                                                </button>
+                                                {canEdit && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleEdit(ret); }}
+                                                        className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
+                                                    >
+                                                        <EditIcon className="w-4 h-4" /> Edit
+                                                    </button>
+                                                )}
                                                 {canDelete && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleDelete(ret._id); }}

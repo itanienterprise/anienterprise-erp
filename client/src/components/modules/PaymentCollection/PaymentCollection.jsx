@@ -3,6 +3,7 @@ import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, Chevr
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { generateMoneyReceiptPDF } from '../../../utils/pdfGenerator';
 import { decryptData, encryptData } from '../../../utils/encryption';
+import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 import PaymentCollectionReport from './PaymentCollectionReport';
@@ -22,6 +23,10 @@ const PaymentCollection = () => {
         }
     });
 
+    const canAdd = hasPermission(currentUser, 'paymentCollection', 'add');
+    const canEdit = hasPermission(currentUser, 'paymentCollection', 'edit');
+    const canDelete = hasPermission(currentUser, 'paymentCollection', 'delete');
+    const canManage = canEdit || canDelete;
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
 
     // Edit States
@@ -310,6 +315,10 @@ const PaymentCollection = () => {
     };
 
     const handleDeletePayment = (payment) => {
+        if (!canDelete) {
+            alert('Forbidden: You do not have permission to delete payment collections');
+            return;
+        }
         setPaymentToDelete(payment);
         setShowDeleteConfirm(true);
     };
@@ -374,6 +383,10 @@ const PaymentCollection = () => {
 
     const handleAddCollection = async (e) => {
         e.preventDefault();
+        if (!canAdd) {
+            alert('Forbidden: You do not have permission to add payment collections');
+            return;
+        }
         const totalAmountValue = newPayment.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
         if (!newPayment.customerId || totalAmountValue <= 0) return;
 
@@ -430,6 +443,10 @@ const PaymentCollection = () => {
 
     const handleUpdateCollection = async (e) => {
         e.preventDefault();
+        if (!canEdit) {
+            alert('Forbidden: You do not have permission to edit payment collections');
+            return;
+        }
         const activeItems = newPayment.items.filter(item => parseFloat(item.amount) > 0);
         if (!newPayment.customerId || activeItems.length === 0) return;
 
@@ -1004,7 +1021,7 @@ const PaymentCollection = () => {
                                 {isLoading ? (
                                     Array(5).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan={isAdmin ? 8 : 7} className="px-6 py-12 text-center">
+                                            <td colSpan={canManage ? 8 : 7} className="px-6 py-12 text-center">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
                                                         <DollarSignIcon className="w-6 h-6 text-blue-500" />
@@ -1131,23 +1148,23 @@ const PaymentCollection = () => {
                                                             >
                                                                 <FileTextIcon className="w-5 h-5" />
                                                             </button>
-                                                            {isAdmin && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => handleEditInitiation(group.items[0])}
-                                                                        className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                                                                        title="Edit Receipt"
-                                                                    >
-                                                                        <EditIcon className="w-5 h-5" />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleDeletePayment(group.items[0])}
-                                                                        className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                                                        title="Delete Receipt"
-                                                                    >
-                                                                        <TrashIcon className="w-5 h-5" />
-                                                                    </button>
-                                                                </>
+                                                            {canEdit && (
+                                                                <button
+                                                                    onClick={() => handleEditInitiation(group.items[0])}
+                                                                    className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                    title="Edit Receipt"
+                                                                >
+                                                                    <EditIcon className="w-5 h-5" />
+                                                                </button>
+                                                            )}
+                                                            {canDelete && (
+                                                                <button
+                                                                    onClick={() => handleDeletePayment(group.items[0])}
+                                                                    className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                                                    title="Delete Receipt"
+                                                                >
+                                                                    <TrashIcon className="w-5 h-5" />
+                                                                </button>
                                                             )}
                                                         </div>
                                                     </td>
@@ -1157,7 +1174,7 @@ const PaymentCollection = () => {
                                     })()
                                 ) : (
                                     <tr>
-                                        <td colSpan={isAdmin ? 8 : 7} className="px-6 py-12 text-center">
+                                        <td colSpan={canManage ? 8 : 7} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center gap-2">
                                                 <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
                                                     <SearchIcon className="w-6 h-6 text-gray-400" />
@@ -1255,20 +1272,24 @@ const PaymentCollection = () => {
                                                                     <span className="mobile-card-value font-black text-blue-600">৳{Number(item.amount || 0).toLocaleString('en-IN')}</span>
                                                                 </div>
 
-                                                                {isAdmin && (
+                                                                {canManage && (
                                                                     <div className="mobile-card-actions pt-2">
-                                                                        <button
-                                                                            onClick={(e) => { e.stopPropagation(); handleEditInitiation(item); }}
-                                                                            className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
-                                                                        >
-                                                                            <EditIcon className="w-4 h-4" /> Edit
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={(e) => { e.stopPropagation(); handleDeletePayment(item); }}
-                                                                            className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-4 hover:bg-red-100 transition-colors"
-                                                                        >
-                                                                            <TrashIcon className="w-4 h-4" />
-                                                                        </button>
+                                                                        {canEdit && (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleEditInitiation(item); }}
+                                                                                className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
+                                                                            >
+                                                                                <EditIcon className="w-4 h-4" /> Edit
+                                                                            </button>
+                                                                        )}
+                                                                        {canDelete && (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); handleDeletePayment(item); }}
+                                                                                className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-4 hover:bg-red-100 transition-colors"
+                                                                            >
+                                                                                <TrashIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                             </div>

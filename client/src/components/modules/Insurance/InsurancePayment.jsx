@@ -1104,8 +1104,10 @@ const InsurancePayment = () => {
                                                     {canManage && (
                                                         <td className="px-4 py-3 whitespace-nowrap text-center">
                                                             <div className="flex items-center justify-center gap-2">
-                                                                <button onClick={() => handleEditPayment(p)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
-                                                                {isAdmin && (
+                                                                {canEdit && (
+                                                                    <button onClick={() => handleEditPayment(p)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
+                                                                )}
+                                                                {canDelete && (
                                                                     <button onClick={() => handleDeletePayment(p)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
                                                                 )}
                                                             </div>
@@ -1218,13 +1220,15 @@ const InsurancePayment = () => {
 
                                                     {canManage && (
                                                         <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
-                                                            <button
-                                                                onClick={() => handleEditPayment(p)}
-                                                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
-                                                            >
-                                                                <EditIcon className="w-3.5 h-3.5" /> Edit
-                                                            </button>
-                                                            {isAdmin && (
+                                                            {canEdit && (
+                                                                <button
+                                                                    onClick={() => handleEditPayment(p)}
+                                                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                                >
+                                                                    <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                                </button>
+                                                            )}
+                                                            {canDelete && (
                                                                 <button
                                                                     onClick={() => handleDeletePayment(p)}
                                                                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"

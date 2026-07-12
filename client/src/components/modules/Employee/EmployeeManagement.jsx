@@ -49,6 +49,7 @@ const EmployeeManagement = ({
     const canAdd = hasPermission(currentUser, 'employees', 'add');
     const canEdit = hasPermission(currentUser, 'employees', 'edit');
     const canDelete = hasPermission(currentUser, 'employees', 'delete');
+    const canSpecial = hasPermission(currentUser, 'employees', 'special');
     const cannotManage = !canAdd && !canEdit;
     const cannotDelete = !canDelete;
 
@@ -834,7 +835,7 @@ const EmployeeManagement = ({
                                 <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Salary</p><p className="text-sm text-gray-700">{viewData.salary ? `${viewData.salary} BDT` : 'N/A'}</p></div>
                             </div>
                             
-                            {isAdmin && (
+                            {(isAdmin || canSpecial) && (
                                 <div className="border-t border-gray-100 pt-4 mt-2 flex flex-col gap-2">
                                     <div className="flex items-center justify-between">
                                         <div>

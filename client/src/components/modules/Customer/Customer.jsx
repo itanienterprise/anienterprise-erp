@@ -4,6 +4,7 @@ import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDo
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF } from '../../../utils/pdfGenerator';
 import { api } from '../../../utils/api';
+import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import CustomerReport from './CustomerReport';
 import './Customer.css';
@@ -207,6 +208,10 @@ const Customer = ({
         return options;
     };
 
+    const canAdd = useMemo(() => hasPermission(currentUser, 'customer', 'add'), [currentUser]);
+    const canEdit = useMemo(() => hasPermission(currentUser, 'customer', 'edit'), [currentUser]);
+    const canDelete = useMemo(() => hasPermission(currentUser, 'customer', 'delete'), [currentUser]);
+
     const isFullAdmin = useMemo(() => {
         if (!currentUser) return false;
         if (currentUser.username === 'admin') return true;
@@ -298,6 +303,13 @@ const Customer = ({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        const isEditing = !!editingId;
+        const hasAccess = isEditing ? canEdit : canAdd;
+        if (!hasAccess) {
+            alert(`Forbidden: You do not have permission to ${isEditing ? 'edit' : 'add'} customers`);
+            return;
+        }
 
         // Validate phone number
         if (formData.phone.length !== 14) {
@@ -418,7 +430,7 @@ const Customer = ({
     };
 
     const handleDelete = (id) => {
-        if (!isFullAdmin) return;
+        if (!canDelete) return;
         onDeleteConfirm({ show: true, type: 'customer', id, isBulk: false });
     };
 
@@ -818,15 +830,17 @@ const Customer = ({
                                 <BarChartIcon className="w-4 h-4 text-gray-400 hidden sm:block" />
                                 <span className="text-sm font-medium">Report</span>
                             </button>
-                            <button
-                                onClick={() => {
-                                    if (!showForm) resetForm();
-                                    setShowForm(!showForm);
-                                }}
-                                className="h-10 border border-transparent flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 active:scale-95 text-sm font-medium"
-                            >
-                                <span className="text-sm font-medium">+ Add New</span>
-                            </button>
+                            {canAdd && (
+                                <button
+                                    onClick={() => {
+                                        if (!showForm) resetForm();
+                                        setShowForm(!showForm);
+                                    }}
+                                    className="h-10 border border-transparent flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 active:scale-95 text-sm font-medium"
+                                >
+                                    <span className="text-sm font-medium">+ Add New</span>
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1097,8 +1111,10 @@ const Customer = ({
                                                         <td className="px-6 py-4 text-sm text-gray-600">
                                                             <div className="flex items-center justify-center space-x-2">
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(c); }} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
-                                                                {isFullAdmin && (
+                                                                {canEdit && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
+                                                                )}
+                                                                {canDelete && (
                                                                     <button onClick={(e) => { e.stopPropagation(); handleDelete(c._id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
                                                                 )}
                                                             </div>
@@ -1184,13 +1200,15 @@ const Customer = ({
                                                                 >
                                                                     <EyeIcon className="w-4 h-4" /> View
                                                                 </button>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(c); }}
-                                                                    className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1"
-                                                                >
-                                                                    <EditIcon className="w-4 h-4" /> Edit
-                                                                </button>
-                                                                {isFullAdmin && (
+                                                                {canEdit && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(c); }}
+                                                                        className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1"
+                                                                    >
+                                                                        <EditIcon className="w-4 h-4" /> Edit
+                                                                    </button>
+                                                                )}
+                                                                {canDelete && (
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); handleDelete(c._id); }}
                                                                         className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-3"
