@@ -764,7 +764,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
                 return sortedOptions.map(wh => ({
                     name: wh,
-                    data: calculateStockData(stockRecords, { ...filters, warehouse: wh }, '', warehouseData, salesRecords, products, damages)
+                    data: calculateStockData(stockRecords, { ...filters, warehouse: wh, reportType }, '', warehouseData, salesRecords, products, damages)
                 })).filter(w => w.data.displayRecords.length > 0);
             })()
             : [{ name: filters.warehouse, data: stockData }];
@@ -858,7 +858,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             const customLinesToDraw = [];
 
 
-            const sortedDisplayRecords = [...currentStockData.displayRecords].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const sortedDisplayRecords = [...currentStockData.displayRecords].sort((a, b) => a.productName.localeCompare(b.productName));
             sortedDisplayRecords.forEach((item, index) => {
                 // Legitimate quality check - only separate if there's actual quality data
                 const qualityGroups = item.brandList.reduce((acc, ent) => {
@@ -913,6 +913,22 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 qEntries.forEach(([quality, brands], qIdx) => {
                     let isFirstRowOfQuality = true;
                     let lastBrand = null;
+
+                    // Pre-calculate brand spans within this quality group
+                    const brandSpans = [];
+                    let lastB = null;
+                    let lastBIdx = -1;
+                    brands.forEach((b, i) => {
+                        const brandName = (b.brand || 'No Brand').trim().toUpperCase();
+                        if (brandName !== lastB) {
+                            lastB = brandName;
+                            lastBIdx = i;
+                            brandSpans[i] = { name: b.brand, span: 1 };
+                        } else {
+                            brandSpans[lastBIdx].span++;
+                            brandSpans[i] = { name: b.brand, span: 0 };
+                        }
+                    });
 
                     brands.forEach((ent, bIdx) => {
                         const row = [];
@@ -990,7 +1006,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         // Price Report Columns
                         if (reportType === 'price') {
                             row.push({ content: ent.lcNo || '—', styles: { halign: 'left' } });
-                            row.push({ content: ent.purchasedPrice ? `TK ${parseFloat(ent.purchasedPrice).toFixed(2)}` : '—', styles: { halign: 'right' } });
+                            row.push({ content: ent.purchasedPrice ? `TK ${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—', styles: { halign: 'right' } });
                         }
 
                         // Closing Data
@@ -1009,6 +1025,50 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                             row.isQualityEnd = true;
                         }
                         tableRows.push(row);
+
+                        // Check if we need to insert a Brand Total row for brands with multiple LCs
+                        let startIdx = bIdx;
+                        while (startIdx > 0 && brandSpans[startIdx].span === 0) {
+                            startIdx--;
+                        }
+                        const spanInfo = brandSpans[startIdx];
+                        const isLastOfBrandGroup = bIdx === startIdx + spanInfo.span - 1;
+                        const hasMultipleLcs = spanInfo.span > 1;
+
+                        if (reportType === 'price' && hasMultipleLcs && isLastOfBrandGroup) {
+                            const brandGroup = brands.slice(startIdx, startIdx + spanInfo.span);
+                            const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
+                            const pktSize = ent.packetSize || 30;
+                            const { whole, remainder } = calculatePktRemainderLocal(totalQty, pktSize);
+
+                            const brandTotalRow = [];
+                            // Column 0: SL
+                            brandTotalRow.push({
+                                content: '',
+                                styles: { lineWidth: 0 }
+                            });
+                            // Column 1 & 2: Brand Total (colSpan 4)
+                            brandTotalRow.push({
+                                content: `${ent.brand || 'No Brand'} TOTAL`,
+                                colSpan: 4,
+                                styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248], lineWidth: 0 }
+                            });
+                            // Column 5: BAG
+                            brandTotalRow.push({
+                                content: `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`,
+                                styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
+                            });
+                            // Column 6: QUANTITY
+                            brandTotalRow.push({
+                                content: Math.round(totalQty).toLocaleString('en-US'),
+                                styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
+                            });
+
+                            brandTotalRow.isBrandTotal = true;
+                            boldBottomRowIndices.add(tableRows.length);
+                            tableRows.push(brandTotalRow);
+                        }
+
                         isFirstRowOfProduct = false;
                         isFirstRowOfQuality = false;
                     });
@@ -1184,13 +1244,13 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 margin: { left: margin, right: margin },
                 didParseCell: (data) => {
                     if (data.row.section === 'body') {
-                        // Keep SUB TOTAL rows attached to the row above — prevents blank gaps
-                        if (data.row.raw && data.row.raw.isSubTotal) {
+                        // Keep SUB TOTAL and Brand Total rows attached to the row above — prevents blank gaps
+                        if (data.row.raw && (data.row.raw.isSubTotal || data.row.raw.isBrandTotal)) {
                             data.row.pageBreak = 'avoid';
                         }
                         // Disable default borders for SL, Product/Quality, and Brand columns on subtotal/grand total rows
                         // to prevent vertical lines from cutting through colSpan/spanned cells.
-                        if (data.row.raw && data.row.raw.isSubTotal) {
+                        if (data.row.raw && (data.row.raw.isSubTotal || data.row.raw.isBrandTotal)) {
                             const maxColIdx = reportType === 'price' ? 4 : 2;
                             if (data.column.index <= maxColIdx) {
                                 data.cell.styles.lineWidth = 0;
@@ -1201,9 +1261,10 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 didDrawCell: (data) => {
                     const { cell, row, column } = data;
                     if (row.section !== 'body') return;
+                    if (cell.width === 0) return;
 
                     const isBoundaryRow = boldBottomRowIndices.has(row.index);
-                    const isSubTotal = row.raw && row.raw.isSubTotal;
+                    const isSubTotal = row.raw && (row.raw.isSubTotal || row.raw.isBrandTotal);
                     const isLastRow = row.index === data.table.body.length - 1;
 
                     if (column.index === 0 || column.index === 1 || column.index === 2) {
@@ -1235,7 +1296,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                             const nextRow = data.table.body[row.index + 1];
                             const nextCell = nextRow ? nextRow.cells[2] : null;
                             const isNextBrandStart = nextCell && nextCell.text && nextCell.text.join('').trim() !== '';
-                            if (isNextBrandStart || (nextRow && nextRow.raw && nextRow.raw.isSubTotal)) {
+                            if (isNextBrandStart || (nextRow && nextRow.raw && (nextRow.raw.isSubTotal || nextRow.raw.isBrandTotal))) {
                                 drawBottom = true;
                             }
                         }

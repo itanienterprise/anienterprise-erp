@@ -264,7 +264,6 @@ const StockReport = ({
                             {records.length > 0 ? (
                                 records.map((item, index) => {
                                     const brands = item.brandList;
-                                    const totalRows = brands.length + 1; // +1 for Sub Total row
                                     
                                      // Pre-calculate quality spans
                                      const qualitySpans = [];
@@ -299,7 +298,21 @@ const StockReport = ({
                                              brandSpans[i] = { name: b.brand, span: 0 };
                                          }
                                      });
- 
+
+                                     let totalRows = brands.length + 1; // +1 for Sub Total row
+                                     if (reportType === 'price') {
+                                         brandSpans.forEach((bSpan, bIdx) => {
+                                             if (bSpan && bSpan.span > 1) {
+                                                 totalRows++;
+                                                 // Find which quality group this brand belongs to and adjust its span
+                                                 let qIdx = bIdx;
+                                                 while (qIdx > 0 && qualitySpans[qIdx].span === 0) {
+                                                     qIdx--;
+                                                 }
+                                                 qualitySpans[qIdx].span++;
+                                             }
+                                         });
+                                     }
                                      return (
                                          <React.Fragment key={index}>
                                              {brands.map((ent, i) => {
@@ -308,64 +321,94 @@ const StockReport = ({
                                                  const sPkt = parseFloat(ent.salePacket) || 0;
                                                  const qInfo = qualitySpans[i];
                                                  const bInfo = brandSpans[i];
- 
+
+                                                 // Find the start index of this brand group to check if it's the last of the group and has multiple LCs
+                                                 let startIdx = i;
+                                                 while (startIdx > 0 && brandSpans[startIdx].span === 0) {
+                                                     startIdx--;
+                                                 }
+                                                 const spanInfo = brandSpans[startIdx];
+                                                 const isLastOfBrandGroup = i === startIdx + spanInfo.span - 1;
+                                                 const hasMultipleLcs = spanInfo.span > 1;
+
                                                  return (
-                                                     <tr key={`${index}-${i}`} className="hover:bg-gray-50 transition-colors border-b border-gray-900 last:border-b-0">
-                                                         {i === 0 && (
-                                                             <td rowSpan={totalRows} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 text-center align-top font-bold">
-                                                                 {index + 1}
-                                                             </td>
-                                                         )}
-                                                         {qInfo.span > 0 && (
-                                                             <td rowSpan={qInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
-                                                                 {i === 0 && <div className="font-black uppercase mb-1 underline decoration-gray-400">{item.productName}</div>}
-                                                                 {qInfo.name !== 'NO QUALITY' && (
-                                                                     <div className="font-bold uppercase text-blue-700 bg-blue-50/50 px-1 py-0.5 rounded text-[12px] inline-block mt-1">
-                                                                         {qInfo.name}
-                                                                     </div>
-                                                                 )}
-                                                             </td>
-                                                         )}
-                                                         {bInfo.span > 0 && (
-                                                             <td rowSpan={bInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
-                                                                 <div className="leading-tight uppercase font-medium">{ent.brand || 'No Brand'}</div>
-                                                             </td>
-                                                         )}
-                                                        {reportType === 'price' && (
-                                                            <>
-                                                                <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top uppercase">
-                                                                    {ent.lcNo || '—'}
-                                                                </td>
-                                                                <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top font-bold whitespace-nowrap">
-                                                                    {ent.purchasedPrice ? `৳${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-                                                                </td>
-                                                            </>
-                                                        )}
-                                                        {reportType === 'detailed' ? (
-                                                            <>
-                                                                <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap">
-                                                                    {openWhole}{openRem !== 0 ? ` - ${Math.abs(openRem)} kg` : ''}
-                                                                </td>
-                                                                <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-bold">
-                                                                    {Math.round(ent.totalInHouseQuantity || 0).toLocaleString('en-US')}
-                                                                </td>
-                                                                <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap">
-                                                                    {Number.isInteger(sPkt) ? sPkt : sPkt.toFixed(2)}
-                                                                </td>
-                                                                <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-bold">
-                                                                    {Math.round(ent.saleQuantity || 0).toLocaleString('en-US')}
-                                                                </td>
-                                                            </>
-                                                        ) : null}
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap">
-                                                            {closeWhole}{closeRem !== 0 ? ` - ${Math.abs(closeRem)} kg` : ''}
-                                                        </td>
-                                                        <td className="px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-black">
-                                                            {Math.round(ent.inHouseQuantity || 0).toLocaleString('en-US')}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+                                                     <React.Fragment key={`${index}-${i}`}>
+                                                         <tr className="hover:bg-gray-50 transition-colors border-b border-gray-900 last:border-b-0">
+                                                             {i === 0 && (
+                                                                 <td rowSpan={totalRows} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 text-center align-top font-bold">
+                                                                     {index + 1}
+                                                                 </td>
+                                                             )}
+                                                             {qInfo.span > 0 && (
+                                                                 <td rowSpan={qInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
+                                                                     {i === 0 && <div className="font-black uppercase mb-1 underline decoration-gray-400">{item.productName}</div>}
+                                                                     {qInfo.name !== 'NO QUALITY' && (
+                                                                         <div className="font-bold uppercase text-blue-700 bg-blue-50/50 px-1 py-0.5 rounded text-[12px] inline-block mt-1">
+                                                                             {qInfo.name}
+                                                                         </div>
+                                                                     )}
+                                                                 </td>
+                                                             )}
+                                                             {bInfo.span > 0 && (
+                                                                 <td rowSpan={bInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
+                                                                     <div className="leading-tight uppercase font-medium">{ent.brand || 'No Brand'}</div>
+                                                                 </td>
+                                                             )}
+                                                            {reportType === 'price' && (
+                                                                <>
+                                                                    <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top uppercase">
+                                                                        {ent.lcNo || '—'}
+                                                                    </td>
+                                                                    <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top font-bold whitespace-nowrap">
+                                                                        {ent.purchasedPrice ? `৳${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                                    </td>
+                                                                </>
+                                                            )}
+                                                            {reportType === 'detailed' ? (
+                                                                <>
+                                                                    <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap">
+                                                                        {openWhole}{openRem !== 0 ? ` - ${Math.abs(openRem)} kg` : ''}
+                                                                    </td>
+                                                                    <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-bold">
+                                                                        {Math.round(ent.totalInHouseQuantity || 0).toLocaleString('en-US')}
+                                                                    </td>
+                                                                    <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap">
+                                                                        {Number.isInteger(sPkt) ? sPkt : sPkt.toFixed(2)}
+                                                                    </td>
+                                                                    <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-bold">
+                                                                        {Math.round(ent.saleQuantity || 0).toLocaleString('en-US')}
+                                                                    </td>
+                                                                </>
+                                                            ) : null}
+                                                            <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap">
+                                                                {closeWhole}{closeRem !== 0 ? ` - ${Math.abs(closeRem)} kg` : ''}
+                                                            </td>
+                                                            <td className="px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-black">
+                                                                {Math.round(ent.inHouseQuantity || 0).toLocaleString('en-US')}
+                                                            </td>
+                                                         </tr>
+                                                         {reportType === 'price' && hasMultipleLcs && isLastOfBrandGroup && (() => {
+                                                             const brandGroup = brands.slice(startIdx, startIdx + spanInfo.span);
+                                                             const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
+                                                             const pktSize = ent.packetSize || 30;
+                                                             const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
+                                                             return (
+                                                                 <tr className="bg-gray-100/50 font-bold border-b border-gray-900 last:border-b-0">
+                                                                     <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold uppercase" colSpan={3}>
+                                                                         {ent.brand || 'No Brand'} Total
+                                                                     </td>
+                                                                     <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold whitespace-nowrap">
+                                                                         {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
+                                                                     </td>
+                                                                     <td className="px-2 py-1 text-[13px] text-right text-gray-900 font-black whitespace-nowrap">
+                                                                         {Math.round(totalQty).toLocaleString('en-US')}
+                                                                     </td>
+                                                                 </tr>
+                                                             );
+                                                         })()}
+                                                     </React.Fragment>
+                                                 );
+                                             })}
                                             {/* Sub Total Row */}
                                             <tr className="bg-gray-100/50 border-b-2 border-gray-900 font-bold">
                                                 <td className="border-r border-gray-900 px-2 py-1.5 text-[11px] font-black text-gray-400 align-top uppercase" colSpan={reportType === 'price' ? 4 : 2}>
