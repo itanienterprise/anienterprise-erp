@@ -658,7 +658,7 @@ function App() {
   const [stockFilters, setStockFilters] = useState({
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
-    warehouse: '', brand: '', importer: '', exporter: '', productName: '', category: ''
+    warehouse: 'All Warehouses', brand: '', importer: '', exporter: '', productName: '', category: ''
   });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);

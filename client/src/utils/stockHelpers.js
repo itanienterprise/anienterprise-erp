@@ -297,10 +297,16 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             }
 
                             if (beBrand === normBrand && beQuality === normQuality) {
+                                const saleLc = (sale.lcNo || be.lcNo || si.lcNo || '').trim().toLowerCase();
                                 if (isPriceReport) {
-                                    const saleLc = (sale.lcNo || be.lcNo || si.lcNo || '').trim().toLowerCase();
                                     const stockLc = (item.lcNo || '').trim().toLowerCase();
                                     if (saleLc !== stockLc) return;
+                                }
+                                if (stockFilters.lcNo && saleLc !== stockFilters.lcNo.toLowerCase()) return;
+                                if (stockSearchQuery) {
+                                    const q = stockSearchQuery.toLowerCase();
+                                    const matchesQuery = normBrand.includes(q) || keyLower.includes(q) || saleLc.includes(q);
+                                    if (!matchesQuery) return;
                                 }
 
                                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
@@ -351,12 +357,17 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const dWh = (damage.warehouse || '').trim().toLowerCase();
 
                 if (dProdName === keyLower && dBrand === normBrand) {
+                    const damageLc = (damage.lcNo || '').trim().toLowerCase();
                     if (isPriceReport) {
-                        const damageLc = (damage.lcNo || '').trim().toLowerCase();
                         const stockLc = (item.lcNo || '').trim().toLowerCase();
                         if (damageLc !== stockLc) return;
                     }
-                    if (stockFilters.lcNo && (damage.lcNo || '').trim() !== stockFilters.lcNo) return;
+                    if (stockFilters.lcNo && damageLc !== stockFilters.lcNo.toLowerCase()) return;
+                    if (stockSearchQuery) {
+                        const q = stockSearchQuery.toLowerCase();
+                        const matchesQuery = dProdName.includes(q) || dBrand.includes(q) || damageLc.includes(q);
+                        if (!matchesQuery) return;
+                    }
                     if (isWhFilter) {
                         const filterWH = stockFilters.warehouse.toLowerCase();
                         // Skip damage if it has no warehouse or warehouse doesn't match the filter
@@ -431,10 +442,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             if (stockFilters.productName && sProdName.toLowerCase() !== stockFilters.productName.toLowerCase()) return;
 
-            if (stockSearchQuery) {
-                const q = stockSearchQuery.toLowerCase();
-                if (!sProdName.toLowerCase().includes(q)) return;
-            }
+
 
             if (!groupedStock[sProdName]) {
                 groupedStock[sProdName] = {
@@ -460,6 +468,15 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const normQuality = resolvedQ.trim().toLowerCase();
                 const beLc = (sale.lcNo || be.lcNo || si.lcNo || '').trim();
                 const bePrice = parseFloat(be.purchasedPrice) || 0;
+ 
+                if (stockFilters.lcNo && beLc.toLowerCase() !== stockFilters.lcNo.toLowerCase()) return;
+                if (stockSearchQuery) {
+                    const q = stockSearchQuery.toLowerCase();
+                    const matchesQuery = sProdName.toLowerCase().includes(q) ||
+                        normBrand.includes(q) ||
+                        beLc.toLowerCase().includes(q);
+                    if (!matchesQuery) return;
+                }
 
                 const isPriceReport = stockFilters && stockFilters.reportType === 'price';
                 const subKey = isPriceReport
@@ -513,7 +530,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 const stockLc = beLc.toLowerCase();
                                 if (damageLc !== stockLc) return;
                             }
-                            if (stockFilters.lcNo && (damage.lcNo || '').trim() !== stockFilters.lcNo) return;
+                            if (stockFilters.lcNo && (damage.lcNo || '').trim().toLowerCase() !== stockFilters.lcNo.toLowerCase()) return;
+                            if (stockSearchQuery) {
+                                const q = stockSearchQuery.toLowerCase();
+                                const damageLc = (damage.lcNo || '').trim().toLowerCase();
+                                const matchesQuery = dProdName.includes(q) || dBrand.includes(q) || damageLc.includes(q);
+                                if (!matchesQuery) return;
+                            }
                             if (isWhFilter) {
                                 const filterWH = stockFilters.warehouse.toLowerCase();
                                 // Skip damage if it has no warehouse or warehouse doesn't match the filter

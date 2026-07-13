@@ -1247,7 +1247,7 @@ function LCReceive({
             const indexToSelect = (highlightedIndex >= 0 && highlightedIndex < options.length) ? highlightedIndex : 0;
             if (options && options.length > 0) {
                 const selected = options[indexToSelect];
-                const value = typeof selected === 'object' ? (selected.lcNo || selected.name || selected.whName || selected.port || selected.brand || selected.value || selected.bankName || selected.ipNumber || selected) : selected;
+                const value = typeof selected === 'object' ? (selected.invoiceNo || selected.lcNo || selected.name || selected.whName || selected.port || selected.brand || selected.value || selected.bankName || selected.ipNumber || selected) : selected;
                 onSelect(fieldOrValue, value);
                 setHighlightedIndex(-1);
             } else {
@@ -1755,9 +1755,20 @@ function LCReceive({
         const matched = costOfGoods.filter(cog => {
             return String(cog.lcNo || '').trim().toLowerCase() === String(stockFormData.lcNo).trim().toLowerCase();
         });
-        const uniqueInvoices = [...new Set(matched.map(cog => String(cog.invoiceNo || '')).filter(Boolean))];
-        if (!input) return uniqueInvoices;
-        return uniqueInvoices.filter(inv => inv.toLowerCase().includes(String(input).toLowerCase()));
+        const uniqueMap = new Map();
+        matched.forEach(cog => {
+            if (cog.invoiceNo) {
+                const inv = String(cog.invoiceNo).trim();
+                uniqueMap.set(inv, (cog.brand || '').trim());
+            }
+        });
+        const list = Array.from(uniqueMap.entries()).map(([invoiceNo, brand]) => ({ invoiceNo, brand }));
+        if (!input) return list;
+        const q = String(input).toLowerCase();
+        return list.filter(item => 
+            item.invoiceNo.toLowerCase().includes(q) || 
+            item.brand.toLowerCase().includes(q)
+        );
     };
 
     const [showLcFilterPanel, setShowLcFilterPanel] = useState(false);
@@ -3097,13 +3108,13 @@ function LCReceive({
                                                                                                 onMouseDown={(e) => {
                                                                                                     e.preventDefault();
                                                                                                     e.stopPropagation();
-                                                                                                    handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', inv);
+                                                                                                    handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', inv.invoiceNo);
                                                                                                     setActiveDropdown(null);
                                                                                                 }}
                                                                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                                                className={`w-full text-left px-3 py-2 text-sm transition-colors font-medium ${entry.invoiceNo === inv ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                                                className={`w-full text-left px-3 py-2 text-sm transition-colors font-medium ${entry.invoiceNo === inv.invoiceNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                                             >
-                                                                                                {inv}
+                                                                                                {inv.invoiceNo}{inv.brand ? ` (${inv.brand})` : ''}
                                                                                             </button>
                                                                                         ))}
                                                                                         {getFilteredInvoices(entry.invoiceNo || '').length === 0 && (

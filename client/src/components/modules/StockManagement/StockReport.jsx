@@ -22,9 +22,9 @@ const StockReport = ({
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [reportType, setReportType] = useState('short'); // 'short' or 'detailed'
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterSearchInputs, setFilterSearchInputs] = useState({ warehouseSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
-    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, brand: false, product: false, category: false });
-    const initialFilterDropdownState = { warehouse: false, brand: false, product: false, category: false };
+    const [filterSearchInputs, setFilterSearchInputs] = useState({ warehouseSearch: '', brandSearch: '', productSearch: '' });
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, brand: false, product: false });
+    const initialFilterDropdownState = { warehouse: false, brand: false, product: false };
 
     // --- Local Stock Data Recalculation for Price Report ---
     const activeStockData = React.useMemo(() => {
@@ -164,7 +164,6 @@ const StockReport = ({
     const warehouseFilterRef = useRef(null);
     const productFilterRef = useRef(null);
     const brandFilterRef = useRef(null);
-    const categoryFilterRef = useRef(null);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -177,7 +176,6 @@ const StockReport = ({
             if (filterDropdownOpen.warehouse && warehouseFilterRef.current && !warehouseFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, warehouse: false }));
             if (filterDropdownOpen.product && productFilterRef.current && !productFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, product: false }));
             if (filterDropdownOpen.brand && brandFilterRef.current && !brandFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, brand: false }));
-            if (filterDropdownOpen.category && categoryFilterRef.current && !categoryFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, category: false }));
         };
 
         const handleEscape = (e) => {
@@ -683,8 +681,8 @@ const StockReport = ({
                                             <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <button
                                                 onClick={() => {
-                                                    setStockFilters({ startDate: '', endDate: '', warehouse: '', brand: '', productName: '', category: '' });
-                                                    setFilterSearchInputs({ warehouseSearch: '', brandSearch: '', productSearch: '', categorySearch: '' });
+                                                    setStockFilters({ startDate: '', endDate: '', warehouse: 'All Warehouses', brand: '', productName: '', category: '' });
+                                                    setFilterSearchInputs({ warehouseSearch: '', brandSearch: '', productSearch: '' });
                                                     setFilterDropdownOpen(initialFilterDropdownState);
                                                 }}
                                                 className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
@@ -748,43 +746,6 @@ const StockReport = ({
                                             </div>
 
                                             <div className="space-y-4">
-                                                {/* Category Selection */}
-                                                <div className="space-y-1.5 relative" ref={categoryFilterRef}>
-                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Category</label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            value={filterSearchInputs.categorySearch}
-                                                            onChange={(e) => {
-                                                                setFilterSearchInputs({ ...filterSearchInputs, categorySearch: e.target.value });
-                                                                setFilterDropdownOpen({ ...initialFilterDropdownState, category: true });
-                                                            }}
-                                                            onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, category: true })}
-                                                            placeholder={stockFilters.category || "Search Category..."}
-                                                            className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.category ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                        />
-                                                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                            {stockFilters.category && (
-                                                                <button onClick={() => { setStockFilters({ ...stockFilters, category: '' }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                    <XIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                        </div>
-                                                    </div>
-                                                    {filterDropdownOpen.category && (() => {
-                                                        const options = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
-                                                        const filtered = options.filter(c => c.toLowerCase().includes(filterSearchInputs.categorySearch.toLowerCase()));
-                                                        return filtered.length > 0 ? (
-                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                {filtered.map(c => (
-                                                                    <button key={c} type="button" onClick={() => { setStockFilters({ ...stockFilters, category: c }); setFilterSearchInputs({ ...filterSearchInputs, categorySearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{c}</button>
-                                                                ))}
-                                                            </div>
-                                                        ) : null;
-                                                    })()}
-                                                </div>
-
                                                 {/* Product Name Selection */}
                                                 <div className="space-y-1.5 relative" ref={productFilterRef}>
                                                     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product</label>
@@ -888,7 +849,7 @@ const StockReport = ({
                                 </>
                             )}
                         </div>
-                        <button onClick={() => generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
+                        <button onClick={() => generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages, searchQuery)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
                             <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
                         <button onClick={onClose} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" /></button>

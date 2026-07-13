@@ -685,7 +685,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
     }
 };
 
-export const generateStockReportPDF = (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products, damages = []) => {
+export const generateStockReportPDF = (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products, damages = [], searchQuery = '') => {
     try {
         const doc = new jsPDF();
 
@@ -744,6 +744,14 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             doc.setFont('helvetica', 'bold');
             doc.text(filters.warehouse, margin + 25, yPos);
         }
+ 
+        if (searchQuery) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Search Query:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(searchQuery, margin + 25, yPos);
+        }
 
         // Right Side: Printed On
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
@@ -764,7 +772,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
                 return sortedOptions.map(wh => ({
                     name: wh,
-                    data: calculateStockData(stockRecords, { ...filters, warehouse: wh, reportType }, '', warehouseData, salesRecords, products, damages)
+                    data: calculateStockData(stockRecords, { ...filters, warehouse: wh, reportType }, searchQuery, warehouseData, salesRecords, products, damages)
                 })).filter(w => w.data.displayRecords.length > 0);
             })()
             : [{ name: filters.warehouse, data: stockData }];
