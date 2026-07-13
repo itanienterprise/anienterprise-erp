@@ -1371,9 +1371,21 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                         </div>
                         <div className="min-w-0">
                             <h3 className="text-lg font-bold text-gray-900 truncate">{showConsumption ? 'LC Consumption History' : 'LC Record Details'}</h3>
-                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-0.5">
                                 LC NO: <span className="text-sm font-black text-blue-600">{data.lcNo}</span>
                             </p>
+                            {(() => {
+                                const prods = data.productsList && data.productsList.length > 0
+                                    ? data.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                    : data.productName || data.product || '';
+                                return prods ? (
+                                    <div className="mt-1">
+                                        <span className="text-[11px] font-extrabold text-blue-850 bg-blue-50/70 border border-blue-100/50 px-2 py-0.5 rounded-md uppercase tracking-wider inline-block">
+                                            {prods}
+                                        </span>
+                                    </div>
+                                ) : null;
+                            })()}
                         </div>
                     </div>
 
@@ -1449,16 +1461,27 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
                 {/* Mobile Header */}
                 <div className="md:hidden flex flex-col gap-3 px-4 py-4 border-b border-gray-100 bg-gray-50/50">
-                    {/* Top Row: Title, LC Info and Actions */}
-                    <div className="flex items-center justify-between gap-2">
+                    {/* Top Row: Title, LC Info and Acti                    <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
                             <div className="min-w-0">
-                                <h3 className="text-sm font-black text-gray-900 truncate">
+                                <h3 className="text-sm font-black text-gray-900 truncate leading-none">
                                     {showConsumption ? 'LC Consumption History' : 'LC Record Details'}
                                 </h3>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1">
                                     LC NO: <span className="text-xs font-black text-blue-600">{data.lcNo}</span>
                                 </p>
+                                {(() => {
+                                    const prods = data.productsList && data.productsList.length > 0
+                                        ? data.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                        : data.productName || data.product || '';
+                                    return prods ? (
+                                        <div className="mt-1">
+                                            <span className="text-[9px] font-extrabold text-blue-850 bg-blue-50/70 border border-blue-100/50 px-1.5 py-0.5 rounded uppercase tracking-wider inline-block">
+                                                {prods}
+                                            </span>
+                                        </div>
+                                    ) : null;
+                                })()}
                             </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -1942,7 +1965,6 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invoice No</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Truck No</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Supplier</th>
-                                                    <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Product</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Brand</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">QTY</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Invoice Bill (Rs)</th>
@@ -1992,7 +2014,6 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 <td className="px-1 py-1.5 text-sm text-gray-650 whitespace-nowrap">{record.invoiceNo || '—'}</td>
                                                                 <td className="px-1 py-1.5 text-sm text-gray-500 whitespace-nowrap">{record.truckNo || '—'}</td>
                                                                 <td className="px-1 py-1.5 text-sm font-bold text-gray-900 whitespace-nowrap">{record.supplier || '—'}</td>
-                                                                <td className="px-1 py-1.5 text-sm text-gray-900 font-semibold whitespace-nowrap">{record.product || '—'}</td>
                                                                 <td className="px-1 py-1.5 text-sm text-gray-500 font-bold whitespace-nowrap">{record.brand || '—'}</td>
                                                                 <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900 whitespace-nowrap">{qtyVal.toLocaleString('en-IN')}</td>
                                                                 <td className="px-1 py-1.5 text-sm text-right text-gray-600 whitespace-nowrap">{parseFloat(record.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} RS</td>
@@ -2008,7 +2029,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     })
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan="15" className="px-1 py-1.5 text-center text-gray-400 font-bold">
+                                                        <td colSpan="14" className="px-1 py-1.5 text-center text-gray-400 font-bold">
                                                             {consumptionSearchQuery ? 'No CoG records match your search.' : 'No Cost of Goods records found for this LC.'}
                                                         </td>
                                                     </tr>
@@ -2016,7 +2037,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             </tbody>
                                             <tfoot className="bg-gray-50/30">
                                                 <tr>
-                                                    <td colSpan="6" className="px-1 py-1.5 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total:</td>
+                                                    <td colSpan="5" className="px-1 py-1.5 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total:</td>
                                                     <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900">
                                                         {filteredCogRecords.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString('en-IN')}
                                                     </td>
@@ -2203,10 +2224,6 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                             {isExpanded && (
                                                                 <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-1 duration-200">
                                                                     <div className="grid grid-cols-[125px_8px_1fr] gap-y-1.5 pt-2 text-xs items-baseline">
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product & Brand</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-gray-900 uppercase text-[11px]">{record.product || '—'} ({record.brand || '—'})</span>
-
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice Value</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                                         <span className="font-semibold text-gray-700 text-[11px]">{record.amount ? `${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</span>

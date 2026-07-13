@@ -432,13 +432,20 @@ function App() {
 
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
-    if (sidebarOpen) {
+    if (sidebarOpen && windowWidth < 768) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [sidebarOpen]);
+  }, [sidebarOpen, windowWidth]);
+
+  const handleViewChange = (view) => {
+    setCurrentView(view);
+    if (windowWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
 
   // Manage body class when modal is open inside main (handles all modular modals dynamically)
   useEffect(() => {
@@ -1991,7 +1998,7 @@ function App() {
         />
       )}
       {/* Sidebar */}
-      <aside className={`${windowWidth >= 768 ? 'relative' : `fixed inset-y-0 left-0 z-[1100] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} w-56 bg-white text-gray-900 border-r border-gray-200 transform transition-transform duration-300 ease-in-out overflow-x-hidden flex-shrink-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`} style={isTouchOnlyDevice ? { transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' } : {}}>
+      <aside className={`${windowWidth >= 768 ? `relative ${sidebarOpen ? 'w-56' : 'w-0 overflow-hidden'}` : `fixed inset-y-0 left-0 z-[1100] w-56 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} bg-white text-gray-900 border-gray-200 ${windowWidth >= 768 && !sidebarOpen ? 'border-r-0' : 'border-r'} transform transition-all duration-300 ease-in-out flex-shrink-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`} style={isTouchOnlyDevice ? { transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' } : {}}>
         {/* Sidebar top — must match header height (64px) exactly */}
         <div className="flex items-center px-4 border-b border-gray-200 bg-gray-50/50 flex-shrink-0" style={{ height: '64px' }}>
           <button
@@ -2018,7 +2025,7 @@ function App() {
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden hide-scrollbar">
-          <button onClick={() => { setCurrentView('dashboard'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'dashboard' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+          <button onClick={() => { handleViewChange('dashboard'); }} className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'dashboard' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
             <HomeIcon className="w-5 h-5 mr-3" />
             <span className="font-medium text-sm">Dashboard</span>
           </button>
@@ -2038,7 +2045,7 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1">
                   {hasPermission(currentUser, 'employees', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('employee-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('employee-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'employee-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                     >
                       <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2048,14 +2055,14 @@ function App() {
                   {((currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
                     <>
                       <button
-                        onClick={() => { setCurrentView('role-creation'); setSidebarOpen(false); }}
+                        onClick={() => { handleViewChange('role-creation'); }}
                         className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'role-creation' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                       >
                         <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                         <span>Role Creation</span>
                       </button>
                       <button
-                        onClick={() => { setCurrentView('system-access'); setSidebarOpen(false); }}
+                        onClick={() => { handleViewChange('system-access'); }}
                         className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'system-access' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                       >
                         <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2068,7 +2075,7 @@ function App() {
             </div>
           )}
           {hasPermission(currentUser, 'port', 'view') && (
-            <button onClick={() => { setCurrentView('port-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <button onClick={() => { handleViewChange('port-section'); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
               <AnchorIcon className="w-5 h-5 mr-3" />
               <span className="font-medium text-sm">Port</span>
             </button>
@@ -2087,21 +2094,21 @@ function App() {
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${importerDropdownOpen ? 'max-h-60 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
                   <button
-                    onClick={() => { setCurrentView('importer-section'); setSidebarOpen(false); }}
+                    onClick={() => { handleViewChange('importer-section'); }}
                     className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>Importer</span>
                   </button>
                   <button
-                    onClick={() => { setCurrentView('exporter-section'); setSidebarOpen(false); }}
+                    onClick={() => { handleViewChange('exporter-section'); }}
                     className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'exporter-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>Exporter</span>
                   </button>
                   <button
-                    onClick={() => { setCurrentView('supplier-section'); setSidebarOpen(false); }}
+                    onClick={() => { handleViewChange('supplier-section'); }}
                     className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'supplier-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <TruckIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2112,7 +2119,7 @@ function App() {
             </div>
           )}
           {hasPermission(currentUser, 'bank', 'view') && (
-            <button onClick={() => { setCurrentView('bank-section'); setSidebarOpen(false); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+            <button onClick={() => { handleViewChange('bank-section'); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
               <DollarSignIcon className="w-5 h-5 mr-3" />
               <span className="font-medium text-sm">Bank</span>
             </button>
@@ -2134,14 +2141,14 @@ function App() {
                   {hasPermission(currentUser, 'cnf', 'view') && (
                     <>
                       <button
-                        onClick={() => { setCurrentView('indian-cnf-section'); setSidebarOpen(false); }}
+                        onClick={() => { handleViewChange('indian-cnf-section'); }}
                         className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                       >
                         <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                         <span>Indian C&F</span>
                       </button>
                       <button
-                        onClick={() => { setCurrentView('bd-cnf-section'); setSidebarOpen(false); }}
+                        onClick={() => { handleViewChange('bd-cnf-section'); }}
                         className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bd-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                       >
                         <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2151,7 +2158,7 @@ function App() {
                   )}
                   {hasPermission(currentUser, 'cnfPayment', 'view') && (
                   <button
-                    onClick={() => { setCurrentView('cnf-payment-section'); setSidebarOpen(false); }}
+                    onClick={() => { handleViewChange('cnf-payment-section'); }}
                     className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                   >
                     <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2177,7 +2184,7 @@ function App() {
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${ipDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
                   <button
-                    onClick={() => { setCurrentView('ip-section'); setSidebarOpen(false); }}
+                    onClick={() => { handleViewChange('ip-section'); }}
                     className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'ip-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2203,7 +2210,7 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1">
                   {hasPermission(currentUser, 'pi', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('pi-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('pi-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2212,7 +2219,7 @@ function App() {
                   )}
                   {hasPermission(currentUser, 'packingList', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('packing-list-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('packing-list-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'packing-list-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2221,7 +2228,7 @@ function App() {
                   )}
                   {hasPermission(currentUser, 'trSetup', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('tr-setup-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('tr-setup-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <SettingsIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2248,7 +2255,7 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1">
                   {hasPermission(currentUser, 'insurance', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('insurance-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('insurance-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2257,7 +2264,7 @@ function App() {
                   )}
                   {hasPermission(currentUser, 'insurancePayment', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('insurance-payment-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('insurance-payment-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2287,7 +2294,7 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
                   {hasPermission(currentUser, 'lcManagement', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('lc-management-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('lc-management-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-management-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <LCManagerIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2296,7 +2303,7 @@ function App() {
                   )}
                   {hasPermission(currentUser, 'lcGp', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('lc-gp-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('lc-gp-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-gp-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2305,7 +2312,7 @@ function App() {
                   )}
                   {hasPermission(currentUser, 'lcExpense', 'view') && (
                   <button
-                    onClick={() => { setCurrentView('lc-expense-section'); setSidebarOpen(false); }}
+                    onClick={() => { handleViewChange('lc-expense-section'); }}
                     className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-expense-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2314,7 +2321,7 @@ function App() {
                   )}
                   {hasPermission(currentUser, 'lcReceive', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('lc-entry-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('lc-entry-section'); }}
                       className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-entry-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <div className="flex items-center">
@@ -2348,7 +2355,7 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1">
                   {hasPermission(currentUser, 'product', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('products-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('products-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'products-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <VegetableIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2357,7 +2364,7 @@ function App() {
                   )}
                   {hasPermission(currentUser, 'stock', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('stock-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('stock-section'); }}
                       className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <div className="flex items-center">
@@ -2370,14 +2377,14 @@ function App() {
                   {hasPermission(currentUser, 'warehouse', 'view') && (
                     <>
                       <button
-                        onClick={() => { setCurrentView('warehouse-section'); setSidebarOpen(false); }}
+                        onClick={() => { handleViewChange('warehouse-section'); }}
                         className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                       >
                         <HomeIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                         <span>Warehouse</span>
                       </button>
                       <button
-                        onClick={() => { setCurrentView('damage-section'); setSidebarOpen(false); }}
+                        onClick={() => { handleViewChange('damage-section'); }}
                         className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'damage-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                       >
                         <TrashIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2406,7 +2413,7 @@ function App() {
                 <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
                   {hasPermission(currentUser, 'customer', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('customer-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('customer-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2415,7 +2422,7 @@ function App() {
                   )}
                   {hasPermission(currentUser, 'paymentCollection', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('payment-collection-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('payment-collection-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2444,7 +2451,7 @@ function App() {
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
                   <button
-                    onClick={() => { setCurrentView('general-sale-section'); setSidebarOpen(false); }}
+                    onClick={() => { handleViewChange('general-sale-section'); }}
                     className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <div className="flex items-center">
@@ -2454,7 +2461,7 @@ function App() {
                     {pendingModules.generalSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                   </button>
                   <button
-                    onClick={() => { setCurrentView('border-sale-section'); setSidebarOpen(false); }}
+                    onClick={() => { handleViewChange('border-sale-section'); }}
                     className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                   >
                     <div className="flex items-center">
@@ -2465,7 +2472,7 @@ function App() {
                   </button>
                   {hasPermission(currentUser, 'returnProduct', 'view') && (
                     <button
-                      onClick={() => { setCurrentView('return-product-section'); setSidebarOpen(false); }}
+                      onClick={() => { handleViewChange('return-product-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'return-product-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
                       <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
@@ -2478,7 +2485,7 @@ function App() {
           )}
           {hasPermission(currentUser, 'profitLoss', 'view') && (
             <button
-              onClick={() => { setCurrentView('profit-loss-section'); setSidebarOpen(false); }}
+              onClick={() => { handleViewChange('profit-loss-section'); }}
               className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'profit-loss-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <BarChartIcon className="w-5 h-5 mr-3" />
@@ -2488,7 +2495,7 @@ function App() {
 
           {hasPermission(currentUser, 'costOfGoods', 'view') && (
             <button
-              onClick={() => { setCurrentView('cost-of-goods-section'); setSidebarOpen(false); }}
+              onClick={() => { handleViewChange('cost-of-goods-section'); }}
               className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'cost-of-goods-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <TrendingUpIcon className="w-5 h-5 mr-3" />
@@ -2499,7 +2506,7 @@ function App() {
           {/* Backup & Restore — Admin Only */}
           {hasPermission(currentUser, 'backupRestore', 'view') && (
             <button
-              onClick={() => { setCurrentView('backup-restore-section'); setSidebarOpen(false); }}
+              onClick={() => { handleViewChange('backup-restore-section'); }}
               className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'backup-restore-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
               <DatabaseIcon className="w-5 h-5 mr-3" />
@@ -2516,18 +2523,16 @@ function App() {
         <header className="flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm print:hidden" style={{ height: '64px', flexShrink: 0 }}>
           {/* Left side */}
           <div className="flex items-center gap-3">
-            {/* Hamburger — mobile only */}
-            {windowWidth < 768 && (
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
-              >
-                <MenuIcon className="w-6 h-6" />
-              </button>
-            )}
-            {/* App title — desktop only (mobile title is centered below) */}
+            {/* Hamburger */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-md text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <MenuIcon className="w-6 h-6" />
+            </button>
+            {/* App title — desktop only */}
             {windowWidth >= 768 && (
-              <h1 className="text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
+              <h1 className="text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight ml-1">
                 ANI Enterprise ERP
               </h1>
             )}
@@ -2540,8 +2545,20 @@ function App() {
             </h1>
           )}
 
-          {/* Right side — bell icon */}
+          {/* Right side — profile and bell icon */}
           <div className="flex items-center gap-3 relative z-10">
+            {!sidebarOpen && (
+              <button
+                onClick={() => setShowProfile(true)}
+                className="relative group focus:outline-none flex-shrink-0 mr-1 animate-in fade-in duration-200"
+              >
+                <img
+                  src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
+                  alt="Profile"
+                  className="w-8 h-8 rounded-full border border-gray-200 shadow-sm transition-all group-hover:scale-105 group-hover:border-blue-400"
+                />
+              </button>
+            )}
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
