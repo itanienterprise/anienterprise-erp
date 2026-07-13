@@ -26,23 +26,29 @@ export default function ProfitLoss({ salesRecords, products }) {
   const [stockRecords, setStockRecords] = useState([]);
   const [damages, setDamages] = useState([]);
 
+  // Cost of Goods states
+  const [costOfGoodsRecords, setCostOfGoodsRecords] = useState([]);
+  const [useActualCog, setUseActualCog] = useState(true);
+
   useEffect(() => {
     const fetchLCData = async () => {
       try {
-        const [lcRes, expRes, insRes, stockRes, damageRes] = await Promise.all([
+        const [lcRes, expRes, insRes, stockRes, damageRes, cogRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/lc-management`),
           axios.get(`${API_BASE_URL}/api/lc-expenses`),
           axios.get(`${API_BASE_URL}/api/insurance-payments`),
           axios.get(`${API_BASE_URL}/api/stock`),
-          axios.get(`${API_BASE_URL}/api/damages`)
+          axios.get(`${API_BASE_URL}/api/damages`),
+          axios.get(`${API_BASE_URL}/api/cost-of-goods`)
         ]);
         setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
         setLcExpenses(Array.isArray(expRes.data) ? expRes.data : []);
         setInsurancePayments(Array.isArray(insRes.data) ? insRes.data : []);
         setStockRecords(Array.isArray(stockRes.data) ? stockRes.data : []);
         setDamages(Array.isArray(damageRes.data) ? damageRes.data : []);
+        setCostOfGoodsRecords(Array.isArray(cogRes.data) ? cogRes.data : []);
       } catch (error) {
-        console.error('Error fetching LC, expenses, stock, and damage data:', error);
+        console.error('Error fetching LC, expenses, stock, damage, and cost of goods data:', error);
       }
     };
     fetchLCData();
@@ -99,6 +105,25 @@ export default function ProfitLoss({ salesRecords, products }) {
     return parseFloat(product.purchasedPrice) || 0;
   };
 
+  // Selected LC Details
+  const selectedLc = useMemo(() => {
+    if (!selectedLcNo || selectedLcNo === 'All') return null;
+    return lcRecords.find(lc => (lc.lcNo || '').trim().toLowerCase() === selectedLcNo.trim().toLowerCase());
+  }, [selectedLcNo, lcRecords]);
+
+  // Filtered Cost of Goods records for selected LC
+  const selectedLcCostOfGoods = useMemo(() => {
+    if (!selectedLc) return [];
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '').toLowerCase();
+    const lcNoClean = cleanLc(selectedLc.lcNo);
+    return costOfGoodsRecords.filter(rec => cleanLc(rec.lcNo) === lcNoClean);
+  }, [selectedLc, costOfGoodsRecords]);
+
+  // Sum of netBill for these Cost of Goods records
+  const totalLcCostOfGoodsAmount = useMemo(() => {
+    return selectedLcCostOfGoods.reduce((sum, rec) => sum + (parseFloat(rec.netBill) || 0), 0);
+  }, [selectedLcCostOfGoods]);
+
   // Helper to check if a sale date matches the selected range
   const isDateInRange = (saleDateStr) => {
     if (!saleDateStr) return false;
@@ -132,9 +157,11 @@ export default function ProfitLoss({ salesRecords, products }) {
     let totalRevenue = 0;
     let totalCost = 0;
 
+    const hasLcFilter = selectedLcNo && selectedLcNo !== 'All';
+
     salesRecords.forEach(sale => {
-      // Filter by date
-      if (!isDateInRange(sale.date)) return;
+      // Filter by date (bypass if a specific LC is selected)
+      if (!hasLcFilter && !isDateInRange(sale.date)) return;
 
       // Filter by Sale Type
       if (saleTypeFilter !== 'All' && sale.saleType !== saleTypeFilter) return;
@@ -181,18 +208,19 @@ export default function ProfitLoss({ salesRecords, products }) {
       });
     });
 
-    const totalProfit = totalRevenue - totalCost;
+    const finalCost = (useActualCog && selectedLc) ? totalLcCostOfGoodsAmount : totalCost;
+    const totalProfit = totalRevenue - finalCost;
     const margin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
     return {
       summary: {
         totalRevenue,
-        totalCost,
+        totalCost: finalCost,
         totalProfit,
         margin
       }
     };
-  }, [salesRecords, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo]);
+  }, [salesRecords, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo, useActualCog, selectedLc, totalLcCostOfGoodsAmount]);
 
   // Unique product names for filter dropdown
   const uniqueProducts = useMemo(() => {
@@ -217,12 +245,6 @@ export default function ProfitLoss({ salesRecords, products }) {
     });
     return Array.from(nos).sort();
   }, [lcRecords]);
-
-  // Selected LC Details
-  const selectedLc = useMemo(() => {
-    if (!selectedLcNo || selectedLcNo === 'All') return null;
-    return lcRecords.find(lc => (lc.lcNo || '').trim().toLowerCase() === selectedLcNo.trim().toLowerCase());
-  }, [selectedLcNo, lcRecords]);
 
   // Expenses for the selected LC (matching LCManagement's logic)
   const selectedLcExpenses = useMemo(() => {
@@ -881,65 +903,133 @@ export default function ProfitLoss({ salesRecords, products }) {
         )}
       </div>
 
-      {/* Row container for LC Expense (Left) and Product Stock & Arrivals (Right) */}
+      {/* Row: COG (left 50%) | LC Expense + Product Stock stacked (right 50%) */}
       <div className="flex flex-col lg:flex-row gap-4 mt-6">
-        
-        {/* LC Expense Card (Left) */}
+
+        {/* LEFT: Cost of Goods (COG) Card — 50% */}
         <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col">
           {selectedLc ? (
-            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex-1 flex flex-col justify-between">
-              <div>
-                <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
-                  <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">LC Expense</h2>
-                  <p className="text-xs text-gray-500 font-medium">All registered payments, virtual margins and premium details for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col flex-1">
+                <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Cost of Goods (COG)</h2>
+                    <p className="text-xs text-gray-500 font-medium">Actual costing records and net bills for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Use actual COG in P&L</span>
+                    <input
+                      type="checkbox"
+                      checked={useActualCog}
+                      onChange={(e) => setUseActualCog(e.target.checked)}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500/20 border-gray-300"
+                    />
+                  </label>
                 </div>
                 <div className="overflow-x-auto min-h-[220px]">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
                         <th className="py-2.5 px-6">Date</th>
-                        <th className="py-2.5 px-4">Expense Head</th>
-                        <th className="py-2.5 px-4">Paid To / Bank</th>
-                        <th className="py-2.5 px-6 text-right font-black">Amount</th>
+                        <th className="py-2.5 px-4">Invoice / Truck</th>
+                        <th className="py-2.5 px-4">Product & Brand</th>
+                        <th className="py-2.5 px-4 text-right">Quantity</th>
+                        <th className="py-2.5 px-6 text-right font-black">Net Bill</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
-                      {selectedLcExpenses.length === 0 ? (
+                      {selectedLcCostOfGoods.length === 0 ? (
                         <tr>
-                          <td colSpan="4" className="py-8 text-center text-gray-400 font-semibold">No expenses found for this LC.</td>
+                          <td colSpan="5" className="py-8 text-center text-gray-400 font-semibold">No Cost of Goods records found for this LC.</td>
                         </tr>
                       ) : (
-                        selectedLcExpenses.map((exp, idx) => (
-                          <tr key={exp._id || idx} className="hover:bg-slate-50/30 transition-colors">
-                            <td className="py-2.5 px-6 whitespace-nowrap text-gray-500">{formatDate(exp.date)}</td>
-                            <td className="py-2.5 px-4 font-bold text-gray-950">{exp.expenseHead || '-'}</td>
-                            <td className="py-2.5 px-4 text-gray-600 truncate max-w-[120px]">{exp.cnfAgent || exp.bankName || exp.name || '-'}</td>
-                            <td className="py-2.5 px-6 text-right font-black text-rose-600">৳ {Math.round(exp.amount).toLocaleString('en-IN')}</td>
+                        selectedLcCostOfGoods.map((rec, idx) => (
+                          <tr key={rec._id || idx} className="hover:bg-slate-50/30 transition-colors">
+                            <td className="py-2.5 px-6 whitespace-nowrap text-gray-500">{formatDate(rec.date)}</td>
+                            <td className="py-2.5 px-4">
+                              <div className="font-bold text-gray-900">{rec.invoiceNo || '-'}</div>
+                              <div className="text-[10px] text-gray-400 font-semibold">{rec.truckNo || '-'}</div>
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <div className="font-bold text-gray-800">{rec.product || '-'}</div>
+                              <div className="text-[10px] text-gray-400 font-semibold">{rec.brand || '-'}</div>
+                            </td>
+                            <td className="py-2.5 px-4 text-right font-semibold text-gray-900">{parseFloat(rec.quantity || 0).toLocaleString()} KG</td>
+                            <td className="py-2.5 px-6 text-right font-black text-blue-600">৳ {Math.round(rec.netBill || 0).toLocaleString('en-IN')}</td>
                           </tr>
                         ))
                       )}
                     </tbody>
                   </table>
                 </div>
+              <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-xs font-black text-gray-500 uppercase tracking-wider">Total COG</span>
+                <span className="text-sm font-black text-blue-600">৳ {Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}</span>
               </div>
+            </div>
+          ) : (
+            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[200px] flex-1 flex flex-col justify-center">
+              <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
+                <ReceiptIcon className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900 mb-1">Cost of Goods (COG)</h3>
+              <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to inspect all related Cost of Goods records, invoicing details, and actual costs.</p>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT: LC Expense (25%) + Product Stock & Arrivals (25%) — side by side */}
+        <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col sm:flex-row gap-4">
+
+          {/* LC Expense Card */}
+          {selectedLc ? (
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col flex-1">
+                <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
+                  <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">LC Expense</h2>
+                  <p className="text-xs text-gray-500 font-medium">Payments for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
+                </div>
+                <div className="overflow-x-auto min-h-[160px]">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                        <th className="py-2.5 px-4">Expense Head</th>
+                        <th className="py-2.5 px-4 text-right font-black">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
+                      {selectedLcExpenses.length === 0 ? (
+                        <tr>
+                          <td colSpan="2" className="py-8 text-center text-gray-400 font-semibold">No expenses found for this LC.</td>
+                        </tr>
+                      ) : (
+                        selectedLcExpenses.map((exp, idx) => (
+                          <tr key={exp._id || idx} className="hover:bg-slate-50/30 transition-colors">
+                            <td className="py-2.5 px-4">
+                              <div className="font-bold text-gray-950 break-words">{exp.expenseHead || '-'}</div>
+                              <div className="text-[10px] text-gray-400 font-medium break-words">{exp.cnfAgent || exp.bankName || exp.name || formatDate(exp.date)}</div>
+                            </td>
+                            <td className="py-2.5 px-4 text-right font-black text-rose-600 whitespace-nowrap">৳ {Math.round(exp.amount).toLocaleString('en-IN')}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
                 <span className="text-xs font-black text-gray-500 uppercase tracking-wider">Total Expenses</span>
                 <span className="text-sm font-black text-rose-600">৳ {Math.round(totalLcExpensesAmount).toLocaleString('en-IN')}</span>
               </div>
             </div>
           ) : (
-            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[220px] flex-1 flex flex-col justify-center">
+            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] flex-1 flex flex-col justify-center">
               <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 mx-auto mb-4 animate-pulse">
                 <ReceiptIcon className="w-8 h-8" />
               </div>
               <h3 className="text-lg font-black text-gray-900 mb-1">LC Expense</h3>
-              <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to inspect all related payments, insurance premiums, and virtual margins.</p>
+              <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC to view payments.</p>
             </div>
           )}
-        </div>
 
-        {/* Product Stock & Arrivals Card (Right) */}
-        <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col">
+          {/* Product Stock & Arrivals Card */}
           {selectedLc ? (
             <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex-1 flex flex-col">
               <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
@@ -956,48 +1046,42 @@ export default function ProfitLoss({ salesRecords, products }) {
                         <div className="w-2.5 h-6 bg-blue-600 rounded-full" />
                         <h3 className="text-base font-black text-gray-950">{prod.productName}</h3>
                       </div>
-                      
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {/* Purchase Arrival */}
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/10 transition-all">
                           <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Purchase (Total Arrival)</div>
                           <div className="text-sm font-black text-gray-900">{Math.round(prod.purchaseQty).toLocaleString()} {prod.unit}</div>
-                          <div className="text-xs font-bold text-blue-600 mt-1">৳ {Math.round(prod.purchasePrice).toLocaleString('en-IN')}</div>
+                          <div className="text-sm font-bold text-blue-600 mt-1">৳ {Math.round(prod.purchasePrice).toLocaleString('en-IN')}</div>
                         </div>
-
                         {/* Inhouse Quantity */}
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-emerald-100 hover:bg-emerald-50/10 transition-all">
                           <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Inhouse Quantity</div>
                           <div className="text-sm font-black text-gray-900">{Math.round(prod.inhouseQty).toLocaleString()} {prod.unit}</div>
-                          <div className="text-xs font-bold text-emerald-600 mt-1">৳ {Math.round(prod.inhousePrice).toLocaleString('en-IN')}</div>
+                          <div className="text-sm font-bold text-emerald-600 mt-1">৳ {Math.round(prod.inhousePrice).toLocaleString('en-IN')}</div>
                         </div>
-
                         {/* Short Quantity */}
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-amber-100 hover:bg-amber-50/10 transition-all">
                           <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Short Quantity</div>
                           <div className="text-sm font-black text-rose-600">{Math.round(prod.shortQty).toLocaleString()} {prod.unit}</div>
-                          <div className="text-xs font-bold text-amber-600 mt-1">৳ {Math.round(prod.shortPrice).toLocaleString('en-IN')}</div>
+                          <div className="text-sm font-bold text-amber-600 mt-1">৳ {Math.round(prod.shortPrice).toLocaleString('en-IN')}</div>
                         </div>
-
                         {/* Damage Quantity */}
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-rose-100 hover:bg-rose-50/10 transition-all">
                           <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Damage Quantity</div>
                           <div className="text-sm font-black text-rose-700">{Math.round(prod.damageQty).toLocaleString()} {prod.unit}</div>
-                          <div className="text-xs font-bold text-rose-500 mt-1">৳ {Math.round(prod.damagePrice).toLocaleString('en-IN')}</div>
+                          <div className="text-sm font-bold text-rose-500 mt-1">৳ {Math.round(prod.damagePrice).toLocaleString('en-IN')}</div>
                         </div>
-
                         {/* Sold Quantity */}
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-violet-100 hover:bg-violet-50/10 transition-all">
                           <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Sold Quantity</div>
                           <div className="text-sm font-black text-gray-900">{Math.round(prod.saleQty || 0).toLocaleString()} {prod.unit}</div>
-                          <div className="text-xs font-bold text-violet-600 mt-1">৳ {Math.round(prod.salePrice || 0).toLocaleString('en-IN')}</div>
+                          <div className="text-sm font-bold text-violet-600 mt-1">৳ {Math.round(prod.salePrice || 0).toLocaleString('en-IN')}</div>
                         </div>
-
                         {/* Current Stock */}
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:bg-indigo-50/10 transition-all">
                           <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Current Stock</div>
                           <div className="text-sm font-black text-gray-900">{Math.round(prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0)).toLocaleString()} {prod.unit}</div>
-                          <div className="text-xs font-bold text-indigo-600 mt-1">
+                          <div className="text-sm font-bold text-indigo-600 mt-1">
                             ৳ {(() => {
                               const currentStockQty = prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0);
                               const avgPurchasePrice = prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : 0;
@@ -1021,7 +1105,6 @@ export default function ProfitLoss({ salesRecords, products }) {
             </div>
           )}
         </div>
-
       </div>
 
       </div>
