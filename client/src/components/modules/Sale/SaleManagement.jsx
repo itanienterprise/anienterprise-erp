@@ -4462,7 +4462,7 @@ const SaleManagement = ({
                                     const items = sale.items && sale.items.length > 0
                                         ? sale.items.flatMap(item =>
                                             (item.brandEntries || []).length > 0
-                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: item.lcNo, uom: be.uom || item.uom || 'QTY' }))
+                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: be.lcNo || item.lcNo || sale.lcNo || '', uom: be.uom || item.uom || 'QTY' }))
                                                 : [{ ...item, productName: item.productName, uom: item.uom || 'QTY' }]
                                         )
                                         : [{
@@ -4593,7 +4593,7 @@ const SaleManagement = ({
                                                     <div className="flex flex-col gap-2">
                                                         {items.map((it, idx) => (
                                                             <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                {it.lcNo ? it.lcNo.slice(-4) : (sale.lcNo ? sale.lcNo.slice(-4) : '-')}
+                                                                {it.lcNo ? it.lcNo.slice(-5) : (sale.lcNo ? sale.lcNo.slice(-5) : '-')}
                                                             </div>
                                                         ))}
                                                     </div>
