@@ -10,11 +10,12 @@ function decryptRecord(r) {
 
 mongoose.connect('mongodb://127.0.0.1:27017/erp_db').then(async () => {
     const rawProducts = await Product.find({});
-    console.log(`Total Product records: ${rawProducts.length}`);
     
     rawProducts.forEach((p, idx) => {
         const d = decryptRecord(p);
-        console.log(`${idx + 1}. ID: ${d._id} | Name: "${d.name}" | HSCode: "${d.hsCode}" | Brand: "${d.brand}" | Brands: ${JSON.stringify(d.brands)}`);
+        if (d.name && d.name.toUpperCase().includes('MOSUR')) {
+            console.log(`Matched Product: ID: ${d._id} | Name: "${d.name}" | HSCode: "${d.hsCode}" | Brand: "${d.brand}" | Brands: ${JSON.stringify(d.brands)}`);
+        }
     });
     
     process.exit(0);

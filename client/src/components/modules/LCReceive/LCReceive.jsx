@@ -898,6 +898,7 @@ function LCReceive({
                 if (!value) {
                     entry.brand = '';
                     entry.purchasedPrice = '';
+                    entry.invoiceQty = '';
                 } else {
                     const matchedCog = costOfGoods.find(cog => {
                         const lcMatch = !prev.lcNo || String(cog.lcNo || '').trim().toLowerCase() === String(prev.lcNo).trim().toLowerCase();
@@ -931,9 +932,11 @@ function LCReceive({
 
                         const finalPrice = matchedCog.costingKg || costingKgVal || 0;
                         entry.purchasedPrice = Number(finalPrice).toFixed(2);
+                        entry.invoiceQty = qtyVal;
                     } else {
                         entry.brand = '';
                         entry.purchasedPrice = '';
+                        entry.invoiceQty = '';
                     }
                 }
             }
@@ -1007,7 +1010,7 @@ function LCReceive({
             const product = { ...updatedProducts[pIndex] };
             product.brandEntries = [
                 ...product.brandEntries,
-                { invoiceNo: '', brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '' }
+                { invoiceNo: '', brand: '', purchasedPrice: '', packet: '', packetSize: '', quantity: '', unit: 'kg', sweepedPacket: '', sweepedQuantity: '', inHousePacket: '', inHouseQuantity: '', invoiceQty: '' }
             ];
             updatedProducts[pIndex] = product;
             const summaries = calculateSummaries(updatedProducts, prev);
@@ -3059,14 +3062,13 @@ function LCReceive({
                                                 {product.isMultiBrand && (
                                                     <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300 bg-gray-50/50 p-2 md:p-4 rounded-xl border border-gray-100 mx-[-4px] md:mx-0">
                                                         <div className="hidden md:flex items-center gap-2 mb-1 px-3">
-                                                            <div className="flex-1 grid grid-cols-7 gap-2">
+                                                            <div className="flex-1 grid grid-cols-6 gap-2">
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">INVOICE NO</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BRAND</div>
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">INVOICE QTY</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PRICE</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BAG</div>
                                                                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SIZE</div>
-                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">QTY</div>
-                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UNIT</div>
                                                             </div>
                                                             <div className="w-10"></div>
                                                         </div>
@@ -3074,7 +3076,7 @@ function LCReceive({
                                                             {product.brandEntries.map((entry, bIndex) => (
                                                                 <div key={bIndex} className="p-2 md:p-3 bg-white/40 border border-gray-200/50 rounded-lg space-y-4 group/brand">
                                                                     <div className="flex items-center gap-2">
-                                                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-7 lg:grid-cols-7 gap-2">
+                                                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-6 lg:grid-cols-6 gap-2">
                                                                             <div className="relative w-full col-span-1">
                                                                                 <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Invoice No</label>
                                                                                 <div className="relative flex-1">
@@ -3216,6 +3218,13 @@ function LCReceive({
                                                                                 )}
                                                                             </div>
                                                                             <div className="space-y-1 md:space-y-0 col-span-1">
+                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Invoice Qty</label>
+                                                                                <input
+                                                                                    type="text" value={entry.invoiceQty !== undefined ? entry.invoiceQty : ''} readOnly placeholder="Invoice Qty"
+                                                                                    className="w-full h-9 px-2 text-sm bg-gray-50/80 border border-gray-200 rounded-lg text-gray-600 font-medium outline-none cursor-default"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="space-y-1 md:space-y-0 col-span-1">
                                                                                 <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Price</label>
                                                                                 <input
                                                                                     type="number" value={entry.purchasedPrice} placeholder="Price" onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'purchasedPrice', e.target.value)}
@@ -3236,25 +3245,7 @@ function LCReceive({
                                                                                     className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                                 />
                                                                             </div>
-                                                                            <div className="space-y-1 md:space-y-0 col-span-1">
-                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Qty</label>
-                                                                                <input
-                                                                                    type="number"
-                                                                                    value={entry.quantity && parseFloat(entry.quantity) !== 0 ? entry.quantity : ''}
-                                                                                    onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'quantity', e.target.value)}
-                                                                                    placeholder="Qty"
-                                                                                    className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                                />
-                                                                            </div>
-                                                                            <div className="space-y-1 md:space-y-0 col-span-1">
-                                                                                <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1">Unit</label>
-                                                                                <select
-                                                                                    value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}
-                                                                                    className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                                                                >
-                                                                                    <option>kg</option><option>pcs</option><option>boxes</option><option>liters</option>
-                                                                                </select>
-                                                                            </div>
+
                                                                         </div>
                                                                         <div className="hidden md:flex items-center md:flex-col gap-1">
                                                                             <button
@@ -3274,8 +3265,18 @@ function LCReceive({
                                                                         </div>
                                                                     </div>
 
-                                                                    {/* Combined line for Sweeped and InHouse fields */}
-                                                                    <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-3">
+                                                                    {/* Combined line for Qty, Sweeped, InHouse and Unit fields */}
+                                                                    <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-6 md:gap-3">
+                                                                        <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
+                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">QTY</label>
+                                                                            <input
+                                                                                type="number"
+                                                                                value={entry.quantity && parseFloat(entry.quantity) !== 0 ? entry.quantity : ''}
+                                                                                onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'quantity', e.target.value)}
+                                                                                placeholder="Qty"
+                                                                                className="w-full h-9 md:h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                            />
+                                                                        </div>
                                                                         <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
                                                                             <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">SWP. BAG</label>
                                                                             <input
@@ -3305,6 +3306,15 @@ function LCReceive({
                                                                                 type="text" value={entry.inHouseQuantity} readOnly placeholder="Qty"
                                                                                 className="w-full h-9 md:h-8 px-2 text-xs bg-gray-50/80 border border-gray-200 rounded-md text-gray-600 font-medium outline-none cursor-default"
                                                                             />
+                                                                        </div>
+                                                                        <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
+                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase md:min-w-[60px]">UNIT</label>
+                                                                            <select
+                                                                                value={entry.unit} onChange={(e) => handleBrandEntryChange(pIndex, bIndex, 'unit', e.target.value)}
+                                                                                className="w-full h-9 md:h-8 px-2 text-xs bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                                            >
+                                                                                <option>kg</option><option>pcs</option><option>boxes</option><option>liters</option>
+                                                                            </select>
                                                                         </div>
                                                                     </div>
                                                                 </div>

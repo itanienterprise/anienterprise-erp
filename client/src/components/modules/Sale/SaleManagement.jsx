@@ -574,9 +574,9 @@ const SaleManagement = ({
         items: [{
             productId: '',
             productName: '',
-            lcNo: '',
             uom: saleType === 'General' ? 'QTY' : 'Truck',
             brandEntries: [{
+                lcNo: '',
                 brand: '',
                 brandName: '',
                 inhouseQty: '',
@@ -803,10 +803,12 @@ const SaleManagement = ({
                             const targetName = (item.productName || '').toLowerCase().trim();
                             const recBrand = (record.brand || '').toLowerCase().trim();
                             const targetBrand = (entry.brand || '').toLowerCase().trim();
+                            const recLc = (record.lcNo || '').toLowerCase().trim();
+                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
                             if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
 
-                            if (recName === targetName && recBrand === targetBrand) {
+                            if (recName === targetName && recBrand === targetBrand && (!targetLc || recLc === targetLc)) {
                                 totalInhouseQty += parseFloat(record.inHouseQuantity) || 0;
                             }
                         });
@@ -817,8 +819,10 @@ const SaleManagement = ({
                             const targetProd = (item.productName || '').toLowerCase().trim();
                             const wBrand = (w.brand || '').toLowerCase().trim();
                             const targetBrand = (entry.brand || '').toLowerCase().trim();
+                            const wLc = (w.lcNo || '').toLowerCase().trim();
+                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
-                            if (wProd === targetProd && wBrand === targetBrand) {
+                            if (wProd === targetProd && wBrand === targetBrand && (!targetLc || wLc === targetLc)) {
                                 totalInhouseQty += parseFloat(w.whQty) || 0;
                             }
                         });
@@ -836,9 +840,11 @@ const SaleManagement = ({
                                             const sBrandName = (be.brand || '').toLowerCase().trim();
                                             const tBrandName = (entry.brand || '').toLowerCase().trim();
                                             const tProdNameMatched = (item.productName || '').toLowerCase().trim();
+                                            const sLc = (be.lcNo || si.lcNo || s.lcNo || '').toLowerCase().trim();
+                                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
                                             // Regular brand match OR (Sale brand is empty/hyphen AND stock brand matches product name)
-                                            if (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdNameMatched)) {
+                                            if ((sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdNameMatched)) && (!targetLc || sLc === targetLc)) {
                                                 totalInhouseQty -= parseFloat(be.quantity) || 0;
                                             }
                                         });
@@ -853,7 +859,9 @@ const SaleManagement = ({
                             if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
                             const recName = (record.productName || record.product || '').toLowerCase().trim();
                             const targetName = (item.productName || '').toLowerCase().trim();
-                            if (recName === targetName) {
+                            const recLc = (record.lcNo || '').toLowerCase().trim();
+                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
+                            if (recName === targetName && (!targetLc || recLc === targetLc)) {
                                 totalInhouseQty += parseFloat(record.inHouseQuantity) || 0;
                             }
                         });
@@ -861,7 +869,9 @@ const SaleManagement = ({
                         warehouses.forEach(w => {
                             const wProd = (w.productName || w.product || '').toLowerCase().trim();
                             const targetProd = (item.productName || '').toLowerCase().trim();
-                            if (wProd === targetProd) {
+                            const wLc = (w.lcNo || '').toLowerCase().trim();
+                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
+                            if (wProd === targetProd && (!targetLc || wLc === targetLc)) {
                                 totalInhouseQty += parseFloat(w.whQty) || 0;
                             }
                         });
@@ -876,7 +886,11 @@ const SaleManagement = ({
                                     const tProdName = (item.productName || '').toLowerCase().trim();
                                     if (sProdName === tProdName && si.brandEntries) {
                                         si.brandEntries.forEach(be => {
-                                            totalInhouseQty -= parseFloat(be.quantity) || 0;
+                                            const sLc = (be.lcNo || si.lcNo || s.lcNo || '').toLowerCase().trim();
+                                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
+                                            if (!targetLc || sLc === targetLc) {
+                                                totalInhouseQty -= parseFloat(be.quantity) || 0;
+                                            }
                                         });
                                     }
                                 });
@@ -892,7 +906,7 @@ const SaleManagement = ({
 
                     // 2. Calculate Warehouse Stock for the selected product + brand + warehouse
                     // The user requested: "warehouse stock will show the selected product's selected warehouse quantity"
-                    if (entry.warehouseName && entry.brand) {
+                    if (entry.warehouseName) {
                         let totalWhQty = 0;
                         warehouses.forEach(w => {
                             const wName = (w.whName || w.warehouse || '').toLowerCase().trim();
@@ -901,8 +915,11 @@ const SaleManagement = ({
                             const targetProd = (item.productName || '').toLowerCase().trim();
                             const wBrand = (w.brand || '').toLowerCase().trim();
                             const targetBrand = (entry.brand || '').toLowerCase().trim();
+                            const wLc = (w.lcNo || '').toLowerCase().trim();
+                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
-                            if (wName === targetWh && wProd === targetProd && wBrand === targetBrand) {
+                            const brandMatches = !targetBrand || wBrand === targetBrand;
+                            if (wName === targetWh && wProd === targetProd && brandMatches && (!targetLc || wLc === targetLc)) {
                                 totalWhQty += parseFloat(w.whQty) || 0;
                             }
                         });
@@ -915,10 +932,13 @@ const SaleManagement = ({
                             const targetProd = (item.productName || '').toLowerCase().trim();
                             const rBrand = (record.brand || '').toLowerCase().trim();
                             const targetBrand = (entry.brand || '').toLowerCase().trim();
+                            const rLc = (record.lcNo || '').toLowerCase().trim();
+                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
                             if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
 
-                            if (rName === targetWh && rProd === targetProd && rBrand === targetBrand) {
+                            const brandMatches = !targetBrand || rBrand === targetBrand;
+                            if (rName === targetWh && rProd === targetProd && brandMatches && (!targetLc || rLc === targetLc)) {
                                 totalWhQty += parseFloat(record.inHouseQuantity) || 0;
                             }
                         });
@@ -938,9 +958,11 @@ const SaleManagement = ({
                                             const sWhName = (be.warehouseName || '').toLowerCase().trim();
                                             const tWhName = (entry.warehouseName || '').toLowerCase().trim();
                                             const tProdNameMatched = (item.productName || '').toLowerCase().trim();
+                                            const sLc = (be.lcNo || si.lcNo || s.lcNo || '').toLowerCase().trim();
+                                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
-                                            const brandMatches = sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdNameMatched);
-                                            if (brandMatches && sWhName === tWhName) {
+                                            const brandMatches = !tBrandName ? true : (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdNameMatched));
+                                            if (brandMatches && sWhName === tWhName && (!targetLc || sLc === targetLc)) {
                                                 totalWhQty -= parseFloat(be.quantity) || 0;
                                             }
                                         });
@@ -954,61 +976,7 @@ const SaleManagement = ({
                             updatedEntry.warehouseQty = totalWhQty.toString();
                             itemChanged = true;
                         }
-                    } else if (entry.warehouseName && !entry.brand) {
-                        // Fallback for single-entry products: no brand selected, calculate product-level warehouse stock
-                        let totalWhQty = 0;
-                        warehouses.forEach(w => {
-                            const wName = (w.whName || w.warehouse || '').toLowerCase().trim();
-                            const targetWh = (entry.warehouseName || '').toLowerCase().trim();
-                            const wProd = (w.productName || w.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-
-                            if (wName === targetWh && wProd === targetProd) {
-                                totalWhQty += parseFloat(w.whQty) || 0;
-                            }
-                        });
-
-                        // Also check stockRecords for warehouse-level stock
-                        stockRecords.forEach(record => {
-                            const rName = (record.warehouse || record.whName || '').toLowerCase().trim();
-                            const targetWh = (entry.warehouseName || '').toLowerCase().trim();
-                            const rProd = (record.productName || record.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-
-                            if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
-
-                            if (rName === targetWh && rProd === targetProd) {
-                                totalWhQty += parseFloat(record.inHouseQuantity) || 0;
-                            }
-                        });
-
-                        // Subtract ALL matching sales for this warehouse (across all brands)
-                        allSalesRecords.forEach(s => {
-                            const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
-                            if (s.items) {
-                                s.items.forEach(si => {
-                                    const sProdName = (si.productName || '').toLowerCase().trim();
-                                    const tProdName = (item.productName || '').toLowerCase().trim();
-                                    if (sProdName === tProdName && si.brandEntries) {
-                                        si.brandEntries.forEach(be => {
-                                            const sWhName = (be.warehouseName || '').toLowerCase().trim();
-                                            const tWhName = (entry.warehouseName || '').toLowerCase().trim();
-                                            if (sWhName === tWhName) {
-                                                totalWhQty -= parseFloat(be.quantity) || 0;
-                                            }
-                                        });
-                                    }
-                                });
-                            }
-                        });
-                        totalWhQty = Math.max(0, totalWhQty);
-
-                        if (updatedEntry.warehouseQty !== totalWhQty.toString()) {
-                            updatedEntry.warehouseQty = totalWhQty.toString();
-                            itemChanged = true;
-                        }
-                    } else if (!entry.warehouseName) {
+                    } else {
                         if (updatedEntry.warehouseQty !== '') {
                             updatedEntry.warehouseQty = '';
                             itemChanged = true;
@@ -1027,7 +995,7 @@ const SaleManagement = ({
 
             return hasChanges ? { ...prev, items: newItems } : prev;
         });
-    }, [formData.items.map(i => i.productId).join(','), formData.items.map(i => i.brandEntries.map(e => `${e.brand}-${e.warehouseName}`).join(',')).join('|'), stockRecords, warehouses, allSalesRecords]);
+    }, [formData.items.map(i => i.productId).join(','), formData.items.map(i => i.brandEntries.map(e => `${e.brand}-${e.warehouseName}-${e.lcNo}`).join(',')).join('|'), stockRecords, warehouses, allSalesRecords]);
 
     const addProductItem = () => {
         setFormData(prev => ({
@@ -1035,9 +1003,9 @@ const SaleManagement = ({
             items: [...prev.items, {
                 productId: '',
                 productName: '',
-                lcNo: '',
                 uom: saleType === 'General' ? 'QTY' : 'Truck',
                 brandEntries: [{
+                    lcNo: '',
                     brand: '',
                     brandName: '',
                     inhouseQty: '',
@@ -1060,6 +1028,7 @@ const SaleManagement = ({
             newItems[productIdx] = {
                 ...newItems[productIdx],
                 brandEntries: [...newItems[productIdx].brandEntries, {
+                    lcNo: '',
                     brand: '',
                     brandName: '',
                     inhouseQty: '',
@@ -1455,9 +1424,9 @@ const SaleManagement = ({
             items: [{
                 productId: '',
                 productName: '',
-                lcNo: '',
                 uom: saleType === 'General' ? 'QTY' : 'Truck',
                 brandEntries: [{
+                    lcNo: '',
                     brand: '',
                     brandName: '',
                     inhouseQty: '',
@@ -1542,10 +1511,10 @@ const SaleManagement = ({
                 if (item.brandEntries) {
                     return {
                         ...item,
-                        lcNo: itemLcNo,
                         uom: itemUom,
                         brandEntries: item.brandEntries.map(be => ({
                             ...be,
+                            lcNo: be.lcNo || itemLcNo,
                             uom: be.uom || itemUom
                         }))
                     };
@@ -1554,9 +1523,9 @@ const SaleManagement = ({
                 return {
                     productId: item.productId,
                     productName: item.productName,
-                    lcNo: itemLcNo,
                     uom: itemUom,
                     brandEntries: [{
+                        lcNo: itemLcNo,
                         brand: item.brand,
                         inhouseQty: item.inhouseQty,
                         warehouseId: item.warehouseId,
@@ -1749,11 +1718,31 @@ const SaleManagement = ({
 
     const getFilteredLCs = () => {
         const query = (lcSearch || '').toLowerCase();
-        return lcRecords.filter(lc =>
-            (lc.lcNo || '').toLowerCase().includes(query) ||
-            (lc.importerName || '').toLowerCase().includes(query) ||
-            (lc.productName || '').toLowerCase().includes(query)
-        ).slice(0, 50);
+        let filtered = lcRecords;
+        if (saleType !== 'Border' && activeItemIndex !== null) {
+            const item = formData.items[activeItemIndex];
+            if (item && item.productName) {
+                const targetProd = item.productName.toLowerCase().trim();
+                const matchedProdDef = products.find(p => p.name.toLowerCase().trim() === targetProd);
+                const targetIpName = matchedProdDef?.ipName?.toLowerCase().trim();
+
+                filtered = filtered.filter(lc => {
+                    const lcProd = (lc.productName || '').toLowerCase().trim();
+                    return lcProd === targetProd || (targetIpName && lcProd === targetIpName);
+                });
+            }
+        }
+        return filtered.filter(lc => {
+            const matchedProduct = products.find(p => 
+                (p.name || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim() ||
+                (p.ipName || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim()
+            );
+            const dispProductName = matchedProduct ? matchedProduct.name : (lc.productName || '');
+            return (lc.lcNo || '').toLowerCase().includes(query) ||
+                (lc.importerName || '').toLowerCase().includes(query) ||
+                (lc.productName || '').toLowerCase().includes(query) ||
+                dispProductName.toLowerCase().includes(query);
+        }).slice(0, 50);
     };
 
     const getFilteredCompanies = () => {
@@ -1998,80 +1987,42 @@ const SaleManagement = ({
                 setLcSearch('');
             }
         } else {
-            // General sale (product-wise)
-            if (activeItemIndex === null) return;
-            if (!lc) {
-                setFormData(prev => {
-                    const newItems = [...prev.items];
-                    newItems[activeItemIndex] = {
-                        ...newItems[activeItemIndex],
-                        lcNo: '',
-                        productId: '',
-                        productName: '',
-                        brand: '',
-                        brandEntries: [{
-                            brand: '',
-                            brandName: '',
-                            quantity: '',
-                            bag: '',
-                            bagSize: '',
-                            truck: '',
-                            unitPrice: '',
-                            totalAmount: ''
-                        }]
-                    };
-                    return { ...prev, items: newItems };
-                });
-                setLcSearch('');
-            } else {
-                setFormData(prev => {
-                    const newItems = [...prev.items];
-                    const item = { ...newItems[activeItemIndex] };
-                    
-                    item.lcNo = lc.lcNo;
+            // General sale (brand-wise LC)
+            if (activeItemIndex === null || activeEntryIndex === null) return;
+            setFormData(prev => {
+                const newItems = [...prev.items];
+                const item = { ...newItems[activeItemIndex] };
+                const newBrandEntries = [...item.brandEntries];
+                const entry = { ...newBrandEntries[activeEntryIndex] };
 
-                    // Always overwrite product and reset brand according to the new LC
-                    if (lc.productName) {
-                        const productObj = products.find(p => p.name === lc.productName);
-                        if (productObj) {
-                            item.productId = productObj._id;
-                            item.productName = productObj.name;
-                        } else {
-                            item.productId = '';
-                            item.productName = lc.productName;
-                        }
-                    } else {
-                        item.productId = '';
-                        item.productName = '';
+                if (!lc) {
+                    entry.lcNo = '';
+                } else {
+                    entry.lcNo = lc.lcNo;
+                    if (lc.brand) {
+                        entry.brand = lc.brand;
+                        entry.brandName = lc.brand;
                     }
+                }
 
-                    // Reset brand entries
-                    item.brand = '';
-                    item.brandEntries = [{
-                        brand: '',
-                        brandName: '',
-                        quantity: '',
-                        bag: '',
-                        bagSize: '',
-                        truck: '',
-                        unitPrice: '',
-                        totalAmount: ''
-                    }];
+                newBrandEntries[activeEntryIndex] = entry;
+                item.brandEntries = newBrandEntries;
+                newItems[activeItemIndex] = item;
+                
+                const newData = {
+                    ...prev,
+                    items: newItems
+                };
 
-                    const newData = {
-                        ...prev,
-                        items: newItems
-                    };
-
+                if (lc) {
                     if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
                     if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
                     if (!newData.port && lc.port) newData.port = lc.port;
+                }
 
-                    newItems[activeItemIndex] = item;
-                    return newData;
-                });
-                setLcSearch('');
-            }
+                return newData;
+            });
+            setLcSearch('');
         }
         setActiveDropdown(null);
     };
@@ -2086,6 +2037,7 @@ const SaleManagement = ({
                 productName: product.name,
                 brand: '', // Clear item-level brand
                 brandEntries: [{ // Reset brand entries for new product
+                    lcNo: '',
                     brand: '',
                     brandName: '',
                     inhouseQty: '',
@@ -3138,7 +3090,17 @@ const SaleManagement = ({
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="font-bold">{lc.lcNo}</span>
-                                                        <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
+                                                        <span className="text-[10px] text-gray-500">
+                                                            {lc.importerName} | {
+                                                                (() => {
+                                                                    const matched = products.find(p => 
+                                                                        (p.name || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim() ||
+                                                                        (p.ipName || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim()
+                                                                    );
+                                                                    return matched ? matched.name : (lc.productName || '');
+                                                                })()
+                                                            }
+                                                        </span>
                                                     </div>
                                                 </button>
                                             ))}
@@ -3746,83 +3708,8 @@ const SaleManagement = ({
 
                                         <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'flex flex-col md:flex-row md:items-center gap-4 mb-6'}`}>
                                             {/* LC No Selection */}
-                                            {saleType !== 'Border' && (
-                                                <div className="space-y-1.5 relative px-4 lc-dropdown-container flex-1 md:max-w-md">
-                                                    <label className="sale-mgmt-item-label">LC No</label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            name="lcNo"
-                                                            placeholder={item.lcNo || "Search LC..."}
-                                                            value={activeDropdown === 'lcNo' && activeItemIndex === index ? lcSearch : (item.lcNo || '')}
-                                                            readOnly={isFieldReadOnly(originalData?.items?.[index]?.lcNo)}
-                                                            onChange={(e) => {
-                                                                if (isFieldReadOnly(originalData?.items?.[index]?.lcNo)) return;
-                                                                setLcSearch(e.target.value);
-                                                                setActiveDropdown('lcNo');
-                                                                setActiveItemIndex(index);
-                                                                setHighlightedIndex(-1);
-                                                                handleItemInputChange(index, null, { target: { name: 'lcNo', value: e.target.value } });
-                                                            }}
-                                                            autoComplete="off"
-                                                            onFocus={() => {
-                                                                if (isFieldReadOnly(originalData?.items?.[index]?.lcNo)) return;
-                                                                setLcSearch(item.lcNo || '');
-                                                                setActiveDropdown('lcNo');
-                                                                setActiveItemIndex(index);
-                                                                setHighlightedIndex(-1);
-                                                            }}
-                                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
-                                                            className={`sale-mgmt-input pr-14 ${item.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.lcNo) ? 'bg-gray-50' : ''}`}
-                                                        />
-                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                            {item.lcNo && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setActiveItemIndex(index);
-                                                                        handleLcSelect(null);
-                                                                    }}
-                                                                    className="text-gray-400 hover:text-red-500"
-                                                                >
-                                                                    <XIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setActiveDropdown(activeDropdown === 'lcNo' && activeItemIndex === index ? null : 'lcNo');
-                                                                    setActiveItemIndex(index);
-                                                                }}
-                                                                className="text-gray-300 hover:text-blue-500 transition-colors"
-                                                            >
-                                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' && activeItemIndex === index ? 'rotate-180' : ''}`} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    {activeDropdown === 'lcNo' && activeItemIndex === index && getFilteredLCs().length > 0 && (
-                                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                            {getFilteredLCs().map((lc, idx) => (
-                                                                <button
-                                                                    key={lc._id || `lc-${idx}`}
-                                                                    type="button"
-                                                                    onClick={() => handleLcSelect(lc)}
-                                                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${item.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                                >
-                                                                    <div className="flex flex-col">
-                                                                        <span className="font-bold">{lc.lcNo}</span>
-                                                                        <span className="text-[10px] text-gray-500">{lc.importerName} | {lc.productName}</span>
-                                                                    </div>
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-
                                             {/* Product Selection */}
-                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container ${saleType === 'Border' ? 'flex-1' : 'flex-1 md:max-w-md'}`}>
+                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container flex-1`}>
                                                 <label className="sale-mgmt-item-label">Product</label>
                                                 <div className="relative">
                                                     <input
@@ -3992,7 +3879,8 @@ const SaleManagement = ({
                                         {saleType !== 'Border' && (
                                             <div className="space-y-1">
                                                 {/* Header Row for Brands (Hidden on Mobile) */}
-                                                <div className="hidden md:grid grid-cols-10 gap-4 px-6 py-1 border border-transparent">
+                                                <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-1 border border-transparent">
+                                                    <div className="col-span-2 sale-mgmt-item-label text-center">LC No</div>
                                                     <div className="col-span-2 sale-mgmt-item-label text-center">Brand</div>
                                                     <div className="sale-mgmt-item-label text-center">Inhouse</div>
                                                     <div className="sale-mgmt-item-label text-center">Warehouse</div>
@@ -4004,7 +3892,94 @@ const SaleManagement = ({
                                                 </div>
 
                                                 {item.brandEntries.map((entry, entryIndex) => (
-                                                    <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-10 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
+                                                    <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center px-6 group/entry transition-all hover:bg-gray-50/50 rounded-xl py-1.5 border border-transparent hover:border-gray-100/50 relative">
+                                                        {/* LC No Selection */}
+                                                        <div className="col-span-2 space-y-1 relative lc-dropdown-container">
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block">LC No</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder={entry.lcNo || "LC No"}
+                                                                    value={activeDropdown === 'lcNo' && activeItemIndex === index && activeEntryIndex === entryIndex ? lcSearch : (entry.lcNo || '')}
+                                                                    readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo)}
+                                                                    onChange={(e) => {
+                                                                        if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo)) return;
+                                                                        setLcSearch(e.target.value);
+                                                                        setActiveDropdown('lcNo');
+                                                                        setActiveItemIndex(index);
+                                                                        setActiveEntryIndex(entryIndex);
+                                                                        setHighlightedIndex(-1);
+                                                                        handleItemInputChange(index, entryIndex, { target: { name: 'lcNo', value: e.target.value } });
+                                                                    }}
+                                                                    autoComplete="off"
+                                                                    onFocus={() => {
+                                                                        if (isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo)) return;
+                                                                        setActiveDropdown('lcNo');
+                                                                        setActiveItemIndex(index);
+                                                                        setActiveEntryIndex(entryIndex);
+                                                                        setLcSearch(entry.lcNo || '');
+                                                                        setHighlightedIndex(-1);
+                                                                    }}
+                                                                    onKeyDown={(e) => !isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo) && handleDropdownKeyDown(e, 'lcNo', getFilteredLCs(), handleLcSelect)}
+                                                                    className={`sale-mgmt-input pr-10 !text-xs ${entry.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.lcNo) ? 'bg-gray-50' : ''}`}
+                                                                />
+                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                                                    {entry.lcNo && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setActiveItemIndex(index);
+                                                                                setActiveEntryIndex(entryIndex);
+                                                                                handleLcSelect(null);
+                                                                            }}
+                                                                            className="text-gray-400 hover:text-red-500"
+                                                                        >
+                                                                            <XIcon className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setActiveDropdown(activeDropdown === 'lcNo' && activeItemIndex === index && activeEntryIndex === entryIndex ? null : 'lcNo');
+                                                                            setActiveItemIndex(index);
+                                                                            setActiveEntryIndex(entryIndex);
+                                                                        }}
+                                                                        className="text-gray-300 hover:text-blue-500 transition-colors"
+                                                                    >
+                                                                        <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'lcNo' && activeItemIndex === index && activeEntryIndex === entryIndex ? 'rotate-180' : ''}`} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            {activeDropdown === 'lcNo' && activeItemIndex === index && activeEntryIndex === entryIndex && getFilteredLCs().length > 0 && (
+                                                                <div className="absolute z-[70] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-40 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                                    {getFilteredLCs().map((lc, idx) => (
+                                                                        <button
+                                                                            key={lc._id || `lc-${idx}`}
+                                                                            type="button"
+                                                                            onClick={() => handleLcSelect(lc)}
+                                                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                                                            className={`w-full px-4 py-2 text-left text-xs font-medium transition-colors ${entry.lcNo === lc.lcNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className="font-bold text-[11px]">{lc.lcNo}</span>
+                                                                                <span className="text-[9px] text-gray-500">
+                                                                                    {lc.importerName} | {
+                                                                                        (() => {
+                                                                                            const matched = products.find(p => 
+                                                                                                (p.name || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim() ||
+                                                                                                (p.ipName || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim()
+                                                                                            );
+                                                                                            return matched ? matched.name : (lc.productName || '');
+                                                                                        })()
+                                                                                    }
+                                                                                </span>
+                                                                            </div>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
                                                         {/* Brand Selection */}
                                                         <div className="col-span-2 space-y-1 relative brand-dropdown-container">
                                                             <label className="md:hidden sale-mgmt-item-label mb-1 block">Brand</label>
