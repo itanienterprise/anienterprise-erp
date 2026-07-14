@@ -2721,7 +2721,11 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         const sortedReportData = [...reportData].sort((a, b) => new Date(a.date) - new Date(b.date));
         sortedReportData.forEach((sale) => {
             // Create flattened list of all entries across all items
-            const flatItems = (sale.items || []).flatMap(item => {
+            const flatItems = sale.flatItems ? sale.flatItems.map(fItem => ({
+                ...fItem,
+                bag: fItem.bag !== undefined ? fItem.bag : 0,
+                uom: fItem.uom || 'QTY'
+            })) : (sale.items || []).flatMap(item => {
                 const entries = (item.brandEntries && item.brandEntries.length > 0)
                     ? item.brandEntries
                     : [{ brandName: item.brand || '-', quantity: item.quantity, bag: item.bag, unitPrice: 0, totalAmount: item.totalAmount, uom: item.uom }];

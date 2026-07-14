@@ -10,6 +10,7 @@ const SalesReport = ({
     salesRecords = [],
     saleFilters,
     setSaleFilters,
+    searchQuery = '',
     saleType = 'General'
 }) => {
     const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -30,6 +31,7 @@ const SalesReport = ({
     const fromDateFilterRef = useRef(null);
     const toDateFilterRef = useRef(null);
 
+    // Close Dropdowns on Click Outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (showFilterPanel && filterPanelRef.current && !filterPanelRef.current.contains(event.target) && !filterButtonRef.current.contains(event.target)) {
@@ -46,18 +48,11 @@ const SalesReport = ({
             if (filterDropdownOpen.to && toDateFilterRef.current && !toDateFilterRef.current.contains(event.target)) setFilterDropdownOpen(prev => ({ ...prev, to: false }));
         };
 
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') {
-                setShowFilterPanel(false);
-                setFilterDropdownOpen(initialFilterDropdownState);
-            }
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        document.addEventListener('keydown', handleEscape);
+        if (showFilterPanel || Object.values(filterDropdownOpen).some(Boolean)) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('keydown', handleEscape);
         };
     }, [showFilterPanel, filterDropdownOpen]);
 
@@ -66,10 +61,10 @@ const SalesReport = ({
         if (isOpen || showFilterPanel) {
             document.body.style.overflow = 'hidden';
         } else {
-            document.body.style.overflow = '';
+            document.body.style.overflow = 'unset';
         }
         return () => {
-            document.body.style.overflow = '';
+            document.body.style.overflow = 'unset';
         };
     }, [isOpen, showFilterPanel]);
 
@@ -79,14 +74,16 @@ const SalesReport = ({
         if (key === 'productName' || key === 'brandName') {
             const options = new Set();
             salesRecords.forEach(sale => {
-                (sale.items || []).forEach(item => {
+                const items = sale.items || [];
+                items.forEach(item => {
                     if (key === 'productName') {
-                        const val = (item.productName || item.product || '').trim();
-                        if (val) options.add(val);
-                    } else if (key === 'brandName') {
-                        (item.brandEntries || []).forEach(entry => {
-                            const val = (entry.brandName || entry.brand || '').trim();
-                            if (val) options.add(val);
+                        const pName = item.productName || item.product;
+                        if (pName) options.add(pName.trim());
+                    } else {
+                        const brandEntries = item.brandEntries || [];
+                        brandEntries.forEach(entry => {
+                            const bName = entry.brandName || entry.brand;
+                            if (bName) options.add(bName.trim());
                         });
                     }
                 });
@@ -114,49 +111,106 @@ const SalesReport = ({
             if (saleFilters.bdCnf && sale.bdCnf !== saleFilters.bdCnf) return false;
         }
 
-        // Product & Brand Filtering
-        if (saleFilters.productName || saleFilters.brandName) {
-            const items = sale.items || [];
-            const matches = items.some(item => {
-                const pName = (item.productName || item.product || '');
-                const pMatch = !saleFilters.productName || pName === saleFilters.productName;
-
-                if (!pMatch) return false;
-
-                if (saleFilters.brandName) {
-                    return (item.brandEntries || []).some(entry => (entry.brandName || entry.brand) === saleFilters.brandName);
-                }
-                return true;
-            });
-            if (!matches) return false;
-        }
-
         return true;
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    // Construct flat items per sale, applying search query filters to display only matching products/brands/LCs
+    const salesWithItems = filteredSales.map(sale => {
+        const items = sale.items || [];
+        let flatItems = items.flatMap(item => {
+            const entries = (item.brandEntries && item.brandEntries.length > 0)
+                ? item.brandEntries
+                : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: 0, totalAmount: item.totalAmount }];
+
+            return entries.map((entry, subIdx) => ({
+                productName: item.productName || item.product || '-',
+                brand: entry.brandName || entry.brand || '-',
+                quantity: entry.quantity || 0,
+                bag: entry.bag || item.bag || 0,
+                truck: entry.truck || sale.truck || '-',
+                price: entry.unitPrice || 0,
+                total: entry.totalAmount || 0,
+                lcNo: item.lcNo || sale.lcNo || '-',
+                uom: entry.uom || item.uom || 'QTY',
+                isFirstInProduct: subIdx === 0,
+                productSpan: entries.length
+            }));
+        });
+
+        if (flatItems.length === 0) {
+            flatItems.push({
+                productName: sale.productName || '-',
+                brand: sale.brand || '-',
+                quantity: sale.quantity || 0,
+                bag: sale.bag || 0,
+                price: 0,
+                total: sale.totalAmount || 0,
+                lcNo: sale.lcNo || '-',
+                uom: sale.uom || 'QTY',
+                isFirstInProduct: true,
+                productSpan: 1
+            });
+        }
+
+        // Filter flat items based on search query
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            flatItems = flatItems.filter(item => {
+                return (
+                    (item.productName || '').toLowerCase().includes(query) ||
+                    (item.brand || '').toLowerCase().includes(query) ||
+                    (item.lcNo || '').toLowerCase().includes(query) ||
+                    (item.truck || '').toLowerCase().includes(query)
+                );
+            });
+        }
+
+        // Apply specific saleFilters
+        if (saleFilters.productName) {
+            flatItems = flatItems.filter(item => item.productName === saleFilters.productName);
+        }
+        if (saleFilters.brandName) {
+            flatItems = flatItems.filter(item => item.brand === saleFilters.brandName);
+        }
+
+        // Recalculate spans and first flags for rendering
+        const productGroups = {};
+        flatItems.forEach(item => {
+            if (!productGroups[item.productName]) {
+                productGroups[item.productName] = [];
+            }
+            productGroups[item.productName].push(item);
+        });
+
+        const recalculatedFlatItems = [];
+        Object.keys(productGroups).forEach(prodName => {
+            const group = productGroups[prodName];
+            group.forEach((item, subIdx) => {
+                recalculatedFlatItems.push({
+                    ...item,
+                    isFirstInProduct: subIdx === 0,
+                    productSpan: group.length
+                });
+            });
+        });
+
+        return {
+            ...sale,
+            flatItems: recalculatedFlatItems
+        };
+    }).filter(sale => sale.flatItems.length > 0);
+
     const summary = {
-        totalQty: filteredSales.reduce((sum, sale) => {
-            const items = sale.items || [];
-            const itemQtyTotal = items.reduce((iSum, item) => {
-                const brandEntries = item.brandEntries || [];
-                if (brandEntries.length > 0) {
-                    return iSum + brandEntries.reduce((bSum, entry) =>
-                        bSum + (parseFloat(entry.quantity) || 0), 0);
-                }
-                return iSum + (parseFloat(item.quantity) || 0);
-            }, 0);
-            return sum + (items.length > 0 ? itemQtyTotal : (parseFloat(sale.quantity) || 0));
+        totalQty: salesWithItems.reduce((sum, sale) => {
+            return sum + sale.flatItems.reduce((fSum, item) => fSum + (parseFloat(item.quantity) || 0), 0);
         }, 0),
-        totalTrucks: saleType === 'Border' ? filteredSales.reduce((sum, sale) => {
-            const items = sale.items || [];
-            const truckTotal = items.reduce((iSum, item) => {
-                const brandEntries = item.brandEntries || [];
-                return iSum + brandEntries.reduce((bSum, entry) => bSum + (parseFloat(entry.truck) || 0), 0);
-            }, 0);
-            return sum + (items.length > 0 ? truckTotal : (parseFloat(sale.truck) || 0));
+        totalTrucks: saleType === 'Border' ? salesWithItems.reduce((sum, sale) => {
+            return sum + sale.flatItems.reduce((fSum, item) => fSum + (parseFloat(item.truck) || 0), 0);
         }, 0) : 0,
-        totalAmount: filteredSales.reduce((sum, sale) => sum + (parseFloat(sale.totalAmount) || 0), 0),
-        totalPaid: filteredSales.reduce((sum, sale) => sum + (parseFloat(sale.paidAmount) || 0), 0)
+        totalAmount: salesWithItems.reduce((sum, sale) => {
+            return sum + sale.flatItems.reduce((fSum, item) => fSum + (parseFloat(item.total) || 0), 0);
+        }, 0),
+        totalPaid: salesWithItems.reduce((sum, sale) => sum + (parseFloat(sale.paidAmount) || 0), 0)
     };
 
     const toggleRowExpansion = (id) => {
@@ -768,7 +822,7 @@ const SalesReport = ({
                                 </>
                             )}
                         </div>
-                        <button onClick={() => generateSalesReportPDF(filteredSales, saleFilters, summary, saleType)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
+                        <button onClick={() => generateSalesReportPDF(salesWithItems, saleFilters, summary, saleType)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
                             <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
                         <button onClick={onClose} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" /></button>
@@ -846,43 +900,11 @@ const SalesReport = ({
                                 <tbody className="divide-y divide-gray-900">
                                     {(() => {
                                         let sl = 1;
-                                        return filteredSales.length > 0 ? (
-                                            filteredSales.flatMap((sale) => {
-                                                const items = sale.items || [];
-                                                // Create a list of all brand entries across all items
-                                                const flatItems = items.flatMap(item => {
-                                                    const entries = (item.brandEntries && item.brandEntries.length > 0)
-                                                        ? item.brandEntries
-                                                        : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: 0, totalAmount: item.totalAmount }];
+                                         return salesWithItems.length > 0 ? (
+                                             salesWithItems.flatMap((sale) => {
+                                                 const flatItems = sale.flatItems;
 
-                                                    return entries.map((entry, subIdx) => ({
-                                                        productName: item.productName || item.product || '-',
-                                                        brand: entry.brandName || entry.brand || '-',
-                                                        quantity: entry.quantity || 0,
-                                                        truck: entry.truck || sale.truck || '-',
-                                                        price: entry.unitPrice || 0,
-                                                        total: entry.totalAmount || 0,
-                                                        lcNo: item.lcNo || sale.lcNo || '-',
-                                                        isFirstInProduct: subIdx === 0,
-                                                        productSpan: entries.length
-                                                    }));
-                                                });
-
-                                                // If no items, fallback to sale level (safety)
-                                                if (flatItems.length === 0) {
-                                                    flatItems.push({
-                                                        productName: sale.productName || '-',
-                                                        brand: sale.brand || '-',
-                                                        quantity: sale.quantity || 0,
-                                                        price: 0,
-                                                        total: sale.totalAmount || 0,
-                                                        lcNo: sale.lcNo || '-',
-                                                        isFirstInProduct: true,
-                                                        productSpan: 1
-                                                    });
-                                                }
-
-                                                return flatItems.map((item, idx) => (
+                                                 return flatItems.map((item, idx) => (
                                                         <tr key={`${sale._id}-${idx}`} className="hover:bg-gray-50 transition-colors">
                                                             {idx === 0 && (
                                                                 <>
@@ -954,10 +976,10 @@ const SalesReport = ({
                                         )
                                     })()}
                                 </tbody>
-                                {filteredSales.length > 0 && (
+                                {salesWithItems.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-100 border-t-2 border-gray-900">
-                                            <td colSpan={saleType === 'Border' ? "9" : "9"} className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-2 py-2 text-[12px]'} font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900`}>Grand Total</td>
+                                            <td colSpan={saleType === 'Border' ? "9" : "9"} className={`${saleType === 'Border' ? 'px-0.5' : 'px-2 py-2 text-[12px]'} font-black text-gray-900 text-right uppercase tracking-wider border-r border-gray-900`}>Grand Total</td>
                                             <td className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-black text-gray-900 border-r border-gray-900`}>{summary.totalQty.toLocaleString('en-US')}</td>
                                             {saleType === 'Border' && <td className="px-0.5 py-1 text-[12px] text-center font-black text-gray-900 border-r border-gray-900">{summary.totalTrucks.toLocaleString('en-US')}</td>}
                                             <td className={`${saleType === 'Border' ? 'px-0.5 py-1 text-[12px]' : 'px-1 py-2 text-[12px]'} text-right font-bold text-gray-900 border-r border-gray-900`}></td>
@@ -966,7 +988,7 @@ const SalesReport = ({
                                             </td>
                                             {saleType !== 'Border' && (
                                                 <>
-                                                    <td className="px-1 py-2 text-[12px] text-right font-black text-gray-900 border-r border-gray-900">{filteredSales.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0).toLocaleString('en-IN')}</td>
+                                                    <td className="px-1 py-2 text-[12px] text-right font-black text-gray-900 border-r border-gray-900">{salesWithItems.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0).toLocaleString('en-IN')}</td>
                                                     <td className="px-1 py-2 text-[12px] text-right font-black text-green-700 border-r border-gray-900">{summary.totalPaid.toLocaleString('en-IN')}</td>
                                                     <td className="px-1 py-2 text-[12px] text-right font-black text-red-700">{(summary.totalAmount - summary.totalPaid).toLocaleString('en-IN')}</td>
                                                 </>
@@ -979,29 +1001,10 @@ const SalesReport = ({
 
                         {/* Mobile Card View */}
                         <div className="md:hidden space-y-4 px-1">
-                            {filteredSales.length > 0 ? (
-                                filteredSales.map((sale) => {
+                            {salesWithItems.length > 0 ? (
+                                salesWithItems.map((sale) => {
                                     const isExpanded = expandedRows.includes(sale._id);
-                                    const items = sale.items || [];
-                                    const flatItems = items.flatMap(item =>
-                                        (item.brandEntries || []).map(entry => ({
-                                            productName: item.productName || item.product || '-',
-                                            brand: entry.brandName || entry.brand || '-',
-                                            quantity: sale.saleType === 'Border' ? (entry.truck || 0) : (entry.quantity || 0),
-                                            price: entry.unitPrice || 0,
-                                            total: entry.totalAmount || 0
-                                        }))
-                                    );
-
-                                    if (flatItems.length === 0) {
-                                        flatItems.push({
-                                            productName: sale.productName || '-',
-                                            brand: sale.brand || '-',
-                                            quantity: sale.quantity || 0,
-                                            price: 0,
-                                            total: sale.totalAmount || 0
-                                        });
-                                    }
+                                    const flatItems = sale.flatItems;
 
                                     return (
                                         <div

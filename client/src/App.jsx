@@ -689,6 +689,7 @@ function App() {
   const [showLcReport, setShowLcReport] = useState(false);
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [filteredSalesForReport, setFilteredSalesForReport] = useState([]);
+  const [salesReportSearchQuery, setSalesReportSearchQuery] = useState('');
   const [saleFilters, setSaleFilters] = useState({ quickRange: 'monthly', selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
   const [products, setProducts] = useState([]);
   const [damages, setDamages] = useState([]);
@@ -1844,6 +1845,7 @@ function App() {
             endLongPress={endLongPress}
             setShowSalesReport={setShowSalesReport}
             setSalesReportData={setFilteredSalesForReport}
+            setSalesReportSearchQuery={setSalesReportSearchQuery}
             toggleSelection={toggleSelection}
             isLongPressTriggered={isLongPressTriggered}
             saleFilters={saleFilters}
@@ -1868,6 +1870,7 @@ function App() {
             endLongPress={endLongPress}
             setShowSalesReport={setShowSalesReport}
             setSalesReportData={setFilteredSalesForReport}
+            setSalesReportSearchQuery={setSalesReportSearchQuery}
             toggleSelection={toggleSelection}
             isLongPressTriggered={isLongPressTriggered}
             saleFilters={saleFilters}
@@ -2663,6 +2666,7 @@ function App() {
         salesRecords={filteredSalesForReport}
         saleFilters={saleFilters}
         setSaleFilters={setSaleFilters}
+        searchQuery={salesReportSearchQuery}
         saleType={currentView === 'border-sale-section' ? 'Border' : 'General'}
       />
 

@@ -27,6 +27,7 @@ const SaleManagement = ({
     endLongPress,
     setShowSalesReport,
     setSalesReportData,
+    setSalesReportSearchQuery,
     saleFilters,
     setSaleFilters,
     currentUser,
@@ -2961,6 +2962,7 @@ const SaleManagement = ({
                         <button
                             onClick={() => {
                                 if (setSalesReportData) setSalesReportData(getFilteredData());
+                                if (setSalesReportSearchQuery) setSalesReportSearchQuery(searchQuery);
                                 setShowSalesReport(true);
                             }}
                             className="sale-mgmt-btn-action sale-mgmt-btn-white"
