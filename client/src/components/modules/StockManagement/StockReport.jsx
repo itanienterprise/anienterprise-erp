@@ -26,6 +26,60 @@ const StockReport = ({
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, brand: false, product: false });
     const initialFilterDropdownState = { warehouse: false, brand: false, product: false };
 
+    const selectedProductsList = React.useMemo(() => {
+        if (!stockFilters.productName) return [];
+        if (Array.isArray(stockFilters.productName)) return stockFilters.productName;
+        return stockFilters.productName.split(',').map(p => p.trim()).filter(Boolean);
+    }, [stockFilters.productName]);
+
+    const selectedBrandsList = React.useMemo(() => {
+        if (!stockFilters.brand) return [];
+        if (Array.isArray(stockFilters.brand)) return stockFilters.brand;
+        return stockFilters.brand.split(',').map(b => b.trim()).filter(Boolean);
+    }, [stockFilters.brand]);
+
+    const handleToggleProduct = (prodName) => {
+        let newList;
+        if (selectedProductsList.includes(prodName)) {
+            newList = selectedProductsList.filter(p => p !== prodName);
+        } else {
+            newList = [...selectedProductsList, prodName];
+        }
+
+        // Keep only valid brands matching the selected products
+        const validBrands = new Set();
+        const selectedProductNames = newList.map(p => p.toLowerCase().trim());
+        const combinedRecords = [...stockRecords, ...(warehouseData || [])];
+        combinedRecords.forEach(r => {
+            if (selectedProductNames.length > 0) {
+                const rProdName = (r.productName || r.product || '').trim().toLowerCase();
+                if (!selectedProductNames.includes(rProdName)) return;
+            }
+            if (r.brand) validBrands.add(r.brand);
+            if (r.brandList) r.brandList.forEach(b => validBrands.add(b.brand));
+        });
+        const filteredBrands = selectedBrandsList.filter(b => validBrands.has(b));
+
+        setStockFilters({
+            ...stockFilters,
+            productName: newList,
+            brand: filteredBrands
+        });
+    };
+
+    const handleToggleBrand = (brandName) => {
+        let newList;
+        if (selectedBrandsList.includes(brandName)) {
+            newList = selectedBrandsList.filter(b => b !== brandName);
+        } else {
+            newList = [...selectedBrandsList, brandName];
+        }
+        setStockFilters({
+            ...stockFilters,
+            brand: newList
+        });
+    };
+
     // --- Local Stock Data Recalculation for Price Report ---
     const activeStockData = React.useMemo(() => {
         if (reportType === 'price') {
@@ -40,29 +94,37 @@ const StockReport = ({
 
         // Apply brand filter from Advanced Filter panel
         if (stockFilters.brand) {
-            const brandFilter = stockFilters.brand.toLowerCase().trim();
-            records = records.map(item => {
-                const filteredBrands = item.brandList.filter(b =>
-                    (b.brand || '').toLowerCase().trim() === brandFilter
-                );
-                if (filteredBrands.length > 0) {
-                    const groupedBrands = getGroupedBrandList(filteredBrands);
-                    const inHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
-                    const totalInHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
-                    const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
-                    const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
-                    return {
-                        ...item,
-                        brandList: filteredBrands,
-                        inHouseQuantity,
-                        totalInHouseQuantity,
-                        saleQuantity,
-                        salePacket,
-                        packetSize: filteredBrands.find(b => (b.packetSize || 0) > 0)?.packetSize || item.packetSize || 30
-                    };
-                }
-                return null;
-            }).filter(Boolean);
+            let selectedBrands = [];
+            if (Array.isArray(stockFilters.brand)) {
+                selectedBrands = stockFilters.brand.map(b => b.toLowerCase().trim());
+            } else if (typeof stockFilters.brand === 'string' && stockFilters.brand.trim() !== '') {
+                selectedBrands = stockFilters.brand.split(',').map(b => b.toLowerCase().trim());
+            }
+
+            if (selectedBrands.length > 0) {
+                records = records.map(item => {
+                    const filteredBrands = item.brandList.filter(b =>
+                        selectedBrands.includes((b.brand || '').toLowerCase().trim())
+                    );
+                    if (filteredBrands.length > 0) {
+                        const groupedBrands = getGroupedBrandList(filteredBrands);
+                        const inHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                        const totalInHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
+                        const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
+                        const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
+                        return {
+                            ...item,
+                            brandList: filteredBrands,
+                            inHouseQuantity,
+                            totalInHouseQuantity,
+                            saleQuantity,
+                            salePacket,
+                            packetSize: filteredBrands.find(b => (b.packetSize || 0) > 0)?.packetSize || item.packetSize || 30
+                        };
+                    }
+                    return null;
+                }).filter(Boolean);
+            }
         }
 
         // Apply text search filter
@@ -663,12 +725,12 @@ const StockReport = ({
                             <button
                                 ref={filterButtonRef}
                                 onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || Object.values(stockFilters).some(v => v !== '')
+                                className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || Object.values(stockFilters).some(v => Array.isArray(v) ? v.length > 0 : v !== '')
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
                                     : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
                                     }`}
                             >
-                                <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showFilterPanel || Object.values(stockFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showFilterPanel || Object.values(stockFilters).some(v => Array.isArray(v) ? v.length > 0 : v !== '') ? 'text-white' : 'text-gray-400'}`} />
                             </button>
 
                             {/* Floating Filter Panel */}
@@ -681,8 +743,8 @@ const StockReport = ({
                                             <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <button
                                                 onClick={() => {
-                                                    setStockFilters({ startDate: '', endDate: '', warehouse: 'All Warehouses', brand: '', productName: '', category: '' });
                                                     setFilterSearchInputs({ warehouseSearch: '', brandSearch: '', productSearch: '' });
+                                                    setStockFilters({ startDate: '', endDate: '', warehouse: 'All Warehouses', brand: [], productName: [], category: '' });
                                                     setFilterDropdownOpen(initialFilterDropdownState);
                                                 }}
                                                 className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
@@ -749,6 +811,18 @@ const StockReport = ({
                                                 {/* Product Name Selection */}
                                                 <div className="space-y-1.5 relative" ref={productFilterRef}>
                                                     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Product</label>
+                                                    {selectedProductsList.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 mb-1.5 pl-1 max-h-24 overflow-y-auto">
+                                                            {selectedProductsList.map(prod => (
+                                                                <span key={prod} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold border border-blue-100">
+                                                                    {prod}
+                                                                    <button type="button" onClick={() => handleToggleProduct(prod)} className="text-blue-500 hover:text-blue-700">
+                                                                        <XIcon className="w-3 h-3" />
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                     <div className="relative">
                                                         <input
                                                             type="text"
@@ -757,16 +831,19 @@ const StockReport = ({
                                                                 setFilterSearchInputs({ ...filterSearchInputs, productSearch: e.target.value });
                                                                 setFilterDropdownOpen({ ...initialFilterDropdownState, product: true });
                                                             }}
+                                                            onClick={() => {
+                                                                setFilterDropdownOpen({ ...initialFilterDropdownState, product: !filterDropdownOpen.product });
+                                                            }}
                                                             onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, product: true })}
-                                                            placeholder={stockFilters.productName || "Search Product..."}
-                                                            className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.productName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                            placeholder="Search Product..."
+                                                            className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${selectedProductsList.length > 0 ? 'text-gray-900 font-semibold' : 'text-gray-300'}`}
                                                         />
                                                         <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                            {stockFilters.productName && (
-                                                                <button onClick={() => { setStockFilters({ ...stockFilters, productName: '', brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                            {selectedProductsList.length > 0 ? (
+                                                                <button onClick={() => { setStockFilters({ ...stockFilters, productName: [], brand: [] }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
                                                                     <XIcon className="w-4 h-4" />
                                                                 </button>
-                                                            )}
+                                                            ) : null}
                                                             <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
                                                         </div>
                                                     </div>
@@ -783,7 +860,21 @@ const StockReport = ({
                                                         return filtered.length > 0 ? (
                                                             <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                                 {filtered.map(p => (
-                                                                    <button key={p} type="button" onClick={() => { setStockFilters({ ...stockFilters, productName: p, brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, productSearch: '', brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{p}</button>
+                                                                    <button
+                                                                        key={p}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            handleToggleProduct(p);
+                                                                        }}
+                                                                        className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                                    >
+                                                                        <span>{p}</span>
+                                                                        {selectedProductsList.includes(p) ? (
+                                                                            <span className="w-4 h-4 flex items-center justify-center bg-blue-600 rounded text-white text-[10px] font-bold">✓</span>
+                                                                        ) : (
+                                                                            <span className="w-4 h-4 rounded border border-gray-300" />
+                                                                        )}
+                                                                    </button>
                                                                 ))}
                                                             </div>
                                                         ) : null;
@@ -791,56 +882,83 @@ const StockReport = ({
                                                 </div>
 
                                                 {/* Brand Selection - Only if Product selected */}
-                                                {stockFilters.productName && (
-                                                    <div className="space-y-1.5 relative animate-in fade-in slide-in-from-top-2 duration-300" ref={brandFilterRef}>
-                                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={filterSearchInputs.brandSearch}
-                                                                onChange={(e) => {
-                                                                    setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
-                                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
-                                                                }}
-                                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
-                                                                placeholder={stockFilters.brand || "Search Brand..."}
-                                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${stockFilters.brand ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
-                                                            />
-                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                                {stockFilters.brand && (
-                                                                    <button onClick={() => { setStockFilters({ ...stockFilters, brand: '' }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
-                                                                        <XIcon className="w-4 h-4" />
+                                                <div className="space-y-1.5 relative animate-in fade-in slide-in-from-top-2 duration-300" ref={brandFilterRef}>
+                                                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pl-1">Brand</label>
+                                                    {selectedBrandsList.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 mb-1.5 pl-1 max-h-24 overflow-y-auto">
+                                                            {selectedBrandsList.map(brand => (
+                                                                <span key={brand} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold border border-blue-100">
+                                                                    {brand}
+                                                                    <button type="button" onClick={() => handleToggleBrand(brand)} className="text-blue-500 hover:text-blue-700">
+                                                                        <XIcon className="w-3 h-3" />
                                                                     </button>
-                                                                )}
-                                                                <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
-                                                            </div>
+                                                                </span>
+                                                            ))}
                                                         </div>
-                                                        {filterDropdownOpen.brand && (() => {
-                                                            const brandsSet = new Set();
-                                                            const combinedRecords = [...stockRecords, ...(warehouseData || [])];
-                                                            combinedRecords.forEach(r => {
-                                                                // STRICT FILTER: If a product is selected, ONLY show brands for that product
-                                                                const rProd = (r.productName || r.product || '').trim();
-                                                                if (stockFilters.productName && rProd !== stockFilters.productName) return;
-
-                                                                if (r.brand) brandsSet.add(r.brand);
-                                                                if (r.brandList) r.brandList.forEach(b => brandsSet.add(b.brand));
-                                                            });
-                                                            const options = Array.from(brandsSet).sort().filter(b => b.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase()));
-                                                            return options.length > 0 ? (
-                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                    {options.map(brand => (
-                                                                        <button key={brand} type="button" onClick={() => { setStockFilters({ ...stockFilters, brand }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors">{brand}</button>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl py-2 px-4 text-sm text-gray-500 text-center">
-                                                                    No brands found
-                                                                </div>
-                                                            );
-                                                        })()}
+                                                    )}
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={filterSearchInputs.brandSearch}
+                                                            onChange={(e) => {
+                                                                setFilterSearchInputs({ ...filterSearchInputs, brandSearch: e.target.value });
+                                                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true });
+                                                            }}
+                                                            onClick={() => {
+                                                                setFilterDropdownOpen({ ...initialFilterDropdownState, brand: !filterDropdownOpen.brand });
+                                                            }}
+                                                            onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, brand: true })}
+                                                            placeholder="Search Brand..."
+                                                            className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-14 ${selectedBrandsList.length > 0 ? 'text-gray-900 font-semibold' : 'text-gray-300'}`}
+                                                            disabled={selectedProductsList.length === 0}
+                                                        />
+                                                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                            {selectedBrandsList.length > 0 ? (
+                                                                <button onClick={() => { setStockFilters({ ...stockFilters, brand: [] }); setFilterSearchInputs({ ...filterSearchInputs, brandSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="text-gray-400 hover:text-gray-600">
+                                                                    <XIcon className="w-4 h-4" />
+                                                                </button>
+                                                            ) : null}
+                                                            <SearchIcon className="w-4.5 h-4.5 text-gray-300 pointer-events-none" />
+                                                        </div>
                                                     </div>
-                                                )}
+                                                    {filterDropdownOpen.brand && (() => {
+                                                        const brandsSet = new Set();
+                                                        const combinedRecords = [...stockRecords, ...(warehouseData || [])];
+                                                        combinedRecords.forEach(r => {
+                                                            const rProd = (r.productName || r.product || '').trim().toLowerCase();
+                                                            if (selectedProductsList.length > 0 && !selectedProductsList.map(p => p.toLowerCase()).includes(rProd)) return;
+
+                                                            if (r.brand) brandsSet.add(r.brand);
+                                                            if (r.brandList) r.brandList.forEach(b => brandsSet.add(b.brand));
+                                                        });
+                                                        const options = Array.from(brandsSet).sort().filter(b => b.toLowerCase().includes(filterSearchInputs.brandSearch.toLowerCase()));
+                                                        return options.length > 0 ? (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                                {options.map(brand => (
+                                                                    <button
+                                                                        key={brand}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            handleToggleBrand(brand);
+                                                                        }}
+                                                                        className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                                    >
+                                                                        <span>{brand}</span>
+                                                                        {selectedBrandsList.includes(brand) ? (
+                                                                            <span className="w-4 h-4 flex items-center justify-center bg-blue-600 rounded text-white text-[10px] font-bold">✓</span>
+                                                                        ) : (
+                                                                            <span className="w-4 h-4 rounded border border-gray-300" />
+                                                                        )}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl py-2 px-4 text-sm text-gray-500 text-center">
+                                                                No brands found
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
                                             </div>
 
                                             <button onClick={() => setShowFilterPanel(false)} className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-3 flex-shrink-0 active:scale-[0.98]">APPLY FILTERS</button>

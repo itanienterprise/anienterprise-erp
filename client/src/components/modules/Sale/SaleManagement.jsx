@@ -1625,10 +1625,16 @@ const SaleManagement = ({
                 if (matchesBasic) return true;
 
                 if (s.items && Array.isArray(s.items)) {
-                    return s.items.some(item =>
-                        item.productName?.toLowerCase().includes(query) ||
-                        item.brand?.toLowerCase().includes(query)
-                    );
+                    return s.items.some(item => {
+                        const itemLc = (item.lcNo || '').toLowerCase();
+                        const brandLcMatch = (item.brandEntries || []).some(be =>
+                            (be.lcNo || '').toLowerCase().includes(query)
+                        );
+                        return item.productName?.toLowerCase().includes(query) ||
+                            item.brand?.toLowerCase().includes(query) ||
+                            itemLc.includes(query) ||
+                            brandLcMatch;
+                    });
                 }
                 return false;
             });
@@ -2330,17 +2336,22 @@ const SaleManagement = ({
                 if (!matches) return false;
             } else {
                 const inv = (sale.invoiceNo || '').toLowerCase();
+                const lcNo = (sale.lcNo || '').toLowerCase();
                 const challan = (sale.challanNo || '').toLowerCase();
                 const truck = (sale.truckNo || '').toLowerCase();
                 const cname = (sale.companyName || sale.customerName || '').toLowerCase();
                 const itemsMatch = (sale.items || []).some(item => {
                     const pName = (item.productName || item.product || '').toLowerCase();
                     const itemLc = (item.lcNo || '').toLowerCase();
-                    return pName.includes(q) || itemLc.includes(q) || (item.brandEntries || []).some(e =>
+                    const brandLcMatch = (item.brandEntries || []).some(e =>
+                        (e.lcNo || '').toLowerCase().includes(q)
+                    );
+                    const brandEntriesMatch = (item.brandEntries || []).some(e =>
                         String(e.quantity || '').includes(q) || String(e.unitPrice || '').includes(q) || String(e.totalAmount || '').includes(q)
                     );
+                    return pName.includes(q) || itemLc.includes(q) || brandLcMatch || brandEntriesMatch;
                 });
-                if (!inv.includes(q) && !challan.includes(q) && !truck.includes(q) && !cname.includes(q) && !itemsMatch) return false;
+                if (!inv.includes(q) && !lcNo.includes(q) && !challan.includes(q) && !truck.includes(q) && !cname.includes(q) && !itemsMatch) return false;
             }
         }
         // Date range
@@ -4778,7 +4789,7 @@ const SaleManagement = ({
                             const items = sale.items && sale.items.length > 0
                                 ? sale.items.flatMap(item =>
                                     (item.brandEntries || []).length > 0
-                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: item.lcNo, uom: be.uom || item.uom || 'QTY' }))
+                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: be.lcNo || item.lcNo || sale.lcNo || '', uom: be.uom || item.uom || 'QTY' }))
                                         : [{ ...item, productName: item.productName, uom: item.uom || 'QTY' }]
                                 )
                                 : [{

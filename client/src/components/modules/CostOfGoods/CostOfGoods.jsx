@@ -26,6 +26,7 @@ const CostOfGoods = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [records, setRecords] = useState([]);
+    const [expandedLc, setExpandedLc] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [viewData, setViewData] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -605,6 +606,25 @@ const CostOfGoods = ({
         return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
     });
 
+    const groupedRecords = React.useMemo(() => {
+        const groups = [];
+        const groupMap = {};
+        
+        sortedRecords.forEach(record => {
+            const lc = record.lcNo || 'No LC';
+            if (!groupMap[lc]) {
+                groupMap[lc] = {
+                    lcNo: lc,
+                    records: []
+                };
+                groups.push(groupMap[lc]);
+            }
+            groupMap[lc].records.push(record);
+        });
+        
+        return groups;
+    }, [sortedRecords]);
+
     return (
         <div style={{ animation: 'fadeIn 0.5s ease-out' }} className="space-y-6">
             {/* Header */}
@@ -808,7 +828,7 @@ const CostOfGoods = ({
                                         <th onClick={() => requestSort('lcNo')} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
                                             <div className="flex items-center gap-1">LC No <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="lcNo" /></div>
                                         </th>
-                                        <th onClick={() => requestSort('supplier')} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
+                                        <th onClick={() => requestSort('supplier')} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none max-w-[140px] truncate">
                                             <div className="flex items-center gap-1">Supplier <SortIcon config={sortConfig} columnKey="costOfGoods" targetKey="supplier" /></div>
                                         </th>
                                         <th onClick={() => requestSort('invoiceNo')} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
@@ -845,72 +865,106 @@ const CostOfGoods = ({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {sortedRecords.map(record => {
-                                        const isSelected = selectedItems.has(record._id);
-                                        const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
-                                        const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
-                                        const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
-                                        const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
-                                        const qtyVal = parseFloat(record.quantity) || 0;
-                                        const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
-                                        const dollarRateVal = parseFloat(record.rsToDollar) || 0;
-                                        const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
-                                        const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
-                                        const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
-                                        const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
-                                        const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+                                    {groupedRecords.map(group => {
+                                        const isExpanded = expandedLc === group.lcNo;
+                                        const isCollapsed = !isExpanded;
                                         return (
-                                            <tr
-                                                key={record._id}
-                                                className={`border-b border-gray-50 transition-colors hover:bg-gray-50/70 ${isSelected ? 'bg-blue-50' : ''}`}
-                                                onClick={() => { if (isSelectionMode) toggleSelection(record._id); }}
-                                                onContextMenu={e => {
-                                                    e.preventDefault();
-                                                    setIsSelectionMode(true);
-                                                    toggleSelection(record._id);
-                                                }}
-                                            >
-                                                {isSelectionMode && (
-                                                    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isSelected}
-                                                            onChange={() => { if (!isSelectionMode) setIsSelectionMode(true); toggleSelection(record._id); }}
-                                                            className="rounded"
-                                                        />
+                                            <React.Fragment key={group.lcNo}>
+                                                <tr
+                                                    className="bg-blue-50/40 border-b border-gray-100 hover:bg-blue-50/60 cursor-pointer select-none transition-colors"
+                                                    onClick={() => setExpandedLc(prev => prev === group.lcNo ? null : group.lcNo)}
+                                                >
+                                                    <td colSpan={isSelectionMode ? 15 : 14} className="px-4 py-3.5 text-[13px] font-bold text-blue-700">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <ChevronDownIcon className={`w-4.5 h-4.5 text-blue-600 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                <span>LC No: {group.lcNo}</span>
+                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-lg ml-2">
+                                                                    {group.records.length} {group.records.length === 1 ? 'record' : 'records'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex gap-6 text-xs text-gray-500 pr-4">
+                                                                <div>Total Qty: <span className="font-extrabold text-gray-800">{group.records.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString()} kg</span></div>
+                                                                <div>Total Net Bill: <span className="font-extrabold text-gray-800">{group.records.reduce((sum, r) => {
+                                                                    const billSum = r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.slofCf) || 0));
+                                                                    const rebatePct = r.rebate !== undefined ? r.rebate : (r.redate !== undefined ? r.redate : '2.9');
+                                                                    const rebateVal = r.rebateAmount !== undefined ? r.rebateAmount : (r.redateAmount !== undefined ? r.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                                                    const netBillVal = r.netBill !== undefined ? r.netBill : (billSum - rebateVal);
+                                                                    return sum + netBillVal;
+                                                                }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS</span></div>
+                                                            </div>
+                                                        </div>
                                                     </td>
-                                                )}
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{record.date ? formatDate(record.date) : '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] font-semibold text-gray-800">{record.lcNo ? record.lcNo.slice(-5) : '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{record.supplier || '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{record.invoiceNo || '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{record.truckNo || '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{record.product || '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{record.brand || '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{record.quantity || '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{record.amount ? `${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{rateKgBdtVal !== undefined && rateKgBdtVal !== null && rateKgBdtVal !== '' ? `${Number(rateKgBdtVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{cfExpVal !== undefined && cfExpVal !== null && cfExpVal !== '' ? `${Number(cfExpVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-800">{costingKgVal !== undefined && costingKgVal !== null && costingKgVal !== '' ? `${Number(costingKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
-                                                <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <button onClick={() => setViewData(record)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="View">
-                                                            <EyeIcon className="w-4 h-4 text-gray-500 hover:text-blue-600 transition-colors" />
-                                                        </button>
-                                                        {canEdit && (
-                                                            <button onClick={() => handleEdit(record)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="Edit">
-                                                                <EditIcon className="w-4 h-4 text-gray-500 hover:text-yellow-500 transition-colors" />
-                                                            </button>
-                                                        )}
-                                                        {canDelete && (
-                                                            <button onClick={() => handleDelete(record._id)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="Delete">
-                                                                <TrashIcon className="w-4 h-4 text-gray-500 hover:text-red-500 transition-colors" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                                </tr>
+                                                {!isCollapsed && group.records.map(record => {
+                                                    const isSelected = selectedItems.has(record._id);
+                                                    const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
+                                                    const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
+                                                    const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                                    const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
+                                                    const qtyVal = parseFloat(record.quantity) || 0;
+                                                    const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                                    const dollarRateVal = parseFloat(record.rsToDollar) || 0;
+                                                    const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                                    const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
+                                                    const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                                    const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
+                                                    const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+                                                    return (
+                                                        <tr
+                                                            key={record._id}
+                                                            className={`border-b border-gray-50 transition-colors hover:bg-gray-50/70 ${isSelected ? 'bg-blue-50' : ''}`}
+                                                            onClick={() => { if (isSelectionMode) toggleSelection(record._id); }}
+                                                            onContextMenu={e => {
+                                                                e.preventDefault();
+                                                                setIsSelectionMode(true);
+                                                                toggleSelection(record._id);
+                                                            }}
+                                                        >
+                                                            {isSelectionMode && (
+                                                                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isSelected}
+                                                                        onChange={() => { if (!isSelectionMode) setIsSelectionMode(true); toggleSelection(record._id); }}
+                                                                        className="rounded"
+                                                                    />
+                                                                </td>
+                                                            )}
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{record.date ? formatDate(record.date) : '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] font-semibold text-gray-800">{record.lcNo ? record.lcNo.slice(-5) : '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800 max-w-[140px] truncate" title={record.supplier || ''}>{record.supplier || '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{record.invoiceNo || '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{record.truckNo || '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{record.product || '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{record.brand || '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{record.quantity || '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{record.amount ? `${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{rateKgBdtVal !== undefined && rateKgBdtVal !== null && rateKgBdtVal !== '' ? `${Number(rateKgBdtVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{cfExpVal !== undefined && cfExpVal !== null && cfExpVal !== '' ? `${Number(cfExpVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{costingKgVal !== undefined && costingKgVal !== null && costingKgVal !== '' ? `${Number(costingKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
+                                                            <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    <button onClick={() => setViewData(record)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="View">
+                                                                        <EyeIcon className="w-4 h-4 text-gray-500 hover:text-blue-600 transition-colors" />
+                                                                    </button>
+                                                                    {canEdit && (
+                                                                        <button onClick={() => handleEdit(record)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="Edit">
+                                                                            <EditIcon className="w-4 h-4 text-gray-500 hover:text-yellow-500 transition-colors" />
+                                                                        </button>
+                                                                    )}
+                                                                    {canDelete && (
+                                                                        <button onClick={() => handleDelete(record._id)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="Delete">
+                                                                            <TrashIcon className="w-4 h-4 text-gray-500 hover:text-red-500 transition-colors" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </React.Fragment>
                                         );
                                     })}
                                 </tbody>

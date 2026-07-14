@@ -202,10 +202,23 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const itemWH = (item.whName || item.warehouse || '').trim().toLowerCase();
             if (!itemWH || (itemWH !== filterWH && !itemWH.includes(filterWH) && !filterWH.includes(itemWH))) return false;
         }
-        if (stockFilters.brand && (item.brand || '').trim() !== stockFilters.brand) return false;
+        if (stockFilters.brand) {
+            const itemBrand = (item.brand || '').trim().toLowerCase();
+            if (Array.isArray(stockFilters.brand)) {
+                if (stockFilters.brand.length > 0 && !stockFilters.brand.map(b => b.toLowerCase().trim()).includes(itemBrand)) return false;
+            } else if (typeof stockFilters.brand === 'string' && stockFilters.brand.trim() !== '') {
+                const selectedBrands = stockFilters.brand.split(',').map(b => b.trim().toLowerCase());
+                if (!selectedBrands.includes(itemBrand)) return false;
+            }
+        }
         if (stockFilters.productName) {
             const itemName = (item.productName || item.product || '').trim().toLowerCase();
-            if (itemName !== stockFilters.productName.toLowerCase()) return false;
+            if (Array.isArray(stockFilters.productName)) {
+                if (stockFilters.productName.length > 0 && !stockFilters.productName.map(p => p.toLowerCase().trim()).includes(itemName)) return false;
+            } else if (typeof stockFilters.productName === 'string' && stockFilters.productName.trim() !== '') {
+                const selectedProds = stockFilters.productName.split(',').map(p => p.trim().toLowerCase());
+                if (!selectedProds.includes(itemName)) return false;
+            }
         }
 
         if (stockSearchQuery) {
@@ -440,7 +453,15 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === sProdName.toLowerCase());
             if (product?.category?.toLowerCase() !== 'general') return;
 
-            if (stockFilters.productName && sProdName.toLowerCase() !== stockFilters.productName.toLowerCase()) return;
+            if (stockFilters.productName) {
+                const searchName = sProdName.toLowerCase();
+                if (Array.isArray(stockFilters.productName)) {
+                    if (stockFilters.productName.length > 0 && !stockFilters.productName.map(p => p.toLowerCase().trim()).includes(searchName)) return;
+                } else if (typeof stockFilters.productName === 'string' && stockFilters.productName.trim() !== '') {
+                    const selectedProds = stockFilters.productName.split(',').map(p => p.trim().toLowerCase());
+                    if (!selectedProds.includes(searchName)) return;
+                }
+            }
 
 
 
@@ -460,7 +481,15 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 if (isWhFilter && saleWH !== stockFilters.warehouse.toLowerCase()) return;
                 
                 // ADDED: Brand filter for General products
-                if (stockFilters.brand && (be.brand || '').trim() !== stockFilters.brand) return;
+                if (stockFilters.brand) {
+                    const itemBrand = (be.brand || '').trim().toLowerCase();
+                    if (Array.isArray(stockFilters.brand)) {
+                        if (stockFilters.brand.length > 0 && !stockFilters.brand.map(b => b.toLowerCase().trim()).includes(itemBrand)) return;
+                    } else if (typeof stockFilters.brand === 'string' && stockFilters.brand.trim() !== '') {
+                        const selectedBrands = stockFilters.brand.split(',').map(b => b.trim().toLowerCase());
+                        if (!selectedBrands.includes(itemBrand)) return;
+                    }
+                }
 
                 const normBrand = (be.brand || 'No Brand').trim().toLowerCase();
                 const rq = resolveQuality(sProdName, be.brand);
@@ -716,8 +745,22 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
             const dWh = (damage.warehouse || '').trim().toLowerCase();
 
-            if (stockFilters.productName && dProdName !== stockFilters.productName.toLowerCase()) return;
-            if (stockFilters.brand && dBrand !== stockFilters.brand.toLowerCase()) return;
+            if (stockFilters.productName) {
+                if (Array.isArray(stockFilters.productName)) {
+                    if (stockFilters.productName.length > 0 && !stockFilters.productName.map(p => p.toLowerCase().trim()).includes(dProdName)) return;
+                } else if (typeof stockFilters.productName === 'string' && stockFilters.productName.trim() !== '') {
+                    const selectedProds = stockFilters.productName.split(',').map(p => p.trim().toLowerCase());
+                    if (!selectedProds.includes(dProdName)) return;
+                }
+            }
+            if (stockFilters.brand) {
+                if (Array.isArray(stockFilters.brand)) {
+                    if (stockFilters.brand.length > 0 && !stockFilters.brand.map(b => b.toLowerCase().trim()).includes(dBrand)) return;
+                } else if (typeof stockFilters.brand === 'string' && stockFilters.brand.trim() !== '') {
+                    const selectedBrands = stockFilters.brand.split(',').map(b => b.trim().toLowerCase());
+                    if (!selectedBrands.includes(dBrand)) return;
+                }
+            }
             if (isWhFilter) {
                 const filterWH = stockFilters.warehouse.toLowerCase();
                 if (!dWh || (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh))) return;
