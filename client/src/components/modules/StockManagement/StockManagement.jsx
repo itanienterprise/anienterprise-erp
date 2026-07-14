@@ -183,7 +183,7 @@ const StockManagement = ({
         to: '', toManager: '', toLocation: '', toCapacity: '',
         productEntries: [{
             productName: '',
-            brandEntries: [{ brand: '', inhousePkt: '', inhouseQty: '', whPkt: '', whQty: '', transferPkt: '', transferQty: '' }]
+            brandEntries: [{ lcNo: '', brand: '', inhousePkt: '', inhouseQty: '', whPkt: '', whQty: '', transferPkt: '', transferQty: '' }]
         }]
     });
     const [isAddingWarehouseStock, setIsAddingWarehouseStock] = useState(false);
@@ -200,6 +200,8 @@ const StockManagement = ({
     const whProductDropdownRefs = useRef([]);
     const [showWhBrandDropdown, setShowWhBrandDropdown] = useState(false);
     const whBrandDropdownRefs = useRef({}); // Using object for nested indices
+    const [showWhLcDropdown, setShowWhLcDropdown] = useState(false);
+    const whLcDropdownRefs = useRef({});
 
 
     // Expand/Collapse state for mobile cards
@@ -661,12 +663,52 @@ const StockManagement = ({
         setShowProductHistoryReport(true);
     };
 
+    const availableLcs = useMemo(() => {
+        const activeProduct = addWarehouseStockFormData.productEntries[activeWhProductIndex];
+        if (!activeProduct || !activeProduct.productName) return [];
+        const targetProd = (activeProduct.productName || '').trim().toLowerCase();
+
+        // Get all unique LC numbers from warehouseData for this product
+        const lcs = warehouseData
+            .filter(item => (item.productName || item.product || '').trim().toLowerCase() === targetProd)
+            .map(item => (item.lcNo || '').trim())
+            .filter(Boolean);
+
+        return [...new Set(lcs)].sort();
+    }, [addWarehouseStockFormData.productEntries, activeWhProductIndex, warehouseData]);
+
     const availableBrands = useMemo(() => {
         const activeProduct = addWarehouseStockFormData.productEntries[activeWhProductIndex];
-        if (!activeProduct || !activeProduct.productName || !products) return [];
-        const selectedProduct = products.find(p => p.name === activeProduct.productName);
-        return selectedProduct ? (selectedProduct.brands || []) : [];
-    }, [addWarehouseStockFormData.productEntries, activeWhProductIndex, products]);
+        if (!activeProduct || !activeProduct.productName) return [];
+        const activeBrandEntry = activeProduct.brandEntries[activeWhBrandIndex];
+        const currentLc = (activeBrandEntry?.lcNo || '').trim().toLowerCase();
+        const targetProd = (activeProduct.productName || '').trim().toLowerCase();
+
+        // Find brands for this product AND this LC No in warehouseData
+        const matchingBrands = warehouseData
+            .filter(item =>
+                (item.productName || item.product || '').trim().toLowerCase() === targetProd &&
+                (currentLc ? (item.lcNo || '').trim().toLowerCase() === currentLc : true)
+            )
+            .map(item => (item.brand || '').trim())
+            .filter(Boolean);
+
+        const uniqueMatchingBrands = [...new Set(matchingBrands)].sort();
+
+        // If we found matching brands, return them as objects (with brand property)
+        if (uniqueMatchingBrands.length > 0) {
+            return uniqueMatchingBrands.map(bName => ({ brand: bName }));
+        }
+
+        // Fallback: If no matching brands found in warehouseData, fall back to product's defined brands
+        if (products) {
+            const selectedProduct = products.find(p => p.name === activeProduct.productName);
+            if (selectedProduct && selectedProduct.brands) {
+                return selectedProduct.brands.map(b => typeof b === 'object' && b.brand ? b : { brand: b });
+            }
+        }
+        return [];
+    }, [addWarehouseStockFormData.productEntries, activeWhProductIndex, activeWhBrandIndex, warehouseData, products]);
 
     const ports = useMemo(() => {
         return [...new Set(stockRecords.map(r => r.port).filter(Boolean))].map(name => ({ name })).sort((a, b) => a.name.localeCompare(b.name));
@@ -822,19 +864,25 @@ const StockManagement = ({
             if (bIndex !== null) {
                 // Update brand-specific field
                 const updatedBrands = [...updatedProducts[pIndex].brandEntries];
-                if (name === 'brand') {
+                if (name === 'brand' || name === 'lcNo') {
                     const currentProductName = updatedProducts[pIndex].productName;
                     const targetProd = (currentProductName || '').trim().toLowerCase();
-                    const targetBrand = (value || '').trim().toLowerCase();
+                    
+                    const brandVal = name === 'brand' ? value : updatedBrands[bIndex].brand;
+                    const lcNoVal = name === 'lcNo' ? value : updatedBrands[bIndex].lcNo;
+                    
+                    const targetBrand = (brandVal || '').trim().toLowerCase();
+                    const targetLcNo = (lcNoVal || '').trim().toLowerCase();
                     const targetWh = (addWarehouseStockFormData.whName || '').trim().toLowerCase();
 
                     const matchingStockEntries = warehouseData.filter(item =>
-                        ((item.productName || '').trim().toLowerCase() === targetProd || (item.product || '').trim().toLowerCase() === targetProd) &&
-                        (item.brand || '').trim().toLowerCase() === targetBrand
+                        ((item.productName || item.product || '').trim().toLowerCase() === targetProd) &&
+                        (item.brand || '').trim().toLowerCase() === targetBrand &&
+                        (targetLcNo ? (item.lcNo || '').trim().toLowerCase() === targetLcNo : true)
                     );
 
-                    const globalInPkt = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhousePkt) || 0) : 0;
-                    const globalInQty = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhouseQty) || 0) : 0;
+                    const globalInPkt = matchingStockEntries.reduce((sum, item) => sum + (parseFloat(item.inhousePkt) || 0), 0);
+                    const globalInQty = matchingStockEntries.reduce((sum, item) => sum + (parseFloat(item.inhouseQty) || 0), 0);
 
                     let totalWhPkt = 0;
                     let totalWhQty = 0;
@@ -860,7 +908,8 @@ const StockManagement = ({
                                 if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
                                     if (saleItem.brandEntries) {
                                         saleItem.brandEntries.forEach(entry => {
-                                            if ((entry.brand || '').trim().toLowerCase() === targetBrand) {
+                                            if ((entry.brand || '').trim().toLowerCase() === targetBrand &&
+                                                (targetLcNo ? (entry.lcNo || '').trim().toLowerCase() === targetLcNo : true)) {
                                                 const sQty = parseFloat(entry.quantity) || 0;
                                                 const pktSize = parseFloat(saleItem.packetSize || entry.packetSize) || (matchingStockEntries[0]?.packetSize ? parseFloat(matchingStockEntries[0].packetSize) : 0);
                                                 const sPkt = pktSize > 0 ? sQty / pktSize : 0;
@@ -894,9 +943,11 @@ const StockManagement = ({
                         whQty: finalWhQty ? Number(finalWhQty.toFixed(2)) : 0,
                         packetSize: matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].packetSize) || 0) : 0
                     };
-                    setActiveWhProductIndex(pIndex);
-                    setActiveWhBrandIndex(bIndex);
-                    setShowWhBrandDropdown(true);
+                    if (name === 'brand') {
+                        setActiveWhProductIndex(pIndex);
+                        setActiveWhBrandIndex(bIndex);
+                        setShowWhBrandDropdown(true);
+                    }
                 } else if (name === 'brand_refresh') {
                     // Logic for refreshing an existing brand's data (used when whName changes)
                     const currentProductName = updatedProducts[pIndex].productName;
@@ -1013,90 +1064,10 @@ const StockManagement = ({
             } else {
                 // Update product-specific field
                 if (name === 'productName') {
-                    // Auto-populate brands for this product if whName is selected
-                    const targetWh = (addWarehouseStockFormData.whName || '').trim().toLowerCase();
-                    const targetProd = (value || '').trim().toLowerCase();
-
-                    // Find all unique brands for this product in warehouseData
-                    const productBrands = [...new Set(warehouseData
-                        .filter(item => (item.productName || item.product || '').trim().toLowerCase() === targetProd)
-                        .map(item => item.brand))]
-                        .filter(Boolean);
-
-                    let autoFilledBrands = [];
-                    if (productBrands.length > 0) {
-                        autoFilledBrands = productBrands.map(brandName => {
-                            // Calculate quantities for each brand
-                            const matchingStockEntries = warehouseData.filter(item =>
-                                ((item.productName || '').trim().toLowerCase() === targetProd || (item.product || '').trim().toLowerCase() === targetProd) &&
-                                (item.brand || '').trim().toLowerCase() === brandName.trim().toLowerCase()
-                            );
-
-                            const globalInPkt = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhousePkt) || 0) : 0;
-                            const globalInQty = matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].inhouseQty) || 0) : 0;
-
-                            let totalWhPkt = 0;
-                            let totalWhQty = 0;
-                            matchingStockEntries.forEach(item => {
-                                if ((item.whName || '').trim().toLowerCase() === targetWh) {
-                                    totalWhPkt += (parseFloat(item.whPkt) || 0);
-                                    totalWhQty += (parseFloat(item.whQty) || 0);
-                                }
-                            });
-
-                            let tSaleQty = 0;
-                            let tSalePkt = 0;
-                            let wSaleQty = 0;
-                            let wSalePkt = 0;
-
-                            (salesRecords || []).forEach(sale => {
-                                const sStatus = (sale.status || '').toLowerCase();
-                                if (sStatus !== 'accepted') return;
-                                if (sale.items) {
-                                    sale.items.forEach(saleItem => {
-                                        if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
-                                            if (saleItem.brandEntries) {
-                                                saleItem.brandEntries.forEach(entry => {
-                                                    if ((entry.brand || '').trim().toLowerCase() === brandName.trim().toLowerCase()) {
-                                                        const sQty = parseFloat(entry.quantity) || 0;
-                                                        const pktSize = parseFloat(saleItem.packetSize || entry.packetSize) || (matchingStockEntries[0]?.packetSize ? parseFloat(matchingStockEntries[0].packetSize) : 0);
-                                                        const sPkt = pktSize > 0 ? sQty / pktSize : 0;
-                                                        tSaleQty += sQty;
-                                                        tSalePkt += sPkt;
-                                                        if ((entry.warehouseName || '').trim().toLowerCase() === targetWh) {
-                                                            wSaleQty += sQty;
-                                                            wSalePkt += sPkt;
-                                                        }
-                                                    }
-                                                });
-                                            }
-                                        }
-                                    });
-                                }
-                            });
-
-                            const fInPkt = Math.max(0, globalInPkt - tSalePkt);
-                            const fInQty = Math.max(0, globalInQty - tSaleQty);
-                            const fWhPkt = Math.max(0, totalWhPkt - wSalePkt);
-                            const fWhQty = Math.max(0, totalWhQty - wSaleQty);
-
-                            return {
-                                brand: brandName,
-                                inhousePkt: fInPkt ? Number(fInPkt.toFixed(2)) : 0,
-                                inhouseQty: fInQty ? Number(fInQty.toFixed(2)) : 0,
-                                whPkt: fWhPkt ? Number(fWhPkt.toFixed(2)) : 0,
-                                whQty: fWhQty ? Number(fWhQty.toFixed(2)) : 0,
-                                transferPkt: '',
-                                transferQty: '',
-                                packetSize: matchingStockEntries.length > 0 ? (parseFloat(matchingStockEntries[0].packetSize) || 0) : 0
-                            };
-                        });
-                    }
-
                     updatedProducts[pIndex] = {
                         ...updatedProducts[pIndex],
                         [name]: value,
-                        brandEntries: autoFilledBrands.length > 0 ? autoFilledBrands : [{ brand: '', inhousePkt: '', inhouseQty: '', whPkt: '', whQty: '', transferPkt: '', transferQty: '', packetSize: '' }]
+                        brandEntries: [{ lcNo: '', brand: '', inhousePkt: '', inhouseQty: '', whPkt: '', whQty: '', transferPkt: '', transferQty: '', packetSize: '' }]
                     };
                     setActiveWhProductIndex(pIndex);
                     setShowWhProductDropdown(true);
@@ -1200,6 +1171,7 @@ const StockManagement = ({
             productEntries: [...prev.productEntries, {
                 productName: '',
                 brandEntries: [{
+                    lcNo: '',
                     brand: '',
                     inhousePkt: '',
                     inhouseQty: '',
@@ -1225,6 +1197,7 @@ const StockManagement = ({
     const addWarehouseBrandEntry = (pIndex) => {
         const updatedProducts = [...addWarehouseStockFormData.productEntries];
         updatedProducts[pIndex].brandEntries.push({
+            lcNo: '',
             brand: '',
             inhousePkt: '',
             inhouseQty: '',
@@ -1261,11 +1234,12 @@ const StockManagement = ({
 
                     if (transferQty <= 0 && transferPkt <= 0) continue;
 
-                    // 1. Handle Source Deduction - Support multiple sources matching same product/brand
+                    // 1. Handle Source Deduction - Support multiple sources matching same product/brand/LC No
                     const sourceRecords = warehouseData.filter(item =>
                         item.whName === addWarehouseStockFormData.whName &&
                         (item.productName || item.product) === productEntry.productName &&
                         item.brand === brandEntry.brand &&
+                        (brandEntry.lcNo ? (item.lcNo || '').trim().toLowerCase() === brandEntry.lcNo.trim().toLowerCase() : true) &&
                         ((parseFloat(item.whQty) > 0) || (parseFloat(item.whPkt) > 0))
                     );
 
@@ -1505,6 +1479,9 @@ const StockManagement = ({
             if (showWhBrandDropdown && whBrandDropdownRefs.current[`${activeWhProductIndex}-${activeWhBrandIndex}`] && !whBrandDropdownRefs.current[`${activeWhProductIndex}-${activeWhBrandIndex}`].contains(event.target)) {
                 setShowWhBrandDropdown(false);
             }
+            if (showWhLcDropdown && whLcDropdownRefs.current[`${activeWhProductIndex}-${activeWhBrandIndex}`] && !whLcDropdownRefs.current[`${activeWhProductIndex}-${activeWhBrandIndex}`].contains(event.target)) {
+                setShowWhLcDropdown(false);
+            }
         };
 
         const handleKeyDown = (e) => {
@@ -1522,7 +1499,7 @@ const StockManagement = ({
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [showStockFilterPanel, showHistoryFilterPanel, activeDropdown, filterDropdownOpen, viewRecord, showWhDropdown, showToDropdown, showWhProductDropdown, showWhBrandDropdown, activeWhProductIndex, activeWhBrandIndex]);
+    }, [showStockFilterPanel, showHistoryFilterPanel, activeDropdown, filterDropdownOpen, viewRecord, showWhDropdown, showToDropdown, showWhProductDropdown, showWhBrandDropdown, showWhLcDropdown, activeWhProductIndex, activeWhBrandIndex]);
 
     // Scroll Lock Effect
     useEffect(() => {
@@ -2415,7 +2392,7 @@ const StockManagement = ({
 
              {/* Add Stock to Warehouse Form Card */}
              {showAddWarehouseStockForm && (
-                 <div className="warehouse-form-container border-blue-100 mb-6">
+                 <div className="warehouse-form-container border-blue-100 mb-6" style={{ maxWidth: '1300px' }}>
  
                      <div className="warehouse-form-header">
                         <div>
@@ -2705,7 +2682,8 @@ const StockManagement = ({
 
                                         {/* Brand Entries for this Product */}
                                         <div className="space-y-4">
-                                            <div className="hidden lg:grid grid-cols-8 gap-4 px-3 mb-1 pr-[88px]">
+                                            <div className="hidden lg:grid grid-cols-10 gap-4 px-3 mb-1 pr-[88px]">
+                                                <div className="col-span-2 text-xs font-bold text-gray-400 uppercase tracking-wider">LC No</div>
                                                 <div className="col-span-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Brand</div>
                                                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">InHouse QTY</div>
                                                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider text-center">InHouse BAG</div>
@@ -2717,7 +2695,47 @@ const StockManagement = ({
 
                                             {product.brandEntries.map((brandEntry, bIndex) => (
                                                 <div key={bIndex} className="flex flex-col lg:flex-row items-center gap-4 p-4 lg:p-3 bg-white/40 border border-gray-200/50 rounded-xl group/brand hover:border-blue-200 transition-all">
-                                                    <div className="flex-1 w-full grid grid-cols-1 lg:grid-cols-8 gap-4 items-center">
+                                                    <div className="flex-1 w-full grid grid-cols-1 lg:grid-cols-10 gap-4 items-center">
+                                                        <div className="lg:col-span-2 relative" ref={el => whLcDropdownRefs.current[`${pIndex}-${bIndex}`] = el}>
+                                                            <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">LC No</label>
+                                                            <input
+                                                                type="text"
+                                                                name="lcNo"
+                                                                value={brandEntry.lcNo || ''}
+                                                                onChange={(e) => handleAddWarehouseStockInputChange(e, pIndex, bIndex)}
+                                                                onFocus={() => {
+                                                                    setActiveWhProductIndex(pIndex);
+                                                                    setActiveWhBrandIndex(bIndex);
+                                                                    setShowWhLcDropdown(true);
+                                                                }}
+                                                                placeholder="LC No"
+                                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-sm font-semibold"
+                                                                autoComplete="off"
+                                                                disabled={!product.productName}
+                                                            />
+                                                            {showWhLcDropdown && activeWhProductIndex === pIndex && activeWhBrandIndex === bIndex && product.productName && (
+                                                                <div className="absolute z-[100] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-2xl overflow-hidden min-w-[200px]">
+                                                                    <div className="max-h-60 overflow-y-auto py-1">
+                                                                        {availableLcs
+                                                                            .filter(lc => lc.toLowerCase().includes((brandEntry.lcNo || '').toLowerCase()))
+                                                                            .map((lc, lcIdx) => (
+                                                                                <button
+                                                                                    key={lcIdx}
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        const fakeEvent = { target: { name: 'lcNo', value: lc } };
+                                                                                        handleAddWarehouseStockInputChange(fakeEvent, pIndex, bIndex);
+                                                                                        setShowWhLcDropdown(false);
+                                                                                    }}
+                                                                                    className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors group"
+                                                                                >
+                                                                                    <div className="font-bold text-gray-900 text-xs group-hover:text-blue-700 whitespace-nowrap">{lc}</div>
+                                                                                </button>
+                                                                            ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                         <div className="lg:col-span-2 relative" ref={el => whBrandDropdownRefs.current[`${pIndex}-${bIndex}`] = el}>
                                                             <label className="block lg:hidden text-xs font-bold text-gray-500 mb-1">Brand</label>
                                                             <input

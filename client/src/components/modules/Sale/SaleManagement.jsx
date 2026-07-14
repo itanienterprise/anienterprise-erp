@@ -4470,18 +4470,33 @@ const SaleManagement = ({
                                         ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
                                         : false;
 
-                                    const items = sale.items && sale.items.length > 0
+                                    let items = sale.items && sale.items.length > 0
                                         ? sale.items.flatMap(item =>
                                             (item.brandEntries || []).length > 0
                                                 ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: be.lcNo || item.lcNo || sale.lcNo || '', uom: be.uom || item.uom || 'QTY' }))
-                                                : [{ ...item, productName: item.productName, uom: item.uom || 'QTY' }]
+                                                : [{ ...item, productName: item.productName, lcNo: item.lcNo || sale.lcNo || '', uom: item.uom || 'QTY' }]
                                         )
                                         : [{
                                             productName: sale.productName,
                                             brand: sale.brand,
                                             quantity: sale.quantity,
-                                            unitPrice: sale.unitPrice
+                                            unitPrice: sale.unitPrice,
+                                            lcNo: sale.lcNo || ''
                                         }];
+
+                                    if (searchQuery) {
+                                        const query = searchQuery.toLowerCase();
+                                        const filteredItems = items.filter(it => {
+                                            const lcNoMatch = (it.lcNo || '').toLowerCase().includes(query);
+                                            const prodMatch = (it.productName || '').toLowerCase().includes(query);
+                                            const brandMatch = (it.brand || '').toLowerCase().includes(query);
+                                            const truckMatch = (it.truck || '').toLowerCase().includes(query);
+                                            return lcNoMatch || prodMatch || brandMatch || truckMatch;
+                                        });
+                                        if (filteredItems.length > 0) {
+                                            items = filteredItems;
+                                        }
+                                    }
 
                                     if (saleType === 'Border') {
                                         return (
@@ -4786,19 +4801,34 @@ const SaleManagement = ({
                                 ? sale.items.flatMap(item => (item.brandEntries || [])).length > 1
                                 : false;
 
-                            const items = sale.items && sale.items.length > 0
+                            let items = sale.items && sale.items.length > 0
                                 ? sale.items.flatMap(item =>
                                     (item.brandEntries || []).length > 0
                                         ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: be.lcNo || item.lcNo || sale.lcNo || '', uom: be.uom || item.uom || 'QTY' }))
-                                        : [{ ...item, productName: item.productName, uom: item.uom || 'QTY' }]
+                                        : [{ ...item, productName: item.productName, lcNo: item.lcNo || sale.lcNo || '', uom: item.uom || 'QTY' }]
                                 )
                                 : [{
                                     productName: sale.productName,
                                     brand: sale.brand,
                                     quantity: sale.quantity,
                                     unitPrice: sale.unitPrice,
+                                    lcNo: sale.lcNo || '',
                                     uom: sale.uom || 'QTY'
                                 }];
+
+                            if (searchQuery) {
+                                const query = searchQuery.toLowerCase();
+                                const filteredItems = items.filter(it => {
+                                    const lcNoMatch = (it.lcNo || '').toLowerCase().includes(query);
+                                    const prodMatch = (it.productName || '').toLowerCase().includes(query);
+                                    const brandMatch = (it.brand || '').toLowerCase().includes(query);
+                                    const truckMatch = (it.truck || '').toLowerCase().includes(query);
+                                    return lcNoMatch || prodMatch || brandMatch || truckMatch;
+                                });
+                                if (filteredItems.length > 0) {
+                                    items = filteredItems;
+                                }
+                            }
 
                             return (
                                 <div

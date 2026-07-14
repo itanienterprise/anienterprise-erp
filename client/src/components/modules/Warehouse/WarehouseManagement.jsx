@@ -235,6 +235,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
 
     const [editingWarehouseId, setEditingWarehouseId] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: 'warehouse' });
+    const [editingStock, setEditingStock] = useState(null);
 
     const filteredData = useMemo(() => {
         if (!warehouseData || !Array.isArray(warehouseData)) return [];
@@ -564,6 +565,75 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
             status: wh.status || 'Active'
         });
         setShowWarehouseForm(true);
+    };
+
+    const handleEditStock = (stock) => {
+        setEditingStock({
+            _id: stock._id,
+            recordType: stock.recordType || (stock.inhousePkt !== undefined && stock.inhouseQty !== undefined ? 'stock' : 'warehouse'),
+            whName: stock.whName,
+            productName: stock.productName || stock.product,
+            brand: stock.brand,
+            lcNo: stock.lcNo || '',
+            inhousePkt: stock.inhousePkt || 0,
+            inhouseQty: stock.inhouseQty || 0,
+            whPkt: stock.whPkt || 0,
+            whQty: stock.whQty || 0,
+            packetSize: stock.packetSize || 0
+        });
+    };
+
+    const handleSaveStockEdit = async () => {
+        if (!editingStock) return;
+        try {
+            const originalRecord = warehouseData.find(item => item._id === editingStock._id);
+            if (!originalRecord) {
+                alert('Error: Original stock record not found');
+                return;
+            }
+
+            const updatedRecord = {
+                ...originalRecord,
+                whName: editingStock.whName,
+                warehouse: editingStock.whName,
+                productName: editingStock.productName,
+                product: editingStock.productName,
+                brand: editingStock.brand,
+                lcNo: editingStock.lcNo,
+                whQty: editingStock.whQty,
+                whPkt: editingStock.whPkt,
+                inhouseQty: editingStock.inhouseQty,
+                inhousePkt: editingStock.inhousePkt,
+                packetSize: editingStock.packetSize,
+                ...(originalRecord.recordType === 'stock' && {
+                    warehouse: editingStock.whName,
+                    whName: editingStock.whName,
+                    productName: editingStock.productName,
+                    product: editingStock.productName,
+                    brand: editingStock.brand,
+                    lcNo: editingStock.lcNo,
+                    inHouseQuantity: editingStock.inhouseQty,
+                    inhouseQty: editingStock.inhouseQty,
+                    inHousePacket: editingStock.inhousePkt,
+                    inhousePkt: editingStock.inhousePkt
+                })
+            };
+
+            const { _id, recordType, createdAt, updatedAt, ...sourceDataToEncrypt } = updatedRecord;
+            const encryptedSource = encryptData(sourceDataToEncrypt);
+
+            if (originalRecord.recordType === 'stock') {
+                await axios.put(`${API_BASE_URL}/api/stock/${originalRecord._id}`, { data: encryptedSource });
+            } else {
+                await axios.put(`${API_BASE_URL}/api/warehouses/${originalRecord._id}`, { data: encryptedSource });
+            }
+
+            setWarehouseData(prev => prev.map(item => item._id === editingStock._id ? updatedRecord : item));
+            setEditingStock(null);
+        } catch (error) {
+            console.error('Error saving stock edit:', error);
+            alert('Failed to save stock edit');
+        }
     };
 
 
@@ -1494,7 +1564,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                 <div className="text-right font-bold text-emerald-800 uppercase">TOTAL STOCK QTY</div>
                                                                 <div className="text-right font-bold text-blue-800 uppercase">WareHouse BAG</div>
                                                                 <div className="text-right font-bold text-blue-800 uppercase">WareHouse QTY</div>
-                                                                {isAdmin && <div className="text-right font-bold text-gray-500">Actions</div>}
+                                                                <div className="text-right font-bold text-gray-500">Actions</div>
                                                             </div>
                                                         </th>
                                                     </tr>
@@ -1535,12 +1605,12 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                                     <div className="text-sm text-black text-right font-bold">
                                                                                         {parseFloat(brand.whQty || 0).toLocaleString('en-US')} kg
                                                                                     </div>
-                                                                                    {isAdmin && (
-                                                                                        <div className="flex items-center justify-end gap-2">
-                                                                                            <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                    <div className="flex items-center justify-end gap-2">
+                                                                                        <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                        {isAdmin && (
                                                                                             <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
-                                                                                        </div>
-                                                                                    )}
+                                                                                        )}
+                                                                                    </div>
                                                                                 </div>
                                                                             ))}
 
@@ -1602,12 +1672,12 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                                     <div key={bIdx} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                                                         <div className="flex justify-between items-center pb-2 border-b border-gray-200 mb-3">
                                                                                             <span className="text-sm font-bold text-blue-600">{brand.brand}</span>
-                                                                                            {isAdmin && (
-                                                                                                <div className="flex items-center gap-2">
-                                                                                                    <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                                {isAdmin && (
                                                                                                     <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
-                                                                                                </div>
-                                                                                            )}
+                                                                                                )}
+                                                                                            </div>
                                                                                         </div>
                                                                                         <div className="grid grid-cols-[80px_8px_1fr] gap-y-2 text-xs items-baseline text-left pt-2 border-t border-gray-100">
                                                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BAG</span>
@@ -1785,6 +1855,157 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                     </>
                 )
             }
+            {editingStock && (
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setEditingStock(null)}></div>
+                    <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 animate-in zoom-in duration-200">
+                        <div className="flex justify-between items-center mb-6 pb-2 border-b border-gray-100">
+                            <h3 className="text-xl font-bold text-gray-900">Edit Stock Details</h3>
+                            <button onClick={() => setEditingStock(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                <XIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {/* Editable Warehouse, Product, Brand, LC No */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500 pl-1">Warehouse</label>
+                                    <select
+                                        value={editingStock.whName}
+                                        onChange={(e) => setEditingStock({ ...editingStock, whName: e.target.value })}
+                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-semibold"
+                                    >
+                                        {uniqueWarehouses.map(w => (
+                                            <option key={w.whName} value={w.whName}>{w.whName}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500 pl-1">Product</label>
+                                    <select
+                                        value={editingStock.productName}
+                                        onChange={(e) => setEditingStock({ ...editingStock, productName: e.target.value })}
+                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-semibold"
+                                    >
+                                        {products.map(p => (
+                                            <option key={p.name} value={p.name}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500 pl-1">Brand</label>
+                                    <input
+                                        type="text"
+                                        value={editingStock.brand}
+                                        onChange={(e) => setEditingStock({ ...editingStock, brand: e.target.value })}
+                                        placeholder="Brand Name"
+                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-semibold"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500 pl-1">LC No</label>
+                                    <input
+                                        type="text"
+                                        value={editingStock.lcNo}
+                                        onChange={(e) => setEditingStock({ ...editingStock, lcNo: e.target.value })}
+                                        placeholder="LC No"
+                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-semibold"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Editable inputs */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500 pl-1">InHouse Qty (kg)</label>
+                                    <input
+                                        type="number"
+                                        value={editingStock.inhouseQty}
+                                        onChange={(e) => {
+                                            const qty = parseFloat(e.target.value) || 0;
+                                            const size = parseFloat(editingStock.packetSize) || 0;
+                                            const pkt = size > 0 ? Number((qty / size).toFixed(2)) : 0;
+                                            setEditingStock({ ...editingStock, inhouseQty: qty, inhousePkt: pkt });
+                                        }}
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-semibold"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500 pl-1">InHouse Bags</label>
+                                    <input
+                                        type="number"
+                                        value={editingStock.inhousePkt}
+                                        onChange={(e) => {
+                                            const pkt = parseFloat(e.target.value) || 0;
+                                            const size = parseFloat(editingStock.packetSize) || 0;
+                                            const qty = size > 0 ? Number((pkt * size).toFixed(2)) : 0;
+                                            setEditingStock({ ...editingStock, inhousePkt: pkt, inhouseQty: qty });
+                                        }}
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-semibold"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500 pl-1">Warehouse Qty (kg)</label>
+                                    <input
+                                        type="number"
+                                        value={editingStock.whQty}
+                                        onChange={(e) => {
+                                            const qty = parseFloat(e.target.value) || 0;
+                                            const size = parseFloat(editingStock.packetSize) || 0;
+                                            const pkt = size > 0 ? Number((qty / size).toFixed(2)) : 0;
+                                            setEditingStock({ ...editingStock, whQty: qty, whPkt: pkt });
+                                        }}
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-semibold"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500 pl-1">Warehouse Bags</label>
+                                    <input
+                                        type="number"
+                                        value={editingStock.whPkt}
+                                        onChange={(e) => {
+                                            const pkt = parseFloat(e.target.value) || 0;
+                                            const size = parseFloat(editingStock.packetSize) || 0;
+                                            const qty = size > 0 ? Number((pkt * size).toFixed(2)) : 0;
+                                            setEditingStock({ ...editingStock, whPkt: pkt, whQty: qty });
+                                        }}
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-semibold"
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-gray-500 pl-1">Packet Size (kg)</label>
+                                <input
+                                    type="number"
+                                    value={editingStock.packetSize}
+                                    onChange={(e) => {
+                                        const size = parseFloat(e.target.value) || 0;
+                                        setEditingStock({ ...editingStock, packetSize: size });
+                                    }}
+                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-semibold"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-8">
+                            <button
+                                onClick={() => setEditingStock(null)}
+                                className="flex-1 px-6 py-3 bg-gray-50 text-gray-700 rounded-xl font-bold hover:bg-gray-100 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveStockEdit}
+                                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                            >
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {deleteConfirm.show && (
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirm({ show: false, id: null, type: 'stock' })}></div>
