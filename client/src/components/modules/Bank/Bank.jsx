@@ -75,6 +75,7 @@ const Bank = ({ onDeleteConfirm }) => {
     const importerFilterRef = useRef(null);
     const [formData, setFormData] = useState({
         bankName: '',
+        shortName: '',
         binNo: '',
         branches: [{
             branch: '',
@@ -652,6 +653,7 @@ const Bank = ({ onDeleteConfirm }) => {
     const resetForm = () => {
         setFormData({
             bankName: '',
+            shortName: '',
             binNo: '',
             branches: [{
                 branch: '',
@@ -709,6 +711,7 @@ const Bank = ({ onDeleteConfirm }) => {
 
         setFormData({
             bankName: bank.bankName || '',
+            shortName: bank.shortName || '',
             binNo: bank.binNo || '',
             branches: branches,
             isIndian: bank.isIndian || false,
@@ -843,6 +846,19 @@ const Bank = ({ onDeleteConfirm }) => {
                                 onChange={handleInputChange}
                                 required
                                 placeholder="Enter Bank Name"
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
+                            />
+                        </div>
+
+                        <div className="col-span-1 space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Short Name</label>
+                            <input
+                                type="text"
+                                name="shortName"
+                                value={formData.shortName}
+                                onChange={handleInputChange}
+                                placeholder="e.g. CITY, ISLAMI, DBBL"
                                 autoComplete="off"
                                 className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
                             />

@@ -744,7 +744,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             doc.setFont('helvetica', 'bold');
             doc.text(filters.warehouse, margin + 25, yPos);
         }
- 
+
         if (searchQuery) {
             yPos += 5;
             doc.setFont('helvetica', 'bold');
@@ -2738,7 +2738,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     truck: entry.truck || sale.truck || '-',
                     price: entry.unitPrice || 0,
                     total: entry.totalAmount || 0,
-                    lcNo: item.lcNo || sale.lcNo || '-',
+                    lcNo: (entry.lcNo !== undefined && entry.lcNo !== null) ? (entry.lcNo || '-') : (item.lcNo || sale.lcNo || '-'),
                     uom: entry.uom || item.uom || 'QTY',
                     isFirstInProduct: subIdx === 0,
                     productSpan: entries.length
@@ -4925,21 +4925,22 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
 
         // Data Preparation
         const tableHeaders = [
-            ['Date', 'Exp Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Port', 'Product', 'Quantity', 'LC Receive', 'LC Balance', 'Total Value', 'Expense']
+            ['Date', 'L.S. Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Port', 'Product', 'Quantity', 'LC Receive', 'LC Balance', 'Bill Value', 'Total Value', 'Expense']
         ];
 
         const tableRows = reportData.map(record => [
             formatDate(record.openingDate),
-            formatDate(record.expiryDate),
-            record.lcNo || '-',
-            record.importerName || '-',
-            record.exporterName || '-',
-            record.bankName || '-',
-            record.port || '-',
-            record.product || '-',
+            formatDate(record.latestShipmentDate),
+            String(record.lcNo || '-').trim(),
+            String(record.importerName || '-').trim(),
+            String(record.exporterName || '-').trim(),
+            String(record.bankName || '-').trim(),
+            String(record.port || '-').trim(),
+            String(record.product || '-').trim(),
             `${Math.round(record.qty).toLocaleString('en-US')} Kg`,
             `${Math.round(record.received || 0).toLocaleString('en-US')} Kg`,
             `${Math.round(record.bal).toLocaleString('en-US')} Kg`,
+            record.dollarRate ? '\n' : ' ',
             `${Math.round(record.val).toLocaleString('en-US')}`,
             record.exp > 0 ? `${Math.round(record.exp).toLocaleString('en-US')}` : '—'
         ]);
@@ -4949,6 +4950,7 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
             { content: `${Math.round(totals.totalQty).toLocaleString('en-US')} Kg`, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: `${Math.round(totals.totalReceived || 0).toLocaleString('en-US')} Kg`, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: `${Math.round(totals.totalBal).toLocaleString('en-US')} Kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `$${Math.round(totals.totalBillValueUsd || 0).toLocaleString('en-US')}`, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: `${Math.round(totals.totalVal).toLocaleString('en-US')}`, styles: { halign: 'right', fontStyle: 'bold' } },
             { content: totals.totalExp > 0 ? `${Math.round(totals.totalExp).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } }
         ];
@@ -4958,10 +4960,11 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
             head: tableHeaders,
             body: tableRows,
             foot: [footerRow],
+            showFoot: 'lastPage',
             theme: 'grid',
             styles: {
                 fontSize: 9,
-                cellPadding: 1.5,
+                cellPadding: 1.2,
                 textColor: [0, 0, 0],
                 lineColor: [0, 0, 0],
                 lineWidth: 0.1,
@@ -4982,19 +4985,55 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
                 lineWidth: 0.1
             },
             columnStyles: {
-                0: { cellWidth: 19, halign: 'center' }, // Date
-                1: { cellWidth: 19, halign: 'center' }, // Expire Date
-                2: { cellWidth: 24, halign: 'center', fontStyle: 'bold' }, // LC No
-                3: { cellWidth: 24, overflow: "hidden" }, // Importer
-                4: { cellWidth: 20, overflow: "hidden" }, // Exporter
-                5: { cellWidth: 27, overflow: "hidden" }, // Bank
-                6: { cellWidth: 20, halign: 'center' }, // Port
-                7: { cellWidth: 23, halign: 'left' }, // Product
-                8: { cellWidth: 23, halign: 'right' }, // Qty
-                9: { cellWidth: 23, halign: 'right' }, // LC Receive
-                10: { cellWidth: 23, halign: 'right' }, // LC Balance
-                11: { cellWidth: 22, halign: 'right' }, // Total Value
-                12: { cellWidth: 22, halign: 'right' } // Exp
+                0: { cellWidth: 20, halign: 'center', valign: 'middle' }, // Date
+                1: { cellWidth: 20, halign: 'center', valign: 'middle' }, // L.S. Date
+                2: { cellWidth: 24, halign: 'center', valign: 'middle', fontStyle: 'bold' }, // LC No
+                3: { cellWidth: 20, overflow: "hidden", valign: 'middle' }, // Importer
+                4: { cellWidth: 18, overflow: "hidden", valign: 'middle' }, // Exporter
+                5: { cellWidth: 12, overflow: "hidden", valign: 'middle' }, // Bank
+                6: { cellWidth: 16, halign: 'center', valign: 'middle' }, // Port
+                7: { cellWidth: 24, halign: 'left', valign: 'middle' },   // Product
+                8: { cellWidth: 23, halign: 'right', valign: 'middle' },  // Qty
+                9: { cellWidth: 23, halign: 'right', valign: 'middle' },  // LC Receive
+                10: { cellWidth: 23, halign: 'right', valign: 'middle' }, // LC Balance
+                11: { cellWidth: 20, halign: 'right', valign: 'middle' }, // Bill Value ($)
+                12: { cellWidth: 22, halign: 'right', valign: 'middle' }, // Total Value
+                13: { cellWidth: 22, halign: 'right', valign: 'middle' }  // Expense
+            },
+            didDrawCell: (data) => {
+                if (data.row.section === 'body' && data.column.index === 11) {
+                    const rowIdx = data.row.index;
+                    const record = reportData[rowIdx];
+                    if (record) {
+                        const cell = data.cell;
+                        const usdText = `$${Math.round(record.billValueUsd || 0).toLocaleString('en-US')}`;
+                        const rateText = record.dollarRate ? `(Tk ${parseFloat(record.dollarRate).toFixed(2)})` : '';
+                        
+                        const x = cell.x + cell.width - cell.padding('right');
+                        const originalFont = doc.getFont();
+                        
+                        if (rateText) {
+                            const y1 = cell.y + (cell.height / 2) - 0.7;
+                            const y2 = cell.y + (cell.height / 2) + 2.8;
+
+                            doc.setFont('helvetica', 'bold');
+                            doc.setFontSize(9);
+                            doc.setTextColor(0, 0, 0);
+                            doc.text(usdText, x, y1, { align: 'right' });
+                            
+                            doc.setFont('helvetica', 'normal');
+                            doc.setFontSize(9);
+                            doc.text(rateText, x, y2, { align: 'right' });
+                        } else {
+                            const y = cell.y + (cell.height / 2) + 1.0;
+                            doc.setFont('helvetica', 'bold');
+                            doc.setFontSize(9);
+                            doc.setTextColor(0, 0, 0);
+                            doc.text(usdText, x, y, { align: 'right' });
+                        }
+                        doc.setFont(originalFont.fontName, originalFont.fontStyle);
+                    }
+                }
             },
             margin: { left: margin, right: margin }
         });

@@ -170,15 +170,7 @@ export default function ProfitLoss({ salesRecords, products }) {
 
       // Create flat list of entries for calculations
       const entries = items.flatMap(item => {
-        const itemLcNo = item.lcNo || sale.lcNo || '';
-        
-        // Filter by LC Number at the item level if specified
-        if (selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '') {
-          const entryLcNo = itemLcNo.trim().toLowerCase();
-          const searchLcNo = selectedLcNo.trim().toLowerCase();
-          if (!entryLcNo.includes(searchLcNo)) return [];
-        }
-
+        const itemLcNo = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
         const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
           ? item.brandEntries
           : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: item.unitPrice || 0, totalAmount: item.totalAmount || 0 }];
@@ -188,8 +180,17 @@ export default function ProfitLoss({ salesRecords, products }) {
           brandName: entry.brandName || entry.brand || '-',
           quantity: parseFloat(entry.quantity) || 0,
           unitPrice: parseFloat(entry.unitPrice) || 0,
-          totalAmount: parseFloat(entry.totalAmount) || (parseFloat(entry.quantity) * parseFloat(entry.unitPrice)) || 0
+          totalAmount: parseFloat(entry.totalAmount) || (parseFloat(entry.quantity) * parseFloat(entry.unitPrice)) || 0,
+          lcNo: (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLcNo
         }));
+      }).filter(entry => {
+        // Filter by LC Number if specified
+        if (selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '') {
+          const entryLcNo = (entry.lcNo || '').trim().toLowerCase();
+          const searchLcNo = selectedLcNo.trim().toLowerCase();
+          return entryLcNo.includes(searchLcNo);
+        }
+        return true;
       });
 
       // Filter by Product Name if specified
@@ -415,8 +416,7 @@ export default function ProfitLoss({ salesRecords, products }) {
 
       const items = sale.items || [];
       items.forEach(item => {
-        const itemLc = item.lcNo || sale.lcNo || '';
-        if (cleanLc(itemLc) !== lcNoClean) return;
+        const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
 
         const prodName = item.productName || item.product || 'Unknown Product';
         if (!summaryMap[prodName]) {
@@ -441,6 +441,9 @@ export default function ProfitLoss({ salesRecords, products }) {
           : [{ quantity: item.quantity, totalAmount: item.totalAmount || (parseFloat(item.quantity) * parseFloat(item.unitPrice)) || 0 }];
         
         brandEntries.forEach(entry => {
+          const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLc;
+          if (cleanLc(entryLc) !== lcNoClean) return;
+
           const qty = parseFloat(entry.quantity) || 0;
           const totalAmount = parseFloat(entry.totalAmount) || (qty * (parseFloat(entry.unitPrice) || 0));
           summaryMap[prodName].saleQty += qty;

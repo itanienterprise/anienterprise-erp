@@ -1507,7 +1507,7 @@ const SaleManagement = ({
         } else {
             // Check if items are flat or nested
             initialItems = initialItems.map(item => {
-                const itemLcNo = item.lcNo || sale.lcNo || '';
+                const itemLcNo = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
                 const itemUom = item.uom || sale.uom || (saleType === 'General' ? 'QTY' : 'Truck');
                 if (item.brandEntries) {
                     return {
@@ -1515,7 +1515,7 @@ const SaleManagement = ({
                         uom: itemUom,
                         brandEntries: item.brandEntries.map(be => ({
                             ...be,
-                            lcNo: be.lcNo || itemLcNo,
+                            lcNo: (be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : itemLcNo,
                             uom: be.uom || itemUom
                         }))
                     };
@@ -4475,8 +4475,8 @@ const SaleManagement = ({
                                     let items = sale.items && sale.items.length > 0
                                         ? sale.items.flatMap(item =>
                                             (item.brandEntries || []).length > 0
-                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: be.lcNo || item.lcNo || sale.lcNo || '', uom: be.uom || item.uom || 'QTY' }))
-                                                : [{ ...item, productName: item.productName, lcNo: item.lcNo || sale.lcNo || '', uom: item.uom || 'QTY' }]
+                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: (be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (item.lcNo || sale.lcNo || ''), uom: be.uom || item.uom || 'QTY' }))
+                                                : [{ ...item, productName: item.productName, lcNo: (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || ''), uom: item.uom || 'QTY' }]
                                         )
                                         : [{
                                             productName: sale.productName,
@@ -4485,6 +4485,7 @@ const SaleManagement = ({
                                             unitPrice: sale.unitPrice,
                                             lcNo: sale.lcNo || ''
                                         }];
+
 
                                     if (searchQuery) {
                                         const query = searchQuery.toLowerCase();
@@ -4621,7 +4622,7 @@ const SaleManagement = ({
                                                     <div className="flex flex-col gap-2">
                                                         {items.map((it, idx) => (
                                                             <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                {it.lcNo ? it.lcNo.slice(-5) : (sale.lcNo ? sale.lcNo.slice(-5) : '-')}
+                                                                {it.lcNo || sale.lcNo || '-'}
                                                             </div>
                                                         ))}
                                                     </div>

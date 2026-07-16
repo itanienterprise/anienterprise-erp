@@ -334,7 +334,12 @@ const StockHistoryModal = ({
                 const matchesLc = (sale.lcNo || '').trim() === historyFilters.lcNo ||
                     (sale.items || []).some(item =>
                         (item.productName || '').trim().toLowerCase() === productName &&
-                        (item.lcNo || '').trim() === historyFilters.lcNo
+                        (
+                            (item.lcNo || '').trim() === historyFilters.lcNo ||
+                            (item.brandEntries || []).some(entry =>
+                                (entry.lcNo || '').trim() === historyFilters.lcNo
+                            )
+                        )
                     );
                 if (!matchesLc) return false;
             }
@@ -348,7 +353,10 @@ const StockHistoryModal = ({
                 const matchesLC = (sale.lcNo || '').toLowerCase().includes(searchLower) ||
                     (sale.items || []).some(item =>
                         (item.productName || '').trim().toLowerCase() === productName &&
-                        (item.lcNo || '').toLowerCase().includes(searchLower)
+                        (
+                            (item.lcNo || '').toLowerCase().includes(searchLower) ||
+                            (item.brandEntries || []).some(entry => (entry.lcNo || '').toLowerCase().includes(searchLower))
+                        )
                     );
                 const matchesItemBrand = (sale.items || [])
                     .filter(item => (item.productName || '').trim().toLowerCase() === productName)
@@ -364,11 +372,9 @@ const StockHistoryModal = ({
                 (item.productName || '').trim().toLowerCase() === productName
             );
             matchingItems.forEach(item => {
-                if (historyFilters.lcNo) {
-                    const currentLc = (item.lcNo || sale.lcNo || '').trim();
-                    if (currentLc !== historyFilters.lcNo) return;
-                }
                 (item.brandEntries || []).forEach(entry => {
+                    const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : (item.lcNo || sale.lcNo || '');
+                    if (historyFilters.lcNo && entryLc.trim() !== historyFilters.lcNo) return;
                     if (historyFilters.brand && (entry.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return;
                     if (historyFilters.warehouse && (entry.warehouseName || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return;
                     
@@ -388,7 +394,7 @@ const StockHistoryModal = ({
 
                     flattened.push({
                         ...sale,
-                        lcNo: item.lcNo || sale.lcNo || '',
+                        lcNo: entryLc,
                         itemBrand: entry.brand,
                         itemTruck: entry.truck,
                         itemPacket: calculatedPacket,
@@ -420,13 +426,28 @@ const StockHistoryModal = ({
         const whFromWh = (warehouseData || []).filter(w => (w.productName || w.product || '').trim().toLowerCase() === productName).map(w => w.whName || w.warehouse).filter(Boolean);
         const warehouses = [...new Set([...whFromStock, ...whFromWh])].sort();
 
+        // Collect LC Nos from purchase records
+        const lcNosFromPurchase = records.map(r => r.lcNo).filter(Boolean);
+        // Also collect LC Nos from sale brand entries for this product
+        const lcNosFromSales = (salesRecords || []).flatMap(sale =>
+            (sale.items || []).flatMap(item => {
+                if ((item.productName || '').trim().toLowerCase() !== productName) return [];
+                return [
+                    item.lcNo,
+                    sale.lcNo,
+                    ...(item.brandEntries || []).map(e => e.lcNo)
+                ].filter(Boolean);
+            })
+        );
+
+        const isPlaceholder = (v) => !v || v.toString().trim() === '-' || v.toString().trim() === '—' || v.toString().trim() === '--';
         return {
-            lcNos: [...new Set(records.map(r => r.lcNo).filter(Boolean))].sort(),
+            lcNos: [...new Set([...lcNosFromPurchase, ...lcNosFromSales])].filter(v => !isPlaceholder(v)).sort(),
             ports: [...new Set(records.map(r => r.port).filter(Boolean))].sort(),
             brands: [...new Set(records.flatMap(r => [r.brand, ...(r.entries || []).map(e => e.brand), ...(r.brandEntries || []).map(e => e.brand)]).filter(Boolean))].sort(),
             warehouses
         };
-    }, [viewRecord, stockRecords, warehouseData]);
+    }, [viewRecord, stockRecords, warehouseData, salesRecords]);
 
     const handleGenerateProductReport = () => {
         if (!viewRecord) return;

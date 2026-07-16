@@ -27,7 +27,9 @@ export const getGroupedBrandList = (brandList) => {
                 inHouseQuantity: 0,
                 inHousePacket: 0,
                 totalInHouseQuantity: 0,
-                totalInHousePacket: 0
+                totalInHousePacket: 0,
+                closingQuantity: 0,
+                closingPacket: 0
             };
         }
         groups[key].openingQuantity += b.openingQuantity || 0;
@@ -44,6 +46,8 @@ export const getGroupedBrandList = (brandList) => {
         groups[key].inHousePacket += b.inHousePacket || 0;
         groups[key].totalInHouseQuantity += b.totalInHouseQuantity || 0;
         groups[key].totalInHousePacket += b.totalInHousePacket || 0;
+        groups[key].closingQuantity += b.closingQuantity || 0;
+        groups[key].closingPacket += b.closingPacket || 0;
     });
     return Object.values(groups);
 };
@@ -81,6 +85,7 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
 
 export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = []) => {
     const isWhFilter = stockFilters.warehouse && stockFilters.warehouse.trim().toLowerCase() !== 'all warehouses';
+    const isPriceReport = stockFilters && stockFilters.reportType === 'price';
 
     const resolveQuality = (pName, bName) => {
         if (!products || !Array.isArray(products)) return '-';
@@ -153,7 +158,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     // 2. Process Warehouse Records (Transfers)
     warehouseData.forEach(whItem => {
-        if (!whItem || (whItem.location || '').trim().toLowerCase() === 'returned stock') return;
+        if (!whItem || whItem.isTransferLog) return;
+        if ((whItem.location || '').trim().toLowerCase() === 'returned stock') return;
         if (whItem.recordType !== 'warehouse' && !whItem.productName && !whItem.product) return;
         if (seenRecords.has(whItem._id)) return;
         seenRecords.add(whItem._id);
@@ -256,10 +262,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         const normBrand = (item.brand || 'No Brand').trim().toLowerCase();
         const normQuality = (item.quality || '-').trim().toLowerCase();
-        const isPriceReport = stockFilters && stockFilters.reportType === 'price';
-        const subKey = isPriceReport
-            ? `${normQuality}_${normBrand}_${(item.lcNo || 'no-lc').trim().toLowerCase()}_${item.purchasedPrice || 0}`
-            : `${normQuality}_${normBrand}`;
+        const subKey = `${normQuality}_${normBrand}_${(item.lcNo || 'no-lc').trim().toLowerCase()}_${item.purchasedPrice || 0}`;
 
         if (!acc[key].brands[subKey]) {
             acc[key].brands[subKey] = {
@@ -310,11 +313,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             }
 
                             if (beBrand === normBrand && beQuality === normQuality) {
-                                const saleLc = (sale.lcNo || be.lcNo || si.lcNo || '').trim().toLowerCase();
-                                if (isPriceReport) {
-                                    const stockLc = (item.lcNo || '').trim().toLowerCase();
-                                    if (saleLc !== stockLc) return;
-                                }
+                                const saleLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim().toLowerCase();
+                                const stockLc = (item.lcNo || '').trim().toLowerCase();
+                                if (saleLc !== stockLc) return; // ALWAYS require LC matching
                                 if (stockFilters.lcNo && saleLc !== stockFilters.lcNo.toLowerCase()) return;
                                 if (stockSearchQuery) {
                                     const q = stockSearchQuery.toLowerCase();
@@ -371,10 +372,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                 if (dProdName === keyLower && dBrand === normBrand) {
                     const damageLc = (damage.lcNo || '').trim().toLowerCase();
-                    if (isPriceReport) {
-                        const stockLc = (item.lcNo || '').trim().toLowerCase();
-                        if (damageLc !== stockLc) return;
-                    }
+                    const stockLc = (item.lcNo || '').trim().toLowerCase();
+                    if (damageLc !== stockLc) return; // ALWAYS require LC matching
                     if (stockFilters.lcNo && damageLc !== stockFilters.lcNo.toLowerCase()) return;
                     if (stockSearchQuery) {
                         const q = stockSearchQuery.toLowerCase();
@@ -450,6 +449,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const sProdName = (si.productName || '').trim();
             if (!sProdName) return;
 
+            // If this product already has stock records in first pass, do not process in second pass!
+            if (groupedStock[sProdName]) return;
+
             const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === sProdName.toLowerCase());
             if (product?.category?.toLowerCase() !== 'general') return;
 
@@ -495,7 +497,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const rq = resolveQuality(sProdName, be.brand);
                 const resolvedQ = rq !== '-' ? rq : (be.quality || '-');
                 const normQuality = resolvedQ.trim().toLowerCase();
-                const beLc = (sale.lcNo || be.lcNo || si.lcNo || '').trim();
+                const beLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim();
                 const bePrice = parseFloat(be.purchasedPrice) || 0;
  
                 if (stockFilters.lcNo && beLc.toLowerCase() !== stockFilters.lcNo.toLowerCase()) return;
@@ -507,10 +509,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     if (!matchesQuery) return;
                 }
 
-                const isPriceReport = stockFilters && stockFilters.reportType === 'price';
-                const subKey = isPriceReport
-                    ? `${normQuality}_${normBrand}_${beLc.toLowerCase()}_${bePrice}`
-                    : `${normQuality}_${normBrand}`;
+                const subKey = `${normQuality}_${normBrand}_${beLc.toLowerCase()}_${bePrice}`;
                 
                 if (!group.brands[subKey]) {
                     let resolvedPktSize = safeParse(be.packetSize);
@@ -537,7 +536,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         purchasedPrice: bePrice
                     };
                 } else {
-                    const saleLC = sale.lcNo || be.lcNo || si.lcNo;
+                    const saleLC = (be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '');
                     if (saleLC && !group.brands[subKey].lcNos.includes(saleLC)) {
                         group.brands[subKey].lcNos.push(saleLC);
                     }
@@ -554,11 +553,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
                         const dWh = (damage.warehouse || '').trim().toLowerCase();
                         if (dProdName === sProdName.toLowerCase() && dBrand === normBrand) {
-                            if (isPriceReport) {
-                                const damageLc = (damage.lcNo || '').trim().toLowerCase();
-                                const stockLc = beLc.toLowerCase();
-                                if (damageLc !== stockLc) return;
-                            }
+                            const damageLc = (damage.lcNo || '').trim().toLowerCase();
+                            const stockLc = beLc.toLowerCase();
+                            if (damageLc !== stockLc) return;
                             if (stockFilters.lcNo && (damage.lcNo || '').trim().toLowerCase() !== stockFilters.lcNo.toLowerCase()) return;
                             if (stockSearchQuery) {
                                 const q = stockSearchQuery.toLowerCase();
@@ -619,7 +616,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     });
 
     const displayRecords = Object.values(groupedStock).map(group => {
-        const brandList = Object.values(group.brands).map(b => {
+        let brandList = Object.values(group.brands).map(b => {
             const totalIn = b.openingQuantity + b.periodArrivalQuantity;
             const saleQty = b.saleQuantity;
             const shortageQty = b.sweepedQuantity;
@@ -644,7 +641,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 totalInHouseQuantity: openingAfterShortage,
                 totalInHousePacket: openingPktAfterShortage
             };
-        }).sort((a, b) => {
+        });
+
+        // If not a price report, group by quality and brand name!
+        if (!isPriceReport) {
+            brandList = getGroupedBrandList(brandList);
+        }
+
+        brandList = brandList.sort((a, b) => {
             const qCmp = (a.quality || '-').localeCompare(b.quality || '-');
             if (qCmp !== 0) return qCmp;
             return a.brand.localeCompare(b.brand);

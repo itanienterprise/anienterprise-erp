@@ -1255,7 +1255,7 @@ apiRouter.get('/api/sales', async (req, res) => {
       if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
         try { d = decryptData(d.data); } catch (e) { /* ignore */ }
       }
-      return { ...d, _id: r._id, createdAt: r.createdAt };
+      return { ...d, _id: r._id, createdAt: r.createdAt, saleType: d.saleType || r.saleType, invoiceNo: d.invoiceNo || r.invoiceNo };
     });
     res.json(decrypted);
   } catch (err) {

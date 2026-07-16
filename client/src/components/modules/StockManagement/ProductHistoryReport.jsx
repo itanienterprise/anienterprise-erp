@@ -91,11 +91,12 @@ const ProductHistoryReport = ({
         ...(rawSaleHistory || []).map(s => s.itemBrand),
         ...(rawDamageHistory || []).map(d => d.brand)
     ].filter(Boolean))].sort();
+    const isLcPlaceholder = (v) => !v || v.toString().trim() === '-' || v.toString().trim() === '—' || v.toString().trim() === '--';
     const lcOptions = [...new Set([
         ...(rawPurchaseHistory || []).map(p => p.lcNo),
         ...(rawSaleHistory || []).map(s => s.lcNo),
         ...(rawDamageHistory || []).map(d => d.lcNo)
-    ].filter(Boolean))].sort();
+    ].filter(v => !isLcPlaceholder(v)))].sort();
     const warehouseOptions = [...new Set([
         ...(rawPurchaseHistory || []).map(p => p.warehouse || p.whName),
         ...(rawSaleHistory || []).map(s => s.itemWarehouse),

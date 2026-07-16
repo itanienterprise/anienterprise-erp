@@ -549,11 +549,9 @@ const StockManagement = ({
                 (item.productName || '').trim().toLowerCase() === productName
             );
             matchingItems.forEach(item => {
-                if (historyFilters.lcNo) {
-                    const currentLc = (item.lcNo || sale.lcNo || '').trim();
-                    if (currentLc !== historyFilters.lcNo) return;
-                }
                 (item.brandEntries || []).forEach(entry => {
+                    const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : (item.lcNo || sale.lcNo || '');
+                    if (historyFilters.lcNo && entryLc.trim() !== historyFilters.lcNo) return;
                     if (historyFilters.brand && (entry.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return;
                     if (historyFilters.warehouse && (entry.warehouseName || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return;
                     if (searchLower) {
@@ -561,7 +559,7 @@ const StockManagement = ({
                             (sale.companyName || '').toLowerCase().includes(searchLower) ||
                             (sale.customerName || '').toLowerCase().includes(searchLower) ||
                             (sale.contact || '').toLowerCase().includes(searchLower) ||
-                            (item.lcNo || sale.lcNo || '').toLowerCase().includes(searchLower);
+                            entryLc.toLowerCase().includes(searchLower);
                         const matchesBrand = (entry.brand || '').toLowerCase().includes(searchLower);
                         if (!matchesEnv && !matchesBrand) return;
                     }
@@ -583,7 +581,7 @@ const StockManagement = ({
 
                     flattened.push({
                         ...sale,
-                        lcNo: item.lcNo || sale.lcNo || '',
+                        lcNo: entryLc,
                         itemBrand: entry.brand,
                         itemTruck: entry.truck,
                         itemPacket: calculatedPacket,
@@ -1354,6 +1352,25 @@ const StockManagement = ({
                             const encryptedData = encryptData(newEntry);
                             await axios.post(`${API_BASE_URL}/api/warehouses`, { data: encryptedData });
                         }
+
+                        // Create and save a transfer history log document
+                        const transferLog = {
+                            isTransferLog: true,
+                            date: new Date().toISOString(),
+                            fromWh: addWarehouseStockFormData.whName,
+                            toWh: destWhName,
+                            productName: productEntry.productName,
+                            product: productEntry.productName,
+                            brand: brandEntry.brand,
+                            lcNo: deduction.lcNo || '',
+                            truckNo: deduction.truckNo || '',
+                            whQty: deduction.qty,
+                            whPkt: deduction.pkt,
+                            manager: addWarehouseStockFormData.toManager || addWarehouseStockFormData.manager || '-',
+                            location: addWarehouseStockFormData.toLocation || addWarehouseStockFormData.location || '-'
+                        };
+                        const encryptedLog = encryptData(transferLog);
+                        await axios.post(`${API_BASE_URL}/api/warehouses`, { data: encryptedLog });
                     }
                 }
             }

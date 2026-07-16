@@ -16,6 +16,7 @@ import {
     EditIcon,
     BarChartIcon,
     ChevronUpIcon,
+    EyeIcon,
 } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import WarehouseReport from './WarehouseReport';
@@ -39,6 +40,8 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
     });
     const [searchQuery, setSearchQuery] = useState('');
     const [warehouseData, setWarehouseData] = useState([]);
+    const [viewingTransferHistory, setViewingTransferHistory] = useState(null);
+    const [transferHistoryRecords, setTransferHistoryRecords] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [showWhDropdown, setShowWhDropdown] = useState(false);
@@ -149,9 +152,14 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
             setProductsWithLC(uniqueProdsWithLC);
 
             // 2. Normalize Warehouse records
+            const logs = [];
             const allDecryptedWh = whData.map(item => {
                 try {
                     const decrypted = item;
+                    if (decrypted.isTransferLog) {
+                        logs.push(decrypted);
+                        return null;
+                    }
                     const prodName = (decrypted.product || decrypted.productName || '').trim();
                     const brand = (decrypted.brand || '').trim();
                     const key = `${prodName.toLowerCase()}|${brand.toLowerCase()}`;
@@ -213,6 +221,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
             // Combine for comprehensive view
             const combinedData = [...allDecryptedWh, ...decryptedStock];
             setWarehouseData(combinedData);
+            setTransferHistoryRecords(logs);
         } catch (error) {
             console.error('Error fetching warehouse data:', error);
         }
@@ -546,7 +555,11 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
 
     const handleDeleteStock = async (id, type = 'stock') => {
         try {
-            await axios.delete(`${API_BASE_URL}/api/warehouses/${id}`);
+            if (type === 'stock') {
+                await axios.delete(`${API_BASE_URL}/api/stock/${id}`);
+            } else {
+                await axios.delete(`${API_BASE_URL}/api/warehouses/${id}`);
+            }
             setWarehouseData(prev => prev.filter(item => item._id !== id));
             setDeleteConfirm({ show: false, id: null, type: type });
         } catch (error) {
@@ -1606,9 +1619,28 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                                         {parseFloat(brand.whQty || 0).toLocaleString('en-US')} kg
                                                                                     </div>
                                                                                     <div className="flex items-center justify-end gap-2">
-                                                                                        <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
-                                                                                        {isAdmin && (
-                                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                        <button 
+                                                                                            onClick={() => setViewingTransferHistory({ 
+                                                                                                whName: whGroup.whName, 
+                                                                                                productName: prodGroup.productName, 
+                                                                                                brand: brand.brand 
+                                                                                            })} 
+                                                                                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                                            title="View Transfer History"
+                                                                                        >
+                                                                                            <EyeIcon className="w-4 h-4" />
+                                                                                        </button>
+                                                                                        {brand._id && (
+                                                                                            <>
+                                                                                                {brand._id && (
+                                                                                                    <>
+                                                                                                        <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                                        {isAdmin && (
+                                                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: brand.recordType || 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                                        )}
+                                                                                                    </>
+                                                                                                )}
+                                                                                            </>
                                                                                         )}
                                                                                     </div>
                                                                                 </div>
@@ -1673,9 +1705,24 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                                         <div className="flex justify-between items-center pb-2 border-b border-gray-200 mb-3">
                                                                                             <span className="text-sm font-bold text-blue-600">{brand.brand}</span>
                                                                                             <div className="flex items-center gap-2">
-                                                                                                <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
-                                                                                                {isAdmin && (
-                                                                                                    <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                                <button 
+                                                                                                    onClick={() => setViewingTransferHistory({ 
+                                                                                                        whName: whGroup.whName, 
+                                                                                                        productName: prodGroup.productName, 
+                                                                                                        brand: brand.brand 
+                                                                                                    })} 
+                                                                                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                                                    title="View Transfer History"
+                                                                                                >
+                                                                                                    <EyeIcon className="w-4 h-4" />
+                                                                                                </button>
+                                                                                                {brand._id && (
+                                                                                                    <>
+                                                                                                        <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                                        {isAdmin && (
+                                                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: brand.recordType || 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                                        )}
+                                                                                                    </>
                                                                                                 )}
                                                                                             </div>
                                                                                         </div>
@@ -2027,6 +2074,127 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                 className="flex-1 px-6 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-200"
                             >
                                 Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {viewingTransferHistory && (
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewingTransferHistory(null)}></div>
+                    <div className="relative bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col border border-gray-100 animate-in zoom-in duration-200">
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-xl font-bold text-blue-900 tracking-tight">Stock Transfer History</h3>
+                                <p className="text-xs text-gray-500 font-medium mt-1">
+                                    Warehouse: <span className="font-bold text-gray-800">{viewingTransferHistory.whName}</span> | 
+                                    Product: <span className="font-bold text-gray-800">{viewingTransferHistory.productName}</span> | 
+                                    Brand: <span className="font-bold text-gray-800">{viewingTransferHistory.brand}</span>
+                                </p>
+                            </div>
+                            <button onClick={() => setViewingTransferHistory(null)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
+                                <XIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div className="p-6 overflow-y-auto flex-1">
+                            {(() => {
+                                const filteredLogs = transferHistoryRecords.filter(log => 
+                                    (log.productName || log.product || '').trim().toLowerCase() === viewingTransferHistory.productName.trim().toLowerCase() &&
+                                    (log.brand || '').trim().toLowerCase() === viewingTransferHistory.brand.trim().toLowerCase() &&
+                                    ((log.fromWh || '').trim().toLowerCase() === viewingTransferHistory.whName.trim().toLowerCase() ||
+                                     (log.toWh || '').trim().toLowerCase() === viewingTransferHistory.whName.trim().toLowerCase())
+                                ).sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+
+                                if (filteredLogs.length === 0) {
+                                    return (
+                                        <div className="py-12 text-center">
+                                            <BoxIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                                            <p className="text-gray-500 font-medium">No transfer history recorded for this item.</p>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                                        <table className="w-full text-left border-collapse text-sm">
+                                            <thead>
+                                                <tr className="bg-gray-50 border-b border-gray-100">
+                                                    <th className="px-4 py-3 text-xs font-extrabold text-gray-500 uppercase tracking-wider">Date</th>
+                                                    <th className="px-4 py-3 text-xs font-extrabold text-gray-500 uppercase tracking-wider text-center">Type</th>
+                                                    <th className="px-4 py-3 text-xs font-extrabold text-gray-500 uppercase tracking-wider">Route</th>
+                                                    <th className="px-4 py-3 text-xs font-extrabold text-gray-500 uppercase tracking-wider">LC No</th>
+                                                    <th className="px-4 py-3 text-xs font-extrabold text-gray-500 uppercase tracking-wider">Truck No</th>
+                                                    <th className="px-4 py-3 text-xs font-extrabold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
+                                                    <th className="px-4 py-3 text-xs font-extrabold text-gray-500 uppercase tracking-wider text-right">Bags</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {filteredLogs.map((log, idx) => {
+                                                    const isIncoming = (log.toWh || '').trim().toLowerCase() === viewingTransferHistory.whName.trim().toLowerCase();
+                                                    
+                                                    let displayDate = '-';
+                                                    try {
+                                                        const dateVal = log.date || log.createdAt;
+                                                        if (dateVal) {
+                                                            displayDate = new Date(dateVal).toLocaleDateString('en-GB', {
+                                                                day: '2-digit',
+                                                                month: '2-digit',
+                                                                year: 'numeric'
+                                                            });
+                                                        }
+                                                    } catch (e) {
+                                                        displayDate = '-';
+                                                    }
+
+                                                    return (
+                                                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                                                            <td className="px-4 py-3 font-medium text-gray-600">{displayDate}</td>
+                                                            <td className="px-4 py-3 text-center">
+                                                                {isIncoming ? (
+                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-wide">
+                                                                        Incoming
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-100 uppercase tracking-wide">
+                                                                        Outgoing
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-gray-700">
+                                                                {isIncoming ? (
+                                                                    <span>From <span className="font-semibold text-gray-900">{log.fromWh}</span></span>
+                                                                ) : (
+                                                                    <span>To <span className="font-semibold text-gray-900">{log.toWh}</span></span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-3 font-semibold text-gray-900">{log.lcNo || '-'}</td>
+                                                            <td className="px-4 py-3 text-gray-600">{log.truckNo || '-'}</td>
+                                                            <td className={`px-4 py-3 text-right font-bold ${isIncoming ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                {isIncoming ? '+' : '-'}{parseFloat(log.whQty || 0).toLocaleString('en-US')} kg
+                                                            </td>
+                                                            <td className={`px-4 py-3 text-right font-bold ${isIncoming ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                {isIncoming ? '+' : '-'}{parseFloat(log.whPkt || 0).toLocaleString('en-US')}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+                            <button 
+                                onClick={() => setViewingTransferHistory(null)} 
+                                className="px-5 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-100 transition-all text-sm shadow-sm"
+                            >
+                                Close
                             </button>
                         </div>
                     </div>

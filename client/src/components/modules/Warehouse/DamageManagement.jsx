@@ -141,7 +141,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                         saleItem.brandEntries.forEach(entry => {
                             const whName = (entry.warehouseName || '').trim().toLowerCase();
                             const brandName = (entry.brand || entry.quality || '').trim().toLowerCase();
-                            const lcName = (entry.lcNo || saleItem.lcNo || sale.lcNo || '').trim().toLowerCase();
+                            const lcName = ((entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : (saleItem.lcNo || sale.lcNo || '')).trim().toLowerCase();
 
                             const whMatch = whName === targetWH || (isGeneralWH && (whName === '' || whName === 'general / in stock'));
                             if (whMatch) {
