@@ -1023,7 +1023,8 @@ function App() {
                                 type === 'packing-list' ? 'packing-lists' :
                                   type === 'tr-setup' ? 'tr-setups' :
                                     type === 'cost-of-goods' ? 'cost-of-goods' :
-                                      'stock';
+                                      type === 'insurance' ? 'insurance' :
+                                        'stock';
 
 
     try {
@@ -1138,12 +1139,13 @@ function App() {
         else if (type === 'stock') fetchStockRecords();
         else if (type === 'sales') fetchSales();
 
-        if (['employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
+        if (['insurance', 'employees', 'sales', 'customer', 'ip', 'cnf', 'bank', 'indian-bank', 'importer', 'exporter', 'supplier', 'port', 'pi', 'lc-expense', 'packing-list', 'tr-setup', 'cost-of-goods'].includes(type) || type.includes('cnf')) {
           setRefreshKey(prev => prev + 1);
         }
 
         // Send deletion notification
         const labels = {
+          'insurance': 'Insurance Record',
           'sales': 'Sales Record',
           'ip': 'IP Record',
           'importer': 'Importer',
