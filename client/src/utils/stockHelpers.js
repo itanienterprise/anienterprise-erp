@@ -262,7 +262,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         const normBrand = (item.brand || 'No Brand').trim().toLowerCase();
         const normQuality = (item.quality || '-').trim().toLowerCase();
-        const subKey = `${normQuality}_${normBrand}_${(item.lcNo || 'no-lc').trim().toLowerCase()}_${item.purchasedPrice || 0}`;
+        const subKey = `${normQuality}_${normBrand}_${(item.lcNo || 'no-lc').trim().toLowerCase()}`;
 
         if (!acc[key].brands[subKey]) {
             acc[key].brands[subKey] = {
@@ -279,11 +279,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 _damagesResolved: false,
                 lcNos: item.lcNo ? [item.lcNo] : [],
                 lcNo: item.lcNo || '',
-                purchasedPrice: item.purchasedPrice || 0
+                purchasedPrice: item.purchasedPrice || 0,
+                totalCostForAvg: item.purchasedPrice * safeParse(item.inHouseQuantity),
+                totalQtyForAvg: safeParse(item.inHouseQuantity)
             };
         } else {
             if (item.lcNo && !acc[key].brands[subKey].lcNos.includes(item.lcNo)) {
                 acc[key].brands[subKey].lcNos.push(item.lcNo);
+            }
+            acc[key].brands[subKey].totalCostForAvg += item.purchasedPrice * safeParse(item.inHouseQuantity);
+            acc[key].brands[subKey].totalQtyForAvg += safeParse(item.inHouseQuantity);
+            if (acc[key].brands[subKey].totalQtyForAvg > 0) {
+                acc[key].brands[subKey].purchasedPrice = acc[key].brands[subKey].totalCostForAvg / acc[key].brands[subKey].totalQtyForAvg;
             }
         }
 
@@ -509,7 +516,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     if (!matchesQuery) return;
                 }
 
-                const subKey = `${normQuality}_${normBrand}_${beLc.toLowerCase()}_${bePrice}`;
+                const subKey = `${normQuality}_${normBrand}_${beLc.toLowerCase()}`;
                 
                 if (!group.brands[subKey]) {
                     let resolvedPktSize = safeParse(be.packetSize);
