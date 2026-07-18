@@ -1924,31 +1924,10 @@ const SaleManagement = ({
     const handleLcSelect = (lc) => {
         if (saleType === 'Border') {
             if (!lc) {
-                setFormData(prev => {
-                    const newData = {
-                        ...prev,
-                        lcNo: ''
-                    };
-                    if (newData.items.length === 1) {
-                        newData.items[0] = {
-                            ...newData.items[0],
-                            productId: '',
-                            productName: '',
-                            brand: '',
-                            brandEntries: [{
-                                brand: '',
-                                brandName: '',
-                                quantity: '',
-                                bag: '',
-                                bagSize: '',
-                                truck: '',
-                                unitPrice: '',
-                                totalAmount: ''
-                            }]
-                        };
-                    }
-                    return newData;
-                });
+                setFormData(prev => ({
+                    ...prev,
+                    lcNo: ''
+                }));
                 setLcSearch('');
             } else {
                 setFormData(prev => {
@@ -1961,33 +1940,6 @@ const SaleManagement = ({
                     if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
                     if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
                     if (!newData.port && lc.port) newData.port = lc.port;
-
-                    // Always overwrite product and reset brand according to the new LC
-                    if (newData.items.length === 1 && lc.productName) {
-                        const productObj = products.find(p => p.name === lc.productName);
-                        const firstItem = {
-                            ...newData.items[0],
-                            brand: '',
-                            brandEntries: [{
-                                brand: '',
-                                brandName: '',
-                                quantity: '',
-                                bag: '',
-                                bagSize: '',
-                                truck: '',
-                                unitPrice: '',
-                                totalAmount: ''
-                            }]
-                        };
-                        if (productObj) {
-                            firstItem.productId = productObj._id;
-                            firstItem.productName = productObj.name;
-                        } else {
-                            firstItem.productId = '';
-                            firstItem.productName = lc.productName;
-                        }
-                        newData.items[0] = firstItem;
-                    }
 
                     return newData;
                 });

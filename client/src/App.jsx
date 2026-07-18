@@ -2552,10 +2552,10 @@ function App() {
 
           {/* Right side — profile and bell icon */}
           <div className="flex items-center gap-3 relative z-10">
-            {!sidebarOpen && (
+            {windowWidth >= 768 && !sidebarOpen && (
               <button
                 onClick={() => setShowProfile(true)}
-                className="relative group focus:outline-none flex-shrink-0 mr-1 animate-in fade-in duration-200"
+                className="hidden md:block relative group focus:outline-none flex-shrink-0 mr-1 animate-in fade-in duration-200"
               >
                 <img
                   src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
