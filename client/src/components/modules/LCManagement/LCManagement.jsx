@@ -6895,62 +6895,66 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             </div>
                         </div>
 
-                        <div className="space-y-1.5 text-left relative" ref={statusRef}>
-                            <label className="text-sm font-semibold text-gray-600 ml-1">Status</label>
-                            <div className="relative">
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveDropdown(activeDropdown === 'status' ? null : 'status')}
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium flex items-center justify-between"
-                                >
-                                    <span className={formData.status ? 'text-gray-900' : 'text-gray-400'}>{formData.status}</span>
-                                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${activeDropdown === 'status' ? 'rotate-180' : ''}`} />
-                                </button>
-                                {activeDropdown === 'status' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl py-1">
-                                        {['Opened', 'In-Transit', 'Received', 'Closed', 'Cancelled'].map((s, idx) => (
-                                            <button
-                                                key={s}
-                                                type="button"
-                                                onClick={() => handleDropdownSelect('status', s)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.status === s ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {s}
-                                            </button>
-                                        ))}
+                        {editingId && (
+                            <>
+                                <div className="space-y-1.5 text-left relative" ref={statusRef}>
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Status</label>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDropdown(activeDropdown === 'status' ? null : 'status')}
+                                            className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium flex items-center justify-between"
+                                        >
+                                            <span className={formData.status ? 'text-gray-900' : 'text-gray-400'}>{formData.status}</span>
+                                            <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${activeDropdown === 'status' ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        {activeDropdown === 'status' && (
+                                            <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl py-1">
+                                                {['Opened', 'In-Transit', 'Received', 'Closed', 'Cancelled'].map((s, idx) => (
+                                                    <button
+                                                        key={s}
+                                                        type="button"
+                                                        onClick={() => handleDropdownSelect('status', s)}
+                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                        className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.status === s ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        {s}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                        </div>
+                                </div>
 
-                        <div className="space-y-1.5 text-left">
-                            <label className="text-sm font-semibold text-gray-600 ml-1">LC Status</label>
-                            <div className="flex items-center gap-4 py-2 px-3 bg-white/50 border border-gray-200/60 rounded-xl h-[46px]">
-                                <label className="inline-flex items-center gap-1.5 cursor-pointer text-sm font-bold text-gray-700">
-                                    <input
-                                        type="radio"
-                                        name="lcStatus"
-                                        value="Running"
-                                        checked={formData.lcStatus !== 'Completed'}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, lcStatus: e.target.value }))}
-                                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    Running
-                                </label>
-                                <label className="inline-flex items-center gap-1.5 cursor-pointer text-sm font-bold text-gray-700">
-                                    <input
-                                        type="radio"
-                                        name="lcStatus"
-                                        value="Completed"
-                                        checked={formData.lcStatus === 'Completed'}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, lcStatus: e.target.value }))}
-                                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    Completed
-                                </label>
-                            </div>
-                        </div>
+                                <div className="space-y-1.5 text-left">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">LC Status</label>
+                                    <div className="flex items-center gap-4 py-2 px-3 bg-white/50 border border-gray-200/60 rounded-xl h-[46px]">
+                                        <label className="inline-flex items-center gap-1.5 cursor-pointer text-sm font-bold text-gray-700">
+                                            <input
+                                                type="radio"
+                                                name="lcStatus"
+                                                value="Running"
+                                                checked={formData.lcStatus !== 'Completed'}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, lcStatus: e.target.value }))}
+                                                className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            Running
+                                        </label>
+                                        <label className="inline-flex items-center gap-1.5 cursor-pointer text-sm font-bold text-gray-700">
+                                            <input
+                                                type="radio"
+                                                name="lcStatus"
+                                                value="Completed"
+                                                checked={formData.lcStatus === 'Completed'}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, lcStatus: e.target.value }))}
+                                                className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            Completed
+                                        </label>
+                                    </div>
+                                </div>
+                            </>
+                        )}
 
                         <div className="space-y-1.5 text-left">
                             <label className="text-sm font-semibold text-gray-600 ml-1">Margin Bill</label>
