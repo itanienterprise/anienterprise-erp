@@ -667,7 +667,7 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                                                     {/* Special checkbox */}
                                                     <td className="px-3 py-3 text-center">
                                                         {mod.specialLabels && Array.isArray(mod.specialLabels) ? (
-                                                            <div className="flex flex-col items-center gap-2">
+                                                            <div className="flex items-center justify-center gap-4">
                                                                 {mod.specialLabels.map(sItem => (
                                                                     <div key={sItem.key} className="flex flex-col items-center gap-0.5">
                                                                         <input
