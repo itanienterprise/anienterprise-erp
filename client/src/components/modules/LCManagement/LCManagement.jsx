@@ -63,7 +63,8 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     }
 };
 
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage, canAddBill, onRefresh }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage, canAddBill, canEditBill, onRefresh, currentUser }) => {
+    const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('history');
@@ -86,6 +87,46 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         remarks: ''
     });
     const [isSavingBill, setIsSavingBill] = useState(false);
+    const [editingBillId, setEditingBillId] = useState(null);
+
+    const handleOpenAddBillModal = () => {
+        setEditingBillId(null);
+        setBillFormData({
+            date: new Date().toISOString().split('T')[0],
+            lcNo: data.lcNo,
+            bankName: data.bankName || '',
+            expenseHead: '',
+            cnfAgent: '',
+            amount: '',
+            paidAmount: '',
+            remarks: ''
+        });
+        setBillHeadQuery('');
+        setCnfQuery('');
+        setShowAddBillModal(true);
+    };
+
+    const handleOpenEditBillModal = (bill) => {
+        const originalExpense = lcExpenses.find(e => e._id === bill._id);
+        if (!originalExpense) {
+            alert('Original bill record not found.');
+            return;
+        }
+        setEditingBillId(bill._id);
+        setBillFormData({
+            date: originalExpense.date ? originalExpense.date.split('T')[0] : new Date().toISOString().split('T')[0],
+            lcNo: originalExpense.lcNo,
+            bankName: originalExpense.bankName || '',
+            expenseHead: originalExpense.expenseHead || '',
+            cnfAgent: originalExpense.cnfAgent || '',
+            amount: originalExpense.amount || '',
+            paidAmount: '',
+            remarks: originalExpense.remarks || ''
+        });
+        setBillHeadQuery(originalExpense.expenseHead || '');
+        setCnfQuery(originalExpense.cnfAgent || '');
+        setShowAddBillModal(true);
+    };
     const [bdCnfs, setBdCnfs] = useState([]);
     const [billHeadDropdownOpen, setBillHeadDropdownOpen] = useState(false);
     const [billHeadQuery, setBillHeadQuery] = useState('');
@@ -132,6 +173,21 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         };
     }, [showAddBillModal]);
 
+    const handleDeleteBill = async (billId) => {
+        if (!isAdmin) {
+            alert('Forbidden: Only Admins are permitted to delete bills');
+            return;
+        }
+        if (!window.confirm('Are you sure you want to delete this bill?')) return;
+        try {
+            await axios.delete(`${API_BASE_URL}/api/lc-expenses/${billId}`);
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            console.error('Error deleting bill:', error);
+            alert('Failed to delete the bill.');
+        }
+    };
+
     const expenseHeads = [
         "Bank Charges",
         "Margin Bill",
@@ -146,9 +202,16 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
     const handleSaveBill = async (e) => {
         e.preventDefault();
-        if (!canManage) {
-            alert('Forbidden: You do not have permission to add bills');
-            return;
+        if (editingBillId) {
+            if (!canEditBill) {
+                alert('Forbidden: You do not have permission to edit bills');
+                return;
+            }
+        } else {
+            if (!canAddBill) {
+                alert('Forbidden: You do not have permission to add bills');
+                return;
+            }
         }
         setIsSavingBill(true);
         try {
@@ -158,24 +221,30 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 amount: parseFloat(billFormData.amount) || 0,
                 type: 'bill'
             };
-            await axios.post(`${API_BASE_URL}/api/lc-expenses`, dataToSubmit);
 
-            const paidVal = parseFloat(billFormData.paidAmount) || 0;
-            if (paidVal > 0) {
-                const paymentToSubmit = {
-                    date: billFormData.date,
-                    lcNo: billFormData.lcNo,
-                    bankName: billFormData.bankName,
-                    expenseHead: billFormData.expenseHead,
-                    cnfAgent: billFormData.cnfAgent,
-                    amount: paidVal,
-                    remarks: billFormData.remarks ? `${billFormData.remarks} (Paid)` : 'Bill Payment',
-                    type: 'payment'
-                };
-                await axios.post(`${API_BASE_URL}/api/lc-expenses`, paymentToSubmit);
+            if (editingBillId) {
+                await axios.put(`${API_BASE_URL}/api/lc-expenses/${editingBillId}`, dataToSubmit);
+            } else {
+                await axios.post(`${API_BASE_URL}/api/lc-expenses`, dataToSubmit);
+
+                const paidVal = parseFloat(billFormData.paidAmount) || 0;
+                if (paidVal > 0) {
+                    const paymentToSubmit = {
+                        date: billFormData.date,
+                        lcNo: billFormData.lcNo,
+                        bankName: billFormData.bankName,
+                        expenseHead: billFormData.expenseHead,
+                        cnfAgent: billFormData.cnfAgent,
+                        amount: paidVal,
+                        remarks: billFormData.remarks ? `${billFormData.remarks} (Paid)` : 'Bill Payment',
+                        type: 'payment'
+                    };
+                    await axios.post(`${API_BASE_URL}/api/lc-expenses`, paymentToSubmit);
+                }
             }
 
             setShowAddBillModal(false);
+            setEditingBillId(null);
             setBillFormData({
                 date: new Date().toISOString().split('T')[0],
                 lcNo: data.lcNo,
@@ -187,12 +256,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 remarks: ''
             });
             setBillHeadQuery('');
+            setCnfQuery('');
             setBillHeadDropdownOpen(false);
             if (onRefresh) {
                 await onRefresh();
             }
         } catch (error) {
             console.error("Error saving bill inside modal:", error);
+            alert("Failed to save the bill.");
         } finally {
             setIsSavingBill(false);
         }
@@ -1178,6 +1249,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         else if (paid > 0) billStatus = "Partial Paid";
 
         billRows.push({
+            _id: bill._id,
+            isDbRecord: true,
             date: bill.date,
             billHead: bill.expenseHead || "Other Bill",
             name: bill.cnfAgent || bill.bankName || bill.remarks || bill.expenseHead || "Other Name",
@@ -1186,6 +1259,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             billBalance: Math.max(0, billAmt - paid),
             status: billStatus
         });
+        lastBillIdxByHead[head] = billRows.length - 1;
     });
 
     // If there are excess payments remaining for a head, add to the last bill row of that head
@@ -1455,7 +1529,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                     <div className="flex items-center gap-2 shrink-0">
                         {showConsumption && activeTab === 'bill' && canAddBill && (
                             <button
-                                onClick={() => setShowAddBillModal(true)}
+                                onClick={handleOpenAddBillModal}
                                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 transition-all transform active:scale-95"
                             >
                                 <PlusIcon className="w-4 h-4" />
@@ -1506,7 +1580,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                         <div className="flex items-center gap-1.5 shrink-0">
                             {showConsumption && activeTab === 'bill' && canAddBill && (
                                 <button
-                                    onClick={() => setShowAddBillModal(true)}
+                                    onClick={handleOpenAddBillModal}
                                     className="h-7 flex items-center justify-center gap-1 px-2.5 rounded-lg text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm transition-all transform active:scale-95 shrink-0 leading-none"
                                 >
                                     <PlusIcon className="w-3.5 h-3.5" />
@@ -2435,6 +2509,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Paid Bill</th>
                                                     <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Bill Balance</th>
                                                     <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
+                                                    <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Action</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50 font-medium">
@@ -2472,11 +2547,36 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                     {bill.status}
                                                                 </span>
                                                             </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-center">
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    {bill.isDbRecord && canEditBill && (
+                                                                        <button
+                                                                            onClick={() => handleOpenEditBillModal(bill)}
+                                                                            className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                            title="Edit Bill"
+                                                                        >
+                                                                            <EditIcon className="w-4.5 h-4.5" />
+                                                                        </button>
+                                                                    )}
+                                                                    {bill.isDbRecord && isAdmin && (
+                                                                        <button
+                                                                            onClick={() => handleDeleteBill(bill._id)}
+                                                                            className="text-gray-400 hover:text-red-650 transition-colors"
+                                                                            title="Delete Bill"
+                                                                        >
+                                                                            <TrashIcon className="w-4.5 h-4.5" />
+                                                                        </button>
+                                                                    )}
+                                                                    {(!bill.isDbRecord || (!canEditBill && !isAdmin)) && (
+                                                                        <span className="text-gray-300 font-sans font-medium select-none">-</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
                                                         </tr>
                                                     ))
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan="7" className="px-3 md:px-6 py-12 text-center text-gray-400 font-bold">
+                                                        <td colSpan="8" className="px-3 md:px-6 py-12 text-center text-gray-400 font-bold">
                                                             {consumptionSearchQuery ? 'No bills match your search.' : 'No bills found for this LC.'}
                                                         </td>
                                                     </tr>
@@ -2499,6 +2599,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 : `৳${bal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
                                                         })()}
                                                     </td>
+                                                    <td></td>
                                                     <td></td>
                                                 </tr>
                                             </tfoot>
@@ -2562,6 +2663,28 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                             }
                                                                         </span>
                                                                     </div>
+                                                                    {bill.isDbRecord && (canEditBill || isAdmin) && (
+                                                                        <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100 mt-2">
+                                                                            {canEditBill && (
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); handleOpenEditBillModal(bill); }}
+                                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 text-[10px] font-bold transition-all transform active:scale-95 cursor-pointer"
+                                                                                >
+                                                                                    <EditIcon className="w-3.5 h-3.5" />
+                                                                                    <span>Edit Bill</span>
+                                                                                </button>
+                                                                            )}
+                                                                            {isAdmin && (
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteBill(bill._id); }}
+                                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-[10px] font-bold transition-all transform active:scale-95 cursor-pointer"
+                                                                                >
+                                                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                                                    <span>Delete Bill</span>
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -3252,7 +3375,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                             {/* Header */}
                             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-900">Add New Bill</h3>
+                                    <h3 className="text-lg font-bold text-gray-900">{editingBillId ? 'Edit Bill' : 'Add New Bill'}</h3>
                                     <p className="text-xs text-blue-500 font-bold uppercase tracking-widest mt-0.5">LC NO: {data.lcNo}</p>
                                 </div>
                                 <button onClick={() => setShowAddBillModal(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all">
@@ -3428,7 +3551,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className={editingBillId ? "space-y-1.5 text-left" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
                                     <div className="space-y-1.5 text-left">
                                         <label className="text-sm font-semibold text-gray-600 ml-1">Bill Amount (৳) *</label>
                                         <input
@@ -3442,18 +3565,20 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold"
                                         />
                                     </div>
-                                    <div className="space-y-1.5 text-left">
-                                        <label className="text-sm font-semibold text-gray-600 ml-1">Paid Amount (৳)</label>
-                                        <input
-                                            type="number"
-                                            value={billFormData.paidAmount}
-                                            onChange={(e) => setBillFormData(prev => ({ ...prev, paidAmount: e.target.value }))}
-                                            min="0"
-                                            step="0.01"
-                                            placeholder="0.00"
-                                            className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold text-emerald-600 placeholder:text-gray-300"
-                                        />
-                                    </div>
+                                    {!editingBillId && (
+                                        <div className="space-y-1.5 text-left">
+                                            <label className="text-sm font-semibold text-gray-600 ml-1">Paid Amount (৳)</label>
+                                            <input
+                                                type="number"
+                                                value={billFormData.paidAmount}
+                                                onChange={(e) => setBillFormData(prev => ({ ...prev, paidAmount: e.target.value }))}
+                                                min="0"
+                                                step="0.01"
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-bold text-emerald-600 placeholder:text-gray-300"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="space-y-1.5 text-left">
@@ -4120,6 +4245,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const canEdit   = hasPermission(currentUser, 'lcManagement', 'edit');
     const canDelete = hasPermission(currentUser, 'lcManagement', 'delete');
     const canSpecial = hasPermission(currentUser, 'lcManagement', 'special');
+    const canSpecialEdit = hasPermission(currentUser, 'lcManagement', 'specialEdit');
     const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
@@ -9656,7 +9782,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     onEditAmendment={handleEditAmendment}
                     canManage={canManage}
                     canAddBill={canSpecial}
+                    canEditBill={canSpecialEdit}
                     onRefresh={fetchInitialData}
+                    currentUser={currentUser}
                 />
             )}
 

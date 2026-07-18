@@ -129,20 +129,29 @@ const RoleCreation = ({ setCurrentUser }) => {
     };
 
     const handleToggleAllModulePermissions = (moduleKey) => {
+        const mod = MODULES_LIST.find(m => m.key === moduleKey);
         setPermissions(prev => {
             const modulePerms = prev[moduleKey] || { view: false, add: false, edit: false, delete: false, special: false };
             const anyChecked = Object.values(modulePerms).some(v => v);
             const newValue = !anyChecked;
             
+            const updatedPerms = {
+                view: newValue,
+                add: newValue,
+                edit: newValue,
+                delete: newValue,
+                special: newValue
+            };
+
+            if (mod && mod.specialLabels) {
+                mod.specialLabels.forEach(sItem => {
+                    updatedPerms[sItem.key] = newValue;
+                });
+            }
+
             return {
                 ...prev,
-                [moduleKey]: {
-                    view: newValue,
-                    add: newValue,
-                    edit: newValue,
-                    delete: newValue,
-                    special: newValue
-                }
+                [moduleKey]: updatedPerms
             };
         });
     };
@@ -423,12 +432,37 @@ const RoleCreation = ({ setCurrentUser }) => {
 
                                                     {/* Special checkbox */}
                                                     <td className="px-3 py-3 text-center">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!!mPerms.special}
-                                                            onChange={() => handlePermissionChange(mod.key, 'special')}
-                                                            className="w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
-                                                        />
+                                                        {mod.specialLabels && Array.isArray(mod.specialLabels) ? (
+                                                            <div className="flex flex-col items-center gap-2">
+                                                                {mod.specialLabels.map(sItem => (
+                                                                    <div key={sItem.key} className="flex flex-col items-center gap-0.5">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={!!mPerms[sItem.key]}
+                                                                            onChange={() => handlePermissionChange(mod.key, sItem.key)}
+                                                                            className="w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                                                                        />
+                                                                        <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                                                            {sItem.label}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : mod.specialLabel ? (
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={!!mPerms.special}
+                                                                    onChange={() => handlePermissionChange(mod.key, 'special')}
+                                                                    className="w-4.5 h-4.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                                                                />
+                                                                <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                                                    {mod.specialLabel}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-300 font-sans font-medium select-none">-</span>
+                                                        )}
                                                     </td>
 
                                                     {/* Actions: Toggle All */}

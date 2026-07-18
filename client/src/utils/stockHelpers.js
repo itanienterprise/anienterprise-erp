@@ -10,10 +10,14 @@ export const getGroupedBrandList = (brandList) => {
     if (!Array.isArray(brandList)) return [];
     const groups = {};
     brandList.forEach(b => {
-        const key = `${b.quality || '-'}_${b.brand || 'No Brand'}`;
+        const cleanBrand = (b.brand || 'No Brand').trim();
+        const cleanQuality = (b.quality || '-').trim();
+        const key = `${cleanQuality.toLowerCase()}_${cleanBrand.toLowerCase()}`;
         if (!groups[key]) {
             groups[key] = {
                 ...b,
+                brand: cleanBrand,
+                quality: cleanQuality,
                 openingQuantity: 0,
                 openingPacket: 0,
                 periodArrivalQuantity: 0,
@@ -51,6 +55,7 @@ export const getGroupedBrandList = (brandList) => {
     });
     return Object.values(groups);
 };
+
 
 // Helper for robust packet and weight remainder calculation (fixing 4,999 - 60 kg issue)
 export const calculatePktRemainder = (totalQty, pktSize) => {

@@ -5,7 +5,7 @@
 
 // List of all primary modules in the ERP system
 export const MODULES_LIST = [
-    { key: 'employees', label: 'HRMS / Employee' },
+    { key: 'employees', label: 'HRMS / Employee', specialLabel: 'Reset Password' },
     { key: 'port', label: 'Port Management' },
     { key: 'importerExporter', label: 'Importer / Exporter' },
     { key: 'cnf', label: 'C&F Management' },
@@ -16,17 +16,24 @@ export const MODULES_LIST = [
     { key: 'trSetup', label: 'TR Setup' },
     { key: 'product', label: 'Product Management' },
     { key: 'customer', label: 'Customer Management' },
-    { key: 'lcReceive', label: 'LC Receive' },
+    { key: 'lcReceive', label: 'LC Receive', specialLabel: 'Approve LC' },
     { key: 'warehouse', label: 'Warehouse & Damage' },
     { key: 'stock', label: 'Stock & Inventory' },
-    { key: 'sales', label: 'Sales & Reports' },
+    { key: 'sales', label: 'Sales & Reports', specialLabel: 'Approve Sale' },
     { key: 'profitLoss', label: 'Profit & Loss' },
     { key: 'costOfGoods', label: 'Cost of Goods' },
     { key: 'paymentCollection', label: 'Payment Collection' },
     { key: 'bank', label: 'Bank Management' },
     { key: 'insurance', label: 'Insurance Management' },
     { key: 'insurancePayment', label: 'Insurance Payment' },
-    { key: 'lcManagement', label: 'LC Management' },
+    { 
+        key: 'lcManagement', 
+        label: 'LC Management', 
+        specialLabels: [
+            { key: 'special', label: 'Add Bill' },
+            { key: 'specialEdit', label: 'Edit Bill' }
+        ]
+    },
     { key: 'lcGp', label: 'LC GatePass' },
     { key: 'lcExpense', label: 'LC Expense' },
     { key: 'returnProduct', label: 'Return Product' },
@@ -43,56 +50,108 @@ export const getDefaultPermissionsForRole = (role) => {
 
     // Initialize all modules to false
     MODULES_LIST.forEach(mod => {
-        defaults[mod.key] = { view: false, add: false, edit: false, delete: false, special: false };
+        const permsObj = { view: false, add: false, edit: false, delete: false, special: false };
+        if (mod.specialLabels) {
+            mod.specialLabels.forEach(sItem => {
+                permsObj[sItem.key] = false;
+            });
+        }
+        defaults[mod.key] = permsObj;
     });
 
     if (roleLower === 'admin') {
         MODULES_LIST.forEach(mod => {
-            defaults[mod.key] = { view: true, add: true, edit: true, delete: true, special: true };
+            const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
+            if (mod.specialLabels) {
+                mod.specialLabels.forEach(sItem => {
+                    permsObj[sItem.key] = true;
+                });
+            }
+            defaults[mod.key] = permsObj;
         });
     } else if (roleLower === 'incharge') {
         // Incharge can do almost everything except delete employees or backup/restore
         MODULES_LIST.forEach(mod => {
             if (mod.key !== 'backupRestore') {
-                defaults[mod.key] = { 
+                const permsObj = { 
                     view: true, 
                     add: true, 
                     edit: true, 
                     delete: mod.key !== 'employees', 
                     special: true 
                 };
+                if (mod.specialLabels) {
+                    mod.specialLabels.forEach(sItem => {
+                        permsObj[sItem.key] = true;
+                    });
+                }
+                defaults[mod.key] = permsObj;
             }
         });
     } else if (roleLower === 'lc manager') {
         // LC Manager can access port, cnf, ip, pi, packing list, tr, lc, warehouse, lcManagement
         const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods'];
         lcModules.forEach(key => {
-            defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
+            const mod = MODULES_LIST.find(m => m.key === key);
+            const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
+            if (mod && mod.specialLabels) {
+                mod.specialLabels.forEach(sItem => {
+                    permsObj[sItem.key] = true;
+                });
+            }
+            defaults[key] = permsObj;
         });
     } else if (roleLower === 'sales manager') {
         // Sales Manager can access products, customers, sales, payment, bank, insurance, insurancePayment, returnProduct
         const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
         salesModules.forEach(key => {
-            defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
+            const mod = MODULES_LIST.find(m => m.key === key);
+            const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
+            if (mod && mod.specialLabels) {
+                mod.specialLabels.forEach(sItem => {
+                    permsObj[sItem.key] = true;
+                });
+            }
+            defaults[key] = permsObj;
         });
     } else if (roleLower === 'accounts manager') {
         // Accounts Manager can access paymentCollection, bank, insurance, insurancePayment, returnProduct
         const accModules = ['paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods'];
         accModules.forEach(key => {
-            defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
+            const mod = MODULES_LIST.find(m => m.key === key);
+            const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
+            if (mod && mod.specialLabels) {
+                mod.specialLabels.forEach(sItem => {
+                    permsObj[sItem.key] = true;
+                });
+            }
+            defaults[key] = permsObj;
         });
         defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false };
     } else if (roleLower === 'border manager') {
         // Border Manager can access port, cnf, ip, lcReceive, warehouse, lcManagement
         const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
         borderModules.forEach(key => {
-            defaults[key] = { view: true, add: true, edit: true, delete: true, special: true };
+            const mod = MODULES_LIST.find(m => m.key === key);
+            const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
+            if (mod && mod.specialLabels) {
+                mod.specialLabels.forEach(sItem => {
+                    permsObj[sItem.key] = true;
+                });
+            }
+            defaults[key] = permsObj;
         });
     } else if (roleLower === 'data entry') {
         // Data entry can do everything except delete and backup/restore
         MODULES_LIST.forEach(mod => {
             if (mod.key !== 'backupRestore') {
-                defaults[mod.key] = { view: true, add: true, edit: true, delete: false, special: false };
+                const permsObj = { view: true, add: true, edit: true, delete: false, special: false };
+                if (mod.specialLabels) {
+                    mod.specialLabels.forEach(sItem => {
+                        permsObj[sItem.key] = false;
+                    });
+                }
+                defaults[mod.key] = permsObj;
             }
         });
     } else {

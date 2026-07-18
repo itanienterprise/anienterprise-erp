@@ -81,15 +81,26 @@ const ProductManagement = ({
         e.preventDefault();
         setIsSubmitting(true);
 
+        const submissionData = {
+            ...productFormData,
+            name: (productFormData.name || '').trim(),
+            category: (productFormData.category || '').trim(),
+            brands: (productFormData.brands || []).map(b => ({
+                ...b,
+                brand: (b.brand || '').trim(),
+                quality: (b.quality || '').trim()
+            }))
+        };
+
         try {
             const url = editingId
                 ? `${API_BASE_URL}/api/products/${editingId}`
                 : `${API_BASE_URL}/api/products`;
 
             if (editingId) {
-                await axios.put(url, productFormData);
+                await axios.put(url, submissionData);
             } else {
-                await axios.post(url, productFormData);
+                await axios.post(url, submissionData);
             }
             await fetchProducts();
             setShowProductForm(false);
