@@ -5935,7 +5935,6 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
         const getProductReceivedQtyKg = (pName) => {
             const cleanPName = (pName || '').trim().toLowerCase();
-            if (!cleanPName) return 0;
             
             // Stock Receipts
             const receiptsMap = {};
@@ -5951,13 +5950,21 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
                     const key = `${dateStr}_${groupVal}`;
 
-                    const matchingEntries = (s.entries || []).filter(item => {
-                        const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
-                        return itemPName === cleanPName;
-                    });
-                    const itemSubtotal = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    let itemQty = 0;
+                    if (s.entries && s.entries.length > 0) {
+                        const matchingEntries = s.entries.filter(item => {
+                            const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
+                            return !cleanPName || itemPName === cleanPName;
+                        });
+                        itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    } else {
+                        const rootPName = (s.productName || s.product || '').trim().toLowerCase();
+                        if (!cleanPName || !rootPName || rootPName === cleanPName) {
+                            itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                        }
+                    }
                     
-                    receiptsMap[key] = (receiptsMap[key] || 0) + itemSubtotal;
+                    receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
                 });
             const rQty = Object.values(receiptsMap).reduce((sum, qty) => sum + qty, 0);
 
@@ -5974,14 +5981,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
                 })
                 .reduce((sum, s) => {
-                    const itemSubtotal = (s.items || []).filter(item => {
+                    const matchingItems = (s.items || []).filter(item => {
                         const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
-                        return itemPName === cleanPName;
-                    }).reduce((iSum, item) => {
+                        return !cleanPName || !itemPName || itemPName === cleanPName;
+                    });
+                    const itemSubtotal = matchingItems.reduce((iSum, item) => {
                         const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
                         return iSum + (brandSubtotal || parseNum(item.quantity));
                     }, 0);
-                    return sum + itemSubtotal;
+                    return sum + (itemSubtotal || parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
                 }, 0);
 
             return rQty + bQty;
@@ -5992,15 +6000,16 @@ const LCManagement = ({ addNotification, currentUser }) => {
             record.productsList.forEach(p => {
                 const pRecQtyKg = getProductReceivedQtyKg(p.productName);
                 const pRecQtyTons = pRecQtyKg / 1000;
-                const pRate = getRatePerTon(p.rate);
-                const pFreight = getFreightPerTon(p.freight);
+                const pRate = getRatePerTon(p.rate || record.rate);
+                const pFreight = getFreightPerTon(p.freight || record.freight);
                 billValueUsd += pRecQtyTons * (pRate + pFreight);
             });
-        } else {
-            // Legacy single product LC
+        }
+        
+        if (billValueUsd === 0 && totalReceivedQtyKg > 0) {
             const pRecQtyTons = totalReceivedQtyKg / 1000;
-            const pRate = getRatePerTon(record.rate);
-            const pFreight = getFreightPerTon(record.freight);
+            const pRate = getRatePerTon(record.rate || (record.productsList?.[0]?.rate));
+            const pFreight = getFreightPerTon(record.freight || (record.productsList?.[0]?.freight));
             billValueUsd = pRecQtyTons * (pRate + pFreight);
         }
 

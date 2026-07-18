@@ -1235,13 +1235,27 @@ const StockManagement = ({
                     if (transferQty <= 0 && transferPkt <= 0) continue;
 
                     // 1. Handle Source Deduction - Support multiple sources matching same product/brand/LC No
-                    const sourceRecords = warehouseData.filter(item =>
-                        item.whName === addWarehouseStockFormData.whName &&
-                        (item.productName || item.product) === productEntry.productName &&
-                        item.brand === brandEntry.brand &&
-                        (brandEntry.lcNo ? (item.lcNo || '').trim().toLowerCase() === brandEntry.lcNo.trim().toLowerCase() : true) &&
-                        ((parseFloat(item.whQty) > 0) || (parseFloat(item.whPkt) > 0))
-                    );
+                    const targetWh = (addWarehouseStockFormData.whName || '').trim().toLowerCase();
+                    const targetProd = (productEntry.productName || '').trim().toLowerCase();
+                    const targetBrand = (brandEntry.brand || '').trim().toLowerCase();
+                    const targetLc = (brandEntry.lcNo || '').trim().toLowerCase();
+
+                    const sourceRecords = warehouseData.filter(item => {
+                        const itemWh = (item.whName || item.warehouse || '').trim().toLowerCase();
+                        const itemProd = (item.productName || item.product || '').trim().toLowerCase();
+                        const itemBrand = (item.brand || '').trim().toLowerCase();
+                        const itemLc = (item.lcNo || '').trim().toLowerCase();
+
+                        const whMatch = !targetWh || itemWh === targetWh || itemWh.includes(targetWh) || targetWh.includes(itemWh);
+                        const prodMatch = itemProd === targetProd;
+                        const brandMatch = !targetBrand || itemBrand === targetBrand || !itemBrand;
+                        const lcMatch = !targetLc || itemLc === targetLc || (item.lcNoClean && targetLc && item.lcNoClean === targetLc.replace(/\D/g, ''));
+
+                        const availQty = parseFloat(item.whQty) || parseFloat(item.inHouseQuantity) || parseFloat(item.inhouseQty) || parseFloat(item.quantity) || 0;
+                        const availPkt = parseFloat(item.whPkt) || parseFloat(item.inHousePacket) || parseFloat(item.inhousePkt) || parseFloat(item.packet) || 0;
+
+                        return whMatch && prodMatch && brandMatch && lcMatch && (availQty > 0 || availPkt > 0);
+                    });
 
                     // Sort to prioritize older stock or simply iterate
                     // Let's iterate and deduct until transferQty/Pkt is fulfilled
@@ -1251,8 +1265,8 @@ const StockManagement = ({
                     for (const sourceRecord of sourceRecords) {
                         if (transferQty <= 0 && transferPkt <= 0) break;
 
-                        const availableQty = parseFloat(sourceRecord.whQty) || 0;
-                        const availablePkt = parseFloat(sourceRecord.whPkt) || 0;
+                        const availableQty = parseFloat(sourceRecord.whQty) || parseFloat(sourceRecord.inHouseQuantity) || parseFloat(sourceRecord.inhouseQty) || parseFloat(sourceRecord.quantity) || 0;
+                        const availablePkt = parseFloat(sourceRecord.whPkt) || parseFloat(sourceRecord.inHousePacket) || parseFloat(sourceRecord.inhousePkt) || parseFloat(sourceRecord.packet) || 0;
 
                         const deductQty = Math.min(availableQty, transferQty);
                         const deductPkt = Math.min(availablePkt, transferPkt);
@@ -1261,16 +1275,46 @@ const StockManagement = ({
                             const newWhQty = availableQty - deductQty;
                             const newWhPkt = availablePkt - deductPkt;
 
+                            let updatedBrandEntries = sourceRecord.brandEntries;
+                            if (Array.isArray(sourceRecord.brandEntries) && sourceRecord.brandEntries.length > 0) {
+                                updatedBrandEntries = sourceRecord.brandEntries.map(be => {
+                                    const beBrand = (be.brand || '').trim().toLowerCase();
+                                    if (!targetBrand || !beBrand || beBrand === targetBrand) {
+                                        const beQty = parseFloat(be.inHouseQuantity ?? be.inhouseQty ?? be.quantity ?? 0);
+                                        const bePkt = parseFloat(be.inHousePacket ?? be.inhousePkt ?? be.packet ?? 0);
+                                        const newBeQty = Math.max(0, beQty - deductQty);
+                                        const newBePkt = Math.max(0, bePkt - deductPkt);
+                                        return {
+                                            ...be,
+                                            quantity: newBeQty,
+                                            packet: newBePkt,
+                                            whQty: newBeQty,
+                                            whPkt: newBePkt,
+                                            inHouseQuantity: newBeQty,
+                                            inhouseQty: newBeQty,
+                                            inHousePacket: newBePkt,
+                                            inhousePkt: newBePkt
+                                        };
+                                    }
+                                    return be;
+                                });
+                            }
+
                             const updatedSource = {
                                 ...sourceRecord,
                                 whQty: newWhQty,
                                 whPkt: newWhPkt,
+                                quantity: newWhQty,
+                                packet: newWhPkt,
                                 ...(sourceRecord.recordType === 'stock' && {
                                     inHouseQuantity: newWhQty,
                                     inhouseQty: newWhQty,
                                     inHousePacket: newWhPkt,
-                                    inhousePkt: newWhPkt
-                                })
+                                    inhousePkt: newWhPkt,
+                                    totalInHouseQuantity: newWhQty,
+                                    totalInHousePacket: newWhPkt
+                                }),
+                                ...(updatedBrandEntries ? { brandEntries: updatedBrandEntries } : {})
                             };
 
                             updates.push({ record: updatedSource, original: sourceRecord });
@@ -1304,16 +1348,16 @@ const StockManagement = ({
 
                     for (const deduction of lcSrrDeductions) {
                         const destRecord = warehouseData.find(item =>
-                            item.whName === destWhName &&
-                            (item.productName || item.product) === productEntry.productName &&
-                            item.brand === brandEntry.brand &&
+                            (item.whName || item.warehouse || '').trim().toLowerCase() === (destWhName || '').trim().toLowerCase() &&
+                            (item.productName || item.product || '').trim().toLowerCase() === targetProd &&
+                            (item.brand || '').trim().toLowerCase() === targetBrand &&
                             (item.lcNo === deduction.lcNo || (!item.lcNo && !deduction.lcNo)) &&
                             (item.truckNo === deduction.truckNo || (!item.truckNo && !deduction.truckNo))
                         );
 
                         if (destRecord) {
-                            const newWhQty = (parseFloat(destRecord.whQty) || 0) + deduction.qty;
-                            const newWhPkt = (parseFloat(destRecord.whPkt) || 0) + deduction.pkt;
+                            const newWhQty = (parseFloat(destRecord.whQty) || parseFloat(destRecord.inHouseQuantity) || 0) + deduction.qty;
+                            const newWhPkt = (parseFloat(destRecord.whPkt) || parseFloat(destRecord.inHousePacket) || 0) + deduction.pkt;
 
                             const updatedDest = {
                                 ...destRecord,
@@ -2980,8 +3024,8 @@ const StockManagement = ({
                                                 )}
                                             </div>
                                             <div className="shrink-0">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${group.inHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : group.inHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {group.inHouseQuantity > 0 ? 'In Stock' : group.inHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(group.inHouseQuantity) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(group.inHouseQuantity) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                    {Math.round(group.inHouseQuantity) > 0 ? 'In Stock' : Math.round(group.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                 </span>
                                             </div>
                                         </div>
@@ -3008,8 +3052,8 @@ const StockManagement = ({
                                                                         )}
                                                                     </div>
                                                                     <div className="shrink-0">
-                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${brand.inHouseQuantity > 0 ? 'bg-emerald-100 text-emerald-700' : brand.inHouseQuantity < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                                            {brand.inHouseQuantity > 0 ? 'In Stock' : brand.inHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${Math.round(brand.inHouseQuantity) > 0 ? 'bg-emerald-100 text-emerald-700' : Math.round(brand.inHouseQuantity) < 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                                            {Math.round(brand.inHouseQuantity) > 0 ? 'In Stock' : Math.round(brand.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                                         </span>
                                                                     </div>
                                                                 </div>
@@ -3098,8 +3142,8 @@ const StockManagement = ({
                                                             </div>
 
                                                             <div className="text-center overflow-hidden">
-                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${brand.inHouseQuantity > 0 ? 'bg-emerald-50 text-emerald-600' : brand.inHouseQuantity < 0 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
-                                                                    {brand.inHouseQuantity > 0 ? 'In Stock' : brand.inHouseQuantity < 0 ? 'Pre-Sold' : 'Out of Stock'}
+                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${Math.round(brand.inHouseQuantity) > 0 ? 'bg-emerald-50 text-emerald-600' : Math.round(brand.inHouseQuantity) < 0 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
+                                                                    {Math.round(brand.inHouseQuantity) > 0 ? 'In Stock' : Math.round(brand.inHouseQuantity) < 0 ? 'Pre-Sold' : 'Out of Stock'}
                                                                 </span>
                                                             </div>
                                                         </div>

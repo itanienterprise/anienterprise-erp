@@ -4989,9 +4989,9 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
                 1: { cellWidth: 20, halign: 'center', valign: 'middle' }, // L.S. Date
                 2: { cellWidth: 24, halign: 'center', valign: 'middle', fontStyle: 'bold' }, // LC No
                 3: { cellWidth: 20, overflow: "hidden", valign: 'middle' }, // Importer
-                4: { cellWidth: 18, overflow: "hidden", valign: 'middle' }, // Exporter
-                5: { cellWidth: 12, overflow: "hidden", valign: 'middle' }, // Bank
-                6: { cellWidth: 16, halign: 'center', valign: 'middle' }, // Port
+                4: { cellWidth: 17, overflow: "hidden", valign: 'middle' }, // Exporter
+                5: { cellWidth: 11, overflow: "hidden", valign: 'middle' }, // Bank
+                6: { cellWidth: 20, halign: 'center', valign: 'middle' }, // Port
                 7: { cellWidth: 24, halign: 'left', valign: 'middle' },   // Product
                 8: { cellWidth: 23, halign: 'right', valign: 'middle' },  // Qty
                 9: { cellWidth: 23, halign: 'right', valign: 'middle' },  // LC Receive
@@ -5008,10 +5008,10 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
                         const cell = data.cell;
                         const usdText = `$${Math.round(record.billValueUsd || 0).toLocaleString('en-US')}`;
                         const rateText = record.dollarRate ? `(Tk ${parseFloat(record.dollarRate).toFixed(2)})` : '';
-                        
+
                         const x = cell.x + cell.width - cell.padding('right');
                         const originalFont = doc.getFont();
-                        
+
                         if (rateText) {
                             const y1 = cell.y + (cell.height / 2) - 0.7;
                             const y2 = cell.y + (cell.height / 2) + 2.8;
@@ -5020,7 +5020,7 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
                             doc.setFontSize(9);
                             doc.setTextColor(0, 0, 0);
                             doc.text(usdText, x, y1, { align: 'right' });
-                            
+
                             doc.setFont('helvetica', 'normal');
                             doc.setFontSize(9);
                             doc.text(rateText, x, y2, { align: 'right' });

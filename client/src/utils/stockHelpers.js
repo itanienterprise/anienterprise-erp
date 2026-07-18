@@ -642,16 +642,26 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const closingQty = openingAfterShortage - saleQty - damageQty;
             const closingPkt = openingPktAfterShortage - b.salePacket - (b.damagePacket || 0);
 
+            const cleanVal = (v) => Math.abs(v) < 0.001 ? 0 : v;
+
             return {
                 ...b,
-                openingQuantity: openingAfterShortage,
-                openingPacket: openingPktAfterShortage,
-                closingQuantity: closingQty,
-                closingPacket: closingPkt,
-                inHouseQuantity: closingQty,
-                inHousePacket: closingPkt,
-                totalInHouseQuantity: openingAfterShortage,
-                totalInHousePacket: openingPktAfterShortage
+                openingQuantity: cleanVal(openingAfterShortage),
+                openingPacket: cleanVal(openingPktAfterShortage),
+                periodArrivalQuantity: cleanVal(b.periodArrivalQuantity),
+                periodArrivalPacket: cleanVal(b.periodArrivalPacket),
+                saleQuantity: cleanVal(saleQty),
+                salePacket: cleanVal(b.salePacket),
+                sweepedQuantity: cleanVal(shortageQty),
+                sweepedPacket: cleanVal(b.sweepedPacket),
+                damageQuantity: cleanVal(damageQty),
+                damagePacket: cleanVal(b.damagePacket || 0),
+                closingQuantity: cleanVal(closingQty),
+                closingPacket: cleanVal(closingPkt),
+                inHouseQuantity: cleanVal(closingQty),
+                inHousePacket: cleanVal(closingPkt),
+                totalInHouseQuantity: cleanVal(openingAfterShortage),
+                totalInHousePacket: cleanVal(openingPktAfterShortage)
             };
         });
 
@@ -665,11 +675,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             if (qCmp !== 0) return qCmp;
             return a.brand.localeCompare(b.brand);
         }).filter(b => 
-            Math.abs(b.totalInHouseQuantity) > 0.01 || 
-            Math.abs(b.saleQuantity) > 0.01 || 
-            Math.abs(b.inHouseQuantity) > 0.01 || 
-            Math.abs(b.sweepedQuantity) > 0.01 ||
-            Math.abs(b.damageQuantity || 0) > 0.01
+            Math.round(Math.abs(b.openingQuantity || 0)) >= 1 || 
+            Math.round(Math.abs(b.periodArrivalQuantity || 0)) >= 1 || 
+            Math.round(Math.abs(b.saleQuantity || 0)) >= 1 || 
+            Math.round(Math.abs(b.inHouseQuantity || 0)) >= 1 || 
+            Math.round(Math.abs(b.closingQuantity || 0)) >= 1 || 
+            Math.round(Math.abs(b.sweepedQuantity || 0)) >= 1 ||
+            Math.round(Math.abs(b.damageQuantity || 0)) >= 1
         );
 
         if (brandList.length === 0) return null;
