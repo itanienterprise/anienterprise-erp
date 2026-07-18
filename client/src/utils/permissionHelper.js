@@ -18,7 +18,7 @@ export const MODULES_LIST = [
     { key: 'customer', label: 'Customer Management' },
     { key: 'lcReceive', label: 'LC Receive', specialLabel: 'Approve LC' },
     { key: 'warehouse', label: 'Warehouse & Damage' },
-    { key: 'stock', label: 'Stock & Inventory' },
+    { key: 'stock', label: 'Stock & Inventory', specialLabel: 'Transfer from Stock' },
     { key: 'sales', label: 'Sales & Reports', specialLabel: 'Approve Sale' },
     { key: 'profitLoss', label: 'Profit & Loss' },
     { key: 'costOfGoods', label: 'Cost of Goods' },

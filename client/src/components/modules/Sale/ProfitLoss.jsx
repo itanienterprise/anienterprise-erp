@@ -419,23 +419,6 @@ export default function ProfitLoss({ salesRecords, products }) {
         const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
 
         const prodName = item.productName || item.product || 'Unknown Product';
-        if (!summaryMap[prodName]) {
-          summaryMap[prodName] = {
-            productName: prodName,
-            purchaseQty: 0,
-            purchasePrice: 0,
-            inhouseQty: 0,
-            inhousePrice: 0,
-            shortQty: 0,
-            shortPrice: 0,
-            damageQty: 0,
-            damagePrice: 0,
-            saleQty: 0,
-            salePrice: 0,
-            unit: item.unit || 'kg'
-          };
-        }
-
         const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
           ? item.brandEntries
           : [{ quantity: item.quantity, totalAmount: item.totalAmount || (parseFloat(item.quantity) * parseFloat(item.unitPrice)) || 0 }];
@@ -443,6 +426,23 @@ export default function ProfitLoss({ salesRecords, products }) {
         brandEntries.forEach(entry => {
           const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLc;
           if (cleanLc(entryLc) !== lcNoClean) return;
+
+          if (!summaryMap[prodName]) {
+            summaryMap[prodName] = {
+              productName: prodName,
+              purchaseQty: 0,
+              purchasePrice: 0,
+              inhouseQty: 0,
+              inhousePrice: 0,
+              shortQty: 0,
+              shortPrice: 0,
+              damageQty: 0,
+              damagePrice: 0,
+              saleQty: 0,
+              salePrice: 0,
+              unit: item.unit || 'kg'
+            };
+          }
 
           const qty = parseFloat(entry.quantity) || 0;
           const totalAmount = parseFloat(entry.totalAmount) || (qty * (parseFloat(entry.unitPrice) || 0));
