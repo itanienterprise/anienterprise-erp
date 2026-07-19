@@ -965,6 +965,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                         <th className="py-2.5 px-6">Date</th>
                         <th className="py-2.5 px-4">Invoice / Truck</th>
                         <th className="py-2.5 px-4">Product & Brand</th>
+                        <th className="py-2.5 px-4 text-right">Cost/KG</th>
                         <th className="py-2.5 px-4 text-right">Quantity</th>
                         <th className="py-2.5 px-6 text-right font-black">Net Bill</th>
                       </tr>
@@ -972,24 +973,44 @@ export default function ProfitLoss({ salesRecords, products }) {
                     <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
                       {selectedLcCostOfGoods.length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="py-8 text-center text-gray-400 font-semibold">No Cost of Goods records found for this LC.</td>
+                          <td colSpan="6" className="py-8 text-center text-gray-400 font-semibold">No Cost of Goods records found for this LC.</td>
                         </tr>
                       ) : (
-                        selectedLcCostOfGoods.map((rec, idx) => (
-                          <tr key={rec._id || idx} className="hover:bg-slate-50/30 transition-colors">
-                            <td className="py-2.5 px-6 whitespace-nowrap text-gray-500">{formatDate(rec.date)}</td>
-                            <td className="py-2.5 px-4">
-                              <div className="font-bold text-gray-900">{rec.invoiceNo || '-'}</div>
-                              <div className="text-[10px] text-gray-400 font-semibold">{rec.truckNo || '-'}</div>
-                            </td>
-                            <td className="py-2.5 px-4">
-                              <div className="font-bold text-gray-800">{rec.product || '-'}</div>
-                              <div className="text-[10px] text-gray-400 font-semibold">{rec.brand || '-'}</div>
-                            </td>
-                            <td className="py-2.5 px-4 text-right font-semibold text-gray-900">{parseFloat(rec.quantity || 0).toLocaleString()} KG</td>
-                            <td className="py-2.5 px-6 text-right font-black text-blue-600">৳ {Math.round(rec.netBill || 0).toLocaleString('en-IN')}</td>
-                          </tr>
-                        ))
+                        selectedLcCostOfGoods.map((rec, idx) => {
+                          const costingKgVal = rec.costingKg !== undefined && rec.costingKg !== null
+                            ? parseFloat(rec.costingKg)
+                            : (() => {
+                                const billSum = rec.totalBill !== undefined ? rec.totalBill : ((parseFloat(rec.amount) || 0) + (parseFloat(rec.indTruckFare) || 0) + (parseFloat(rec.slofCf) || 0));
+                                const rebatePct = rec.rebate !== undefined ? rec.rebate : (rec.redate !== undefined ? rec.redate : '2.9');
+                                const rebateVal = rec.rebateAmount !== undefined ? rec.rebateAmount : (rec.redateAmount !== undefined ? rec.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+                                const netBillVal = rec.netBill !== undefined ? rec.netBill : (billSum - rebateVal);
+                                const qtyVal = parseFloat(rec.quantity) || 0;
+                                const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                const dollarRateVal = parseFloat(rec.rsToDollar) || 0;
+                                const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                const bdtRateVal = parseFloat(rec.dollarRateBdt) || 0;
+                                const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                const cfExpVal = rec.cfOtherExpense !== undefined ? rec.cfOtherExpense : '9';
+                                return rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+                              })();
+
+                          return (
+                            <tr key={rec._id || idx} className="hover:bg-slate-50/30 transition-colors">
+                              <td className="py-2.5 px-6 whitespace-nowrap text-gray-500">{formatDate(rec.date)}</td>
+                              <td className="py-2.5 px-4">
+                                <div className="font-black text-gray-900">{rec.invoiceNo || '-'}</div>
+                                <div className="text-xs text-black font-semibold mt-0.5">{rec.truckNo || '-'}</div>
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <div className="font-black text-gray-900">{rec.product || '-'}</div>
+                                <div className="text-xs text-black font-semibold mt-0.5">{rec.brand || '-'}</div>
+                              </td>
+                              <td className="py-2.5 px-4 text-right font-bold text-gray-900">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="py-2.5 px-4 text-right font-semibold text-gray-900">{parseFloat(rec.quantity || 0).toLocaleString()} KG</td>
+                              <td className="py-2.5 px-6 text-right font-black text-blue-600">৳ {Math.round(rec.netBill || 0).toLocaleString('en-IN')}</td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
