@@ -63,7 +63,7 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     }
 };
 
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, onUpdateDollarRate, canManage, canAddBill, canEditBill, onRefresh, currentUser }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, onUpdateDollarRate, canManage, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [] }) => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
@@ -73,6 +73,13 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const [insurancePayments, setInsurancePayments] = useState([]);
     const [cnfPayments, setCnfPayments] = useState([]);
     const [costOfGoodsRecords, setCostOfGoodsRecords] = useState([]);
+
+    const returnAmount = useMemo(() => {
+        if (!data || !marginReturns) return 0;
+        return marginReturns
+            .filter(r => (r.lcId === data._id || String(r.lcNo || '').trim() === String(data.lcNo || '').trim()))
+            .reduce((sum, r) => sum + (parseFloat(r.returnAmount) || 0), 0);
+    }, [data, marginReturns]);
 
     // States for Add Bill inside modal
     const [showAddBillModal, setShowAddBillModal] = useState(false);
@@ -2753,6 +2760,43 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     <td></td>
                                                     <td></td>
                                                 </tr>
+                                                {returnAmount > 0 && (
+                                                    <>
+                                                        <tr className="border-t border-gray-100/50">
+                                                            <td colSpan="3" className="px-3 md:px-6 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Return Margin:</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-amber-600">
+                                                                -৳{returnAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-amber-600">
+                                                                -৳{returnAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-gray-400">—</td>
+                                                            <td></td>
+                                                            <td></td>
+                                                        </tr>
+                                                        <tr className="border-t border-gray-200 bg-gray-50/50">
+                                                            <td colSpan="3" className="px-3 md:px-6 py-3 md:py-4 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">Grand Total:</td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-blue-600">
+                                                                ৳{(filteredBills.reduce((sum, b) => sum + b.totalBill, 0) - returnAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-emerald-600">
+                                                                ৳{(filteredBills.reduce((sum, b) => sum + (b.paidBill || 0), 0) - returnAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-black text-right text-rose-600">
+                                                                {(() => {
+                                                                    const totalBillVal = filteredBills.reduce((sum, b) => sum + b.totalBill, 0);
+                                                                    const paidBillVal = filteredBills.reduce((sum, b) => sum + (b.paidBill || 0), 0);
+                                                                    const bal = (totalBillVal - returnAmount) - (paidBillVal - returnAmount);
+                                                                    return bal < 0
+                                                                        ? `-৳${Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                                                        : `৳${bal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+                                                                })()}
+                                                            </td>
+                                                            <td></td>
+                                                            <td></td>
+                                                        </tr>
+                                                    </>
+                                                )}
                                             </tfoot>
                                         </table>
                                     </div>
@@ -4320,7 +4364,7 @@ const getMilestoneTotalQty = (mil) => {
     return parseFloat(mil.quantity || 0);
 };
 
-const getMilestoneTotalDollar = (mil, defaultLc) => {
+export const getMilestoneTotalDollar = (mil, defaultLc) => {
     if (!mil) return 0;
     if (mil.totalDollar) {
         const val = parseFloat(mil.totalDollar);
@@ -4626,6 +4670,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [deleteStatus, setDeleteStatus] = useState(null);
     const [dollarRateModalRecord, setDollarRateModalRecord] = useState(null);
     const [lcReceiveModalRecord, setLcReceiveModalRecord] = useState(null);
+    const [marginReturns, setMarginReturns] = useState([]);
 
     // Amendment states
     const [showAmendmentForm, setShowAmendmentForm] = useState(false);
@@ -4808,7 +4853,12 @@ const LCManagement = ({ addNotification, currentUser }) => {
             });
         }
 
-        return total;
+        // 5. Subtract return margin amounts
+        const returnMarginAmt = marginReturns
+            .filter(r => (r.lcId === record._id || String(r.lcNo || '').trim() === String(record.lcNo || '').trim()))
+            .reduce((sum, r) => sum + (parseFloat(r.returnAmount) || 0), 0);
+
+        return Math.max(0, total - returnMarginAmt);
     };
 
     const informativeQuantities = useMemo(() => {
@@ -5260,7 +5310,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const fetchInitialData = async () => {
         setIsLoading(true);
         try {
-            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes] = await Promise.all([
+            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes, marginReturnRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/importers`),
@@ -5274,11 +5324,13 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 axios.get(`${API_BASE_URL}/api/lc-gp`),
                 axios.get(`${API_BASE_URL}/api/lc-expenses`),
                 axios.get(`${API_BASE_URL}/api/ports`),
-                axios.get(`${API_BASE_URL}/api/insurance-payments`)
+                axios.get(`${API_BASE_URL}/api/insurance-payments`),
+                axios.get(`${API_BASE_URL}/api/margin-returns`).catch(() => ({ data: [] }))
             ]);
             setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
             setLcExpenses(Array.isArray(expenseRes.data) ? expenseRes.data : []);
             setInsurancePayments(Array.isArray(insPayRes.data) ? insPayRes.data : []);
+            setMarginReturns(Array.isArray(marginReturnRes?.data) ? marginReturnRes.data : []);
 
             const freshLcRecords = Array.isArray(lcRes.data) ? lcRes.data : [];
             setLcRecords(freshLcRecords);
@@ -10418,6 +10470,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     canEditBill={canSpecialEdit}
                     onRefresh={fetchInitialData}
                     currentUser={currentUser}
+                    marginReturns={marginReturns}
                 />
             )}
 

@@ -18,6 +18,8 @@ import {
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { formatDate } from '../../../utils/helpers';
+import { getLCHistoryTimeline, getMilestoneTotalDollar } from './LCManagement';
+
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -113,7 +115,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
             : (parseFloat(record.quantity) || 0);
         const openingQtyKg = totalQtyTons * 1000;
-        const openingValue = parseFloat(record.marginBill || record.totalAmount || 0);
+        const openingValue = parseFloat(record.totalAmount) || 0;
 
         const parseNum = (val) => {
             if (val === null || val === undefined) return 0;
@@ -162,10 +164,13 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                     const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
                     return iSum + (brandSubtotal || parseNum(item.quantity));
                 }, 0);
-                return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
+                return sum + (itemSubtotal || parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
             }, 0);
 
-        const totalReceivedQtyKg = receivedQtyKg + borderSaleQtyKg;
+        const hasCustomReceive = record?.updatedLcReceive !== undefined && record?.updatedLcReceive !== null && record?.updatedLcReceive !== '';
+        const totalReceivedQtyKg = hasCustomReceive
+            ? (parseFloat(record.updatedLcReceive) || 0)
+            : (receivedQtyKg + borderSaleQtyKg);
         const rawBalanceKg = openingQtyKg - totalReceivedQtyKg;
 
         let adjustmentQtyKg = 0;
@@ -178,7 +183,13 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
         const isEnabled = !!record.enableValueQtyAdjustment;
         const actualAdjustmentQtyKg = isEnabled ? adjustmentQtyKg : 0;
 
-        const dollarRate = parseFloat(record.updatedDollarRate || record.dollarRate || 0);
+        const adjustedQtyKg = openingQtyKg + actualAdjustmentQtyKg;
+        const adjustedQtyTons = adjustedQtyKg / 1000;
+
+        const timeline = getLCHistoryTimeline(record);
+        const latestMilestone = timeline[timeline.length - 1] || {};
+        const totalDollar = getMilestoneTotalDollar(latestMilestone, record);
+        const dollarRate = parseFloat(record.updatedDollarRate || record.dollarRate || latestMilestone.dollarRate || 0);
 
         const getRatePerTon = (rVal) => {
             const r = parseFloat(rVal) || 0;
@@ -246,39 +257,50 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             return rQty + bQty;
         };
 
+        const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || record;
+        const origProducts = (originalLc.productsList && originalLc.productsList.length > 0)
+            ? originalLc.productsList
+            : (record.productsList && record.productsList.length > 0 ? record.productsList : []);
+
         let billValueUsd = 0;
-        if (record.productsList && record.productsList.length > 0) {
-            record.productsList.forEach(p => {
+        if (origProducts.length > 0) {
+            origProducts.forEach(p => {
                 const pRecQtyKg = getProductReceivedQtyKg(p.productName);
                 const pRecQtyTons = pRecQtyKg / 1000;
-                const pRate = getRatePerTon(p.rate || record.rate);
-                const pFreight = getFreightPerTon(p.freight || record.freight);
+                let pRate = getRatePerTon(p.rate);
+                let pFreight = getFreightPerTon(p.freight);
+                if (pRate === 0) {
+                    const rootRate = getRatePerTon(originalLc.rate || record.rate);
+                    const rootFreight = getFreightPerTon(originalLc.freight || record.freight);
+                    if (rootFreight > 0 && rootRate > rootFreight) {
+                        pRate = rootRate - rootFreight;
+                        pFreight = rootFreight;
+                    } else {
+                        pRate = rootRate;
+                        pFreight = rootFreight;
+                    }
+                }
                 billValueUsd += pRecQtyTons * (pRate + pFreight);
             });
         }
         
         if (billValueUsd === 0 && totalReceivedQtyKg > 0) {
             const pRecQtyTons = totalReceivedQtyKg / 1000;
-            const pRate = getRatePerTon(record.rate || (record.productsList?.[0]?.rate));
-            const pFreight = getFreightPerTon(record.freight || (record.productsList?.[0]?.freight));
+            const rootRateVal = originalLc.rate || record.rate || (origProducts[0]?.rate);
+            const rootFreightVal = originalLc.freight || record.freight || (origProducts[0]?.freight);
+            let pRate = getRatePerTon(rootRateVal);
+            let pFreight = getFreightPerTon(rootFreightVal);
+            if (pFreight > 0 && pRate > pFreight) {
+                pRate = pRate - pFreight;
+            }
             billValueUsd = pRecQtyTons * (pRate + pFreight);
         }
 
-        let adjustedTotalAmount = dollarRate > 0 && billValueUsd > 0
+        const adjustedTotalAmount = dollarRate > 0 && billValueUsd > 0
             ? billValueUsd * dollarRate 
             : (isEnabled && openingQtyKg > 0
                 ? openingValue + (actualAdjustmentQtyKg * (openingValue / openingQtyKg))
                 : openingValue);
-
-        // Include amendments if any
-        if (record.amendments && record.amendments.length > 0) {
-            record.amendments.forEach(amnd => {
-                const amndVal = parseFloat(amnd.amendmentMarginBill || amnd.amendmentTotalAmount || amnd.totalAmount || 0);
-                if (amndVal > 0) {
-                    adjustedTotalAmount += amndVal;
-                }
-            });
-        }
 
         return {
             adjustedTotalAmount: adjustedTotalAmount || openingValue,
