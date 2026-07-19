@@ -10,7 +10,7 @@ import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './LCReceive.css';
 
-const ViewDetailsModal = ({ data, onClose }) => {
+const ViewDetailsModal = ({ data, costOfGoods = [], onClose }) => {
     if (!data) return null;
 
     const uniqueEntriesMap = data.entries.reduce((acc, item) => {
@@ -26,10 +26,24 @@ const ViewDetailsModal = ({ data, onClose }) => {
     }, {});
     const uniqueEntries = Object.values(uniqueEntriesMap);
 
+    const matchingCogs = (costOfGoods || []).filter(cog => {
+        const lcMatch = String(cog.lcNo || '').trim().toLowerCase() === String(data.lcNo || '').trim().toLowerCase();
+        const invoiceMatch = data.entries.some(entry => 
+            String(cog.invoiceNo || '').trim().toLowerCase() === String(entry.invoiceNo || '').trim().toLowerCase()
+        );
+        return lcMatch && invoiceMatch;
+    });
+
+    const truckNumbers = Array.from(new Set(
+        matchingCogs
+            .map(cog => (cog.truckNo || '').trim())
+            .filter(t => t !== '')
+    )).join(', ');
+
     return createPortal(
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                 <div className="flex items-center justify-between px-4 md:px-6 py-3.5 md:py-4 border-b border-gray-50 bg-gray-50/50 flex-shrink-0">
                     <div>
                         <h3 className="text-lg font-bold text-gray-900">LC Receive Details</h3>
@@ -83,6 +97,10 @@ const ViewDetailsModal = ({ data, onClose }) => {
                         <span className="text-gray-400 font-bold">:</span>
                         <span className="font-black text-amber-600 text-[13px]">{data.totalLcTruck}</span>
 
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck Number</span>
+                        <span className="text-gray-400 font-bold">:</span>
+                        <span className="font-bold text-blue-600 text-[13px]">{truckNumbers || '—'}</span>
+
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
                         <span className="text-gray-400 font-bold">:</span>
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 text-[11px] font-bold uppercase tracking-wider w-fit">
@@ -133,6 +151,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                             { label: 'BD C&F Value', value: !isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-IN')}` : '-', bold: true, color: 'text-gray-900' },
                             { label: 'Bill Of Entry', value: data.billOfEntry || '-', color: 'text-gray-700' },
                             { label: 'Total Trucks', value: data.totalLcTruck, bold: true, color: 'text-amber-600' },
+                            { label: 'Truck Number', value: truckNumbers || '—', bold: true, color: 'text-blue-600' },
                             ...(data.entries[0]?.requestedBy ? [{ label: 'Requested By', value: data.entries[0].requestedBy, color: 'text-gray-700' }] : []),
                             ...(data.entries[0]?.acceptedBy ? [{ label: 'Accepted By', value: data.entries[0].acceptedBy, color: 'text-emerald-600' }] : []),
                             ...(data.entries[0]?.rejectedBy ? [{ label: 'Rejected By', value: data.entries[0].rejectedBy, color: 'text-red-500' }] : []),
@@ -174,6 +193,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter">Invoice No</th>
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter">Brand</th>
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-center">Truck</th>
+                                        <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-right">Cost/kg</th>
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-center">Bag</th>
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-right">Arrival Qty</th>
                                         <th className="px-4 py-3 text-[11px] font-black text-gray-500 uppercase tracking-tighter text-right text-red-500">Short</th>
@@ -224,6 +244,9 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                                         {item.truckNo}
                                                     </td>
                                                 )}
+                                                <td className="px-4 py-3 text-sm text-gray-900 text-right font-bold">
+                                                    ৳{(parseFloat(item.purchasedPrice) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
                                                 <td className="px-4 py-3 text-sm text-gray-800 text-center font-bold">{Math.round(item.packet).toLocaleString('en-US')}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-900 text-right font-bold">{Math.round(item.quantity).toLocaleString('en-US')} kg</td>
                                                 <td className="px-4 py-3 text-sm text-red-500 text-right font-bold">{Math.round(item.sweepedQuantity).toLocaleString('en-US')} kg</td>
@@ -234,7 +257,7 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-white/80 border-t border-gray-200">
-                                        <td colSpan="4" className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Grand Totals</td>
+                                        <td colSpan="5" className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Grand Totals</td>
                                         <td className="px-4 py-3 text-sm text-gray-900 text-center font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-US')}</td>
                                         <td className="px-4 py-3 text-sm text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString('en-US')} kg</td>
                                         <td className="px-4 py-3 text-sm text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-US')} kg</td>
@@ -292,6 +315,10 @@ const ViewDetailsModal = ({ data, onClose }) => {
                                                                 {item.invoiceNo && <p className="text-[11px] text-gray-500 font-semibold mb-0.5">Invoice: {item.invoiceNo}</p>}
                                                                 {item.brand && <p className="text-xs text-purple-700 font-semibold">{item.brand}</p>}
                                                                 <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 pt-1.5 border-t border-gray-100 text-xs items-baseline text-left">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cost/kg</span>
+                                                                    <span className="text-gray-400 font-bold">:</span>
+                                                                    <span className="font-bold text-gray-850">৳{(parseFloat(item.purchasedPrice) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+
                                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag</span>
                                                                     <span className="text-gray-400 font-bold">:</span>
                                                                     <span className="font-bold text-gray-800">{Math.round(item.packet).toLocaleString('en-US')}</span>
@@ -4059,7 +4086,7 @@ function LCReceive({
                     </div>
                 )
             }
-            {viewData && <ViewDetailsModal data={viewData} onClose={() => setViewData(null)} />}
+            {viewData && <ViewDetailsModal data={viewData} costOfGoods={costOfGoods} onClose={() => setViewData(null)} />}
         </div >
     );
 }
