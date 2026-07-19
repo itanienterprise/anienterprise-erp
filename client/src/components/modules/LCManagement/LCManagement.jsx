@@ -354,7 +354,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const cleanLc = (val) => String(val || '').replace(/\D/g, '');
     const parseNum = (val) => {
         if (val === null || val === undefined) return 0;
-        return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+        const sign = String(val).trim().startsWith('-') ? '-' : '';
+        const parsed = parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+        return sign ? -parsed : parsed;
     };
 
     const lcNoClean = cleanLc(data.lcNo);
@@ -966,7 +968,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             addedValue,
             isEnabled,
             billValueUsd,
-            dollarRate
+            dollarRate,
+            totalReceivedQtyKg,
+            hasCustomReceive
         };
     }, [data, allStockRecords, allSalesRecords, lcNoClean]);
 
@@ -992,7 +996,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const totalLcQtyTons = products.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
     const totalLcQtyKg = totalLcQtyTons * 1000;
     const displayTotalLcQtyKg = data.enableValueQtyAdjustment ? adj.adjustedQtyKg : totalLcQtyKg;
-    const consumedQtyKg = consumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0);
+    const consumedQtyKg = adj.hasCustomReceive
+        ? adj.totalReceivedQtyKg
+        : consumptionHistory.reduce((sum, item) => sum + parseNum(item.quantity), 0);
     const remQtyKg = totalLcQtyKg - consumedQtyKg;
     // truckNo is a numeric count per entry — sum all values instead of counting unique strings
     const truckCount = consumptionHistory.reduce((sum, item) => sum + (item.truckCount || 0), 0);
@@ -1538,7 +1544,17 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 amount: (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0),
                 remarks: p.remarks || 'Premium Payment'
             })),
-            ...cnfPaidList
+            ...cnfPaidList,
+            ...marginReturns
+                .filter(r => (r.lcId === data._id || String(r.lcNo || '').trim() === String(data.lcNo || '').trim()))
+                .map(r => ({
+                    _id: r._id,
+                    date: r.returnDate,
+                    expenseHead: 'Margin Return',
+                    name: r.bankName || data.bankName || 'Bank',
+                    amount: -(parseFloat(r.returnAmount) || 0),
+                    remarks: r.remarks || 'Margin Returned'
+                }))
         ];
 
         // Check if original Margin is Paid
@@ -1581,7 +1597,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         }
 
         return list;
-    }, [data, lcExpenses, insurancePayments, cnfPayments, consolidatedBills, lcNoClean]);
+    }, [data, lcExpenses, insurancePayments, cnfPayments, consolidatedBills, lcNoClean, marginReturns]);
 
     return createPortal(
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
@@ -2025,7 +2041,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
                                                     <PlusIcon className="w-4 h-4 md:w-5 md:h-5" />
                                                 </div>
-                                                <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Value & Qty Added</span>
+                                                <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tolerance</span>
                                             </div>
                                             <div className="flex items-baseline justify-between gap-2 flex-wrap">
                                                 <div className="flex items-baseline gap-0.5 md:gap-1">
@@ -2921,7 +2937,11 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-medium text-gray-800">
                                                                     {exp.cnfAgent || exp.bankName || exp.insuranceCo || exp.insuranceName || exp.name || '-'}
                                                                 </td>
-                                                                <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right text-rose-600 whitespace-nowrap">৳{parseNum(exp.amount).toLocaleString('en-IN')}</td>
+                                                                <td className={`px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right whitespace-nowrap ${parseNum(exp.amount) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                    {parseNum(exp.amount) < 0 
+                                                                        ? `-৳${Math.abs(parseNum(exp.amount)).toLocaleString('en-IN')}` 
+                                                                        : `৳${parseNum(exp.amount).toLocaleString('en-IN')}`}
+                                                                </td>
                                                                 <td className="px-3 md:px-6 py-3 md:py-4 text-sm text-gray-500 truncate max-w-[200px]">{exp.remarks || '-'}</td>
                                                             </tr>
                                                         ))
@@ -2937,10 +2957,12 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <tfoot className="bg-gray-50/30">
                                                 <tr>
                                                     <td colSpan="3" className="px-3 md:px-6 py-3 md:py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Total Expense:</td>
-                                                    <td className="px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right text-rose-600">
+                                                    <td className={`px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right ${expenseTabRecords.reduce((sum, exp) => sum + parseNum(exp.amount), 0) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                         {(() => {
                                                             const total = expenseTabRecords.reduce((sum, exp) => sum + parseNum(exp.amount), 0);
-                                                            return `৳${total.toLocaleString('en-IN')}`;
+                                                            return total < 0 
+                                                                ? `-৳${Math.abs(total).toLocaleString('en-IN')}` 
+                                                                : `৳${total.toLocaleString('en-IN')}`;
                                                         })()}
                                                     </td>
                                                     <td></td>
@@ -2974,7 +2996,11 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                             <p className="text-[10px] text-gray-400 font-semibold font-mono mt-0.5">{formatDate(exp.date)}</p>
                                                                         </div>
                                                                         <div className="text-right shrink-0">
-                                                                            <p className="text-xs font-black text-rose-600">৳{parseNum(exp.amount).toLocaleString('en-IN')}</p>
+                                                                            <p className={`text-xs font-black ${parseNum(exp.amount) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                                {parseNum(exp.amount) < 0 
+                                                                                    ? `-৳${Math.abs(parseNum(exp.amount)).toLocaleString('en-IN')}` 
+                                                                                    : `৳${parseNum(exp.amount).toLocaleString('en-IN')}`}
+                                                                            </p>
                                                                         </div>
                                                                         <div className="shrink-0 text-gray-400 pl-1">
                                                                             {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
@@ -9389,41 +9415,37 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                             <div className="flex flex-col gap-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-inner animate-in fade-in duration-300">
                                                                 {/* Radio Button for Enable Value and Quantity */}
                                                                 <div className="flex items-center justify-between w-full gap-4 flex-wrap">
-                                                                    {record.piNo && record.quantity && record.totalAmount ? (
-                                                                        <div className="flex items-center gap-4 py-1.5 px-3 bg-blue-50/50 rounded-xl border border-blue-100/30">
-                                                                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Adjust Quantity & Value:</span>
-                                                                            <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-gray-700">
-                                                                                <input
-                                                                                    type="radio"
-                                                                                    name={`adjust-${record._id}`}
-                                                                                    checked={!!record.enableValueQtyAdjustment}
-                                                                                    onChange={() => handleToggleValueQtyAdjustment(record, true)}
-                                                                                    className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
-                                                                                />
-                                                                                Enable
-                                                                            </label>
-                                                                            <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-gray-700">
-                                                                                <input
-                                                                                    type="radio"
-                                                                                    name={`adjust-${record._id}`}
-                                                                                    checked={!record.enableValueQtyAdjustment}
-                                                                                    onChange={() => handleToggleValueQtyAdjustment(record, false)}
-                                                                                    className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
-                                                                                />
-                                                                                Disable
-                                                                            </label>
-                                                                            {record.enableValueQtyAdjustment && (
-                                                                                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                                                    {(() => {
-                                                                                        const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
-                                                                                        return `${addedPercent.toFixed(2)}% added`;
-                                                                                    })()}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div />
-                                                                    )}
+                                                                    <div className="flex items-center gap-4 py-1.5 px-3 bg-blue-50/50 rounded-xl border border-blue-100/30">
+                                                                        <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Tolerance:</span>
+                                                                        <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-gray-700">
+                                                                            <input
+                                                                                type="radio"
+                                                                                name={`adjust-${record._id}`}
+                                                                                checked={!!record.enableValueQtyAdjustment}
+                                                                                onChange={() => handleToggleValueQtyAdjustment(record, true)}
+                                                                                className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
+                                                                            />
+                                                                            Enable
+                                                                        </label>
+                                                                        <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-gray-700">
+                                                                            <input
+                                                                                type="radio"
+                                                                                name={`adjust-${record._id}`}
+                                                                                checked={!record.enableValueQtyAdjustment}
+                                                                                onChange={() => handleToggleValueQtyAdjustment(record, false)}
+                                                                                className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
+                                                                            />
+                                                                            Disable
+                                                                        </label>
+                                                                        {record.enableValueQtyAdjustment && (
+                                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                                {(() => {
+                                                                                    const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                                    return `${addedPercent.toFixed(2)}% added`;
+                                                                                })()}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
 
                                                                     <div className="flex items-center gap-4 py-1.5 px-3 bg-blue-50/50 rounded-xl border border-blue-100/30 ml-auto">
                                                                         <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">LC Status:</span>
@@ -10123,39 +10145,37 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <div className="mt-4 border-t border-gray-100 pt-4 space-y-4 animate-in slide-in-from-top-2 duration-300">
                                                         {/* Radio Button for Enable Value and Quantity (Mobile) */}
                                                         <div className="flex flex-col gap-2">
-                                                            {record.piNo && record.quantity && record.totalAmount && (
-                                                                <div className="flex items-center gap-3 py-1 px-2.5 bg-blue-50/50 rounded-xl border border-blue-100/30 flex-wrap">
-                                                                    <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Adjust Qty & Val:</span>
-                                                                    <label className="inline-flex items-center gap-1 cursor-pointer text-[11px] font-bold text-gray-700">
-                                                                        <input
-                                                                            type="radio"
-                                                                            name={`adjust-mobile-${record._id}`}
-                                                                            checked={!!record.enableValueQtyAdjustment}
-                                                                            onChange={() => handleToggleValueQtyAdjustment(record, true)}
-                                                                            className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
-                                                                        />
-                                                                        Enable
-                                                                    </label>
-                                                                    <label className="inline-flex items-center gap-1 cursor-pointer text-[11px] font-bold text-gray-700">
-                                                                        <input
-                                                                            type="radio"
-                                                                            name={`adjust-mobile-${record._id}`}
-                                                                            checked={!record.enableValueQtyAdjustment}
-                                                                            onChange={() => handleToggleValueQtyAdjustment(record, false)}
-                                                                            className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
-                                                                        />
-                                                                        Disable
-                                                                    </label>
-                                                                    {record.enableValueQtyAdjustment && (
-                                                                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                                            {(() => {
-                                                                                const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
-                                                                                return `${addedPercent.toFixed(2)}% added`;
-                                                                            })()}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            )}
+                                                            <div className="flex items-center gap-3 py-1 px-2.5 bg-blue-50/50 rounded-xl border border-blue-100/30 flex-wrap">
+                                                                <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Tolerance:</span>
+                                                                <label className="inline-flex items-center gap-1 cursor-pointer text-[11px] font-bold text-gray-700">
+                                                                    <input
+                                                                        type="radio"
+                                                                        name={`adjust-mobile-${record._id}`}
+                                                                        checked={!!record.enableValueQtyAdjustment}
+                                                                        onChange={() => handleToggleValueQtyAdjustment(record, true)}
+                                                                        className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
+                                                                    />
+                                                                    Enable
+                                                                </label>
+                                                                <label className="inline-flex items-center gap-1 cursor-pointer text-[11px] font-bold text-gray-700">
+                                                                    <input
+                                                                        type="radio"
+                                                                        name={`adjust-mobile-${record._id}`}
+                                                                        checked={!record.enableValueQtyAdjustment}
+                                                                        onChange={() => handleToggleValueQtyAdjustment(record, false)}
+                                                                        className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500"
+                                                                    />
+                                                                    Disable
+                                                                </label>
+                                                                {record.enableValueQtyAdjustment && (
+                                                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                                                        {(() => {
+                                                                            const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                            return `${addedPercent.toFixed(2)}% added`;
+                                                                        })()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <div className="flex items-center gap-3 py-1 px-2.5 bg-blue-50/50 rounded-xl border border-blue-100/30 flex-wrap">
                                                                 <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">LC Status:</span>
                                                                 <label className="inline-flex items-center gap-1 cursor-pointer text-[11px] font-bold text-gray-700">
