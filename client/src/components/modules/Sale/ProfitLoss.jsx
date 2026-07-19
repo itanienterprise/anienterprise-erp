@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { 
-  BarChartIcon, FunnelIcon, TrendingUpIcon, PrinterIcon, 
+import {
+  BarChartIcon, FunnelIcon, TrendingUpIcon, PrinterIcon,
   DollarSignIcon, ReceiptIcon, SearchIcon, XIcon, BoxIcon
 } from '../../Icons';
 import axios from '../../../utils/api';
@@ -84,16 +84,16 @@ export default function ProfitLoss({ salesRecords, products }) {
   // Helper to find the unit purchase price (cost) of a product/brand
   const getPurchasePrice = (productName, brandName) => {
     if (!products || !Array.isArray(products)) return 0;
-    
+
     // Find product matching name
-    const product = products.find(p => 
+    const product = products.find(p =>
       (p.productName || p.product || '').trim().toLowerCase() === (productName || '').trim().toLowerCase()
     );
     if (!product) return 0;
 
     // Try to find the specific brand entry
     if (product.brands && Array.isArray(product.brands)) {
-      const brandEntry = product.brands.find(b => 
+      const brandEntry = product.brands.find(b =>
         (b.brand || '').trim().toLowerCase() === (brandName || '').trim().toLowerCase()
       );
       if (brandEntry && brandEntry.purchasedPrice) {
@@ -139,11 +139,11 @@ export default function ProfitLoss({ salesRecords, products }) {
     if (filterType === 'custom') {
       const sDate = startDate ? new Date(startDate) : null;
       const eDate = endDate ? new Date(endDate) : null;
-      
+
       // Normalize times for date comparison
-      if (sDate) sDate.setHours(0,0,0,0);
-      if (eDate) eDate.setHours(23,59,59,999);
-      saleDate.setHours(0,0,0,0);
+      if (sDate) sDate.setHours(0, 0, 0, 0);
+      if (eDate) eDate.setHours(23, 59, 59, 999);
+      saleDate.setHours(0, 0, 0, 0);
 
       if (sDate && saleDate < sDate) return false;
       if (eDate && saleDate > eDate) return false;
@@ -174,7 +174,7 @@ export default function ProfitLoss({ salesRecords, products }) {
         const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
           ? item.brandEntries
           : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: item.unitPrice || 0, totalAmount: item.totalAmount || 0 }];
-        
+
         return brandEntries.map(entry => ({
           productName: item.productName || item.product || '-',
           brandName: entry.brandName || entry.brand || '-',
@@ -254,7 +254,7 @@ export default function ProfitLoss({ salesRecords, products }) {
     const lcNoClean = cleanLc(selectedLc.lcNo);
 
     // 1. Custom expenses where type !== 'bill'
-    const customExpenses = lcExpenses.filter(exp => 
+    const customExpenses = lcExpenses.filter(exp =>
       cleanLc(exp.lcNo) === lcNoClean && exp.type !== 'bill'
     );
 
@@ -341,9 +341,9 @@ export default function ProfitLoss({ salesRecords, products }) {
   // Product arrival, inhouse, short, and damage summary
   const productSummary = useMemo(() => {
     if (!selectedLc) return [];
-    
+
     const summaryMap = {};
-    
+
     // Aggregate stock (arrival) records
     selectedLcStocks.forEach(item => {
       const prodName = item.productName || item.product || 'Unknown Product';
@@ -363,18 +363,18 @@ export default function ProfitLoss({ salesRecords, products }) {
           unit: item.unit || 'kg'
         };
       }
-      
+
       const qty = parseFloat(item.quantity) || 0;
       const price = parseFloat(item.purchasedPrice) || 0;
       const shortQty = parseFloat(item.sweepedQuantity) || 0;
       const inhouseQty = parseFloat(item.inHouseQuantity) || (qty - shortQty);
-      
+
       summaryMap[prodName].purchaseQty += qty;
       summaryMap[prodName].purchasePrice += qty * price;
-      
+
       summaryMap[prodName].inhouseQty += inhouseQty;
       summaryMap[prodName].inhousePrice += inhouseQty * price;
-      
+
       summaryMap[prodName].shortQty += shortQty;
       summaryMap[prodName].shortPrice += shortQty * price;
     });
@@ -398,10 +398,10 @@ export default function ProfitLoss({ salesRecords, products }) {
           unit: d.unit || 'kg'
         };
       }
-      
+
       const dQty = parseFloat(d.quantity) || 0;
       const dPrice = parseFloat(d.price) || 0;
-      
+
       summaryMap[prodName].damageQty += dQty;
       summaryMap[prodName].damagePrice += dQty * dPrice;
     });
@@ -422,7 +422,7 @@ export default function ProfitLoss({ salesRecords, products }) {
         const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
           ? item.brandEntries
           : [{ quantity: item.quantity, totalAmount: item.totalAmount || (parseFloat(item.quantity) * parseFloat(item.unitPrice)) || 0 }];
-        
+
         brandEntries.forEach(entry => {
           const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLc;
           if (cleanLc(entryLc) !== lcNoClean) return;
@@ -463,7 +463,7 @@ export default function ProfitLoss({ salesRecords, products }) {
 
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-8 print:bg-white print:p-0">
-      
+
       {/* Title Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-200 pb-4 gap-4 print:hidden">
         {/* Left column: Title and Icon */}
@@ -539,17 +539,16 @@ export default function ProfitLoss({ salesRecords, products }) {
           </div>
         </div>
 
-          {/* Right column: Action buttons */}
+        {/* Right column: Action buttons */}
         <div className="flex items-center gap-2 justify-between sm:justify-end md:flex-1">
           <div className="relative">
             <button
               ref={filterButtonRef}
               onClick={() => setShowFilterPanel(!showFilterPanel)}
-              className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center gap-2 px-3 rounded-xl transition-all border font-medium text-sm ${
-                showFilterPanel || filterType !== 'monthly' || saleTypeFilter !== 'All' || selectedProduct !== 'All'
+              className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center gap-2 px-3 rounded-xl transition-all border font-medium text-sm ${showFilterPanel || filterType !== 'monthly' || saleTypeFilter !== 'All' || selectedProduct !== 'All'
                   ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
                   : 'bg-white hover:bg-gray-50 text-gray-600 border-gray-200'
-              }`}
+                }`}
             >
               <FunnelIcon className={`w-4 h-4 ${showFilterPanel || filterType !== 'monthly' || saleTypeFilter !== 'All' || selectedProduct !== 'All' ? 'text-white' : 'text-gray-400'}`} />
             </button>
@@ -703,216 +702,247 @@ export default function ProfitLoss({ salesRecords, products }) {
       </div>
 
       <div className="space-y-6 mt-3">
-      {/* Print-Only Header */}
-      <div className="hidden print:block text-center space-y-2 border-b border-gray-300 pb-6 mb-6">
-        <h1 className="text-3xl font-black text-gray-900">M/S ANI ENTERPRISE</h1>
-        <p className="text-xs text-gray-500">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-        <div className="text-lg font-bold text-gray-800 uppercase tracking-wider py-1 border border-gray-800 inline-block px-8 mt-2">PROFIT & LOSS STATEMENT</div>
-        <p className="text-xs text-gray-600 mt-2 font-medium">
-          Period: {filterType === 'monthly' ? `Month: ${selectedMonth}/${selectedYear}` : filterType === 'yearly' ? `Year: ${selectedYear}` : filterType === 'custom' ? `${startDate} to ${endDate}` : 'All Time'}
-          {saleTypeFilter !== 'All' ? ` | Type: ${saleTypeFilter} Sales` : ''}
-          {selectedProduct !== 'All' ? ` | Product: ${selectedProduct}` : ''}
-          {selectedLcNo !== 'All' ? ` | LC No: ${selectedLcNo}` : ''}
-        </p>
-      </div>
-
-
-      {/* Metrics Grid Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Metric 1: Total Revenue */}
-        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
-            <DollarSignIcon className="w-6 h-6 text-blue-500" />
-          </div>
-          <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Total Revenue</div>
-          <div className="text-xl sm:text-2xl font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalRevenue).toLocaleString('en-IN')}</div>
-          <div className="text-[11px] text-gray-400 mt-2 font-medium">Accumulated invoice totals</div>
+        {/* Print-Only Header */}
+        <div className="hidden print:block text-center space-y-2 border-b border-gray-300 pb-6 mb-6">
+          <h1 className="text-3xl font-black text-gray-900">M/S ANI ENTERPRISE</h1>
+          <p className="text-xs text-gray-500">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
+          <div className="text-lg font-bold text-gray-800 uppercase tracking-wider py-1 border border-gray-800 inline-block px-8 mt-2">PROFIT & LOSS STATEMENT</div>
+          <p className="text-xs text-gray-600 mt-2 font-medium">
+            Period: {filterType === 'monthly' ? `Month: ${selectedMonth}/${selectedYear}` : filterType === 'yearly' ? `Year: ${selectedYear}` : filterType === 'custom' ? `${startDate} to ${endDate}` : 'All Time'}
+            {saleTypeFilter !== 'All' ? ` | Type: ${saleTypeFilter} Sales` : ''}
+            {selectedProduct !== 'All' ? ` | Product: ${selectedProduct}` : ''}
+            {selectedLcNo !== 'All' ? ` | LC No: ${selectedLcNo}` : ''}
+          </p>
         </div>
 
-        {/* Metric 2: Total COGS */}
-        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
-            <ReceiptIcon className="w-6 h-6 text-amber-500" />
-          </div>
-          <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Cost of Goods Sold (COGS)</div>
-          <div className="text-xl sm:text-2xl font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalCost).toLocaleString('en-IN')}</div>
-          <div className="text-[11px] text-gray-400 mt-2 font-medium">Calculated based on product costs</div>
-        </div>
 
-        {/* Metric 3: Gross Profit */}
-        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
-            <TrendingUpIcon className="w-6 h-6 text-emerald-500" />
-          </div>
-          <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Net Profit / Loss</div>
-          <div className={`text-xl sm:text-2xl font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-            ৳ {Math.round(profitLossData.summary.totalProfit).toLocaleString('en-IN')}
-          </div>
-          <div className="text-[11px] text-gray-400 mt-2 font-medium">Net profit before overheads</div>
-        </div>
+        {/* Metrics Grid Overview */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-        {/* Metric 4: Profit Margin */}
-        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
-            <BarChartIcon className="w-6 h-6 text-indigo-500" />
-          </div>
-          <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Net Margin</div>
-          <div className={`text-xl sm:text-2xl font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
-            {profitLossData.summary.margin.toFixed(2)} %
-          </div>
-          <div className="text-[11px] text-gray-400 mt-2 font-medium">Percentage of revenue retained</div>
-        </div>
-      </div>
-
-      {/* LC Details Card (restricted to left side, 50% width on desktop) */}
-      <div className="w-full lg:w-[calc(50%-0.5rem)]">
-        {selectedLc ? (
-          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
-            <div className="px-6 py-5 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50/50">
-              <div>
-                <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">LC Details</h2>
-                <p className="text-xs text-gray-500 font-medium">Core information & values for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
-              </div>
-              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider self-start sm:self-center ${selectedLc.status === 'Opened' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
-                {selectedLc.status || 'Opened'}
-              </span>
+          {/* Metric 1: Total Revenue */}
+          <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
+              <DollarSignIcon className="w-6 h-6 text-blue-500" />
             </div>
-
-            <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Parties & Bank */}
-              <div className="space-y-4">
-                <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Parties & Bank</h3>
-                <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
-                  <div>
-                    <div className="text-[10px] text-gray-400 font-black uppercase">Importer</div>
-                    <div className="text-sm font-bold text-gray-800">{selectedLc.importerName || 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-gray-400 font-black uppercase">Exporter</div>
-                    <div className="text-sm font-bold text-gray-800">{selectedLc.exporterName || 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-gray-400 font-black uppercase">Bank & Branch</div>
-                    <div className="text-sm font-bold text-gray-800">{selectedLc.bankName || 'N/A'} {selectedLc.bankBranch ? `(${selectedLc.bankBranch})` : ''}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Dates & Metrics */}
-              <div className="space-y-4">
-                <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Timeline & Volume</h3>
-                <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-[10px] text-gray-400 font-black uppercase">Opening Date</div>
-                      <div className="text-xs font-bold text-gray-800">{selectedLc.openingDate ? formatDate(selectedLc.openingDate) : 'N/A'}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400 font-black uppercase">Expiry Date</div>
-                      <div className="text-xs font-bold text-gray-800">{selectedLc.expiryDate ? formatDate(selectedLc.expiryDate) : 'N/A'}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-gray-400 font-black uppercase">Total Volume (Ton)</div>
-                    <div className="text-sm font-black text-gray-800">{selectedLc.quantity || '0'} Ton</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-gray-400 font-black uppercase">Port of Entry</div>
-                    <div className="text-sm font-semibold text-gray-800">{selectedLc.port || 'N/A'}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Financial Summary */}
-              <div className="space-y-4">
-                <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Financial Summary</h3>
-                <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
-                  <div>
-                    <div className="text-[10px] text-gray-400 font-black uppercase">LC Value (USD)</div>
-                    <div className="text-sm font-black text-gray-800">$ {parseFloat(selectedLc.totalDollar || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-[10px] text-gray-400 font-black uppercase">Exchange Rate</div>
-                      <div className="text-xs font-semibold text-gray-800">{selectedLc.dollarRate || '0.00'} BDT</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400 font-black uppercase">Total (BDT)</div>
-                      <div className="text-xs font-black text-gray-800">৳ {parseFloat(selectedLc.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 border-t border-gray-200/60 pt-2 mt-1">
-                    <div>
-                      <div className="text-[10px] text-gray-400 font-black uppercase">Margin (%)</div>
-                      <div className="text-xs font-bold text-gray-800">{selectedLc.bankMargin || '0'} %</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400 font-black uppercase">Margin Paid</div>
-                      <div className="text-xs font-black text-emerald-600">৳ {parseFloat(selectedLc.marginPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Products list nested table */}
-            {selectedLc.productsList && selectedLc.productsList.length > 0 && (
-              <div className="border-t border-gray-100">
-                <div className="px-6 py-3 bg-slate-50/20 text-[10px] font-black text-gray-400 uppercase tracking-wider">Products list in LC</div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
-                        <th className="py-2.5 px-6">Product Name</th>
-                        <th className="py-2.5 px-4 text-center">HS Code</th>
-                        <th className="py-2.5 px-4 text-right">Quantity (Ton)</th>
-                        <th className="py-2.5 px-4 text-right">Rate ($)</th>
-                        <th className="py-2.5 px-4 text-right">Freight ($)</th>
-                        <th className="py-2.5 px-6 text-right font-black">Total Value (USD)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
-                      {selectedLc.productsList.map((prod, idx) => {
-                        const qty = parseFloat(prod.quantity) || 0;
-                        const rate = parseFloat(prod.rate) || 0;
-                        const freight = parseFloat(prod.freight) || 0;
-                        const totalVal = qty * (rate + freight);
-                        return (
-                          <tr key={idx} className="hover:bg-slate-50/30 transition-colors">
-                            <td className="py-2.5 px-6 font-bold text-gray-900">{prod.productName || 'N/A'}</td>
-                            <td className="py-2.5 px-4 text-center text-gray-500">{prod.hsCode || 'N/A'}</td>
-                            <td className="py-2.5 px-4 text-right font-bold">{qty.toLocaleString()}</td>
-                            <td className="py-2.5 px-4 text-right">${rate.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-4 text-right">${freight.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-6 text-right font-black text-blue-600">${totalVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+            <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Total Revenue</div>
+            <div className="text-xl sm:text-2xl font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalRevenue).toLocaleString('en-IN')}</div>
+            <div className="text-[11px] text-gray-400 mt-2 font-medium">Accumulated invoice totals</div>
           </div>
-        ) : (
-          <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center">
-            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
-              <BarChartIcon className="w-8 h-8" />
+
+          {/* Metric 2: Total COGS */}
+          <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
+              <ReceiptIcon className="w-6 h-6 text-amber-500" />
             </div>
-            <h3 className="text-lg font-black text-gray-900 mb-1">LC Details</h3>
-            <p className="text-sm text-gray-500 max-w-sm mx-auto">Search or select an LC Number from the header input to inspect its details, margin status, products, and values.</p>
+            <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Cost of Goods Sold (COGS)</div>
+            <div className="text-xl sm:text-2xl font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalCost).toLocaleString('en-IN')}</div>
+            <div className="text-[11px] text-gray-400 mt-2 font-medium">Calculated based on product costs</div>
           </div>
-        )}
-      </div>
 
-      {/* Row: COG (left 50%) | LC Expense + Product Stock stacked (right 50%) */}
-      <div className="flex flex-col lg:flex-row gap-4 mt-6">
+          {/* Metric 3: Gross Profit */}
+          <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
+              <TrendingUpIcon className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Net Profit / Loss</div>
+            <div className={`text-xl sm:text-2xl font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              ৳ {Math.round(profitLossData.summary.totalProfit).toLocaleString('en-IN')}
+            </div>
+            <div className="text-[11px] text-gray-400 mt-2 font-medium">Net profit before overheads</div>
+          </div>
 
-        {/* LEFT: Cost of Goods (COG) Card — 50% */}
-        <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col">
+          {/* Metric 4: Profit Margin */}
+          <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
+              <BarChartIcon className="w-6 h-6 text-indigo-500" />
+            </div>
+            <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Net Margin</div>
+            <div className={`text-xl sm:text-2xl font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+              {profitLossData.summary.margin.toFixed(2)} %
+            </div>
+            <div className="text-[11px] text-gray-400 mt-2 font-medium">Percentage of revenue retained</div>
+          </div>
+        </div>
+
+        {/* LC Details Card (restricted to left side, 50% width on desktop) */}
+        <div className="w-full lg:w-[calc(50%-0.5rem)]">
           {selectedLc ? (
-            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col flex-1">
+            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
+              <div className="px-6 py-5 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50/50">
+                <div>
+                  <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">LC Details</h2>
+                  <p className="text-xs text-gray-500 font-medium">Core information & values for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider self-start sm:self-center ${selectedLc.status === 'Opened' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
+                  {selectedLc.status || 'Opened'}
+                </span>
+              </div>
+
+              <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Parties & Bank */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Parties & Bank</h3>
+                  <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
+                    <div>
+                      <div className="text-[10px] text-gray-400 font-black uppercase">Importer</div>
+                      <div className="text-sm font-bold text-gray-800">{selectedLc.importerName || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 font-black uppercase">Exporter</div>
+                      <div className="text-sm font-bold text-gray-800">{selectedLc.exporterName || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 font-black uppercase">Bank & Branch</div>
+                      <div className="text-sm font-bold text-gray-800">{selectedLc.bankName || 'N/A'} {selectedLc.bankBranch ? `(${selectedLc.bankBranch})` : ''}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dates & Metrics */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Timeline & Volume</h3>
+                  <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-[10px] text-gray-400 font-black uppercase">Opening Date</div>
+                        <div className="text-xs font-bold text-gray-800">{selectedLc.openingDate ? formatDate(selectedLc.openingDate) : 'N/A'}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-400 font-black uppercase">Expiry Date</div>
+                        <div className="text-xs font-bold text-gray-800">{selectedLc.expiryDate ? formatDate(selectedLc.expiryDate) : 'N/A'}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 font-black uppercase">Total Volume (Ton)</div>
+                      <div className="text-sm font-black text-gray-800">{selectedLc.quantity || '0'} Ton</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 font-black uppercase">Port of Entry</div>
+                      <div className="text-sm font-semibold text-gray-800">{selectedLc.port || 'N/A'}</div>
+                    </div>
+                    {(() => {
+                      const totalQtyKg = (parseFloat(selectedLc.quantity) || 0) * 1000;
+                      // Deduplicate stock records by date + group key (same logic as LCManagement)
+                      const receiptsMap = {};
+                      selectedLcStocks.forEach(s => {
+                        const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                        const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                        const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                        const key = `${dateStr}_${groupVal}`;
+                        if (!receiptsMap[key]) {
+                          const itemSubtotal = (s.entries || []).reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity || e.quantity) || 0), 0);
+                          receiptsMap[key] = parseFloat(s.totalLcQuantity) || itemSubtotal || parseFloat(s.inHouseQuantity) || parseFloat(s.quantity) || 0;
+                        } else if (!s.totalLcQuantity) {
+                          receiptsMap[key] += parseFloat(s.inHouseQuantity) || parseFloat(s.quantity) || 0;
+                        }
+                      });
+                      const receiveQtyKg = Object.values(receiptsMap).reduce((sum, v) => sum + v, 0);
+                      const balanceQtyKg = Math.max(0, totalQtyKg - receiveQtyKg);
+                      return (
+                        <div className="grid grid-cols-2 gap-2 border-t border-gray-200/60 pt-2 mt-1">
+                          <div>
+                            <div className="text-[10px] text-gray-400 font-black uppercase">Receive Qty</div>
+                            <div className="text-sm font-black text-blue-600">{Math.round(receiveQtyKg).toLocaleString('en-US')} Kg</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-gray-400 font-black uppercase">Balance</div>
+                            <div className={`text-sm font-black ${balanceQtyKg <= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{Math.round(balanceQtyKg).toLocaleString('en-US')} Kg</div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Financial Summary</h3>
+                  <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
+                    <div>
+                      <div className="text-[10px] text-gray-400 font-black uppercase">LC Value (USD)</div>
+                      <div className="text-sm font-black text-gray-800">$ {parseFloat(selectedLc.totalDollar || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-[10px] text-gray-400 font-black uppercase">Exchange Rate</div>
+                        <div className="text-xs font-semibold text-gray-800">{selectedLc.dollarRate || '0.00'} BDT</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-400 font-black uppercase">Total (BDT)</div>
+                        <div className="text-xs font-black text-gray-800">৳ {parseFloat(selectedLc.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 border-t border-gray-200/60 pt-2 mt-1">
+                      <div>
+                        <div className="text-[10px] text-gray-400 font-black uppercase">Margin (%)</div>
+                        <div className="text-xs font-bold text-gray-800">{selectedLc.bankMargin || '0'} %</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-400 font-black uppercase">Margin Paid</div>
+                        <div className="text-xs font-black text-emerald-600">৳ {parseFloat(selectedLc.marginPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Products list nested table */}
+              {selectedLc.productsList && selectedLc.productsList.length > 0 && (
+                <div className="border-t border-gray-100">
+                  <div className="px-6 py-3 bg-slate-50/20 text-[10px] font-black text-gray-400 uppercase tracking-wider">Products list in LC</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                          <th className="py-2.5 px-6">Product Name</th>
+                          <th className="py-2.5 px-4 text-center">HS Code</th>
+                          <th className="py-2.5 px-4 text-right">Quantity (Ton)</th>
+                          <th className="py-2.5 px-4 text-right">Rate ($)</th>
+                          <th className="py-2.5 px-4 text-right">Freight ($)</th>
+                          <th className="py-2.5 px-6 text-right font-black">Total Value (USD)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
+                        {selectedLc.productsList.map((prod, idx) => {
+                          const qty = parseFloat(prod.quantity) || 0;
+                          const rate = parseFloat(prod.rate) || 0;
+                          const freight = parseFloat(prod.freight) || 0;
+                          const totalVal = qty * (rate + freight);
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50/30 transition-colors">
+                              <td className="py-2.5 px-6 font-bold text-gray-900">{prod.productName || 'N/A'}</td>
+                              <td className="py-2.5 px-4 text-center text-gray-500">{prod.hsCode || 'N/A'}</td>
+                              <td className="py-2.5 px-4 text-right font-bold">{qty.toLocaleString()}</td>
+                              <td className="py-2.5 px-4 text-right">${rate.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                              <td className="py-2.5 px-4 text-right">${freight.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                              <td className="py-2.5 px-6 text-right font-black text-blue-600">${totalVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center">
+              <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
+                <BarChartIcon className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900 mb-1">LC Details</h3>
+              <p className="text-sm text-gray-500 max-w-sm mx-auto">Search or select an LC Number from the header input to inspect its details, margin status, products, and values.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Row: COG (left 50%) | LC Expense + Product Stock stacked (right 50%) */}
+        <div className="flex flex-col lg:flex-row gap-4 mt-6">
+
+          {/* LEFT: Cost of Goods (COG) Card — 50% */}
+          <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col">
+            {selectedLc ? (
+              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col flex-1">
                 <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
                     <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Cost of Goods (COG)</h2>
@@ -964,28 +994,28 @@ export default function ProfitLoss({ salesRecords, products }) {
                     </tbody>
                   </table>
                 </div>
-              <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-xs font-black text-gray-500 uppercase tracking-wider">Total COG</span>
-                <span className="text-sm font-black text-blue-600">৳ {Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}</span>
+                <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
+                  <span className="text-xs font-black text-gray-500 uppercase tracking-wider">Total COG</span>
+                  <span className="text-sm font-black text-blue-600">৳ {Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}</span>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[200px] flex-1 flex flex-col justify-center">
-              <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
-                <ReceiptIcon className="w-8 h-8" />
+            ) : (
+              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[200px] flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
+                  <ReceiptIcon className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-black text-gray-900 mb-1">Cost of Goods (COG)</h3>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to inspect all related Cost of Goods records, invoicing details, and actual costs.</p>
               </div>
-              <h3 className="text-lg font-black text-gray-900 mb-1">Cost of Goods (COG)</h3>
-              <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to inspect all related Cost of Goods records, invoicing details, and actual costs.</p>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* RIGHT: LC Expense (25%) + Product Stock & Arrivals (25%) — side by side */}
-        <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col sm:flex-row gap-4">
+          {/* RIGHT: LC Expense (25%) + Product Stock & Arrivals (25%) — side by side */}
+          <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col sm:flex-row gap-4">
 
-          {/* LC Expense Card */}
-          {selectedLc ? (
-            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col flex-1">
+            {/* LC Expense Card */}
+            {selectedLc ? (
+              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col flex-1">
                 <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
                   <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">LC Expense</h2>
                   <p className="text-xs text-gray-500 font-medium">Payments for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
@@ -1017,98 +1047,98 @@ export default function ProfitLoss({ salesRecords, products }) {
                     </tbody>
                   </table>
                 </div>
-              <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-xs font-black text-gray-500 uppercase tracking-wider">Total Expenses</span>
-                <span className="text-sm font-black text-rose-600">৳ {Math.round(totalLcExpensesAmount).toLocaleString('en-IN')}</span>
+                <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
+                  <span className="text-xs font-black text-gray-500 uppercase tracking-wider">Total Expenses</span>
+                  <span className="text-sm font-black text-rose-600">৳ {Math.round(totalLcExpensesAmount).toLocaleString('en-IN')}</span>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] flex-1 flex flex-col justify-center">
-              <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 mx-auto mb-4 animate-pulse">
-                <ReceiptIcon className="w-8 h-8" />
+            ) : (
+              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 mx-auto mb-4 animate-pulse">
+                  <ReceiptIcon className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-black text-gray-900 mb-1">LC Expense</h3>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC to view payments.</p>
               </div>
-              <h3 className="text-lg font-black text-gray-900 mb-1">LC Expense</h3>
-              <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC to view payments.</p>
-            </div>
-          )}
+            )}
 
-          {/* Product Stock & Arrivals Card */}
-          {selectedLc ? (
-            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex-1 flex flex-col">
-              <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
-                <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Product Stock & Arrivals</h2>
-                <p className="text-xs text-gray-500 font-medium">Arrival summaries, in-house inventory, short and damage records for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
-              </div>
-              <div className="p-6 space-y-8 flex-1">
-                {productSummary.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-gray-400 font-bold">No product arrivals or damages found for this LC.</div>
-                ) : (
-                  productSummary.map((prod, idx) => (
-                    <div key={idx} className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-6 bg-blue-600 rounded-full" />
-                        <h3 className="text-base font-black text-gray-950">{prod.productName}</h3>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Purchase Arrival */}
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/10 transition-all">
-                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Purchase (Total Arrival)</div>
-                          <div className="text-sm font-black text-gray-900">{Math.round(prod.purchaseQty).toLocaleString()} {prod.unit}</div>
-                          <div className="text-sm font-bold text-blue-600 mt-1">৳ {Math.round(prod.purchasePrice).toLocaleString('en-IN')}</div>
+            {/* Product Stock & Arrivals Card */}
+            {selectedLc ? (
+              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex-1 flex flex-col">
+                <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
+                  <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Product Stock & Arrivals</h2>
+                  <p className="text-xs text-gray-500 font-medium">Arrival summaries, in-house inventory, short and damage records for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
+                </div>
+                <div className="p-6 space-y-8 flex-1">
+                  {productSummary.length === 0 ? (
+                    <div className="text-center py-6 text-sm text-gray-400 font-bold">No product arrivals or damages found for this LC.</div>
+                  ) : (
+                    productSummary.map((prod, idx) => (
+                      <div key={idx} className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-6 bg-blue-600 rounded-full" />
+                          <h3 className="text-base font-black text-gray-950">{prod.productName}</h3>
                         </div>
-                        {/* Inhouse Quantity */}
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-emerald-100 hover:bg-emerald-50/10 transition-all">
-                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Inhouse Quantity</div>
-                          <div className="text-sm font-black text-gray-900">{Math.round(prod.inhouseQty).toLocaleString()} {prod.unit}</div>
-                          <div className="text-sm font-bold text-emerald-600 mt-1">৳ {Math.round(prod.inhousePrice).toLocaleString('en-IN')}</div>
-                        </div>
-                        {/* Short Quantity */}
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-amber-100 hover:bg-amber-50/10 transition-all">
-                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Short Quantity</div>
-                          <div className="text-sm font-black text-rose-600">{Math.round(prod.shortQty).toLocaleString()} {prod.unit}</div>
-                          <div className="text-sm font-bold text-amber-600 mt-1">৳ {Math.round(prod.shortPrice).toLocaleString('en-IN')}</div>
-                        </div>
-                        {/* Damage Quantity */}
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-rose-100 hover:bg-rose-50/10 transition-all">
-                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Damage Quantity</div>
-                          <div className="text-sm font-black text-rose-700">{Math.round(prod.damageQty).toLocaleString()} {prod.unit}</div>
-                          <div className="text-sm font-bold text-rose-500 mt-1">৳ {Math.round(prod.damagePrice).toLocaleString('en-IN')}</div>
-                        </div>
-                        {/* Sold Quantity */}
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-violet-100 hover:bg-violet-50/10 transition-all">
-                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Sold Quantity</div>
-                          <div className="text-sm font-black text-gray-900">{Math.round(prod.saleQty || 0).toLocaleString()} {prod.unit}</div>
-                          <div className="text-sm font-bold text-violet-600 mt-1">৳ {Math.round(prod.salePrice || 0).toLocaleString('en-IN')}</div>
-                        </div>
-                        {/* Current Stock */}
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:bg-indigo-50/10 transition-all">
-                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Current Stock</div>
-                          <div className="text-sm font-black text-gray-900">{Math.round(prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0)).toLocaleString()} {prod.unit}</div>
-                          <div className="text-sm font-bold text-indigo-600 mt-1">
-                            ৳ {(() => {
-                              const currentStockQty = prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0);
-                              const avgPurchasePrice = prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : 0;
-                              return Math.round(currentStockQty * avgPurchasePrice).toLocaleString('en-IN');
-                            })()}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Purchase Arrival */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/10 transition-all">
+                            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Purchase (Total Arrival)</div>
+                            <div className="text-sm font-black text-gray-900">{Math.round(prod.purchaseQty).toLocaleString()} {prod.unit}</div>
+                            <div className="text-sm font-bold text-blue-600 mt-1">৳ {Math.round(prod.purchasePrice).toLocaleString('en-IN')}</div>
+                          </div>
+                          {/* Inhouse Quantity */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-emerald-100 hover:bg-emerald-50/10 transition-all">
+                            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Inhouse Quantity</div>
+                            <div className="text-sm font-black text-gray-900">{Math.round(prod.inhouseQty).toLocaleString()} {prod.unit}</div>
+                            <div className="text-sm font-bold text-emerald-600 mt-1">৳ {Math.round(prod.inhousePrice).toLocaleString('en-IN')}</div>
+                          </div>
+                          {/* Short Quantity */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-amber-100 hover:bg-amber-50/10 transition-all">
+                            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Short Quantity</div>
+                            <div className="text-sm font-black text-rose-600">{Math.round(prod.shortQty).toLocaleString()} {prod.unit}</div>
+                            <div className="text-sm font-bold text-amber-600 mt-1">৳ {Math.round(prod.shortPrice).toLocaleString('en-IN')}</div>
+                          </div>
+                          {/* Damage Quantity */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-rose-100 hover:bg-rose-50/10 transition-all">
+                            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Damage Quantity</div>
+                            <div className="text-sm font-black text-rose-700">{Math.round(prod.damageQty).toLocaleString()} {prod.unit}</div>
+                            <div className="text-sm font-bold text-rose-500 mt-1">৳ {Math.round(prod.damagePrice).toLocaleString('en-IN')}</div>
+                          </div>
+                          {/* Sold Quantity */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-violet-100 hover:bg-violet-50/10 transition-all">
+                            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Sold Quantity</div>
+                            <div className="text-sm font-black text-gray-900">{Math.round(prod.saleQty || 0).toLocaleString()} {prod.unit}</div>
+                            <div className="text-sm font-bold text-violet-600 mt-1">৳ {Math.round(prod.salePrice || 0).toLocaleString('en-IN')}</div>
+                          </div>
+                          {/* Current Stock */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:bg-indigo-50/10 transition-all">
+                            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Current Stock</div>
+                            <div className="text-sm font-black text-gray-900">{Math.round(prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0)).toLocaleString()} {prod.unit}</div>
+                            <div className="text-sm font-bold text-indigo-600 mt-1">
+                              ৳ {(() => {
+                                const currentStockQty = prod.inhouseQty - (prod.saleQty || 0) - (prod.damageQty || 0);
+                                const avgPurchasePrice = prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : 0;
+                                return Math.round(currentStockQty * avgPurchasePrice).toLocaleString('en-IN');
+                              })()}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[220px] flex-1 flex flex-col justify-center">
-              <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 mx-auto mb-4 animate-pulse">
-                <BoxIcon className="w-8 h-8" />
+            ) : (
+              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[220px] flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 mx-auto mb-4 animate-pulse">
+                  <BoxIcon className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-black text-gray-900 mb-1">Product Stock & Arrivals</h3>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to analyze product quantities, inhouse stock, shortage amounts, and damages.</p>
               </div>
-              <h3 className="text-lg font-black text-gray-900 mb-1">Product Stock & Arrivals</h3>
-              <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to analyze product quantities, inhouse stock, shortage amounts, and damages.</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
 
       </div>
     </div>
