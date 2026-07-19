@@ -3893,53 +3893,51 @@ const UpdateDollarRateModal = ({ record, onClose, onUpdateSuccess }) => {
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
-                            <DollarSignIcon className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="text-base font-bold">Update Dollar Rate</h3>
-                            <p className="text-xs text-blue-100 font-medium">LC No: {record.lcNo}</p>
-                        </div>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-white/60 animate-in zoom-in-95 duration-200">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+                    <div>
+                        <h3 className="text-lg md:text-xl font-bold text-gray-900">Update Dollar Rate</h3>
+                        <p className="text-xs text-blue-600 font-bold uppercase tracking-wider mt-0.5">LC No: {record.lcNo}</p>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition-all"
+                        className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all"
                     >
                         <XIcon className="w-5 h-5" />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
-                    <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                    {/* Info grid */}
+                    <div className="grid grid-cols-2 gap-3 p-3.5 bg-blue-50/60 rounded-2xl border border-blue-100/80">
                         <div>
-                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Importer</span>
-                            <span className="font-bold text-gray-800 truncate block">{record.importerName || 'N/A'}</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Importer</span>
+                            <span className="text-xs font-black text-gray-800 truncate block">{record.importerName || 'N/A'}</span>
                         </div>
                         <div>
-                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Total Dollar</span>
-                            <span className="font-bold text-blue-600 block">${totalDollar.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Dollar</span>
+                            <span className="text-xs font-black text-blue-600 block">${totalDollar.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div>
-                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Current Dollar Rate</span>
-                            <span className="font-bold text-gray-800 block">৳{currentRate ? currentRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Current Dollar Rate</span>
+                            <span className="text-xs font-black text-gray-800 block">৳{currentRate ? currentRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</span>
                         </div>
                         <div>
-                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Current Total BDT</span>
-                            <span className="font-bold text-gray-800 block">৳{currentTotalBdt ? currentTotalBdt.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '0.00'}</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Current Total BDT</span>
+                            <span className="text-xs font-black text-gray-800 block">৳{currentTotalBdt ? currentTotalBdt.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '0.00'}</span>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-                            New Dollar Rate (BDT / ৳) <span className="text-red-500">*</span>
+                    {/* Input */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            New Dollar Rate (BDT / ৳) <span className="text-rose-500">*</span>
                         </label>
                         <div className="relative">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-base">৳</span>
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">৳</span>
                             <input
                                 type="number"
                                 step="0.01"
@@ -3949,13 +3947,14 @@ const UpdateDollarRateModal = ({ record, onClose, onUpdateSuccess }) => {
                                 placeholder="e.g. 122.50"
                                 required
                                 autoFocus
-                                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-900 text-base focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                className="w-full pl-9 pr-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
                             />
                         </div>
                     </div>
 
+                    {/* Recalculated preview */}
                     {parsedNewRate > 0 && (
-                        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-1">
+                        <div className="p-3.5 bg-emerald-50/70 border border-emerald-100/80 rounded-2xl space-y-1">
                             <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Recalculated LC Total Value</span>
                             <div className="flex items-center justify-between text-sm font-black text-emerald-800">
                                 <span>Total BDT Amount:</span>
@@ -3964,7 +3963,8 @@ const UpdateDollarRateModal = ({ record, onClose, onUpdateSuccess }) => {
                         </div>
                     )}
 
-                    <div className="flex items-center justify-end gap-3 pt-2">
+                    {/* Footer buttons */}
+                    <div className="flex items-center justify-end gap-3 pt-1">
                         <button
                             type="button"
                             onClick={onClose}
@@ -4041,42 +4041,40 @@ const UpdateLcReceiveModal = ({ record, onClose, onUpdateSuccess }) => {
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
-                            <EditIcon className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="text-base font-bold">Update LC Receive</h3>
-                            <p className="text-xs text-blue-100 font-medium">LC No: {record.lcNo}</p>
-                        </div>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-white/60 animate-in zoom-in-95 duration-200">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+                    <div>
+                        <h3 className="text-lg md:text-xl font-bold text-gray-900">Update LC Receive</h3>
+                        <p className="text-xs text-blue-600 font-bold uppercase tracking-wider mt-0.5">LC No: {record.lcNo}</p>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition-all"
+                        className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all"
                     >
                         <XIcon className="w-5 h-5" />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
-                    <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                    {/* Info grid */}
+                    <div className="grid grid-cols-2 gap-3 p-3.5 bg-blue-50/60 rounded-2xl border border-blue-100/80">
                         <div>
-                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Importer</span>
-                            <span className="font-bold text-gray-800 truncate block">{record.importerName || 'N/A'}</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Importer</span>
+                            <span className="text-xs font-black text-gray-800 truncate block">{record.importerName || 'N/A'}</span>
                         </div>
                         <div>
-                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Opening Quantity</span>
-                            <span className="font-bold text-blue-600 block">{openingQtyKg.toLocaleString('en-US')} Kg</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Opening Quantity</span>
+                            <span className="text-xs font-black text-blue-600 block">{openingQtyKg.toLocaleString('en-US')} Kg</span>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-                            LC Received Quantity (Kg) <span className="text-red-500">*</span>
+                    {/* Input */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            LC Received Quantity (Kg) <span className="text-rose-500">*</span>
                         </label>
                         <input
                             type="number"
@@ -4087,14 +4085,15 @@ const UpdateLcReceiveModal = ({ record, onClose, onUpdateSuccess }) => {
                             placeholder="Enter received quantity in Kg"
                             required
                             autoFocus
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-900 text-base focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                            className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
                         />
-                        <p className="text-[11px] text-gray-400 mt-1 italic">
+                        <p className="text-[11px] text-gray-400 italic">
                             Modifying this value will change the LC Receive quantity for this LC directly.
                         </p>
                     </div>
 
-                    <div className="flex items-center justify-between pt-2">
+                    {/* Footer buttons */}
+                    <div className="flex items-center justify-between pt-1">
                         {record.updatedLcReceive !== undefined && record.updatedLcReceive !== null && (
                             <button
                                 type="button"
