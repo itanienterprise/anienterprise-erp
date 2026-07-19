@@ -9144,6 +9144,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
+                                    <th className="px-2 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-left text-nowrap select-none">SL</th>
                                     {renderSortHeader('Date', 'openingDate')}
                                     {renderSortHeader('L.S. Date', 'latestShipmentDate')}
                                     {renderSortHeader('LC No', 'lcNo')}
@@ -9165,7 +9166,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                             <tbody className="divide-y divide-gray-50">
                                             {isLoading ? (
                                     <tr>
-                                        <td colSpan="16" className="px-6 py-12 text-center text-sm text-gray-500">
+                                        <td colSpan="17" className="px-6 py-12 text-center text-sm text-gray-500">
                                             <div className="flex flex-col items-center gap-2">
                                                 <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                                                 <span className="font-medium text-gray-400">Loading records...</span>
@@ -9173,7 +9174,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                         </td>
                                     </tr>
                                 ) : sortedRecords.length > 0 ? (
-                                    sortedRecords.map((record) => {
+                                    sortedRecords.map((record, index) => {
                                         // Helper for sanitized numeric parsing
                                         const parseNum = (val) => {
                                             if (val === null || val === undefined) return 0;
@@ -9258,10 +9259,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             .filter(gp => String(gp.lcNumber || '').replace(/\D/g, '') === lcNoClean)
                                             .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
                                         const remGpKg = Math.max(0, adj.adjustedQtyKg - totalGpQtyKg);
-
                                         return (
                                             <React.Fragment key={record._id}>
                                                 <tr className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                                    <td className="px-2 py-3 text-sm font-medium text-gray-400 whitespace-nowrap">{index + 1}</td>
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
                                                     <td className={`px-2 py-3 text-sm font-bold whitespace-nowrap ${getShipmentDateColorClass(record.latestShipmentDate)}`}>{formatDate(record.latestShipmentDate) || '—'}</td>
                                                     <td className="px-2 py-3 text-sm font-bold text-gray-900 whitespace-nowrap">
@@ -9411,7 +9412,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 {/* Expandable Sub-row containing Charges Breakdown */}
                                                 {expandedLcKey === record._id && (
                                                     <tr className="bg-gray-50/40">
-                                                        <td colSpan="14" className="px-6 py-4 border-b border-gray-100">
+                                                        <td colSpan="17" className="px-6 py-4 border-b border-gray-100">
                                                             <div className="flex flex-col gap-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-inner animate-in fade-in duration-300">
                                                                 {/* Radio Button for Enable Value and Quantity */}
                                                                 <div className="flex items-center justify-between w-full gap-4 flex-wrap">
@@ -9832,7 +9833,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan="15" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
+                                        <td colSpan="17" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
                                             No LC records found
                                         </td>
                                     </tr>
