@@ -63,7 +63,7 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     }
 };
 
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, canManage, canAddBill, canEditBill, onRefresh, currentUser }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, onUpdateDollarRate, canManage, canAddBill, canEditBill, onRefresh, currentUser }) => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
@@ -807,7 +807,10 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
             }, 0);
 
-        const totalReceivedQtyKg = receivedQtyKg + borderSaleQtyKg;
+        const hasCustomReceive = data?.updatedLcReceive !== undefined && data?.updatedLcReceive !== null && data?.updatedLcReceive !== '';
+        const totalReceivedQtyKg = hasCustomReceive
+            ? (parseFloat(data.updatedLcReceive) || 0)
+            : (receivedQtyKg + borderSaleQtyKg);
         const rawBalanceKg = openingQtyKg - totalReceivedQtyKg;
 
         let adjustmentQtyKg = 0;
@@ -821,9 +824,129 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         const actualAdjustmentQtyKg = isEnabled ? adjustmentQtyKg : 0;
         const adjustedQtyKg = openingQtyKg + actualAdjustmentQtyKg;
         
-        const adjustedTotalAmount = isEnabled && openingQtyKg > 0
-            ? openingValue + (actualAdjustmentQtyKg * (openingValue / openingQtyKg))
-            : openingValue;
+        const getRatePerTon = (rVal) => {
+            const r = parseFloat(rVal) || 0;
+            return r > 0 && r < 10 ? r * 1000 : r;
+        };
+        const getFreightPerTon = (fVal) => {
+            const f = parseFloat(fVal) || 0;
+            return f > 0 && f < 0.1 ? f * 1000 : f;
+        };
+
+        const getProductReceivedQtyKg = (pName) => {
+            const cleanPName = (pName || '').trim().toLowerCase();
+            
+            const receiptsMap = {};
+            allStockRecords
+                .filter(s => {
+                    const recordLcNoClean = cleanLc(s.lcNo);
+                    const status = (s.status || '').toLowerCase();
+                    return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+                })
+                .forEach(s => {
+                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                    const key = `${dateStr}_${groupVal}`;
+
+                    let itemQty = 0;
+                    if (s.entries && s.entries.length > 0) {
+                        const matchingEntries = s.entries.filter(item => {
+                            const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
+                            return !cleanPName || itemPName === cleanPName;
+                        });
+                        itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    } else {
+                        const itemPName = (s.productName || s.product || '').trim().toLowerCase();
+                        if (!cleanPName || itemPName === cleanPName) {
+                            itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                        }
+                    }
+
+                    if (!receiptsMap[key]) {
+                        receiptsMap[key] = itemQty;
+                    } else if (!s.totalLcQuantity) {
+                        receiptsMap[key] += itemQty;
+                    }
+                });
+            const rQty = Object.values(receiptsMap).reduce((sum, qty) => sum + qty, 0);
+
+            const bQty = allSalesRecords
+                .filter(s => {
+                    const recordLcNoClean = cleanLc(s.lcNo);
+                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                    const isBorder = sTypeLow.includes('border') ||
+                        (s.invoiceNo || '').startsWith('BS') ||
+                        (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
+                        (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+                    const status = (s.status || '').toLowerCase();
+                    return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+                })
+                .reduce((sum, s) => {
+                    let itemSubtotal = 0;
+                    if (s.items && s.items.length > 0) {
+                        const matchingItems = s.items.filter(item => {
+                            const itemPName = (item.productName || s.productName || '').trim().toLowerCase();
+                            return !cleanPName || itemPName === cleanPName;
+                        });
+                        itemSubtotal = matchingItems.reduce((iSum, item) => {
+                            const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                            return iSum + (brandSubtotal || parseNum(item.quantity));
+                        }, 0);
+                    }
+                    return sum + (itemSubtotal || parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
+                }, 0);
+
+            return rQty + bQty;
+        };
+
+        const timeline = getLCHistoryTimeline(data);
+        const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || data;
+        const origProducts = (originalLc.productsList && originalLc.productsList.length > 0)
+            ? originalLc.productsList
+            : (data.productsList && data.productsList.length > 0 ? data.productsList : []);
+
+        let billValueUsd = 0;
+        if (origProducts.length > 0) {
+            origProducts.forEach(p => {
+                const pRecQtyKg = getProductReceivedQtyKg(p.productName);
+                const pRecQtyTons = pRecQtyKg / 1000;
+                let pRate = getRatePerTon(p.rate);
+                let pFreight = getFreightPerTon(p.freight);
+                if (pRate === 0) {
+                    const rootRate = getRatePerTon(originalLc.rate || data.rate);
+                    const rootFreight = getFreightPerTon(originalLc.freight || data.freight);
+                    if (rootFreight > 0 && rootRate > rootFreight) {
+                        pRate = rootRate - rootFreight;
+                        pFreight = rootFreight;
+                    } else {
+                        pRate = rootRate;
+                        pFreight = rootFreight;
+                    }
+                }
+                billValueUsd += pRecQtyTons * (pRate + pFreight);
+            });
+        }
+        
+        if (billValueUsd === 0 && totalReceivedQtyKg > 0) {
+            const pRecQtyTons = totalReceivedQtyKg / 1000;
+            const rootRateVal = originalLc.rate || data.rate || (origProducts[0]?.rate);
+            const rootFreightVal = originalLc.freight || data.freight || (origProducts[0]?.freight);
+            let pRate = getRatePerTon(rootRateVal);
+            let pFreight = getFreightPerTon(rootFreightVal);
+            if (pFreight > 0 && pRate > pFreight) {
+                pRate = pRate - pFreight;
+            }
+            billValueUsd = pRecQtyTons * (pRate + pFreight);
+        }
+
+        const dollarRate = parseFloat(data.updatedDollarRate || data.dollarRate || 0);
+
+        const adjustedTotalAmount = dollarRate > 0 && billValueUsd > 0
+            ? billValueUsd * dollarRate 
+            : (isEnabled && openingQtyKg > 0
+                ? openingValue + (actualAdjustmentQtyKg * (openingValue / openingQtyKg))
+                : openingValue);
 
         const addedValue = adjustedTotalAmount - openingValue;
 
@@ -834,7 +957,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             adjustedQtyKg,
             adjustedTotalAmount,
             addedValue,
-            isEnabled
+            isEnabled,
+            billValueUsd,
+            dollarRate
         };
     }, [data, allStockRecords, allSalesRecords, lcNoClean]);
 
@@ -1658,9 +1783,35 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 w-full flex flex-col">
                             {/* Summary Cards */}
                             {activeTab === 'bill' ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-0 mb-8 w-full border border-gray-100 rounded-2xl shadow-sm divide-x divide-gray-100 overflow-hidden bg-white">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 w-full border border-gray-100 rounded-2xl shadow-sm divide-x divide-gray-100 overflow-hidden bg-white">
+                                    <div className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-left flex flex-col justify-between">
+                                        <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                                            <div className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg md:rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
+                                                <DollarSignIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                            </div>
+                                            <span className="text-[10px] md:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bill Value</span>
+                                        </div>
+                                        <div className="flex items-baseline justify-between gap-2 text-left w-full">
+                                            <div className="flex flex-col">
+                                                <span className="text-lg md:text-2xl font-black text-indigo-600 leading-tight">
+                                                    ${(adj.billValueUsd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                                {(adj.dollarRate || 0) > 0 && (
+                                                    <span className="text-xs md:text-sm font-bold text-gray-700 mt-0.5">
+                                                        ৳{(adj.dollarRate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col items-end justify-end">
+                                                <span className="text-lg md:text-2xl font-black text-gray-900 leading-tight">
+                                                    ৳{(adj.billValueUsd > 0 && adj.dollarRate > 0 ? (adj.billValueUsd * adj.dollarRate) : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div 
-                                        className="col-span-full md:col-span-1 bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
+                                        className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
                                     >
                                         <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
                                             <div className="p-1.5 md:p-2 bg-blue-50 text-blue-600 rounded-lg md:rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
@@ -3005,7 +3156,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             </div>
                                             <div className="p-4 bg-gray-50/50 rounded-xl border border-gray-100 flex flex-col justify-center">
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dollar Rate</span>
-                                                <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.dollarRate || data.dollarRate || 0).toLocaleString('en-IN')}</p>
+                                                <p className="text-sm font-bold text-gray-800">৳{parseFloat(activeMilestone.isOriginal ? (data.openingDollarRate || activeMilestone.dollarRate || data.dollarRate || 0) : (activeMilestone.dollarRate || data.dollarRate || 0)).toLocaleString('en-IN')}</p>
                                             </div>
                                             <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100/50 flex justify-between items-center">
                                                 <span className="text-xs font-black text-blue-800 uppercase tracking-widest text-left">Total Dollar</span>
@@ -3618,6 +3769,296 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     );
 };
 
+const UpdateDollarRateModal = ({ record, onClose, onUpdateSuccess }) => {
+    const [newDollarRate, setNewDollarRate] = useState(record?.dollarRate || '');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    if (!record) return null;
+
+    const totalDollar = record.productsList && record.productsList.length > 0
+        ? record.productsList.reduce((sum, p) => {
+            const pTot = parseFloat(p.totalDollar);
+            if (pTot > 0) return sum + pTot;
+            const q = parseFloat(p.quantity) || 0;
+            const r = parseFloat(p.rate) || 0;
+            const f = parseFloat(p.freight) || 0;
+            const rScaled = r > 0 ? (r < 10 ? r * 1000 : r) : 0;
+            const fScaled = f < 0.1 ? f * 1000 : f;
+            return sum + (q * (rScaled + fScaled));
+        }, 0)
+        : (parseFloat(record.totalDollar) || ((parseFloat(record.quantity) || 0) * (parseFloat(record.rate) || 0)));
+
+    const currentRate = parseFloat(record.dollarRate) || 0;
+    const currentTotalBdt = parseFloat(record.totalAmount) || (totalDollar * currentRate);
+
+    const parsedNewRate = parseFloat(newDollarRate) || 0;
+    const newTotalBdt = totalDollar * parsedNewRate;
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!newDollarRate || isNaN(parsedNewRate) || parsedNewRate <= 0) {
+            alert('Please enter a valid dollar rate');
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const updatedRecord = {
+                ...record,
+                openingDollarRate: record.openingDollarRate || record.dollarRate,
+                updatedDollarRate: String(newDollarRate),
+                dollarRate: String(newDollarRate),
+                totalAmount: newTotalBdt > 0 ? newTotalBdt.toFixed(2) : record.totalAmount
+            };
+
+            syncBankBills(updatedRecord);
+
+            await onUpdateSuccess(record._id, updatedRecord);
+            onClose();
+        } catch (err) {
+            console.error("Error updating dollar rate:", err);
+            alert('Failed to update dollar rate.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
+                            <DollarSignIcon className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-bold">Update Dollar Rate</h3>
+                            <p className="text-xs text-blue-100 font-medium">LC No: {record.lcNo}</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition-all"
+                    >
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                        <div>
+                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Importer</span>
+                            <span className="font-bold text-gray-800 truncate block">{record.importerName || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Total Dollar</span>
+                            <span className="font-bold text-blue-600 block">${totalDollar.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div>
+                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Current Dollar Rate</span>
+                            <span className="font-bold text-gray-800 block">৳{currentRate ? currentRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</span>
+                        </div>
+                        <div>
+                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Current Total BDT</span>
+                            <span className="font-bold text-gray-800 block">৳{currentTotalBdt ? currentTotalBdt.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '0.00'}</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                            New Dollar Rate (BDT / ৳) <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-base">৳</span>
+                            <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={newDollarRate}
+                                onChange={(e) => setNewDollarRate(e.target.value)}
+                                placeholder="e.g. 122.50"
+                                required
+                                autoFocus
+                                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-900 text-base focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                            />
+                        </div>
+                    </div>
+
+                    {parsedNewRate > 0 && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-1">
+                            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Recalculated LC Total Value</span>
+                            <div className="flex items-center justify-between text-sm font-black text-emerald-800">
+                                <span>Total BDT Amount:</span>
+                                <span className="text-base">৳{newTotalBdt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all flex items-center gap-2"
+                        >
+                            {isSubmitting ? 'Updating...' : 'Update Dollar Rate'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const UpdateLcReceiveModal = ({ record, onClose, onUpdateSuccess }) => {
+    const [newReceiveQty, setNewReceiveQty] = useState(
+        record?.updatedLcReceive !== undefined && record?.updatedLcReceive !== null ? String(record.updatedLcReceive) : ''
+    );
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    if (!record) return null;
+
+    const openingQtyKg = (record.productsList && record.productsList.length > 0
+        ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+        : (parseFloat(record.quantity) || 0)) * 1000;
+
+    const parsedNewQty = parseFloat(newReceiveQty);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (newReceiveQty !== '' && (isNaN(parsedNewQty) || parsedNewQty < 0)) {
+            alert('Please enter a valid receive quantity');
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const updatedRecord = {
+                ...record,
+                updatedLcReceive: newReceiveQty === '' ? null : String(parsedNewQty)
+            };
+            await onUpdateSuccess(record._id, updatedRecord);
+            onClose();
+        } catch (err) {
+            console.error("Error updating LC receive quantity:", err);
+            alert('Failed to update LC receive quantity.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleReset = async () => {
+        setIsSubmitting(true);
+        try {
+            const updatedRecord = {
+                ...record,
+                updatedLcReceive: null
+            };
+            await onUpdateSuccess(record._id, updatedRecord);
+            onClose();
+        } catch (err) {
+            console.error("Error resetting LC receive quantity:", err);
+            alert('Failed to reset LC receive quantity.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
+                            <EditIcon className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-bold">Update LC Receive</h3>
+                            <p className="text-xs text-blue-100 font-medium">LC No: {record.lcNo}</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition-all"
+                    >
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                        <div>
+                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Importer</span>
+                            <span className="font-bold text-gray-800 truncate block">{record.importerName || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span className="text-gray-400 font-bold uppercase tracking-wider block text-[10px]">Opening Quantity</span>
+                            <span className="font-bold text-blue-600 block">{openingQtyKg.toLocaleString('en-US')} Kg</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                            LC Received Quantity (Kg) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={newReceiveQty}
+                            onChange={(e) => setNewReceiveQty(e.target.value)}
+                            placeholder="Enter received quantity in Kg"
+                            required
+                            autoFocus
+                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-900 text-base focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1 italic">
+                            Modifying this value will change the LC Receive quantity for this LC directly.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                        {record.updatedLcReceive !== undefined && record.updatedLcReceive !== null && (
+                            <button
+                                type="button"
+                                onClick={handleReset}
+                                disabled={isSubmitting}
+                                className="px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 font-bold rounded-xl transition-all"
+                            >
+                                Reset to Auto
+                            </button>
+                        )}
+                        <div className="flex items-center gap-3 ml-auto">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all flex items-center gap-2"
+                            >
+                                {isSubmitting ? 'Updating...' : 'Save LC Receive'}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 const getPiIpNumbers = (pi) => {
     if (!pi) return [];
     if (Array.isArray(pi.ipNumbers) && pi.ipNumbers.length > 0) return pi.ipNumbers;
@@ -3656,7 +4097,7 @@ export const getLCHistoryTimeline = (lc) => {
             expiryDate: lc.expiryDate,
             quantity: totalQty,
             rate: lc.rate,
-            dollarRate: lc.dollarRate,
+            dollarRate: lc.openingDollarRate || lc.dollarRate,
             totalDollar: lc.totalDollar,
             totalAmount: lc.totalAmount,
             netPremium: lc.netPremium,
@@ -3681,7 +4122,7 @@ export const getLCHistoryTimeline = (lc) => {
             expiryDate: lc.openingDate, // Fallback
             quantity: origQty,
             rate: amendments[0]?.rate || lc.rate,
-            dollarRate: amendments[0]?.dollarRate || lc.dollarRate,
+            dollarRate: lc.openingDollarRate || amendments[0]?.dollarRate || lc.dollarRate,
             totalDollar: amendments[0]?.totalDollar || lc.totalDollar,
             totalAmount: amendments[0]?.totalAmount || lc.totalAmount,
             netPremium: lc.netPremium,
@@ -4182,6 +4623,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [idToDelete, setIdToDelete] = useState(null);
     const [deleteStatus, setDeleteStatus] = useState(null);
+    const [dollarRateModalRecord, setDollarRateModalRecord] = useState(null);
+    const [lcReceiveModalRecord, setLcReceiveModalRecord] = useState(null);
 
     // Amendment states
     const [showAmendmentForm, setShowAmendmentForm] = useState(false);
@@ -4246,6 +4689,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const canDelete = hasPermission(currentUser, 'lcManagement', 'delete');
     const canSpecial = hasPermission(currentUser, 'lcManagement', 'special');
     const canSpecialEdit = hasPermission(currentUser, 'lcManagement', 'specialEdit');
+    const canEditLcReceive = hasPermission(currentUser, 'lcManagement', 'editLcReceive');
+    const canEditDollarRate = hasPermission(currentUser, 'lcManagement', 'editDollarRate');
+    const canSpecialAccess = canEditLcReceive || canEditDollarRate;
     const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
@@ -5034,7 +5480,35 @@ const LCManagement = ({ addNotification, currentUser }) => {
         setIsSaving(true);
         try {
             if (editingId) {
-                await axios.put(`${API_BASE_URL}/api/lc-management/${editingId}`, formData);
+                const dataToSave = {
+                    ...formData,
+                    openingDollarRate: formData.dollarRate
+                };
+
+                // If amendments exist, sync the 'Original LC' milestone entry in amendments
+                // with the newly edited opening LC values from formData
+                if (dataToSave.amendments && dataToSave.amendments.length > 0) {
+                    const updatedAmendments = [...dataToSave.amendments];
+                    const origIdx = updatedAmendments.findIndex(a => a.amendmentNo === 'Original LC');
+                    if (origIdx !== -1) {
+                        updatedAmendments[origIdx] = {
+                            ...updatedAmendments[origIdx],
+                            dollarRate: dataToSave.dollarRate,
+                            quantity: dataToSave.quantity,
+                            rate: dataToSave.rate,
+                            totalDollar: dataToSave.totalDollar,
+                            totalAmount: dataToSave.totalAmount,
+                            openingDate: dataToSave.openingDate,
+                            expiryDate: dataToSave.expiryDate,
+                            port: dataToSave.port,
+                            piNo: dataToSave.piNo,
+                            productsList: dataToSave.productsList
+                        };
+                        dataToSave.amendments = updatedAmendments;
+                    }
+                }
+
+                await axios.put(`${API_BASE_URL}/api/lc-management/${editingId}`, dataToSave);
 
                 // Add persistent notification for LC Update
                 if (addNotification) {
@@ -5903,7 +6377,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
             }, 0);
 
-        const totalReceivedQtyKg = receivedQtyKg + borderSaleQtyKg;
+        const hasCustomReceive = record?.updatedLcReceive !== undefined && record?.updatedLcReceive !== null && record?.updatedLcReceive !== '';
+        const totalReceivedQtyKg = hasCustomReceive
+            ? (parseFloat(record.updatedLcReceive) || 0)
+            : (receivedQtyKg + borderSaleQtyKg);
         const rawBalanceKg = openingQtyKg - totalReceivedQtyKg;
 
         let adjustmentQtyKg = 0;
@@ -5922,7 +6399,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         const timeline = getLCHistoryTimeline(record);
         const latestMilestone = timeline[timeline.length - 1] || {};
         const totalDollar = getMilestoneTotalDollar(latestMilestone, record);
-        const dollarRate = parseFloat(latestMilestone.dollarRate || record.dollarRate || 0);
+        const dollarRate = parseFloat(record.updatedDollarRate || record.dollarRate || latestMilestone.dollarRate || 0);
 
         const getRatePerTon = (rVal) => {
             const r = parseFloat(rVal) || 0;
@@ -5995,21 +6472,42 @@ const LCManagement = ({ addNotification, currentUser }) => {
             return rQty + bQty;
         };
 
+        const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || record;
+        const origProducts = (originalLc.productsList && originalLc.productsList.length > 0)
+            ? originalLc.productsList
+            : (record.productsList && record.productsList.length > 0 ? record.productsList : []);
+
         let billValueUsd = 0;
-        if (record.productsList && record.productsList.length > 0) {
-            record.productsList.forEach(p => {
+        if (origProducts.length > 0) {
+            origProducts.forEach(p => {
                 const pRecQtyKg = getProductReceivedQtyKg(p.productName);
                 const pRecQtyTons = pRecQtyKg / 1000;
-                const pRate = getRatePerTon(p.rate || record.rate);
-                const pFreight = getFreightPerTon(p.freight || record.freight);
+                let pRate = getRatePerTon(p.rate);
+                let pFreight = getFreightPerTon(p.freight);
+                if (pRate === 0) {
+                    const rootRate = getRatePerTon(originalLc.rate || record.rate);
+                    const rootFreight = getFreightPerTon(originalLc.freight || record.freight);
+                    if (rootFreight > 0 && rootRate > rootFreight) {
+                        pRate = rootRate - rootFreight;
+                        pFreight = rootFreight;
+                    } else {
+                        pRate = rootRate;
+                        pFreight = rootFreight;
+                    }
+                }
                 billValueUsd += pRecQtyTons * (pRate + pFreight);
             });
         }
         
         if (billValueUsd === 0 && totalReceivedQtyKg > 0) {
             const pRecQtyTons = totalReceivedQtyKg / 1000;
-            const pRate = getRatePerTon(record.rate || (record.productsList?.[0]?.rate));
-            const pFreight = getFreightPerTon(record.freight || (record.productsList?.[0]?.freight));
+            const rootRateVal = originalLc.rate || record.rate || (origProducts[0]?.rate);
+            const rootFreightVal = originalLc.freight || record.freight || (origProducts[0]?.freight);
+            let pRate = getRatePerTon(rootRateVal);
+            let pFreight = getFreightPerTon(rootFreightVal);
+            if (pFreight > 0 && pRate > pFreight) {
+                pRate = pRate - pFreight;
+            }
             billValueUsd = pRecQtyTons * (pRate + pFreight);
         }
 
@@ -6098,6 +6596,56 @@ const LCManagement = ({ addNotification, currentUser }) => {
             addNotification?.('Failed to update LC status.', 'error');
             // Revert state on failure
             setLcRecords(prev => prev.map(r => r._id === record._id ? { ...r, lcStatus: originalStatus } : r));
+        }
+    };
+
+    const handleUpdateDollarRate = async (recordId, updatedRecord) => {
+        try {
+            setLcRecords(prev => prev.map(r => r._id === recordId ? updatedRecord : r));
+            if (viewData && viewData._id === recordId) {
+                setViewData(updatedRecord);
+            }
+            const response = await axios.put(`${API_BASE_URL}/api/lc-management/${recordId}`, updatedRecord);
+            if (response.data) {
+                if (addNotification) {
+                    addNotification(
+                        'Dollar Rate Updated',
+                        `Dollar rate for LC No: ${updatedRecord.lcNo} updated to ৳${updatedRecord.dollarRate} by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                    );
+                }
+                addNotification?.('Dollar rate updated successfully', 'success');
+                await fetchLcRecordsOnly();
+            }
+        } catch (error) {
+            console.error("Failed to update dollar rate:", error);
+            addNotification?.('Failed to update dollar rate.', 'error');
+            await fetchInitialData();
+        }
+    };
+
+    const handleUpdateLcReceive = async (recordId, updatedRecord) => {
+        try {
+            setLcRecords(prev => prev.map(r => r._id === recordId ? updatedRecord : r));
+            if (viewData && viewData._id === recordId) {
+                setViewData(updatedRecord);
+            }
+            const response = await axios.put(`${API_BASE_URL}/api/lc-management/${recordId}`, updatedRecord);
+            if (response.data) {
+                if (addNotification) {
+                    addNotification(
+                        'LC Receive Updated',
+                        `LC Receive Quantity for LC No: ${updatedRecord.lcNo} updated to ${updatedRecord.updatedLcReceive ? `${parseFloat(updatedRecord.updatedLcReceive).toLocaleString('en-US')} Kg` : 'Stock Calculation'} by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                    );
+                }
+                addNotification?.('LC Receive quantity updated successfully', 'success');
+                await fetchLcRecordsOnly();
+            }
+        } catch (error) {
+            console.error("Failed to update LC receive quantity:", error);
+            addNotification?.('Failed to update LC receive quantity.', 'error');
+            await fetchInitialData();
         }
     };
 
@@ -8735,7 +9283,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         <span className="font-bold text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')}</span>
                                                     </td>
                                                     <td className="px-2 py-3 text-sm text-right text-gray-600 whitespace-nowrap">
-                                                        <span className="font-bold text-gray-900">{adj.totalReceivedQtyKg.toLocaleString('en-US')}</span>
+                                                         <div className="flex items-center justify-end gap-1">
+                                                             <span className="font-bold text-gray-900">{adj.totalReceivedQtyKg.toLocaleString('en-US')}</span>
+                                                             {canEditLcReceive && (
+                                                                 <button
+                                                                     onClick={(e) => { e.stopPropagation(); setLcReceiveModalRecord(record); }}
+                                                                     className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                     title="Update LC Receive Quantity"
+                                                                 >
+                                                                     <EditIcon className="w-3 h-3" />
+                                                                 </button>
+                                                             )}
+                                                         </div>
                                                     </td>
                                                     <td className="px-2 py-3 text-sm text-right whitespace-nowrap">
                                                         <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
@@ -8748,9 +9307,20 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                 ${adj.billValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                             </span>
                                                             {adj.dollarRate > 0 && (
-                                                                <span className="text-[11px] font-bold text-gray-900 mt-0.5" title="Dollar Rate">
-                                                                    ৳{adj.dollarRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                </span>
+                                                                <div className="flex items-center gap-1 mt-0.5 justify-end">
+                                                                    <span className="text-[11px] font-bold text-gray-900" title="Dollar Rate">
+                                                                        ৳{adj.dollarRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    </span>
+                                                                    {canEditDollarRate && (
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); setDollarRateModalRecord(record); }}
+                                                                            className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                            title="Update Dollar Rate"
+                                                                        >
+                                                                            <EditIcon className="w-3 h-3" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             )}
                                                         </div>
                                                     </td>
@@ -9486,8 +10056,17 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <div className="text-[11px]">
+                                                    <div className="text-[11px] flex items-center gap-1">
                                                         <span className="font-bold text-gray-900">{adj.totalReceivedQtyKg.toLocaleString('en-US')}</span> <span className="text-[10px] text-gray-400 font-normal ml-0.5">Kg</span>
+                                                        {canEditLcReceive && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setLcReceiveModalRecord(record); }}
+                                                                className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                title="Update LC Receive Quantity"
+                                                            >
+                                                                <EditIcon className="w-3 h-3" />
+                                                            </button>
+                                                        )}
                                                     </div>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Balance</span>
@@ -9501,9 +10080,20 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <div className="text-[11px] flex flex-col">
                                                         <span className="font-bold text-gray-900">${adj.billValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                         {adj.dollarRate > 0 && (
-                                                            <span className="text-[11px] font-bold text-gray-900 mt-0.5">
-                                                                Rate: ৳{adj.dollarRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                            </span>
+                                                            <div className="flex items-center gap-1 mt-0.5">
+                                                                <span className="text-[11px] font-bold text-gray-900">
+                                                                    Rate: ৳{adj.dollarRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                </span>
+                                                                {canEditDollarRate && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); setDollarRateModalRecord(record); }}
+                                                                        className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                        title="Update Dollar Rate"
+                                                                    >
+                                                                        <EditIcon className="w-3 h-3" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </div>
 
@@ -9873,11 +10463,30 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     piRecordsRaw={piRecordsRaw}
                     onEdit={handleEdit}
                     onEditAmendment={handleEditAmendment}
+                    onUpdateDollarRate={(rec) => setDollarRateModalRecord(rec)}
+                    onUpdateLcReceive={(rec) => setLcReceiveModalRecord(rec)}
                     canManage={canManage}
+                    canManageSpecial={canSpecialAccess}
                     canAddBill={canSpecial}
                     canEditBill={canSpecialEdit}
                     onRefresh={fetchInitialData}
                     currentUser={currentUser}
+                />
+            )}
+
+            {dollarRateModalRecord && (
+                <UpdateDollarRateModal
+                    record={dollarRateModalRecord}
+                    onClose={() => setDollarRateModalRecord(null)}
+                    onUpdateSuccess={handleUpdateDollarRate}
+                />
+            )}
+
+            {lcReceiveModalRecord && (
+                <UpdateLcReceiveModal
+                    record={lcReceiveModalRecord}
+                    onClose={() => setLcReceiveModalRecord(null)}
+                    onUpdateSuccess={handleUpdateLcReceive}
                 />
             )}
 

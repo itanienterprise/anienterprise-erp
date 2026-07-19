@@ -63,6 +63,7 @@ import InsurancePayment from './components/modules/Insurance/InsurancePayment';
 import LCManagement from './components/modules/LCManagement/LCManagement';
 import LCGatePass from './components/modules/LCManagement/LCGatePass';
 import LCExpense from './components/modules/LCManagement/LCExpense';
+import MarginReturn from './components/modules/LCManagement/MarginReturn';
 import { calculateStockData } from './utils/stockHelpers';
 import LoginPage from './components/auth/LoginPage';
 import Profile from './components/modules/Profile/Profile';
@@ -1160,6 +1161,7 @@ function App() {
           'cnf': 'C&F Agent',
           'pi': 'Proforma Invoice',
           'lc-expense': 'LC Expense',
+          'margin-return': 'Margin Return',
           'stock': 'Stock Record',
           'packing-list': 'Packing List',
           'tr-setup': 'TR Setup',
@@ -1939,6 +1941,16 @@ function App() {
             refreshKey={refreshKey}
           />
         );
+      case 'margin-return-section':
+        return (
+          <MarginReturn
+            key={refreshKey}
+            currentUser={currentUser}
+            addNotification={addNotification}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+            refreshKey={refreshKey}
+          />
+        );
       case 'lc-management-section':
         return <LCManagement addNotification={addNotification} currentUser={currentUser} />;
       case 'return-product-section':
@@ -2280,11 +2292,11 @@ function App() {
               </div>
             </div>
           )}
-          {(hasPermission(currentUser, 'lcManagement', 'view') || hasPermission(currentUser, 'lcGp', 'view') || hasPermission(currentUser, 'lcExpense', 'view') || hasPermission(currentUser, 'lcReceive', 'view')) && (
+          {(hasPermission(currentUser, 'lcManagement', 'view') || hasPermission(currentUser, 'lcGp', 'view') || hasPermission(currentUser, 'lcExpense', 'view') || hasPermission(currentUser, 'marginReturn', 'view') || hasPermission(currentUser, 'lcReceive', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('lc')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${['lc-management-section', 'lc-gp-section', 'lc-entry-section', 'lc-expense-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${['lc-management-section', 'lc-gp-section', 'lc-entry-section', 'lc-expense-section', 'margin-return-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <div className="flex items-center">
                   <LCManagerIcon className="w-5 h-5 mr-3" />
@@ -2323,6 +2335,15 @@ function App() {
                     <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                     <span>LC Expense</span>
                   </button>
+                  )}
+                  {hasPermission(currentUser, 'marginReturn', 'view') && (
+                    <button
+                      onClick={() => { handleViewChange('margin-return-section'); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'margin-return-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Margin Return</span>
+                    </button>
                   )}
                   {hasPermission(currentUser, 'lcReceive', 'view') && (
                     <button

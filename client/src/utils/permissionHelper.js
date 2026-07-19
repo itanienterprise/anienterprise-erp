@@ -31,11 +31,14 @@ export const MODULES_LIST = [
         label: 'LC Management', 
         specialLabels: [
             { key: 'special', label: 'Add Bill' },
-            { key: 'specialEdit', label: 'Edit Bill' }
+            { key: 'specialEdit', label: 'Edit Bill' },
+            { key: 'editLcReceive', label: 'Edit LC Receive' },
+            { key: 'editDollarRate', label: 'Edit Dollar Rate' }
         ]
     },
     { key: 'lcGp', label: 'LC GatePass' },
     { key: 'lcExpense', label: 'LC Expense' },
+    { key: 'marginReturn', label: 'Margin Return' },
     { key: 'returnProduct', label: 'Return Product' },
     { key: 'backupRestore', label: 'Backup & Restore' }
 ];
@@ -82,7 +85,7 @@ export const getDefaultPermissionsForRole = (role) => {
                 };
                 if (mod.specialLabels) {
                     mod.specialLabels.forEach(sItem => {
-                        permsObj[sItem.key] = true;
+                        permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
                     });
                 }
                 defaults[mod.key] = permsObj;
@@ -96,7 +99,7 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    permsObj[sItem.key] = true;
+                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
                 });
             }
             defaults[key] = permsObj;
@@ -109,7 +112,7 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    permsObj[sItem.key] = true;
+                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
                 });
             }
             defaults[key] = permsObj;
@@ -122,7 +125,7 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    permsObj[sItem.key] = true;
+                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
                 });
             }
             defaults[key] = permsObj;
@@ -136,7 +139,7 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    permsObj[sItem.key] = true;
+                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
                 });
             }
             defaults[key] = permsObj;
