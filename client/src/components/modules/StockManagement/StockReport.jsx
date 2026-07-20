@@ -4,6 +4,7 @@ import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateStockReportPDF } from '../../../utils/pdfGenerator';
 import { formatDate } from '../../../utils/helpers';
 import { calculateStockData, calculatePktRemainder, getGroupedBrandList } from '../../../utils/stockHelpers';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const StockReport = ({
     isOpen,
@@ -19,6 +20,9 @@ const StockReport = ({
     showRate
 }) => {
     if (!isOpen) return null;
+
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const canShowRate = hasPermission(currentUser, 'stock', 'showRate');
 
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [reportType, setReportType] = useState('short'); // 'short' or 'detailed'
@@ -723,7 +727,7 @@ const StockReport = ({
                             >
                                 <option value="short">Short Report</option>
                                 <option value="detailed">Details Report</option>
-                                {showRate && <option value="price">Price Report</option>}
+                                {canShowRate && <option value="price">Price Report</option>}
                             </select>
                             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
                                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
