@@ -627,7 +627,13 @@ function App() {
   const [showStockReport, setShowStockReport] = useState(false);
   const [showProductHistoryReport, setShowProductHistoryReport] = useState(false);
   const [productHistoryReportData, setProductHistoryReportData] = useState(null);
-  const [showRate, setShowRate] = useState(false);
+  const [showRate, setShowRate] = useState(() => {
+    return localStorage.getItem('stock_showRate_default') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('stock_showRate_default', showRate ? 'true' : 'false');
+  }, [showRate]);
   const [stockFormData, setStockFormData] = useState({
     date: '',
     lcNo: '',

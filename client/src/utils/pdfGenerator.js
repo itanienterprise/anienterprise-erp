@@ -982,11 +982,12 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         }
 
                         // Column 2: Brand
-                        const brandName = ent.brand || '-';
-                        if (brandName !== lastBrand) {
-                            lastBrand = brandName;
+                        const rawBrand = ent.brand || '-';
+                        const brandCompareName = rawBrand.trim().toUpperCase();
+                        if (brandCompareName !== lastBrand) {
+                            lastBrand = brandCompareName;
                             row.push({
-                                content: brandName,
+                                content: rawBrand,
                                 styles: { halign: 'left' }
                             });
                         } else {
@@ -1235,13 +1236,13 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     7: { cellWidth: 18, halign: 'right' }, // Closing Stock BAG
                     8: { cellWidth: 18, halign: 'right' }  // Closing Stock QTY
                 } : (reportType === 'price' ? {
-                    0: { cellWidth: 10, halign: 'center', lineWidth: 0 }, // SL
+                    0: { cellWidth: 8, halign: 'center', lineWidth: 0 }, // SL
                     1: { cellWidth: 35, lineWidth: 0 }, // Product Name / Quality
-                    2: { cellWidth: 35, lineWidth: 0 }, // Brand
-                    3: { cellWidth: 35 }, // LC NO
-                    4: { cellWidth: 25, halign: 'right' }, // COSTING
-                    5: { cellWidth: 30, halign: 'right' }, // BAG
-                    6: { cellWidth: 30, halign: 'right' }  // QUANTITY
+                    2: { cellWidth: 50, lineWidth: 0 }, // Brand (Increased from 35)
+                    3: { cellWidth: 27 }, // LC NO (Reduced from 35)
+                    4: { cellWidth: 22, halign: 'right' }, // COSTING (Reduced from 25)
+                    5: { cellWidth: 29, halign: 'right' }, // BAG (Reduced from 30)
+                    6: { cellWidth: 29, halign: 'right' }  // QUANTITY (Reduced from 30)
                 } : {
                     0: { cellWidth: 10, halign: 'center', lineWidth: 0 }, // SL
                     1: { cellWidth: 45, lineWidth: 0 }, // Product Name / Quality
