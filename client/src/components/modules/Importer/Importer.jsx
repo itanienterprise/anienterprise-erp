@@ -30,6 +30,7 @@ const Importer = ({
     const canDelete = hasPermission(currentUser, 'importerExporter', 'delete');
     const canManage = canAdd || canEdit;
     const cannotDelete = !canDelete;
+    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
