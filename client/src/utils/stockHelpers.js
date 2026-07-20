@@ -12,7 +12,8 @@ export const getGroupedBrandList = (brandList) => {
     brandList.forEach(b => {
         const cleanBrand = (b.brand || 'No Brand').trim();
         const cleanQuality = (b.quality || '-').trim();
-        const key = `${cleanQuality.toLowerCase()}_${cleanBrand.toLowerCase()}`;
+        const isPreSale = (b.inHouseQuantity || 0) < 0;
+        const key = `${cleanQuality.toLowerCase()}_${cleanBrand.toLowerCase()}${isPreSale ? '_presale' : ''}`;
         if (!groups[key]) {
             groups[key] = {
                 ...b,
@@ -674,25 +675,37 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const qCmp = (a.quality || '-').localeCompare(b.quality || '-');
             if (qCmp !== 0) return qCmp;
             return a.brand.localeCompare(b.brand);
-        }).filter(b => 
-            Math.round(Math.abs(b.openingQuantity || 0)) >= 1 || 
-            Math.round(Math.abs(b.periodArrivalQuantity || 0)) >= 1 || 
-            Math.round(Math.abs(b.saleQuantity || 0)) >= 1 || 
-            Math.round(Math.abs(b.inHouseQuantity || 0)) >= 1 || 
-            Math.round(Math.abs(b.closingQuantity || 0)) >= 1 || 
-            Math.round(Math.abs(b.sweepedQuantity || 0)) >= 1 ||
-            Math.round(Math.abs(b.damageQuantity || 0)) >= 1
-        );
+        }).filter(b => {
+            // In price report mode, show both positive and negative (pre-sold) stocks, but filter out zero stock
+            if (isPriceReport) {
+                return Math.round(Math.abs(b.inHouseQuantity || 0)) >= 1;
+            }
+            return (
+                Math.round(Math.abs(b.openingQuantity || 0)) >= 1 || 
+                Math.round(Math.abs(b.periodArrivalQuantity || 0)) >= 1 || 
+                Math.round(Math.abs(b.saleQuantity || 0)) >= 1 || 
+                Math.round(Math.abs(b.inHouseQuantity || 0)) >= 1 || 
+                Math.round(Math.abs(b.closingQuantity || 0)) >= 1 || 
+                Math.round(Math.abs(b.sweepedQuantity || 0)) >= 1 ||
+                Math.round(Math.abs(b.damageQuantity || 0)) >= 1
+            );
+        });
 
         if (brandList.length === 0) return null;
 
         const groupedBrands = getGroupedBrandList(brandList);
         const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
-        const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
+        // In price report mode, sum inHouseQty directly from individual brandList entries (already filtered
+        // to positive-closing-stock only), to avoid negative-LC values being merged and reducing the total.
+        const inHouseQty = isPriceReport
+            ? brandList.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0)
+            : groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
         const saleQty = brandList.reduce((sum, b) => sum + b.saleQuantity, 0);
         const damageQty = brandList.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
         const openingPkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
-        const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
+        const inHousePkt = isPriceReport
+            ? brandList.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0)
+            : groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
         const salePkt = brandList.reduce((sum, b) => sum + b.salePacket, 0);
         const damagePkt = brandList.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
 

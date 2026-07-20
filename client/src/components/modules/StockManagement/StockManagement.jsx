@@ -3247,7 +3247,7 @@ const StockManagement = ({
                                                                                         return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
                                                                                     })()}
                                                                                 </div>
-                                                                                <div className="text-sm text-blue-900 text-center font-medium">
+                                                                                <div className="text-sm text-blue-900 bg-blue-50/50 px-2 py-1 rounded-lg text-center font-bold">
                                                                                     {Math.round(brand.openingQuantity || 0).toLocaleString('en-US')}
                                                                                 </div>
 
@@ -3258,7 +3258,7 @@ const StockManagement = ({
                                                                                         return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
                                                                                     })()}
                                                                                 </div>
-                                                                                <div className="text-sm text-orange-900 text-center font-medium">
+                                                                                <div className="text-sm text-orange-900 bg-orange-50/50 px-2 py-1 rounded-lg text-center font-bold">
                                                                                     {Math.round(brand.saleQuantity || 0).toLocaleString('en-US')}
                                                                                 </div>
                                                                             </>
@@ -3271,7 +3271,7 @@ const StockManagement = ({
                                                                                 return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
                                                                             })()}
                                                                         </div>
-                                                                        <div className="text-sm text-green-900 text-center font-black">
+                                                                        <div className="text-sm text-green-900 bg-green-50/50 px-2 py-1 rounded-lg text-center font-black border border-green-100/50">
                                                                             {Math.round(brand.inHouseQuantity).toLocaleString('en-US')}
                                                                         </div>
 
@@ -3295,77 +3295,76 @@ const StockManagement = ({
                                                                                     return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
                                                                                 })()}
                                                                             </div>
-                                                                            <div className="text-sm text-purple-950 font-black text-center">
+                                                                            <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
                                                                                 {(() => {
                                                                                     const brandGroup = group.brandList.slice(startIdx, startIdx + spanInfo.span);
                                                                                     const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
                                                                                     return Math.round(totalQty).toLocaleString('en-US');
                                                                                 })()}
                                                                             </div>
-                                                                            <div></div>
                                                                         </div>
                                                                     )}
                                                                 </React.Fragment>
                                                             );
                                                         })}
-                                                    <div className={`pt-2 border-t border-gray-200 mt-1 ${gridClass} items-center whitespace-nowrap min-w-[1000px]`}>
-                                                        <div className="flex items-center gap-1">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Total:</span>
+                                                        <div className={`pt-1.5 pb-1.5 mt-2 bg-blue-50/20 border-t border-dashed border-blue-200 rounded-lg px-2 ${gridClass} items-center whitespace-nowrap min-w-[1000px]`}>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-xs font-black text-blue-950 uppercase tracking-wider">Total:</span>
+                                                            </div>
+                                                            {showRate ? (
+                                                                <>
+                                                                    <div className="text-center"></div>
+                                                                    <div className="text-center"></div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    {/* Total Opening */}
+                                                                    <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
+                                                                        {(() => {
+                                                                            const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                            const { whole, remainder } = calculatePktRemainder(group.openingQuantity, pktSize);
+                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                        })()}
+                                                                    </div>
+                                                                    <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
+                                                                        {Math.round(group.openingQuantity).toLocaleString('en-US')}
+                                                                    </div>
+                                                                    {/* Total Sale */}
+                                                                    <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
+                                                                        {(() => {
+                                                                            const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                            const { whole, remainder } = calculatePktRemainder(group.saleQuantity, pktSize);
+                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                        })()}
+                                                                    </div>
+                                                                    <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
+                                                                        {Math.round(group.saleQuantity).toLocaleString('en-US')}
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                            {/* Total Closing */}
+                                                            <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
+                                                                {(() => {
+                                                                    const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                    const { whole, remainder = 0 } = calculatePktRemainder(group.inHouseQuantity, pktSize);
+                                                                    return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                })()}
+                                                            </div>
+                                                            <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
+                                                                {Math.round(group.inHouseQuantity).toLocaleString('en-US')}
+                                                            </div>
+                                                            <div className="text-center"></div>
                                                         </div>
-                                                        {showRate ? (
-                                                            <>
-                                                                <div className="text-center"></div>
-                                                                <div className="text-center"></div>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                {/* Total Opening */}
-                                                                <div className="text-sm text-blue-900 font-black text-center">
-                                                                    {(() => {
-                                                                        const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                        const { whole, remainder } = calculatePktRemainder(group.openingQuantity, pktSize);
-                                                                        return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
-                                                                    })()}
-                                                                </div>
-                                                                <div className="text-sm text-blue-900 font-black text-center">
-                                                                    {Math.round(group.openingQuantity).toLocaleString('en-US')}
-                                                                </div>
-                                                                {/* Total Sale */}
-                                                                <div className="text-sm text-orange-900 font-black text-center">
-                                                                    {(() => {
-                                                                        const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                        const { whole, remainder } = calculatePktRemainder(group.saleQuantity, pktSize);
-                                                                        return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
-                                                                    })()}
-                                                                </div>
-                                                                <div className="text-sm text-orange-900 font-black text-center">
-                                                                    {Math.round(group.saleQuantity).toLocaleString('en-US')}
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                        {/* Total Closing */}
-                                                        <div className="text-sm text-green-900 font-black text-center underline decoration-green-200">
-                                                            {(() => {
-                                                                const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                const { whole, remainder = 0 } = calculatePktRemainder(group.inHouseQuantity, pktSize);
-                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
-                                                            })()}
-                                                        </div>
-                                                        <div className="text-sm text-green-900 font-black text-center underline decoration-green-200">
-                                                            {Math.round(group.inHouseQuantity).toLocaleString('en-US')}
-                                                        </div>
-                                                        <div className="text-center"></div>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 align-top text-right">
-                                                <div className="flex items-center justify-end gap-3 mt-1">
-                                                    <button onClick={() => setViewRecord({ data: group })} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><EyeIcon className="w-5 h-5" /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })
+                                                </td>
+                                                <td className="px-6 py-4 align-top text-right">
+                                                    <div className="flex items-center justify-end gap-3 mt-1">
+                                                        <button onClick={() => setViewRecord({ data: group })} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><EyeIcon className="w-5 h-5" /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>
