@@ -749,10 +749,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             filteredBrands = filteredBrands.filter(b => (b.brand || '').trim() === stockFilters.brand);
         } else {
             // Otherwise just filter out empty stocks
-            filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity) > 0.01);
+            filteredBrands = filteredBrands.filter(b => Math.abs(Math.round(b.inHouseQuantity)) >= 1);
         }
 
-        if (filteredBrands.length === 0 && (!stockFilters.brand || Math.abs(group.inHouseQuantity) <= 0.01)) {
+        if (filteredBrands.length === 0 && (!stockFilters.brand || Math.abs(Math.round(group.inHouseQuantity)) < 1)) {
             return null;
         }
 

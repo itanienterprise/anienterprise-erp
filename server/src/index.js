@@ -166,50 +166,50 @@ const getDefaultPermissionsForRole = (role) => {
   ];
 
   modules.forEach(m => {
-    defaults[m] = { view: false, add: false, edit: false, delete: false, special: false };
+    defaults[m] = { view: false, add: false, edit: false, delete: false, special: false, showRate: false };
   });
 
   if (roleLower === 'admin') {
     modules.forEach(m => {
-      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: true };
     });
   } else if (roleLower === 'incharge') {
     modules.forEach(m => {
       if (m !== 'backupRestore') {
-        defaults[m] = { view: true, add: true, edit: true, delete: m !== 'employees', special: true };
+        defaults[m] = { view: true, add: true, edit: true, delete: m !== 'employees', special: true, showRate: true };
       }
     });
   } else if (roleLower === 'lc manager') {
     const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods'];
     lcModules.forEach(m => {
-      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
   } else if (roleLower === 'sales manager') {
     const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
     salesModules.forEach(m => {
-      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
   } else if (roleLower === 'accounts manager') {
     const accModules = ['paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods'];
     accModules.forEach(m => {
-      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
-    defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false };
+    defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false, showRate: false };
   } else if (roleLower === 'border manager') {
     const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
     borderModules.forEach(m => {
-      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true };
+      defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
   } else if (roleLower === 'data entry') {
     modules.forEach(m => {
       if (m !== 'backupRestore') {
-        defaults[m] = { view: true, add: true, edit: true, delete: false, special: false };
+        defaults[m] = { view: true, add: true, edit: true, delete: false, special: false, showRate: false };
       }
     });
   } else {
     const staffModules = ['product', 'customer', 'stock', 'sales'];
     staffModules.forEach(m => {
-      defaults[m] = { view: true, add: false, edit: false, delete: false, special: false };
+      defaults[m] = { view: true, add: false, edit: false, delete: false, special: false, showRate: false };
     });
   }
 

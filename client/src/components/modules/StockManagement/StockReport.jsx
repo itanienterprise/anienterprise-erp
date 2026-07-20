@@ -15,7 +15,8 @@ const StockReport = ({
     warehouseData,
     products,
     salesRecords,
-    damages
+    damages,
+    showRate
 }) => {
     if (!isOpen) return null;
 
@@ -25,6 +26,16 @@ const StockReport = ({
     const [filterSearchInputs, setFilterSearchInputs] = useState({ warehouseSearch: '', brandSearch: '', productSearch: '' });
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, brand: false, product: false });
     const initialFilterDropdownState = { warehouse: false, brand: false, product: false };
+
+    useEffect(() => {
+        if (isOpen) {
+            if (showRate) {
+                setReportType('price');
+            } else {
+                setReportType('short');
+            }
+        }
+    }, [isOpen, showRate]);
 
     const selectedProductsList = React.useMemo(() => {
         if (!stockFilters.productName) return [];
@@ -410,10 +421,10 @@ const StockReport = ({
                                                                  </td>
                                                              )}
                                                              {bInfo.span > 0 && (
-                                                                 <td rowSpan={bInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
-                                                                     <div className="leading-tight uppercase font-medium">{ent.brand || 'No Brand'}</div>
-                                                                 </td>
-                                                             )}
+                                                                  <td rowSpan={bInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
+                                                                      <div className="leading-tight uppercase font-medium">{(ent.brand || 'No Brand').trim()}</div>
+                                                                  </td>
+                                                              )}
                                                             {reportType === 'price' && (
                                                                 <>
                                                                     <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top uppercase">
@@ -455,7 +466,7 @@ const StockReport = ({
                                                              return (
                                                                  <tr className="bg-gray-100/50 font-bold border-b border-gray-900 last:border-b-0">
                                                                      <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold uppercase" colSpan={3}>
-                                                                         {ent.brand || 'No Brand'} Total
+                                                                         {(ent.brand || 'No Brand').trim()} Total
                                                                      </td>
                                                                      <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold whitespace-nowrap">
                                                                          {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}

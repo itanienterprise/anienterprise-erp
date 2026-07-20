@@ -627,6 +627,7 @@ function App() {
   const [showStockReport, setShowStockReport] = useState(false);
   const [showProductHistoryReport, setShowProductHistoryReport] = useState(false);
   const [productHistoryReportData, setProductHistoryReportData] = useState(null);
+  const [showRate, setShowRate] = useState(false);
   const [stockFormData, setStockFormData] = useState({
     date: '',
     lcNo: '',
@@ -1772,6 +1773,8 @@ function App() {
             showProductHistoryReport={showProductHistoryReport}
             setProductHistoryReportData={setProductHistoryReportData}
             refreshPendingIndicators={fetchPendingEntries}
+            showRate={showRate}
+            setShowRate={setShowRate}
           />
         );
       case 'products-section':
@@ -2673,6 +2676,7 @@ function App() {
         salesRecords={salesRecords}
         products={products}
         damages={damages}
+        showRate={showRate}
       />
 
       {/* Product History Report Modal */}
