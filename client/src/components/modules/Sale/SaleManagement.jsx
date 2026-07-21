@@ -1653,6 +1653,20 @@ const SaleManagement = ({
             } else if (key === 'party') {
                 valA = (a.companyName || a.customerName || '').toString().toLowerCase();
                 valB = (b.companyName || b.customerName || '').toString().toLowerCase();
+            } else if (key === 'warehouseName') {
+                const getWhName = (sale) => {
+                    if (sale.warehouseName) return sale.warehouseName;
+                    if (sale.items && sale.items.length > 0) {
+                        const item = sale.items[0];
+                        if (item.brandEntries && item.brandEntries.length > 0) {
+                            return item.brandEntries[0].warehouseName || '';
+                        }
+                        return item.warehouseName || '';
+                    }
+                    return '';
+                };
+                valA = getWhName(a).toString().toLowerCase();
+                valB = getWhName(b).toString().toLowerCase();
             } else if (['totalAmount', 'discount', 'paidAmount', 'dueAmount'].includes(key)) {
                 valA = parseFloat(valA) || 0;
                 valB = parseFloat(valB) || 0;
@@ -4372,20 +4386,41 @@ const SaleManagement = ({
                                     </tr>
                                 ) : (
                                     <tr>
+                                        <th className="sale-mgmt-th text-center">
+                                            {isSelectionMode ? (
+                                                <input autoComplete="off"
+                                                    type="checkbox"
+                                                    checked={selectedItems.size === getFilteredData().length && getFilteredData().length > 0}
+                                                    onChange={() => {
+                                                        const data = getFilteredData();
+                                                        if (selectedItems.size === data.length) {
+                                                            setSelectedItems(new Set());
+                                                            setIsSelectionMode(false);
+                                                        } else {
+                                                            setSelectedItems(new Set(data.map(s => s._id)));
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                            ) : 'SL'}
+                                        </th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
+                                            <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
                                         </th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('lcNo')}>
                                             <div className="flex items-center">LC No {renderSortIcon('lcNo')}</div>
                                         </th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('challanNo')}>
-                                            <div className="flex items-center">Challan No {renderSortIcon('challanNo')}</div>
+                                            <div className="flex items-center">CH. No {renderSortIcon('challanNo')}</div>
                                         </th>
                                         <th className="sale-mgmt-th cursor-pointer group whitespace-nowrap" onClick={() => handleSort('truckNo')}>
                                             <div className="flex items-center">Truck No {renderSortIcon('truckNo')}</div>
                                         </th>
-                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
-                                            <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
+                                        <th className="sale-mgmt-th cursor-pointer group whitespace-nowrap" onClick={() => handleSort('warehouseName')}>
+                                            <div className="flex items-center">W.HHOUSE {renderSortIcon('warehouseName')}</div>
                                         </th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('companyName')}>
                                             <div className="flex items-center">Company {renderSortIcon('companyName')}</div>
@@ -4415,9 +4450,9 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                    <tr><td colSpan="17" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
-                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan="17" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = !collapsedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -4564,8 +4599,27 @@ const SaleManagement = ({
                                             onClick={() => isMultiple && toggleRowExpansion(sale._id)}
                                             className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''}`}
                                         >
+                                            <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                {isSelectionMode ? (
+                                                    canUserEditSale(sale) ? (
+                                                        <input autoComplete="off"
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(sale._id)}
+                                                            onChange={() => toggleSelection(sale._id)}
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-4 h-4" /> // Empty space for non-editable
+                                                    )
+                                                ) : (
+                                                    <span className="text-gray-400 font-medium">{index + 1}</span>
+                                                )}
+                                            </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 {isMultiple && !isExpanded ? (
@@ -4580,14 +4634,40 @@ const SaleManagement = ({
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.challanNo || '-'}</div>
+                                            <td className="px-3 py-4">
+                                                 <div className="text-[13px] font-semibold text-gray-800">
+                                                     {sale.challanNo ? (
+                                                         sale.challanNo.split(/(.{5})/).filter(Boolean).map((chunk, idx) => (
+                                                             <div key={idx}>{chunk}</div>
+                                                         ))
+                                                     ) : (
+                                                         '-'
+                                                     )}
+                                                 </div>
                                             </td>
+                                            <td className="px-3 py-4">
+                                                 <div className="text-[13px] font-semibold text-gray-800">
+                                                     {sale.truckNo ? (
+                                                         sale.truckNo.split(/(.{14})/).filter(Boolean).map((chunk, idx) => (
+                                                             <div key={idx}>{chunk}</div>
+                                                         ))
+                                                     ) : (
+                                                         '-'
+                                                     )}
+                                                 </div>
+                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.truckNo || '-'}</div>
-                                            </td>
-                                            <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
+                                                 {isMultiple && !isExpanded ? (
+                                                     <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
+                                                 ) : (
+                                                     <div className="flex flex-col gap-2">
+                                                         {items.map((it, idx) => (
+                                                             <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                 {it.warehouseName || sale.warehouseName || '-'}
+                                                             </div>
+                                                         ))}
+                                                     </div>
+                                                 )}
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-semibold text-gray-800">{getSafeString(sale.companyName) || '-'}</div>

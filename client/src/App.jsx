@@ -443,9 +443,7 @@ function App() {
 
   const handleViewChange = (view) => {
     setCurrentView(view);
-    if (windowWidth < 768) {
-      setSidebarOpen(false);
-    }
+    setSidebarOpen(false);
   };
 
   // Manage body class when modal is open inside main (handles all modular modals dynamically)

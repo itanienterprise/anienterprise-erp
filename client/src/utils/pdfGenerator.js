@@ -4744,35 +4744,78 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
+        // Calculate Totals
+        const totalMarginPaid = reportData.reduce((s, r) => s + (parseFloat(r.marginPaid) || 0), 0);
+        const totalMarginReturn = reportData.reduce((s, r) => s + (parseFloat(r.marginReturn) || 0), 0);
+        const totalBankPaid = reportData.reduce((s, r) => s + (parseFloat(r.bankPaid) || 0), 0);
+
+        // Draw Summary Card
+        const cardY = yPos + 6;
+        const cardWidth = 72;
+        const cardLineHeight = 5;
+        const cardHeight = 19; // 3 items: Margin Paid, Margin Return, Bank Charge
+        const cardX = (pageWidth - cardWidth) / 2;
+
+        // Draw background/border for the card
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.2);
+        doc.rect(cardX, cardY, cardWidth, cardHeight, 'S');
+
+        // Draw card content
+        doc.setFontSize(8.5);
+        doc.setTextColor(0);
+        
+        let currentY = cardY + 1.5;
+        
+        currentY += cardLineHeight;
+        doc.setFont('helvetica', 'bold');
+        doc.text("TOTAL MARGIN PAID", cardX + 4, currentY);
+        doc.text(":", cardX + 42, currentY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`TK ${totalMarginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, cardX + 45, currentY);
+
+        currentY += cardLineHeight;
+        doc.setFont('helvetica', 'bold');
+        doc.text("TOTAL MARGIN RETURN", cardX + 4, currentY);
+        doc.text(":", cardX + 42, currentY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`TK ${totalMarginReturn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, cardX + 45, currentY);
+
+        currentY += cardLineHeight;
+        doc.setFont('helvetica', 'bold');
+        doc.text("TOTAL BANK CHARGE", cardX + 4, currentY);
+        doc.text(":", cardX + 42, currentY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`TK ${totalBankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, cardX + 45, currentY);
+
         // --- Table ---
         const tableRows = reportData.map((row, idx) => [
             idx + 1,
             formatDate(row.date),
-            row.lcNo || '-',
+            row.lcNo && row.lcNo.length > 6 ? row.lcNo.slice(-6) : (row.lcNo || '-'),
             row.importer || '-',
             row.billType || '-',
             row.marginPaid > 0 ? `${row.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-',
+            row.marginReturn > 0 ? `${row.marginReturn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-',
             row.bankPaid > 0 ? `${row.bankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'
         ]);
-
-        // Calculate Totals
-        const totalMarginPaid = reportData.reduce((s, r) => s + (parseFloat(r.marginPaid) || 0), 0);
-        const totalBankPaid = reportData.reduce((s, r) => s + (parseFloat(r.bankPaid) || 0), 0);
 
         // Add Grand Total
         tableRows.push([
             { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             { content: totalMarginPaid > 0 ? `${totalMarginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: totalMarginReturn > 0 ? `${totalMarginReturn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             { content: totalBankPaid > 0 ? `${totalBankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
         ]);
 
-        // Center table: total col widths = 8+20+25+40+35+35+35 = 198
-        const tableColWidths = 8 + 20 + 25 + 40 + 35 + 35 + 35;
+        // Center table: total col widths = 8+18+24+36+32+27+27+26 = 198
+        const tableColWidths = 8 + 18 + 24 + 36 + 32 + 27 + 27 + 26;
         const tableLeftMargin = (pageWidth - tableColWidths) / 2;
 
         autoTable(doc, {
-            startY: yPos + 10,
-            head: [['SL', 'Date', 'LC No', 'Importer', 'Bill Type', 'Margin Paid', 'Bank Charge']],
+            startY: cardY + cardHeight + 5,
+            head: [['SL', 'Date', 'LC No', 'Importer', 'Bill Type', 'Margin Paid', 'Margin Return', 'Bank Charge']],
             body: tableRows,
             theme: 'grid',
             styles: {
@@ -4791,11 +4834,12 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
             columnStyles: {
                 0: { cellWidth: 8, halign: 'center' },   // SL
                 1: { cellWidth: 20, halign: 'center' },  // Date
-                2: { cellWidth: 25, halign: 'center' },  // LC No
-                3: { cellWidth: 46, overflow: 'hidden' },                    // Importer
-                4: { cellWidth: 35, halign: 'center' },  // Bill Type
-                5: { cellWidth: 32, halign: 'right' },   // Margin Paid
-                6: { cellWidth: 32, halign: 'right' }    // Bank Charge
+                2: { cellWidth: 15, halign: 'center' },  // LC No
+                3: { cellWidth: 36, overflow: 'hidden' },                    // Importer
+                4: { cellWidth: 32, halign: 'center' },  // Bill Type
+                5: { cellWidth: 27, halign: 'right' },   // Margin Paid
+                6: { cellWidth: 27, halign: 'right' },   // Margin Return
+                7: { cellWidth: 26, halign: 'right' }    // Bank Charge
             },
             margin: { left: tableLeftMargin, right: tableLeftMargin }
         });

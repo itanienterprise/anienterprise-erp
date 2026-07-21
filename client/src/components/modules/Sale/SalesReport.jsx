@@ -133,7 +133,8 @@ const SalesReport = ({
                 lcNo: item.lcNo || sale.lcNo || '-',
                 uom: entry.uom || item.uom || 'QTY',
                 isFirstInProduct: subIdx === 0,
-                productSpan: entries.length
+                productSpan: entries.length,
+                warehouseName: entry.warehouseName || item.warehouseName || sale.warehouseName || '-'
             }));
         });
 
@@ -148,7 +149,8 @@ const SalesReport = ({
                 lcNo: sale.lcNo || '-',
                 uom: sale.uom || 'QTY',
                 isFirstInProduct: true,
-                productSpan: 1
+                productSpan: 1,
+                warehouseName: sale.warehouseName || '-'
             });
         }
 
@@ -860,13 +862,18 @@ const SalesReport = ({
                                         <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[4%] whitespace-nowrap`}>SL</th>
                                         <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap`}>Date</th>
                                         {saleType !== 'Border' && (
+                                            <th className="border-r border-gray-900 px-1 py-1.5 text-center text-[11px] font-bold text-gray-900 uppercase w-[12%] whitespace-nowrap">Invoice</th>
+                                        )}
+                                        {saleType !== 'Border' ? (
                                             <>
                                                 <th className="border-r border-gray-900 px-1 py-1.5 text-center text-[11px] font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap">LC No</th>
-                                                <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap">Challan No</th>
+                                                <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap">CH. No</th>
                                                 <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap">Truck No</th>
+                                                <th className="border-r border-gray-900 px-1 py-1.5 text-left text-[11px] font-bold text-gray-900 uppercase w-[7%] whitespace-nowrap">W.HHOUSE</th>
                                             </>
+                                        ) : (
+                                            <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase w-[12%] whitespace-nowrap">LC No</th>
                                         )}
-                                        <th className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1.5 text-center ${saleType === 'Border' ? 'text-[12px]' : 'text-[11px]'} font-bold text-gray-900 uppercase w-[12%] whitespace-nowrap`}>{saleType === 'Border' ? 'LC No' : 'Invoice'}</th>
                                         {saleType === 'Border' ? (
                                             <>
                                                 <th className="border-r border-gray-900 px-0.5 py-1.5 text-center text-[12px] font-bold text-gray-900 uppercase whitespace-nowrap">Importer</th>
@@ -910,6 +917,9 @@ const SalesReport = ({
                                                                 <>
                                                                     <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{sl++}</td>
                                                                     <td rowSpan={flatItems.length} className={`border-r border-gray-900 ${saleType === 'Border' ? 'px-0.5' : 'px-1'} py-1 ${saleType === 'Border' ? 'text-[12px]' : 'text-[12px]'} text-gray-900 text-center`}>{formatDate(sale.date)}</td>
+                                                                    {saleType !== 'Border' && (
+                                                                        <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] font-bold text-gray-900 text-center">{sale.invoiceNo}</td>
+                                                                    )}
                                                                 </>
                                                             )}
                                                             {item.isFirstInProduct && (
@@ -927,15 +937,35 @@ const SalesReport = ({
                                                             )}
                                                             {saleType !== 'Border' && idx === 0 && (
                                                                 <>
-                                                                    <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 whitespace-nowrap text-center">{sale.challanNo || '-'}</td>
-                                                                    <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 whitespace-nowrap text-center">{sale.truckNo || '-'}</td>
+                                                                    <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 text-center">
+                                                                        {sale.challanNo ? (
+                                                                            sale.challanNo.split(/(.{5})/).filter(Boolean).map((chunk, idx) => (
+                                                                                <div key={idx}>{chunk}</div>
+                                                                            ))
+                                                                        ) : (
+                                                                            '-'
+                                                                        )}
+                                                                    </td>
+                                                                    <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 text-center">
+                                                                        {sale.truckNo ? (
+                                                                            sale.truckNo.split(/(.{14})/).filter(Boolean).map((chunk, idx) => (
+                                                                                <div key={idx}>{chunk}</div>
+                                                                            ))
+                                                                        ) : (
+                                                                            '-'
+                                                                        )}
+                                                                    </td>
+                                                                    <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] text-gray-900 text-center">
+                                                                        {flatItems.map((it, fIdx) => (
+                                                                            <div key={fIdx} className={fIdx < flatItems.length - 1 ? 'border-b border-gray-200 pb-0.5 mb-0.5' : ''}>
+                                                                                {it.warehouseName || '-'}
+                                                                            </div>
+                                                                        ))}
+                                                                    </td>
                                                                 </>
                                                             )}
                                                             {idx === 0 && (
                                                                 <>
-                                                                    {saleType !== 'Border' && (
-                                                                        <td rowSpan={flatItems.length} className="border-r border-gray-900 px-1 py-1 text-[12px] font-bold text-gray-900 text-center">{sale.invoiceNo}</td>
-                                                                    )}
                                                                     {saleType === 'Border' ? (
                                                                         <>
                                                                             <td rowSpan={flatItems.length} className="border-r border-gray-900 px-0.5 py-1 text-[12px] text-gray-900 text-left whitespace-nowrap">{sale.importer || '-'}</td>

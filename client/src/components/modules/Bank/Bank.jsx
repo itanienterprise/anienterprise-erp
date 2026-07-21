@@ -196,12 +196,14 @@ const Bank = ({ onDeleteConfirm }) => {
             importer: false
         });
         try {
-            const [lcRes, expRes] = await Promise.all([
+            const [lcRes, expRes, marginReturnsRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/lc-expenses`)
+                axios.get(`${API_BASE_URL}/api/lc-expenses`),
+                axios.get(`${API_BASE_URL}/api/margin-returns`).catch(() => ({ data: [] }))
             ]);
             const lcRecords = Array.isArray(lcRes.data) ? lcRes.data : [];
             const expenses = Array.isArray(expRes.data) ? expRes.data : [];
+            const marginReturns = Array.isArray(marginReturnsRes?.data) ? marginReturnsRes.data : [];
 
             const cleanBankName = (bankName || '').trim().toUpperCase();
 
@@ -330,6 +332,7 @@ const Bank = ({ onDeleteConfirm }) => {
                     billType: 'Opening LC',
                     marginBill: origMarginBill,
                     marginPaid: origMarginPaid + openingMarginExpPaid,
+                    marginReturn: 0,
                     bankBill: origBankBill,
                     bankPaid: origBankPaid + openingBankExpPaid
                 });
@@ -352,6 +355,7 @@ const Bank = ({ onDeleteConfirm }) => {
                         billType: amnd.amendmentNo || `Amendment #${idx + 1}`,
                         marginBill: amndMarginBill,
                         marginPaid: amndMarginPaid,
+                        marginReturn: 0,
                         bankBill: amndBankBill,
                         bankPaid: amndBankPaid
                     });
@@ -392,8 +396,28 @@ const Bank = ({ onDeleteConfirm }) => {
                         billType: bill.expenseHead || 'Other Bill',
                         marginBill: isMargin ? billAmt : 0,
                         marginPaid: isMargin ? paid : 0,
+                        marginReturn: 0,
                         bankBill: isMargin ? 0 : billAmt,
                         bankPaid: isMargin ? 0 : paid
+                    });
+                });
+
+                // --- Margin Returns ---
+                const lcMarginReturns = marginReturns.filter(r => 
+                    r.lcId === lc._id || 
+                    (r.lcNo && cleanLc(r.lcNo) === lcNoClean)
+                );
+                lcMarginReturns.forEach(ret => {
+                    rows.push({
+                        date: ret.returnDate || ret.createdAt,
+                        lcNo: lc.lcNo,
+                        importer: lc.importerName || lc.importer || '-',
+                        billType: 'Margin Return',
+                        marginBill: 0,
+                        marginPaid: 0,
+                        marginReturn: parseFloat(ret.returnAmount) || 0,
+                        bankBill: 0,
+                        bankPaid: 0
                     });
                 });
             });
@@ -418,8 +442,8 @@ const Bank = ({ onDeleteConfirm }) => {
 
     const filteredLcBillHistoryRows = useMemo(() => {
         const filtered = lcBillHistoryRows.filter(row => {
-            // Filter out empty rows (where both marginPaid and bankPaid are <= 0)
-            if ((row.marginPaid || 0) <= 0 && (row.bankPaid || 0) <= 0) {
+            // Filter out empty rows (where marginPaid, bankPaid, and marginReturn are all <= 0)
+            if ((row.marginPaid || 0) <= 0 && (row.bankPaid || 0) <= 0 && (row.marginReturn || 0) <= 0) {
                 return false;
             }
 
@@ -521,7 +545,7 @@ const Bank = ({ onDeleteConfirm }) => {
                     return historySortConfig.direction === 'asc' ? aDate - bDate : bDate - aDate;
                 }
 
-                if (historySortConfig.key === 'marginPaid' || historySortConfig.key === 'bankPaid') {
+                if (historySortConfig.key === 'marginPaid' || historySortConfig.key === 'bankPaid' || historySortConfig.key === 'marginReturn') {
                     const aNum = parseFloat(aVal) || 0;
                     const bNum = parseFloat(bVal) || 0;
                     return historySortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
@@ -2027,6 +2051,19 @@ const Bank = ({ onDeleteConfirm }) => {
                                                         </div>
                                                     </th>
                                                     <th 
+                                                        onClick={() => requestSort('marginReturn')}
+                                                        className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
+                                                    >
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            Margin Return
+                                                            {historySortConfig.key === 'marginReturn' && (
+                                                                historySortConfig.direction === 'asc' 
+                                                                    ? <ChevronUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                                    : <ChevronDownIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                            )}
+                                                        </div>
+                                                    </th>
+                                                    <th 
                                                         onClick={() => requestSort('bankPaid')}
                                                         className="px-5 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap cursor-pointer hover:bg-gray-100/50 transition-colors"
                                                     >
@@ -2059,6 +2096,9 @@ const Bank = ({ onDeleteConfirm }) => {
                                                             {row.marginPaid > 0 ? `৳${row.marginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                         </td>
                                                         <td className="px-5 py-3.5 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
+                                                            {row.marginReturn > 0 ? `৳${row.marginReturn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                        </td>
+                                                        <td className="px-5 py-3.5 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
                                                             {row.bankPaid > 0 ? `৳${row.bankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                         </td>
                                                     </tr>
@@ -2069,6 +2109,9 @@ const Bank = ({ onDeleteConfirm }) => {
                                                     <td colSpan="4" className="px-5 py-4 text-xs font-black text-gray-500 uppercase tracking-wider text-right">Total:</td>
                                                     <td className="px-5 py-4 text-sm font-black text-right text-emerald-600">
                                                         ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.marginPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="px-5 py-4 text-sm font-black text-right text-emerald-600">
+                                                        ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.marginReturn, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                     </td>
                                                     <td className="px-5 py-4 text-sm font-black text-right text-emerald-600">
                                                         ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.bankPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -2103,12 +2146,17 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                         M: ৳{row.marginPaid.toLocaleString('en-IN')}
                                                                     </p>
                                                                 )}
+                                                                {row.marginReturn > 0 && (
+                                                                    <p className="text-sm font-black text-rose-600 font-mono">
+                                                                        R: ৳{row.marginReturn.toLocaleString('en-IN')}
+                                                                    </p>
+                                                                )}
                                                                 {row.bankPaid > 0 && (
                                                                     <p className="text-[11px] font-bold text-gray-500 font-mono mt-0.5">
                                                                         B: ৳{row.bankPaid.toLocaleString('en-IN')}
                                                                     </p>
                                                                 )}
-                                                                {row.marginPaid === 0 && row.bankPaid === 0 && (
+                                                                {row.marginPaid === 0 && row.marginReturn === 0 && row.bankPaid === 0 && (
                                                                     <p className="text-sm font-medium text-gray-400">-</p>
                                                                 )}
                                                             </div>
@@ -2145,6 +2193,12 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                     </span>
                                                                 </div>
                                                                 <div className="flex justify-between items-center pt-2 border-t border-gray-100/50">
+                                                                    <span className="text-gray-500 font-medium">Margin Return :</span>
+                                                                    <span className="font-bold text-emerald-600 font-mono">
+                                                                        {row.marginReturn > 0 ? `৳${row.marginReturn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center pt-2 border-t border-gray-100/50">
                                                                     <span className="text-gray-500 font-medium">Bank Charge :</span>
                                                                     <span className="font-bold text-emerald-600 font-mono">
                                                                         {row.bankPaid > 0 ? `৳${row.bankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
@@ -2163,6 +2217,12 @@ const Bank = ({ onDeleteConfirm }) => {
                                                 <span className="font-bold text-gray-500 uppercase tracking-wider">Total Margin Paid:</span>
                                                 <span className="font-black text-emerald-600 font-mono text-sm">
                                                     ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.marginPaid, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center pt-2 border-t border-gray-200/40">
+                                                <span className="font-bold text-gray-500 uppercase tracking-wider">Total Margin Return:</span>
+                                                <span className="font-black text-rose-600 font-mono text-sm">
+                                                    ৳{filteredLcBillHistoryRows.reduce((s, r) => s + r.marginReturn, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center pt-2 border-t border-gray-200/40">

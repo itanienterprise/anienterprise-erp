@@ -788,7 +788,15 @@ const StockHistoryModal = ({
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{item.port}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.importer}>{item.importer}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 truncate max-w-[120px]" title={item.exporter}>{item.exporter || '-'}</td>
-                                                            <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-medium whitespace-nowrap">{item.truckNo || '-'}</td>
+                                                            <td className="px-3 py-3 text-sm text-gray-600 font-medium">
+                                                                {item.truckNo ? (
+                                                                    item.truckNo.split(/(.{14})/).filter(Boolean).map((chunk, idx) => (
+                                                                        <div key={idx}>{chunk}</div>
+                                                                    ))
+                                                                ) : (
+                                                                    '-'
+                                                                )}
+                                                            </td>
                                                             <td className="px-3 py-3 align-top whitespace-nowrap">
                                                                 <div className="space-y-1">
                                                                     {item.entries.map((entry, eIdx) => (
