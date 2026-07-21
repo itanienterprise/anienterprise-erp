@@ -262,8 +262,8 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             ? originalLc.productsList
             : (record.productsList && record.productsList.length > 0 ? record.productsList : []);
 
-        let billValueUsd = 0;
-        if (origProducts.length > 0) {
+        let billValueUsd = parseFloat(record.billValueUsd) || 0;
+        if (billValueUsd === 0 && origProducts.length > 0) {
             origProducts.forEach(p => {
                 const pRecQtyKg = getProductReceivedQtyKg(p.productName);
                 const pRecQtyTons = pRecQtyKg / 1000;

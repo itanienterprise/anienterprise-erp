@@ -915,8 +915,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             ? originalLc.productsList
             : (data.productsList && data.productsList.length > 0 ? data.productsList : []);
 
-        let billValueUsd = 0;
-        if (origProducts.length > 0) {
+        let billValueUsd = parseFloat(data.billValueUsd) || 0;
+        if (billValueUsd === 0 && origProducts.length > 0) {
             origProducts.forEach(p => {
                 const pRecQtyKg = getProductReceivedQtyKg(p.productName);
                 const pRecQtyTons = pRecQtyKg / 1000;
@@ -3839,30 +3839,24 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     );
 };
 
-const UpdateDollarRateModal = ({ record, onClose, onUpdateSuccess }) => {
+const UpdateDollarRateModal = ({ record, adj, onClose, onUpdateSuccess }) => {
     const [newDollarRate, setNewDollarRate] = useState(record?.dollarRate || '');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     if (!record) return null;
 
-    const totalDollar = record.productsList && record.productsList.length > 0
-        ? record.productsList.reduce((sum, p) => {
-            const pTot = parseFloat(p.totalDollar);
-            if (pTot > 0) return sum + pTot;
-            const q = parseFloat(p.quantity) || 0;
-            const r = parseFloat(p.rate) || 0;
-            const f = parseFloat(p.freight) || 0;
-            const rScaled = r > 0 ? (r < 10 ? r * 1000 : r) : 0;
-            const fScaled = f < 0.1 ? f * 1000 : f;
-            return sum + (q * (rScaled + fScaled));
-        }, 0)
-        : (parseFloat(record.totalDollar) || ((parseFloat(record.quantity) || 0) * (parseFloat(record.rate) || 0)));
+    const currentBillValue = adj?.billValueUsd || 0;
+
+    const [newTotalDollar, setNewTotalDollar] = useState(() => {
+        return String(currentBillValue);
+    });
 
     const currentRate = parseFloat(record.dollarRate) || 0;
-    const currentTotalBdt = parseFloat(record.totalAmount) || (totalDollar * currentRate);
+    const currentTotalBdt = parseFloat(record.totalAmount) || (currentBillValue * currentRate);
 
+    const parsedNewDollar = parseFloat(newTotalDollar) || 0;
     const parsedNewRate = parseFloat(newDollarRate) || 0;
-    const newTotalBdt = totalDollar * parsedNewRate;
+    const newTotalBdt = parsedNewDollar * parsedNewRate;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -3870,13 +3864,43 @@ const UpdateDollarRateModal = ({ record, onClose, onUpdateSuccess }) => {
             alert('Please enter a valid dollar rate');
             return;
         }
+        if (isNaN(parsedNewDollar) || parsedNewDollar < 0) {
+            alert('Please enter a valid bill value amount');
+            return;
+        }
         setIsSubmitting(true);
         try {
+            const timeline = getLCHistoryTimeline(record);
+            const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || record;
+            const origProducts = (originalLc.productsList && originalLc.productsList.length > 0)
+                ? originalLc.productsList
+                : (record.productsList && record.productsList.length > 0 ? record.productsList : []);
+
+            const rootRateVal = originalLc.rate || record.rate || (origProducts[0]?.rate) || 0;
+            const rootFreightVal = originalLc.freight || record.freight || (origProducts[0]?.freight) || 0;
+            const getRatePerTon = (rVal) => {
+                const r = parseFloat(rVal) || 0;
+                return r > 0 && r < 10 ? r * 1000 : r;
+            };
+            const getFreightPerTon = (fVal) => {
+                const f = parseFloat(fVal) || 0;
+                return f > 0 && f < 0.1 ? f * 1000 : f;
+            };
+            let pRate = getRatePerTon(rootRateVal);
+            let pFreight = getFreightPerTon(rootFreightVal);
+            if (pFreight > 0 && pRate > pFreight) {
+                pRate = pRate - pFreight;
+            }
+            const totalRatePerTon = pRate + pFreight;
+            const calculatedReceiveQtyKg = totalRatePerTon > 0 ? (parsedNewDollar / totalRatePerTon) * 1000 : 0;
+
             const updatedRecord = {
                 ...record,
                 openingDollarRate: record.openingDollarRate || record.dollarRate,
                 updatedDollarRate: String(newDollarRate),
                 dollarRate: String(newDollarRate),
+                billValueUsd: parsedNewDollar,
+                updatedLcReceive: calculatedReceiveQtyKg > 0 ? String(calculatedReceiveQtyKg.toFixed(2)) : record.updatedLcReceive,
                 totalAmount: newTotalBdt > 0 ? newTotalBdt.toFixed(2) : record.totalAmount
             };
 
@@ -3918,8 +3942,8 @@ const UpdateDollarRateModal = ({ record, onClose, onUpdateSuccess }) => {
                             <span className="text-xs font-black text-gray-800 truncate block">{record.importerName || 'N/A'}</span>
                         </div>
                         <div>
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Dollar</span>
-                            <span className="text-xs font-black text-blue-600 block">${totalDollar.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Current Bill Value</span>
+                            <span className="text-xs font-black text-blue-600 block">${currentBillValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div>
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Current Dollar Rate</span>
@@ -3931,29 +3955,50 @@ const UpdateDollarRateModal = ({ record, onClose, onUpdateSuccess }) => {
                         </div>
                     </div>
 
-                    {/* Input */}
-                    <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                            New Dollar Rate (BDT / ৳) <span className="text-rose-500">*</span>
-                        </label>
-                        <div className="relative">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">৳</span>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={newDollarRate}
-                                onChange={(e) => setNewDollarRate(e.target.value)}
-                                placeholder="e.g. 122.50"
-                                required
-                                autoFocus
-                                className="w-full pl-9 pr-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
-                            />
+                    {/* Inputs */}
+                    <div className="space-y-4">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                Bill Value ($) <span className="text-rose-500">*</span>
+                            </label>
+                            <div className="relative">
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">$</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={newTotalDollar}
+                                    onChange={(e) => setNewTotalDollar(e.target.value)}
+                                    placeholder="e.g. 98700.00"
+                                    required
+                                    autoFocus
+                                    className="w-full pl-9 pr-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                New Dollar Rate (BDT / ৳) <span className="text-rose-500">*</span>
+                            </label>
+                            <div className="relative">
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">৳</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={newDollarRate}
+                                    onChange={(e) => setNewDollarRate(e.target.value)}
+                                    placeholder="e.g. 122.50"
+                                    required
+                                    className="w-full pl-9 pr-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+                                />
+                            </div>
                         </div>
                     </div>
 
                     {/* Recalculated preview */}
-                    {parsedNewRate > 0 && (
+                    {parsedNewRate > 0 && parsedNewDollar >= 0 && (
                         <div className="p-3.5 bg-emerald-50/70 border border-emerald-100/80 rounded-2xl space-y-1">
                             <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Recalculated LC Total Value</span>
                             <div className="flex items-center justify-between text-sm font-black text-emerald-800">
@@ -6559,8 +6604,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             ? originalLc.productsList
             : (record.productsList && record.productsList.length > 0 ? record.productsList : []);
 
-        let billValueUsd = 0;
-        if (origProducts.length > 0) {
+        let billValueUsd = parseFloat(record.billValueUsd) || 0;
+        if (billValueUsd === 0 && origProducts.length > 0) {
             origProducts.forEach(p => {
                 const pRecQtyKg = getProductReceivedQtyKg(p.productName);
                 const pRecQtyTons = pRecQtyKg / 1000;
@@ -10497,6 +10542,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             {dollarRateModalRecord && (
                 <UpdateDollarRateModal
                     record={dollarRateModalRecord}
+                    adj={getAdjustedLcValues(dollarRateModalRecord)}
                     onClose={() => setDollarRateModalRecord(null)}
                     onUpdateSuccess={handleUpdateDollarRate}
                 />
