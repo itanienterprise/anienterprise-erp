@@ -4765,28 +4765,23 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
         // Draw card content
         doc.setFontSize(8.5);
         doc.setTextColor(0);
+        doc.setFont('helvetica', 'bold');
         
         let currentY = cardY + 1.5;
         
         currentY += cardLineHeight;
-        doc.setFont('helvetica', 'bold');
         doc.text("TOTAL MARGIN PAID", cardX + 4, currentY);
         doc.text(":", cardX + 42, currentY);
-        doc.setFont('helvetica', 'normal');
         doc.text(`TK ${totalMarginPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, cardX + 45, currentY);
 
         currentY += cardLineHeight;
-        doc.setFont('helvetica', 'bold');
         doc.text("TOTAL MARGIN RETURN", cardX + 4, currentY);
         doc.text(":", cardX + 42, currentY);
-        doc.setFont('helvetica', 'normal');
         doc.text(`TK ${totalMarginReturn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, cardX + 45, currentY);
 
         currentY += cardLineHeight;
-        doc.setFont('helvetica', 'bold');
         doc.text("TOTAL BANK CHARGE", cardX + 4, currentY);
         doc.text(":", cardX + 42, currentY);
-        doc.setFont('helvetica', 'normal');
         doc.text(`TK ${totalBankPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, cardX + 45, currentY);
 
         // --- Table ---
