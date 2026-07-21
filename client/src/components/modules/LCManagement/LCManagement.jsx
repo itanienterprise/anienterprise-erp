@@ -3839,7 +3839,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     );
 };
 
-const UpdateDollarRateModal = ({ record, adj, onClose, onUpdateSuccess }) => {
+const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUpdateSuccess }) => {
     const [newDollarRate, setNewDollarRate] = useState(record?.dollarRate || '');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -3848,7 +3848,9 @@ const UpdateDollarRateModal = ({ record, adj, onClose, onUpdateSuccess }) => {
     const currentBillValue = adj?.billValueUsd || 0;
 
     const [newTotalDollar, setNewTotalDollar] = useState(() => {
-        return String(currentBillValue);
+        return record.billValueUsd !== undefined && record.billValueUsd !== null && record.billValueUsd !== ''
+            ? String(record.billValueUsd)
+            : '';
     });
 
     const currentRate = parseFloat(record.dollarRate) || 0;
@@ -3856,7 +3858,14 @@ const UpdateDollarRateModal = ({ record, adj, onClose, onUpdateSuccess }) => {
 
     const parsedNewDollar = parseFloat(newTotalDollar) || 0;
     const parsedNewRate = parseFloat(newDollarRate) || 0;
-    const newTotalBdt = parsedNewDollar * parsedNewRate;
+
+    const isResetVal = newTotalDollar === '' || parseFloat(newTotalDollar) === 0;
+    let previewDollar = parsedNewDollar;
+    if (isResetVal) {
+        const tempRec = { ...record, billValueUsd: '' };
+        previewDollar = getAdjustedLcValues(tempRec).billValueUsd || 0;
+    }
+    const previewTotalBdt = previewDollar * parsedNewRate;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -3864,45 +3873,60 @@ const UpdateDollarRateModal = ({ record, adj, onClose, onUpdateSuccess }) => {
             alert('Please enter a valid dollar rate');
             return;
         }
-        if (isNaN(parsedNewDollar) || parsedNewDollar < 0) {
-            alert('Please enter a valid bill value amount');
-            return;
-        }
         setIsSubmitting(true);
         try {
-            const timeline = getLCHistoryTimeline(record);
-            const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || record;
-            const origProducts = (originalLc.productsList && originalLc.productsList.length > 0)
-                ? originalLc.productsList
-                : (record.productsList && record.productsList.length > 0 ? record.productsList : []);
+            let updatedRecord;
+            const isReset = newTotalDollar === '' || parseFloat(newTotalDollar) === 0;
 
-            const rootRateVal = originalLc.rate || record.rate || (origProducts[0]?.rate) || 0;
-            const rootFreightVal = originalLc.freight || record.freight || (origProducts[0]?.freight) || 0;
-            const getRatePerTon = (rVal) => {
-                const r = parseFloat(rVal) || 0;
-                return r > 0 && r < 10 ? r * 1000 : r;
-            };
-            const getFreightPerTon = (fVal) => {
-                const f = parseFloat(fVal) || 0;
-                return f > 0 && f < 0.1 ? f * 1000 : f;
-            };
-            let pRate = getRatePerTon(rootRateVal);
-            let pFreight = getFreightPerTon(rootFreightVal);
-            if (pFreight > 0 && pRate > pFreight) {
-                pRate = pRate - pFreight;
+            if (isReset) {
+                const tempRec = { ...record, billValueUsd: '' };
+                const dynamicBillValue = getAdjustedLcValues(tempRec).billValueUsd || 0;
+                const resetBdt = dynamicBillValue * parsedNewRate;
+
+                updatedRecord = {
+                    ...record,
+                    openingDollarRate: record.openingDollarRate || record.dollarRate,
+                    updatedDollarRate: String(newDollarRate),
+                    dollarRate: String(newDollarRate),
+                    billValueUsd: '',
+                    updatedLcReceive: null,
+                    totalAmount: resetBdt > 0 ? resetBdt.toFixed(2) : record.totalAmount
+                };
+            } else {
+                const timeline = getLCHistoryTimeline(record);
+                const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || record;
+                const origProducts = (originalLc.productsList && originalLc.productsList.length > 0)
+                    ? originalLc.productsList
+                    : (record.productsList && record.productsList.length > 0 ? record.productsList : []);
+
+                const rootRateVal = originalLc.rate || record.rate || (origProducts[0]?.rate) || 0;
+                const rootFreightVal = originalLc.freight || record.freight || (origProducts[0]?.freight) || 0;
+                const getRatePerTon = (rVal) => {
+                    const r = parseFloat(rVal) || 0;
+                    return r > 0 && r < 10 ? r * 1000 : r;
+                };
+                const getFreightPerTon = (fVal) => {
+                    const f = parseFloat(fVal) || 0;
+                    return f > 0 && f < 0.1 ? f * 1000 : f;
+                };
+                let pRate = getRatePerTon(rootRateVal);
+                let pFreight = getFreightPerTon(rootFreightVal);
+                if (pFreight > 0 && pRate > pFreight) {
+                    pRate = pRate - pFreight;
+                }
+                const totalRatePerTon = pRate + pFreight;
+                const calculatedReceiveQtyKg = totalRatePerTon > 0 ? (parsedNewDollar / totalRatePerTon) * 1000 : 0;
+
+                updatedRecord = {
+                    ...record,
+                    openingDollarRate: record.openingDollarRate || record.dollarRate,
+                    updatedDollarRate: String(newDollarRate),
+                    dollarRate: String(newDollarRate),
+                    billValueUsd: parsedNewDollar,
+                    updatedLcReceive: calculatedReceiveQtyKg > 0 ? String(calculatedReceiveQtyKg.toFixed(2)) : record.updatedLcReceive,
+                    totalAmount: previewTotalBdt > 0 ? previewTotalBdt.toFixed(2) : record.totalAmount
+                };
             }
-            const totalRatePerTon = pRate + pFreight;
-            const calculatedReceiveQtyKg = totalRatePerTon > 0 ? (parsedNewDollar / totalRatePerTon) * 1000 : 0;
-
-            const updatedRecord = {
-                ...record,
-                openingDollarRate: record.openingDollarRate || record.dollarRate,
-                updatedDollarRate: String(newDollarRate),
-                dollarRate: String(newDollarRate),
-                billValueUsd: parsedNewDollar,
-                updatedLcReceive: calculatedReceiveQtyKg > 0 ? String(calculatedReceiveQtyKg.toFixed(2)) : record.updatedLcReceive,
-                totalAmount: newTotalBdt > 0 ? newTotalBdt.toFixed(2) : record.totalAmount
-            };
 
             syncBankBills(updatedRecord);
 
@@ -3959,7 +3983,7 @@ const UpdateDollarRateModal = ({ record, adj, onClose, onUpdateSuccess }) => {
                     <div className="space-y-4">
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                Bill Value ($) <span className="text-rose-500">*</span>
+                                Bill Value ($)
                             </label>
                             <div className="relative">
                                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">$</span>
@@ -3970,7 +3994,6 @@ const UpdateDollarRateModal = ({ record, adj, onClose, onUpdateSuccess }) => {
                                     value={newTotalDollar}
                                     onChange={(e) => setNewTotalDollar(e.target.value)}
                                     placeholder="e.g. 98700.00"
-                                    required
                                     autoFocus
                                     className="w-full pl-9 pr-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
                                 />
@@ -3998,12 +4021,12 @@ const UpdateDollarRateModal = ({ record, adj, onClose, onUpdateSuccess }) => {
                     </div>
 
                     {/* Recalculated preview */}
-                    {parsedNewRate > 0 && parsedNewDollar >= 0 && (
+                    {parsedNewRate > 0 && (
                         <div className="p-3.5 bg-emerald-50/70 border border-emerald-100/80 rounded-2xl space-y-1">
                             <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Recalculated LC Total Value</span>
                             <div className="flex items-center justify-between text-sm font-black text-emerald-800">
                                 <span>Total BDT Amount:</span>
-                                <span className="text-base">৳{newTotalBdt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                                <span className="text-base">৳{previewTotalBdt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
                     )}
@@ -4782,7 +4805,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         exporterName: '',
         importerName: '',
         productName: '',
-        lcStatus: 'Running'
+        lcStatus: 'All'
     };
     const [lcFilters, setLcFilters] = useState(initialLcFilterState);
     const [filterSearchInputs, setFilterSearchInputs] = useState({
@@ -6800,7 +6823,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             if (!matchesFilterProduct) return false;
         }
 
-        if (lcFilters.lcStatus) {
+        if (lcFilters.lcStatus && lcFilters.lcStatus !== 'All') {
             const currentRecordStatus = record.lcStatus || 'Running';
             if (currentRecordStatus !== lcFilters.lcStatus) return false;
         }
@@ -7197,9 +7220,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <button
                                                         key={statusOption}
                                                         type="button"
-                                                        onClick={() => setLcFilters({ ...lcFilters, lcStatus: statusOption === 'All' ? '' : statusOption })}
+                                                        onClick={() => setLcFilters({ ...lcFilters, lcStatus: statusOption })}
                                                         className={`flex-1 py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
-                                                            (statusOption === 'All' && !lcFilters.lcStatus) || (lcFilters.lcStatus === statusOption)
+                                                            lcFilters.lcStatus === statusOption
                                                                 ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
                                                                 : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                                                         }`}
@@ -10541,8 +10564,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
             {dollarRateModalRecord && (
                 <UpdateDollarRateModal
+                    key={dollarRateModalRecord._id}
                     record={dollarRateModalRecord}
                     adj={getAdjustedLcValues(dollarRateModalRecord)}
+                    getAdjustedLcValues={getAdjustedLcValues}
                     onClose={() => setDollarRateModalRecord(null)}
                     onUpdateSuccess={handleUpdateDollarRate}
                 />
