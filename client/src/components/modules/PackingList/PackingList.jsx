@@ -447,6 +447,7 @@ function PackingList({
             exporterSignature: rawPi.exporterSignature || '',
             invoiceStyle: rawPi.invoiceStyle || 'Style 2 AAS',
             bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : '',
+            branchName: matchedLcByPi ? (matchedLcByPi.bankBranch || '') : '',
             lcAmendment: matchedLcByPi ? (matchedLcByPi.lcAmendment || '') : '',
             descriptionGoods: rawPi.descriptionGoods || '',
             termsDeliveryPayment: rawPi.termsDeliveryPayment || '',
@@ -739,7 +740,9 @@ function PackingList({
                     setFormData(prev => ({
                         ...prev,
                         lcNumber: item.lcNo || '',
-                        lcDate: item.openingDate ? item.openingDate.split('T')[0] : ''
+                        lcDate: item.openingDate ? item.openingDate.split('T')[0] : '',
+                        bankName: item.bankName || '',
+                        branchName: item.bankBranch || ''
                     }));
                     setActiveDropdown(null);
                 } else if (selectField) {
@@ -1285,7 +1288,8 @@ function PackingList({
                                                         ...prev,
                                                         lcNumber: lc.lcNo || '',
                                                         lcDate: lc.openingDate ? lc.openingDate.split('T')[0] : '',
-                                                        bankName: lc.bankName || ''
+                                                        bankName: lc.bankName || '',
+                                                        branchName: lc.bankBranch || ''
                                                     }));
                                                     setActiveDropdown(null);
                                                 }}
