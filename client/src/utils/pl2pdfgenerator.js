@@ -501,7 +501,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     // Row 1: Exporter vs PI Info
     let y = margin + 8;
-    const row1Height = isPiRevised ? 34 : 30;
+    const row1Height = isPiRevised ? 37.5 : 33.5;
     doc.rect(margin, y, leftColWidth, row1Height);
     doc.rect(midX, y, rightColWidth, row1Height);
 
@@ -545,53 +545,53 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     doc.setFontSize(8.5);
     doc.text("DATE-" + dateVal, midX + rightColWidth - 2, y + 11, { align: 'right' });
 
-    doc.line(midX, y + 13, pageWidth - margin, y + 13);
+    doc.line(midX, y + 14, pageWidth - margin, y + 14);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.text("Buyer's Order No /Proforma Invoice No.& Date", midX + 2, y + 16.5);
+    doc.text("Buyer's Order No /Proforma Invoice No.& Date", midX + 2, y + 18);
 
     if (isPiRevised) {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8.5);
-        doc.text(cleanPiNumber, midX + 2, y + 21);
+        doc.text(cleanPiNumber, midX + 2, y + 22.5);
 
         const origPiDateVal = formatDate(pi?.date || '') || '';
         doc.setFontSize(8.5);
-        doc.text("DATE-" + origPiDateVal, midX + rightColWidth - 2, y + 21, { align: 'right' });
+        doc.text("DATE-" + origPiDateVal, midX + rightColWidth - 2, y + 22.5, { align: 'right' });
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8.5);
-        doc.text(record.piNumber || '', midX + 2, y + 25);
+        doc.text(record.piNumber || '', midX + 2, y + 26.5);
 
         const revisedPiDateVal = formatDate(record.piDate) || '';
         doc.setFontSize(8.5);
-        doc.text("DATE-" + revisedPiDateVal, midX + rightColWidth - 2, y + 25, { align: 'right' });
+        doc.text("DATE-" + revisedPiDateVal, midX + rightColWidth - 2, y + 26.5, { align: 'right' });
 
-        doc.line(midX, y + 28, pageWidth - margin, y + 28);
+        doc.line(midX, y + 29.5, pageWidth - margin, y + 29.5);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.text("Seller (if other than consigner)", midX + 2, y + 31.5);
+        doc.text("Seller (if other than consigner)", midX + 2, y + 33);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
-        doc.text(buyerLines, midX + 2, y + 33.5);
+        doc.text(buyerLines, midX + 2, y + 35.5);
     } else {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
-        doc.text(record.piNumber || '', midX + 2, y + 21);
+        doc.text(record.piNumber || '', midX + 2, y + 22.5);
 
         const piDateVal = formatDate(record.piDate || pi?.date) || '';
         doc.setFontSize(8.5);
-        doc.text("DATE-" + piDateVal, midX + rightColWidth - 2, y + 21, { align: 'right' });
+        doc.text("DATE-" + piDateVal, midX + rightColWidth - 2, y + 22.5, { align: 'right' });
 
-        doc.line(midX, y + 24, pageWidth - margin, y + 24);
+        doc.line(midX, y + 25.5, pageWidth - margin, y + 25.5);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.text("Seller (if other than consigner)", midX + 2, y + 27.5);
+        doc.text("Seller (if other than consigner)", midX + 2, y + 29);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
-        doc.text(buyerLines, midX + 2, y + 30.5);
+        doc.text(buyerLines, midX + 2, y + 32);
     }
 
     // Row 2: Importer vs Country/Terms/LC Box
@@ -1145,7 +1145,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     y = doc.lastAutoTable.finalY;
 
     // Ensure all content fits on the page by checking remaining space for the footer
-    const footerMinSpace = 40; // minimum space needed for Amount Chargeable + Declaration + Signature
+    const footerMinSpace = 28; // minimum space needed for Amount Chargeable + Declaration + Signature
     if (pageHeight - margin - y < footerMinSpace) {
         doc.addPage();
         // Redraw page border for the new page
