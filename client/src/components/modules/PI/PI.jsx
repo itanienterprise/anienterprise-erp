@@ -4119,7 +4119,7 @@ function PI({
                                                                             enriched.partySignature = enriched.partySignature || imp.signature;
                                                                         }
                                                                     }
-                                                                    if (enriched.invoiceStyle === 'Style 2 AAS') {
+                                                                    if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
                                                                         generatePI2PDF(enriched);
                                                                     } else {
                                                                         generatePIPDF(enriched);
@@ -4279,7 +4279,7 @@ function PI({
                                                                 enriched.partyEmail = enriched.partyEmail || imp.email;
                                                                 enriched.partySignature = enriched.partySignature || imp.signature;
                                                             }
-                                                            if (enriched.invoiceStyle === 'Style 2 AAS') {
+                                                            if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
                                                                 generatePI2PDF(enriched);
                                                             } else {
                                                                 generatePIPDF(enriched);
@@ -4623,7 +4623,7 @@ function PI({
                                                                 }
                                                             }
 
-                                                            if (enriched.invoiceStyle === 'Style 2 AAS') {
+                                                            if (enriched.invoiceStyle === 'Style 2 AAS' || enriched.invoiceStyle === 'Style 3') {
                                                                 generatePI2PDF(enriched);
                                                             } else {
                                                                 generatePIPDF(enriched);

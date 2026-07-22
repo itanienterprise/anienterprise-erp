@@ -83,16 +83,27 @@ export const generatePI2PDF = (record) => {
     doc.rect(margin, y, leftColWidth, row1Height);
     doc.rect(midX, y, rightColWidth, row1Height);
 
+    const isStyle3 = record.invoiceStyle === 'Style 3';
+
     // Exporter Content
     doc.setFontSize(13.5);
     doc.setFont("helvetica", "bold");
-    doc.text("Exporter", margin + leftColWidth / 2, y + 5, { align: 'center' });
     const eLW = doc.getTextWidth("Exporter");
-    doc.line(margin + (leftColWidth / 2) - (eLW / 2), y + 6, margin + (leftColWidth / 2) + (eLW / 2), y + 6);
+    if (isStyle3) {
+        doc.text("Exporter", margin + 5, y + 5);
+        doc.line(margin + 5, y + 6, margin + 5 + eLW, y + 6);
+    } else {
+        doc.text("Exporter", margin + leftColWidth / 2, y + 5, { align: 'center' });
+        doc.line(margin + (leftColWidth / 2) - (eLW / 2), y + 6, margin + (leftColWidth / 2) + (eLW / 2), y + 6);
+    }
 
     doc.setFontSize(14);
     const nameLines = doc.splitTextToSize(record.exporterName || '', leftColWidth - 10);
-    doc.text(nameLines, margin + leftColWidth / 2, y + 12, { align: 'center' });
+    if (isStyle3) {
+        doc.text(nameLines, margin + 5, y + 12);
+    } else {
+        doc.text(nameLines, margin + leftColWidth / 2, y + 12, { align: 'center' });
+    }
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -105,7 +116,7 @@ export const generatePI2PDF = (record) => {
     if (exporterEmail) {
         exporterInfo = exporterInfo.trim() + `\nEmail: ${exporterEmail}`;
     }
-    // Render exporter address: compress each logical line via charSpace to fit on one line.
+    
     const exporterColWidth = leftColWidth - 10;
     const exporterCenterX = margin + leftColWidth / 2;
     let expLineY = y + 17;
@@ -114,11 +125,20 @@ export const generatePI2PDF = (record) => {
         const trimmed = rawLine.trim();
         if (!trimmed) { expLineY += expLineH; return; }
         const w = doc.getTextWidth(trimmed);
-        if (w > exporterColWidth) {
-            const cs = (exporterColWidth - w) / (trimmed.length - 1);
-            doc.text(trimmed, exporterCenterX, expLineY, { align: 'center', charSpace: cs });
+        if (isStyle3) {
+            if (w > exporterColWidth) {
+                const cs = (exporterColWidth - w) / (trimmed.length - 1);
+                doc.text(trimmed, margin + 5, expLineY, { charSpace: cs });
+            } else {
+                doc.text(trimmed, margin + 5, expLineY);
+            }
         } else {
-            doc.text(trimmed, exporterCenterX, expLineY, { align: 'center' });
+            if (w > exporterColWidth) {
+                const cs = (exporterColWidth - w) / (trimmed.length - 1);
+                doc.text(trimmed, exporterCenterX, expLineY, { align: 'center', charSpace: cs });
+            } else {
+                doc.text(trimmed, exporterCenterX, expLineY, { align: 'center' });
+            }
         }
         expLineY += expLineH;
     });
@@ -222,20 +242,29 @@ export const generatePI2PDF = (record) => {
     }
     const termsHeight = termsLines.length * 4;
     const saftaHeight = showSafta ? 12 : 0;
-    let row2Height = Math.max(64, countrySectionHeight + 14 + termsHeight + saftaHeight);
+    let row2Height = Math.max(59, countrySectionHeight + 14 + termsHeight + saftaHeight);
     doc.rect(margin, y, leftColWidth, row2Height);
     doc.rect(midX, y, rightColWidth, row2Height);
 
     // Importer
     doc.setFontSize(13.5);
     doc.setFont("helvetica", "bold");
-    doc.text("Importer", margin + leftColWidth / 2, y + 5, { align: 'center' });
     const iLW = doc.getTextWidth("Importer");
-    doc.line(margin + (leftColWidth / 2) - (iLW / 2), y + 6, margin + (leftColWidth / 2) + (iLW / 2), y + 6);
+    if (isStyle3) {
+        doc.text("Importer", margin + 5, y + 5);
+        doc.line(margin + 5, y + 6, margin + 5 + iLW, y + 6);
+    } else {
+        doc.text("Importer", margin + leftColWidth / 2, y + 5, { align: 'center' });
+        doc.line(margin + (leftColWidth / 2) - (iLW / 2), y + 6, margin + (leftColWidth / 2) + (iLW / 2), y + 6);
+    }
 
     doc.setFontSize(14);
     const pnLines = doc.splitTextToSize(record.partyName || '', leftColWidth - 10);
-    doc.text(pnLines, margin + leftColWidth / 2, y + 12, { align: 'center' });
+    if (isStyle3) {
+        doc.text(pnLines, margin + 5, y + 12);
+    } else {
+        doc.text(pnLines, margin + leftColWidth / 2, y + 12, { align: 'center' });
+    }
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -248,34 +277,38 @@ export const generatePI2PDF = (record) => {
     if (email) {
         impInfo = impInfo.trim() + `\nEmail: ${email}`;
     }
-    doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
+    if (isStyle3) {
+        doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + 5, y + 17);
+    } else {
+        doc.text(doc.splitTextToSize(impInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, y + 17, { align: 'center' });
+    }
 
     // Shipping rows (left)
-    doc.line(margin, y + 33, margin + leftColWidth, y + 33);
+    doc.line(margin, y + 29, margin + leftColWidth, y + 29);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
-    doc.text("Pre-Carriage by", margin + leftColWidth / 4, y + 36.5, { align: 'center' });
-    doc.text("Place of Receipt by Pre-Carrier", margin + (3 * leftColWidth / 4), y + 36.5, { align: 'center' });
+    doc.text("Pre-Carriage by", margin + leftColWidth / 4, y + 32.5, { align: 'center' });
+    doc.text("Place of Receipt by Pre-Carrier", margin + (3 * leftColWidth / 4), y + 32.5, { align: 'center' });
     doc.setFontSize(8.5);
-    doc.text(record.preCarriageBy || '', margin + leftColWidth / 4, y + 41, { align: 'center' });
-    doc.text(record.placeOfReceipt || record.placeOfReceiptByPreCarrier || '', margin + (3 * leftColWidth / 4), y + 41, { align: 'center' });
+    doc.text(record.preCarriageBy || '', margin + leftColWidth / 4, y + 37, { align: 'center' });
+    doc.text(record.placeOfReceipt || record.placeOfReceiptByPreCarrier || '', margin + (3 * leftColWidth / 4), y + 37, { align: 'center' });
 
-    doc.line(margin, y + 43, margin + leftColWidth, y + 43);
+    doc.line(margin, y + 39, margin + leftColWidth, y + 39);
     doc.setFontSize(8.5);
-    doc.text("Vessel/Flight No.", margin + leftColWidth / 4, y + 46.5, { align: 'center' });
-    doc.text("Port of Loading", margin + (3 * leftColWidth / 4), y + 46.5, { align: 'center' });
+    doc.text("Vessel/Flight No.", margin + leftColWidth / 4, y + 42.5, { align: 'center' });
+    doc.text("Port of Loading", margin + (3 * leftColWidth / 4), y + 42.5, { align: 'center' });
     doc.setFontSize(8.5);
-    doc.text(record.vesselFlightNo || '', margin + leftColWidth / 4, y + 51, { align: 'center' });
-    doc.text(record.portOfLoading || 'ANY PLACE OF INDIA', margin + (3 * leftColWidth / 4), y + 51, { align: 'center' });
+    doc.text(record.vesselFlightNo || '', margin + leftColWidth / 4, y + 47, { align: 'center' });
+    doc.text(record.portOfLoading || 'ANY PLACE OF INDIA', margin + (3 * leftColWidth / 4), y + 47, { align: 'center' });
 
-    doc.line(margin, y + 53, margin + leftColWidth, y + 53);
+    doc.line(margin, y + 49, margin + leftColWidth, y + 49);
     doc.setFontSize(8.5);
-    doc.text("Port of Discharge", margin + leftColWidth / 4, y + 56.5, { align: 'center' });
-    doc.text("Final Destination", margin + (3 * leftColWidth / 4), y + 56.5, { align: 'center' });
+    doc.text("Port of Discharge", margin + leftColWidth / 4, y + 52.5, { align: 'center' });
+    doc.text("Final Destination", margin + (3 * leftColWidth / 4), y + 52.5, { align: 'center' });
     doc.setFontSize(8.5);
-    doc.text(record.portOfDischarge || record.port || 'HILI', margin + leftColWidth / 4, y + 61, { align: 'center' });
-    doc.text(record.finalDestination || 'BANGLADESH', margin + (3 * leftColWidth / 4), y + 61, { align: 'center' });
-    doc.line(margin + (leftColWidth / 2), y + 33, margin + (leftColWidth / 2), y + row2Height);
+    doc.text(record.portOfDischarge || record.port || 'HILI', margin + leftColWidth / 4, y + 57, { align: 'center' });
+    doc.text(record.finalDestination || 'BANGLADESH', margin + (3 * leftColWidth / 4), y + 57, { align: 'center' });
+    doc.line(margin + (leftColWidth / 2), y + 29, margin + (leftColWidth / 2), y + row2Height);
 
     // Right: Country of Origin / Final Destination
     const subW = rightColWidth / 2;
@@ -461,7 +494,7 @@ export const generatePI2PDF = (record) => {
             halign: 'left',
             fontStyle: 'normal',
             fontSize: numProducts === 1 ? 9 : 10.5,
-            cellPadding: { top: 2, left: 2, right: 2, bottom: numProducts === 1 ? 40 : 2 },
+            cellPadding: { top: 2, left: 2, right: 2, bottom: numProducts === 1 ? 20 : 2 },
             valign: 'top'
         };
         if (rowHeight) descCellStyle.minCellHeight = rowHeight;
@@ -502,7 +535,7 @@ export const generatePI2PDF = (record) => {
             fontSize: 9,
             cellPadding: { top: 4, left: 2, right: 2, bottom: 6 },
             valign: 'top',
-            minCellHeight: 22
+            minCellHeight: 12
         };
         tableBody.push([
             {
@@ -719,7 +752,7 @@ export const generatePI2PDF = (record) => {
         ? (availableForValue - valueWidth) / (wordsVal.length - 1)
         : 0;
 
-    const amountRowHeight = 10;
+    const amountRowHeight = 8;
 
     // Draw label (normal) then value (bold) on the same line
     doc.setFont("helvetica", "normal");
@@ -739,7 +772,9 @@ export const generatePI2PDF = (record) => {
     doc.line(amountColX, totalY, amountColX, declY);
 
     const declText = record.declaration || "-We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.\nWe do certify that we have no local agent in Bangladesh and the quoted price is net and no commission is payable.";
-    const declTextWidth = amountColX - margin - 8;
+    
+    // Set width to 130 to keep declaration text on the left side of the signature block
+    const declTextWidth = 130;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
@@ -750,12 +785,12 @@ export const generatePI2PDF = (record) => {
     declLines.forEach((line, idx) => {
         doc.text(line, margin + 2, declY + 10 + (idx * declLineH));
     });
-    const declBlockBottom = declY + 10 + (declLines.length * declLineH);
 
     const sigImageWidth = 50;
     const sigImageX = pageWidth - margin - sigImageWidth - 5;
 
-    const sigLineY = Math.max(declBlockBottom + 18, (declY + 4) + 36);
+    // Anchor signature line 12mm above the page bottom border
+    const sigLineY = boxBottom - 12;
     const sigTop = sigLineY - 18 - 1; // Sits 1mm above the signature line
 
     if (record.exporterSignature) {
