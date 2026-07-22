@@ -94,7 +94,7 @@ const RINKU_TEMPLATE_LAYOUT = {
     consignorMaxWidth: 0.72,
     fromX: 0.630,
     fromY: 0.517,
-    toX: 0.635,
+    toX: 0.605,
     toY: 0.590,
     descLeftX: 0.10,
     descRightX: 0.29,
@@ -292,48 +292,56 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
 
         // Draw total bags and bag type in the leftmost column ("Packages")
         let totalBags = 0;
-        record.productsList.forEach(prod => {
-            totalBags += parseInt(prod.bagCount) || 0;
-        });
+        if (Array.isArray(record?.productsList)) {
+            record.productsList.forEach(prod => {
+                const val = prod.bagCount || prod.bags || prod.bag || 0;
+                totalBags += parseInt(val) || 0;
+            });
+        }
 
-        if (totalBags > 0) {
+        let bagTypes = [];
+        if (Array.isArray(record?.productsList) && record.productsList.length > 0) {
+            record.productsList.forEach(prod => {
+                if (prod.packingType) {
+                    prod.packingType.split(',').forEach(t => {
+                        const trimmed = t.trim().toUpperCase();
+                        if (trimmed && !bagTypes.includes(trimmed)) {
+                            bagTypes.push(trimmed);
+                        }
+                    });
+                }
+            });
+        }
+        if (bagTypes.length === 0) {
+            const rawBagType = String(record?.packingType || '').trim().toUpperCase();
+            bagTypes = rawBagType
+                .split(',')
+                .map(t => t.trim())
+                .filter(Boolean);
+        }
+
+        if (totalBags > 0 || bagTypes.length > 0) {
             const pX = pageX + pageWidth * layout.packagesX;
             const pY = pageY + pageHeight * layout.packagesY;
             const pLS = pageHeight * 0.025; // Snug vertical spacing for packages
 
-            const bagsFontSize = Math.max(11, Math.round(pageHeight * 0.055));
-            applyAlgerianFont(doc, bagsFontSize);
-            doc.setTextColor(0, 0, 0);
+            let currentPackY = pY;
 
-            // Format bags number (e.g. "3,780")
-            const bagsText = `${totalBags.toLocaleString('en-US')}`;
-            doc.text(bagsText, pX, pY, { align: 'center', charSpace: -0.15 });
+            if (totalBags > 0) {
+                const bagsFontSize = Math.max(11, Math.round(pageHeight * 0.055));
+                applyAlgerianFont(doc, bagsFontSize);
+                doc.setTextColor(0, 0, 0);
 
-            let bagTypes = [];
-            if (Array.isArray(record?.productsList) && record.productsList.length > 0) {
-                record.productsList.forEach(prod => {
-                    if (prod.packingType) {
-                        prod.packingType.split(',').forEach(t => {
-                            const trimmed = t.trim().toUpperCase();
-                            if (trimmed && !bagTypes.includes(trimmed)) {
-                                bagTypes.push(trimmed);
-                            }
-                        });
-                    }
-                });
-            }
-            if (bagTypes.length === 0) {
-                const rawBagType = String(record?.packingType || '').trim().toUpperCase();
-                bagTypes = rawBagType
-                    .split(',')
-                    .map(t => t.trim())
-                    .filter(Boolean);
+                // Format bags number (e.g. "3,780")
+                const bagsText = `${totalBags.toLocaleString('en-US')}`;
+                doc.text(bagsText, pX, pY, { align: 'center', charSpace: -0.15 });
+                currentPackY = pY + pLS;
             }
 
-            let currentPackY = pY + pLS;
             if (bagTypes.length > 0) {
                 const typeFontSize = Math.max(9, Math.round(pageHeight * 0.045));
                 applyAlgerianFont(doc, typeFontSize);
+                doc.setTextColor(0, 0, 0);
                 bagTypes.forEach((type, idx) => {
                     const isLast = idx === bagTypes.length - 1;
                     const lineText = isLast ? type : `${type} /`;

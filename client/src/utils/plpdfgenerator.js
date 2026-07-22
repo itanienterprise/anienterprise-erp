@@ -417,7 +417,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
                 const ipNumbersList = ipNumberVal.split(',').map(s => s.trim()).filter(Boolean);
                 const ipDisplayStr = ipNumbersList.length > 0 ? ipNumbersList.map(ipNo => {
                     const ipRec = ipRecords.find(i => i.ipNumber === ipNo);
-                    const rawDate = ipRec?.closeDate || record.ipDate || pi?.ipDate || '';
+                    const rawDate = ipRec?.openingDate || record.ipDate || pi?.ipDate || '';
                     const formattedIpDate = rawDate ? formatDate(rawDate) : '';
                     return formattedIpDate ? `${ipNo} DT.${formattedIpDate}` : ipNo;
                 }).join(', ') : 'N/A';
@@ -582,6 +582,8 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
         return {
             ...prod,
+            bagCount: prod.bagCount,
+            packingType: prod.packingType,
             hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '',
             freight: prod.freight || piProd?.freight || '',
             totalFreight: prod.totalFreight || piProd?.totalFreight || ''

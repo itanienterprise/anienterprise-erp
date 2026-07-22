@@ -224,7 +224,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
             const ipDisplayStr = filteredIpNumbersList.length > 0 ? filteredIpNumbersList.map(ipNo => {
                 const ipRec = ipRecords.find(i => i.ipNumber === ipNo);
-                const rawDate = ipRec?.closeDate || record.ipDate || pi?.ipDate || '';
+                const rawDate = ipRec?.openingDate || record.ipDate || pi?.ipDate || '';
                 const formattedIpDate = rawDate ? formatDate(rawDate) : '';
                 return formattedIpDate ? `${ipNo} DATED.${formattedIpDate}` : ipNo;
             }).join(', ') : 'N/A';
@@ -405,7 +405,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
             const ipDisplayStr = filteredIpNumbersList.length > 0 ? filteredIpNumbersList.map(ipNo => {
                 const ipRec = ipRecords.find(i => i.ipNumber === ipNo);
-                const rawDate = ipRec?.closeDate || record.ipDate || pi?.ipDate || '';
+                const rawDate = ipRec?.openingDate || record.ipDate || pi?.ipDate || '';
                 const formattedIpDate = rawDate ? formatDate(rawDate) : '';
                 return formattedIpDate ? `${ipNo} DT.${formattedIpDate}` : ipNo;
             }).join(', ') : 'N/A';
@@ -474,6 +474,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
         return {
             ...prod,
+            bagCount: prod.bagCount,
+            packingType: prod.packingType,
             quantity: qty,
             rate: prod.rate || piProd?.rate || '',
             amount: amt || piProd?.amount || '',
@@ -1246,6 +1248,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
         return {
             ...prod,
+            bagCount: prod.bagCount,
+            packingType: prod.packingType,
             hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '',
             freight: prod.freight || piProd?.freight || '',
             totalFreight: prod.totalFreight || piProd?.totalFreight || ''
