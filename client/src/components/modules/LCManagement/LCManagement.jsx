@@ -4814,6 +4814,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         exporterName: '',
         importerName: '',
         productName: '',
+        bankName: '',
         lcStatus: 'All'
     };
     const [lcFilters, setLcFilters] = useState(initialLcFilterState);
@@ -4821,13 +4822,15 @@ const LCManagement = ({ addNotification, currentUser }) => {
         portSearch: '',
         exporterSearch: '',
         importerSearch: '',
-        productSearch: ''
+        productSearch: '',
+        bankSearch: ''
     });
     const initialFilterDropdownState = {
         port: false,
         exporter: false,
         importer: false,
-        product: false
+        product: false,
+        bank: false
     };
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
     const [sortConfig, setSortConfig] = useState({ key: 'openingDate', direction: 'desc' });
@@ -4863,6 +4866,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const exporterFilterRef = useRef(null);
     const importerFilterRef = useRef(null);
     const productFilterRef = useRef(null);
+    const bankFilterRef = useRef(null);
 
 
     const [formData, setFormData] = useState({
@@ -5131,6 +5135,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 refsToCheck = [importerFilterRef];
             } else if (openKey === 'product') {
                 refsToCheck = [productFilterRef];
+            } else if (openKey === 'bank') {
+                refsToCheck = [bankFilterRef];
             }
 
             // If click is outside all associated refs for the open dropdown, close it
@@ -5174,6 +5180,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 });
                 options = [...new Set(products)].sort();
                 search = filterSearchInputs.productSearch;
+                break;
+            case 'lcFilterBank':
+                options = [...new Set(lcRecords.map(r => (r.bankName || '').trim()).filter(Boolean))].sort();
+                search = filterSearchInputs.bankSearch;
                 break;
             default:
                 return [];
@@ -6826,6 +6836,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
         if (lcFilters.port && (record.port || '').trim().toLowerCase() !== lcFilters.port.toLowerCase()) return false;
         if (lcFilters.exporterName && (record.exporterName || '').trim().toLowerCase() !== lcFilters.exporterName.toLowerCase()) return false;
         if (lcFilters.importerName && (record.importerName || '').trim().toLowerCase() !== lcFilters.importerName.toLowerCase()) return false;
+        if (lcFilters.bankName && (record.bankName || '').trim().toLowerCase() !== lcFilters.bankName.toLowerCase()) return false;
         if (lcFilters.productName) {
             const matchesFilterProduct = (record.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase() ||
                 (record.productsList && record.productsList.some(p => (p.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase()));
@@ -7045,7 +7056,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     portSearch: '',
                                                     exporterSearch: '',
                                                     importerSearch: '',
-                                                    productSearch: ''
+                                                    productSearch: '',
+                                                    bankSearch: ''
                                                 });
                                                 setFilterDropdownOpen(initialFilterDropdownState);
                                                 setShowLcFilterPanel(false);
@@ -7215,6 +7227,42 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
                                                         {filtered.map(opt => (
                                                             <button key={opt} type="button" onClick={() => { setLcFilters({ ...lcFilters, exporterName: opt }); setFilterSearchInputs({ ...filterSearchInputs, exporterSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
+                                                        ))}
+                                                    </div>
+                                                ) : null;
+                                            })()}
+                                        </div>
+
+                                        {/* Bank Filter */}
+                                        <div className="space-y-1.5 relative" ref={bankFilterRef}>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bank</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={filterSearchInputs.bankSearch}
+                                                    onChange={(e) => {
+                                                        setFilterSearchInputs({ ...filterSearchInputs, bankSearch: e.target.value });
+                                                        setFilterDropdownOpen({ ...initialFilterDropdownState, bank: true });
+                                                    }}
+                                                    onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bank: true })}
+                                                    placeholder={lcFilters.bankName || "Search Bank..."}
+                                                    className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${lcFilters.bankName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                                />
+                                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                    {lcFilters.bankName && (
+                                                        <button type="button" onClick={() => { setLcFilters({ ...lcFilters, bankName: '' }); setFilterSearchInputs({ ...filterSearchInputs, bankSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                            <XIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                            {filterDropdownOpen.bank && (() => {
+                                                const filtered = getFilteredOptions('lcFilterBank') || [];
+                                                return filtered.length > 0 ? (
+                                                    <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                        {filtered.map(opt => (
+                                                            <button key={opt} type="button" onClick={() => { setLcFilters({ ...lcFilters, bankName: opt }); setFilterSearchInputs({ ...filterSearchInputs, bankSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors uppercase font-medium">{opt}</button>
                                                         ))}
                                                     </div>
                                                 ) : null;

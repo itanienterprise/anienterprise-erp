@@ -4963,6 +4963,15 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
             doc.text(filters.productName, margin + 25, yPos);
         }
 
+        // Bank
+        if (filters.bankName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Bank:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.bankName, margin + 25, yPos);
+        }
+
         // Data Preparation
         const tableHeaders = [
             ['Date', 'L.S. Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Port', 'Product', 'Quantity', 'LC Receive', 'LC Balance', 'Bill Value', 'Total Value', 'Expense']
