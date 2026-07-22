@@ -74,7 +74,7 @@ const TR_TEMPLATE_LAYOUT = {
     packagesY: 0.720,
     descMaxWidth: 0.40,
     saftaX: 0.91,
-    saftaY: 0.48,
+    saftaY: 0.500,
 };
 
 /** Overlay positions for Rinku Commercial Carrier TR template (ratios of page).
@@ -115,7 +115,7 @@ const RINKU_TEMPLATE_LAYOUT = {
     daysX: 0.18,
     daysY: 0.195,
     descMaxWidth: 0.38,
-    saftaX: 0.80,
+    saftaX: 0.82,
     saftaY: 0.590,
 };
 
@@ -582,7 +582,7 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
         const w1 = 68.2;
         const w2 = 50.6;
 
-        const boxCenterY = pageY + pageHeight * 0.69;
+        const boxCenterY = pageY + pageHeight * 0.99;
         const sY1 = boxCenterY - (w1 / 2);
         const sY2 = boxCenterY - (w2 / 2) - 19.5;
 
