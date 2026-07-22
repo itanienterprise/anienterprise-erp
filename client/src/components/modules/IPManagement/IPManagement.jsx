@@ -1981,7 +1981,12 @@ function IPManagement({
                                                     </td>
                                                 )}
                                                 <td className="px-3 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
-                                                <td className="px-3 py-3 text-sm text-red-500 font-medium whitespace-nowrap">{formatDate(record.closeDate)}</td>
+                                                <td className={`px-3 py-3 text-sm font-semibold whitespace-nowrap ${
+                                                    record.computedStatus === 'Active' ? 'text-green-700' :
+                                                    record.computedStatus === 'Expired' ? 'text-red-600' :
+                                                    record.computedStatus === 'Extended' ? 'text-blue-700' :
+                                                    'text-amber-700'
+                                                }`}>{formatDate(record.closeDate)}</td>
                                                 <td className="px-3 py-3 text-sm font-medium text-black whitespace-nowrap">{record.ipNumber}</td>
                                                 <td className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">{record.referenceNo || '-'}</td>
                                                 <td className="px-3 py-3 text-sm text-gray-900 whitespace-nowrap">{record.ipParty}</td>
@@ -2108,7 +2113,7 @@ function IPManagement({
                                                                 <div className="flex items-center">
                                                                     <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Close Date</span>
                                                                     <span className="text-gray-400 font-bold mx-2">-</span>
-                                                                    <span className="text-sm font-bold text-red-600">{formatDate(record.closeDate)}</span>
+                                                                    <span className={`text-sm font-bold ${record.computedStatus === 'Active' ? 'text-green-700' : record.computedStatus === 'Expired' ? 'text-red-600' : record.computedStatus === 'Extended' ? 'text-blue-700' : 'text-amber-700'}`}>{formatDate(record.closeDate)}</span>
                                                                 </div>
                                                             )}
                                                             <div className="flex items-center">
