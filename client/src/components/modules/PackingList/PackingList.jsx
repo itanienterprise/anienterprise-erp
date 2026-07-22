@@ -155,6 +155,7 @@ function PackingList({
         buyerOrderDate: '',
         productsList: [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
         productsImage: '',
+        productsText: '',
         partySignature: '',
         exporterSignature: '',
         trNumber: '',
@@ -458,7 +459,8 @@ function PackingList({
             buyerName: rawPi.buyerName || '',
             selectedRevisionNo: revisionNo,
             productsList: mappedProducts,
-            productsImage: ''
+            productsImage: '',
+            productsText: ''
         }));
         setPiSearchQuery('');
         setActiveDropdown(null);
@@ -540,6 +542,7 @@ function PackingList({
             buyerOrderDate: '',
             productsList: [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
             productsImage: '',
+            productsText: '',
             partySignature: '',
             exporterSignature: '',
             trNumber: '',
@@ -668,6 +671,7 @@ function PackingList({
                 }))
                 : [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }],
             productsImage: record.productsImage || '',
+            productsText: record.productsText || '',
             partySignature: record.partySignature || '',
             exporterSignature: record.exporterSignature || '',
             status: record.status || 'Active',
@@ -1923,6 +1927,19 @@ function PackingList({
                             {/* Divider between product table and packaging image upload */}
                             <div className="border-t border-gray-200/50 my-6"></div>
 
+                            {/* Products & Packaging Text Details */}
+                            <div className="space-y-2 mb-4">
+                                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Products & Packaging Text Details</label>
+                                <textarea
+                                    name="productsText"
+                                    value={formData.productsText || ''}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, productsText: e.target.value }))}
+                                    rows="4"
+                                    placeholder="Enter Products & Packaging details here (will be printed in the PDF if no image is uploaded)..."
+                                    className="w-full px-4 py-3 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-y text-sm"
+                                ></textarea>
+                            </div>
+
                             <div className="rounded-xl border border-gray-200 shadow-sm bg-white/50 p-4">
                                 {formData.productsImage ? (
                                     <div className="relative group">
@@ -2012,6 +2029,7 @@ function PackingList({
                                         <th className="px-6 py-4">Invoice Date</th>
                                         <th className="px-6 py-4">PI Ref Number</th>
                                         <th className="px-6 py-4">Importer / Buyer</th>
+                                        <th className="px-6 py-4">Product</th>
                                         <th className="px-6 py-4 text-center">Bags</th>
                                         <th className="px-6 py-4 text-center">Net Wt (KG)</th>
                                         <th className="px-6 py-4 text-center">Gross Wt (KG)</th>
@@ -2038,6 +2056,15 @@ function PackingList({
                                                 <td className="px-6 py-4 text-gray-600">{formatDate(rec.date)}</td>
                                                 <td className="px-6 py-4 text-gray-600">{rec.piNumber || 'N/A'}</td>
                                                 <td className="px-6 py-4 font-semibold text-gray-800 truncate max-w-[180px]">{rec.partyName}</td>
+                                                <td className="px-6 py-4 text-gray-600 truncate max-w-[150px]" title={
+                                                    Array.isArray(rec.productsList) 
+                                                        ? rec.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                                        : ''
+                                                }>
+                                                    {Array.isArray(rec.productsList) 
+                                                        ? rec.productsList.map(p => p.productName).filter(Boolean).join(', ')
+                                                        : '-'}
+                                                </td>
                                                 <td className="px-6 py-4 text-center font-semibold text-gray-800">{totalBags.toLocaleString('en-US')}</td>
                                                 <td className="px-6 py-4 text-center font-bold text-blue-600">{totalNet.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
                                                 <td className="px-6 py-4 text-center font-bold text-indigo-600">{totalGross.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>

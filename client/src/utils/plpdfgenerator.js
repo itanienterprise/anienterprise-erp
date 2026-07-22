@@ -320,6 +320,29 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
             console.error('Error drawing products image:', e);
             y += 10;
         }
+    } else if (record.productsText) {
+        // Draw custom text instead of building the table
+        try {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            const lines = doc.splitTextToSize(record.productsText, contentWidth - 6);
+            const lineH = 5;
+            const textHeight = lines.length * lineH;
+            if (y + textHeight + 10 > pageHeight - 20) {
+                doc.addPage();
+                y = 15;
+            }
+            doc.setDrawColor(0, 0, 0);
+            doc.setLineWidth(0.1);
+            doc.rect(margin, y + 2, contentWidth, textHeight + 6);
+            lines.forEach((line, idx) => {
+                doc.text(line, margin + 3, y + 7 + (idx * lineH));
+            });
+            y += textHeight + 12;
+        } catch (e) {
+            console.error('Error drawing products text:', e);
+            y += 10;
+        }
     } else {
         const headers = [
             ['Marks & Nos', 'Description of Goods & HS Code', 'No. & Kind of Packages', 'Net Weight', 'Gross Weight']

@@ -792,6 +792,19 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                     bottomPadding = 80;
                     singleRowMinHeight = offsetToDesc + descTextHeight + 80 + 5;
                 }
+            } else if (record.productsText) {
+                try {
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(8);
+                    const textLines = doc.splitTextToSize(record.productsText, 108);
+                    const textHeight = textLines.length * 4;
+                    bottomPadding = textHeight + 5;
+                    singleRowMinHeight = offsetToDesc + descTextHeight + textHeight + 5;
+                } catch (e) {
+                    console.error('Error calculating productsText bottomPadding:', e);
+                    bottomPadding = 40;
+                    singleRowMinHeight = offsetToDesc + descTextHeight + 40 + 5;
+                }
             } else {
                 bottomPadding = showSafta ? 15 : 50;
                 singleRowMinHeight = showSafta ? offsetToDesc + descTextHeight + 15 : offsetToDesc + descTextHeight + 50;
@@ -860,6 +873,16 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 descRowHeight = exactDescHeight + imgHeight + 5;
             } catch (e) {
                 descRowHeight = exactDescHeight + 50;
+            }
+        } else if (record.productsText) {
+            try {
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                const textLines = doc.splitTextToSize(record.productsText, descColWidth - 6);
+                const textHeight = textLines.length * 4;
+                descRowHeight = exactDescHeight + textHeight + 5;
+            } catch (e) {
+                descRowHeight = exactDescHeight + 30;
             }
         }
         tableBody.push([
@@ -1041,6 +1064,17 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                         } catch (e) {
                             console.error('Error drawing productsImage in single-row cell:', e);
                         }
+                    } else if (record.productsText) {
+                        try {
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(8);
+                            const textLines = doc.splitTextToSize(record.productsText, cellWidth - 6);
+                            textLines.forEach((line, idx) => {
+                                doc.text(line, cellX + 3, endY + 4 + (idx * 4));
+                            });
+                        } catch (e) {
+                            console.error('Error drawing productsText in single-row cell:', e);
+                        }
                     }
                 }
 
@@ -1063,6 +1097,17 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                         doc.addImage(record.productsImage, imgProps.fileType || 'PNG', cellX + 3, endY - 2, imgWidth, imgHeight);
                     } catch (e) {
                         console.error('Error drawing productsImage in multi-row cell:', e);
+                    }
+                } else if (record.productsText) {
+                    try {
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(8);
+                        const textLines = doc.splitTextToSize(record.productsText, cellWidth - 6);
+                        textLines.forEach((line, idx) => {
+                            doc.text(line, cellX + 3, endY + 2 + (idx * 4));
+                        });
+                    } catch (e) {
+                        console.error('Error drawing productsText in multi-row cell:', e);
                     }
                 }
             }
