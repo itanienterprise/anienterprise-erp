@@ -73,6 +73,8 @@ const TR_TEMPLATE_LAYOUT = {
     packagesX: 0.09,
     packagesY: 0.720,
     descMaxWidth: 0.40,
+    saftaX: 0.91,
+    saftaY: 0.48,
 };
 
 /** Overlay positions for Rinku Commercial Carrier TR template (ratios of page).
@@ -113,6 +115,8 @@ const RINKU_TEMPLATE_LAYOUT = {
     daysX: 0.18,
     daysY: 0.195,
     descMaxWidth: 0.38,
+    saftaX: 0.80,
+    saftaY: 0.590,
 };
 
 /**
@@ -561,6 +565,32 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
         const dayX = pageX + pageWidth * layout.daysX;
         const dayY = pageY + pageHeight * layout.daysY;
         doc.text(`${daysVal} (${daysWord})`, dayX, dayY, { charSpace: -0.15 });
+    }
+
+    // Draw SAFTA Certification vertically on the right side if present
+    const certification = String(record?.certification || '').trim().toUpperCase();
+    if (certification && (certification.includes('SAFTA') || record?.showSafta)) {
+        const saftaFontSize = Math.max(9, Math.round(pageHeight * 0.045));
+
+        const line1 = "THE CERTIFICATE OF ORIGIN UNDER SAFTA";
+        const line2 = "(South Asian Free Trade Area)";
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(saftaFontSize);
+        doc.setTextColor(0, 0, 0);
+
+        const w1 = 68.2;
+        const w2 = 50.6;
+
+        const boxCenterY = pageY + pageHeight * 0.69;
+        const sY1 = boxCenterY - (w1 / 2);
+        const sY2 = boxCenterY - (w2 / 2) - 19.5;
+
+        const sX = pageX + pageWidth * (layout.saftaX || 0.91);
+
+        doc.text(line1, sX - 2.2, sY1, { angle: 90 });
+        doc.setFontSize(saftaFontSize - 0.5);
+        doc.text(line2, sX + 2.2, sY2, { angle: 90 });
     }
 };
 

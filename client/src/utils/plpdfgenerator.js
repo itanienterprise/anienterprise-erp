@@ -667,7 +667,8 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         coverNote: trCoverNote,
         amendmentLine: trAmendmentLine,
         piGrandTotal: trPiGrandTotal,
-        packingType: record.packingType || pi?.packingType || ''
+        packingType: record.packingType || pi?.packingType || '',
+        certification: record.certification || pi?.certification || ''
     }, trSetups);
 
     // Save/Download PDF

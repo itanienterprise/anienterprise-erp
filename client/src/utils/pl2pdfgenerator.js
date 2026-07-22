@@ -1323,7 +1323,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         coverNote: trCoverNote,
         amendmentLine: trAmendmentLine,
         piGrandTotal: trPiGrandTotal,
-        packingType: record.packingType || pi?.packingType || ''
+        packingType: record.packingType || pi?.packingType || '',
+        certification: record.certification || pi?.certification || ''
     }, trSetups);
 
     // Open in new tab
