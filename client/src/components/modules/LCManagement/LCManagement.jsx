@@ -3894,28 +3894,15 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
                 };
             } else {
                 const timeline = getLCHistoryTimeline(record);
-                const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || record;
-                const origProducts = (originalLc.productsList && originalLc.productsList.length > 0)
-                    ? originalLc.productsList
-                    : (record.productsList && record.productsList.length > 0 ? record.productsList : []);
+                const latestMilestone = timeline[timeline.length - 1] || {};
+                const totalLcDollarValue = getMilestoneTotalDollar(latestMilestone, record);
+                const totalLcQtyTons = latestMilestone.productsList?.length > 0
+                    ? latestMilestone.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                    : (parseFloat(latestMilestone.quantity || record.quantity) || 0);
 
-                const rootRateVal = originalLc.rate || record.rate || (origProducts[0]?.rate) || 0;
-                const rootFreightVal = originalLc.freight || record.freight || (origProducts[0]?.freight) || 0;
-                const getRatePerTon = (rVal) => {
-                    const r = parseFloat(rVal) || 0;
-                    return r > 0 && r < 10 ? r * 1000 : r;
-                };
-                const getFreightPerTon = (fVal) => {
-                    const f = parseFloat(fVal) || 0;
-                    return f > 0 && f < 0.1 ? f * 1000 : f;
-                };
-                let pRate = getRatePerTon(rootRateVal);
-                let pFreight = getFreightPerTon(rootFreightVal);
-                if (pFreight > 0 && pRate > pFreight) {
-                    pRate = pRate - pFreight;
-                }
-                const totalRatePerTon = pRate + pFreight;
-                const calculatedReceiveQtyKg = totalRatePerTon > 0 ? (parsedNewDollar / totalRatePerTon) * 1000 : 0;
+                const calculatedReceiveQtyKg = totalLcDollarValue > 0
+                    ? (parsedNewDollar / totalLcDollarValue) * totalLcQtyTons * 1000
+                    : 0;
 
                 updatedRecord = {
                     ...record,
@@ -4077,10 +4064,31 @@ const UpdateLcReceiveModal = ({ record, onClose, onUpdateSuccess }) => {
         }
         setIsSubmitting(true);
         try {
-            const updatedRecord = {
-                ...record,
-                updatedLcReceive: newReceiveQty === '' ? null : String(parsedNewQty)
-            };
+            let updatedRecord;
+            if (newReceiveQty === '') {
+                updatedRecord = {
+                    ...record,
+                    updatedLcReceive: null,
+                    billValueUsd: ''
+                };
+            } else {
+                const timeline = getLCHistoryTimeline(record);
+                const latestMilestone = timeline[timeline.length - 1] || {};
+                const totalLcDollarValue = getMilestoneTotalDollar(latestMilestone, record);
+                const totalLcQtyTons = latestMilestone.productsList?.length > 0
+                    ? latestMilestone.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                    : (parseFloat(latestMilestone.quantity || record.quantity) || 0);
+
+                const newBillValueUsd = totalLcQtyTons > 0
+                    ? (parsedNewQty / 1000) * (totalLcDollarValue / totalLcQtyTons)
+                    : 0;
+
+                updatedRecord = {
+                    ...record,
+                    updatedLcReceive: String(parsedNewQty),
+                    billValueUsd: newBillValueUsd > 0 ? parseFloat(newBillValueUsd.toFixed(2)) : record.billValueUsd
+                };
+            }
             await onUpdateSuccess(record._id, updatedRecord);
             onClose();
         } catch (err) {
@@ -4096,7 +4104,8 @@ const UpdateLcReceiveModal = ({ record, onClose, onUpdateSuccess }) => {
         try {
             const updatedRecord = {
                 ...record,
-                updatedLcReceive: null
+                updatedLcReceive: null,
+                billValueUsd: ''
             };
             await onUpdateSuccess(record._id, updatedRecord);
             onClose();
