@@ -808,13 +808,13 @@ export const generatePIPDF = (record) => {
                 console.error('Error adding importer signature to PDF:', e);
             }
         }
-        doc.line(margin + 5, y + 18, margin + 65, y + 18);
+        doc.line(margin + 5, y + 21, margin + 65, y + 21);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
-        doc.text("Signature", margin + 35, y + 22, { align: 'center' });
+        doc.text("Signature", margin + 35, y + 25, { align: 'center' });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.text("Buyer", margin + 35, y + 26, { align: 'center' });
+        doc.text("Buyer", margin + 35, y + 29, { align: 'center' });
 
         // Seller signature (Right)
         if (record.exporterSignature) {
@@ -824,13 +824,13 @@ export const generatePIPDF = (record) => {
                 console.error('Error adding exporter signature to PDF:', e);
             }
         }
-        doc.line(pageWidth - margin - 65, y + 18, pageWidth - margin - 5, y + 18);
+        doc.line(pageWidth - margin - 65, y + 21, pageWidth - margin - 5, y + 21);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
-        doc.text("Signature", pageWidth - margin - 35, y + 22, { align: 'center' });
+        doc.text("Signature", pageWidth - margin - 35, y + 25, { align: 'center' });
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.text("Seller", pageWidth - margin - 35, y + 26, { align: 'center' });
+        doc.text("Seller", pageWidth - margin - 35, y + 29, { align: 'center' });
 
     } else if (style === 'Style 2 AAS') {
         doc.setFontSize(8.5);

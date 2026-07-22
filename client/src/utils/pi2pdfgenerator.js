@@ -754,7 +754,9 @@ export const generatePI2PDF = (record) => {
 
     const sigImageWidth = 50;
     const sigImageX = pageWidth - margin - sigImageWidth - 5;
-    const sigTop = declY + 4;
+
+    const sigLineY = Math.max(declBlockBottom + 18, (declY + 4) + 36);
+    const sigTop = sigLineY - 18 - 1; // Sits 1mm above the signature line
 
     if (record.exporterSignature) {
         try {
@@ -764,7 +766,6 @@ export const generatePI2PDF = (record) => {
         }
     }
 
-    const sigLineY = Math.max(declBlockBottom + 18, sigTop + 36);
     doc.line(sigImageX, sigLineY, sigImageX + sigImageWidth, sigLineY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
