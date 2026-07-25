@@ -5000,92 +5000,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
         return uniqueOptions.filter(opt => opt.toLowerCase().includes(q));
     };
 
-    const sentNotificationsRef = useRef(new Set());
-
     useEffect(() => {
         fetchInitialData();
     }, []);
-
-    useEffect(() => {
-        if (!addNotification || !currentUser || lcRecords.length === 0) return;
-
-        // Managers and Data Entry can trigger notifications to avoid redundancy
-        const isAuthorized = ['admin', 'incharge', 'lc manager', 'data entry'].includes((currentUser?.role || '').toLowerCase());
-        if (!isAuthorized && currentUser?.username !== 'admin') return;
-
-        const targetRoles = ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Data Entry'];
-        let hasTriggeredUpdate = false;
-
-        lcRecords.forEach(record => {
-            if (!record.expiryDate) return;
-
-            const expiry = new Date(record.expiryDate);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            expiry.setHours(0, 0, 0, 0);
-
-            const diffTime = expiry.getTime() - today.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-            const hasSentExpireSoon = record.notificationSent?.expireSoon;
-            const hasSentExpired = record.notificationSent?.expired;
-
-            const expireSoonKey = `${record.lcNo}_expireSoon`;
-            const expiredKey = `${record.lcNo}_expired`;
-
-            if (diffDays >= 0 && diffDays <= 15) {
-                if (!hasSentExpireSoon && !sentNotificationsRef.current.has(expireSoonKey)) {
-                    sentNotificationsRef.current.add(expireSoonKey);
-
-                    addNotification(
-                        'LC Expiring Soon',
-                        `LC No: ${record.lcNo} (${record.importerName || ''}) is expiring soon on ${formatDate(record.expiryDate)}.`,
-                        targetRoles,
-                        [],
-                        true
-                    );
-
-                    // Mark as sent in DB
-                    const updatedRecord = {
-                        ...record,
-                        notificationSent: { ...(record.notificationSent || {}), expireSoon: true }
-                    };
-                    const { _id, createdAt, updatedAt, __v, ...dataToSave } = updatedRecord;
-                    axios.put(`${API_BASE_URL}/api/lc-management/${_id}`, dataToSave).catch(err => {
-                        console.error('Error updating LC notification flag:', err);
-                    });
-                    hasTriggeredUpdate = true;
-                }
-            } else if (diffDays < 0) {
-                if (!hasSentExpired && !sentNotificationsRef.current.has(expiredKey)) {
-                    sentNotificationsRef.current.add(expiredKey);
-
-                    addNotification(
-                        'LC Expired',
-                        `LC No: ${record.lcNo} (${record.importerName || ''}) has expired on ${formatDate(record.expiryDate)}.`,
-                        targetRoles,
-                        [],
-                        true
-                    );
-
-                    // Mark as sent in DB
-                    const updatedRecord = {
-                        ...record,
-                        notificationSent: { ...(record.notificationSent || {}), expired: true }
-                    };
-                    const { _id, createdAt, updatedAt, __v, ...dataToSave } = updatedRecord;
-                    axios.put(`${API_BASE_URL}/api/lc-management/${_id}`, dataToSave).catch(err => {
-                        console.error('Error updating LC notification flag:', err);
-                    });
-                    hasTriggeredUpdate = true;
-                }
-            }
-        });
-
-        if (hasTriggeredUpdate) {
-            setTimeout(fetchInitialData, 1000);
-        }
-    }, [lcRecords, addNotification, currentUser]);
 
     useEffect(() => {
         const handleClickOutside = (e) => {

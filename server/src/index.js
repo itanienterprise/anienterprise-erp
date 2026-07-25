@@ -1466,6 +1466,7 @@ apiRouter.post('/api/lc-management', async (req, res) => {
     const newRecord = new LCManagement({ data: encryptedData });
     const savedRecord = await newRecord.save();
     res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
+    checkLcExpiryNotifications().catch(err => console.error('[LCNotification] Error triggering check on save:', err));
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1487,6 +1488,7 @@ apiRouter.put('/api/lc-management/:id', async (req, res) => {
     const updatedRecord = await LCManagement.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'LC record not found' });
     res.json({ ...req.body, _id: updatedRecord._id, createdAt: updatedRecord.createdAt });
+    checkLcExpiryNotifications().catch(err => console.error('[LCNotification] Error triggering check on update:', err));
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -2858,9 +2860,170 @@ const checkIpExpiryNotifications = async () => {
   }
 };
 
+const checkLcExpiryNotifications = async () => {
+  try {
+    const records = await LCManagement.find();
+    const targetRoles = ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Data Entry'];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (const record of records) {
+      let data;
+      try {
+        data = decryptData(record.data);
+        if (data && data.data && typeof data.data === 'string' && !data.lcNo && !data.lcNoVal) {
+          try { data = decryptData(data.data); } catch (e) {}
+        }
+        if (!data || typeof data !== 'object') continue;
+      } catch (err) {
+        continue;
+      }
+
+      let hasUpdated = false;
+      data.notificationSent = data.notificationSent || {};
+
+      const lcNoStr = data.lcNo || data.lcNoVal || '';
+      const importerStr = data.importerName || data.importer || '';
+
+      // 1. LC Expiry Date Check
+      if (data.expiryDate) {
+        const expiry = new Date(data.expiryDate);
+        if (!isNaN(expiry.getTime())) {
+          expiry.setHours(0, 0, 0, 0);
+          const diffMs = expiry.getTime() - today.getTime();
+          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          const formattedExpiryDate = expiry.toLocaleDateString('en-GB');
+
+          if (diffDays >= 0 && diffDays <= 15) {
+            if (!data.notificationSent.expireSoon) {
+              const newNotif = {
+                title: 'LC Expiring Soon',
+                message: `LC No: ${lcNoStr}${importerStr ? ` (${importerStr})` : ''} is expiring soon on ${formattedExpiryDate}.`,
+                targetRoles,
+                targetUsers: [],
+                isSystemic: true,
+                readByUsers: [],
+                createdBy: 'system',
+                createdByName: 'System Scheduler'
+              };
+
+              const notificationDoc = new Notification({
+                data: encryptData(newNotif)
+              });
+              await notificationDoc.save();
+
+              data.notificationSent.expireSoon = true;
+              hasUpdated = true;
+            }
+          } else if (diffDays < 0) {
+            if (!data.notificationSent.expired) {
+              const newNotif = {
+                title: 'LC Expired',
+                message: `LC No: ${lcNoStr}${importerStr ? ` (${importerStr})` : ''} has expired on ${formattedExpiryDate}.`,
+                targetRoles,
+                targetUsers: [],
+                isSystemic: true,
+                readByUsers: [],
+                createdBy: 'system',
+                createdByName: 'System Scheduler'
+              };
+
+              const notificationDoc = new Notification({
+                data: encryptData(newNotif)
+              });
+              await notificationDoc.save();
+
+              data.notificationSent.expired = true;
+              hasUpdated = true;
+            }
+          } else if (diffDays > 15) {
+            if (data.notificationSent.expireSoon || data.notificationSent.expired) {
+              data.notificationSent.expireSoon = false;
+              data.notificationSent.expired = false;
+              hasUpdated = true;
+            }
+          }
+        }
+      }
+
+      // 2. Latest Shipment Date Check
+      const shipmentDateStr = data.latestShipmentDate || data.extendedShipmentDate;
+      if (shipmentDateStr) {
+        const shipment = new Date(shipmentDateStr);
+        if (!isNaN(shipment.getTime())) {
+          shipment.setHours(0, 0, 0, 0);
+          const diffMs = shipment.getTime() - today.getTime();
+          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          const formattedShipmentDate = shipment.toLocaleDateString('en-GB');
+
+          if (diffDays >= 0 && diffDays <= 7) {
+            if (!data.notificationSent.shipmentExpireSoon) {
+              const newNotif = {
+                title: 'LC Latest Shipment Date Expiring Soon',
+                message: `LC No: ${lcNoStr}${importerStr ? ` (${importerStr})` : ''} latest shipment date is expiring soon on ${formattedShipmentDate}.`,
+                targetRoles,
+                targetUsers: [],
+                isSystemic: true,
+                readByUsers: [],
+                createdBy: 'system',
+                createdByName: 'System Scheduler'
+              };
+
+              const notificationDoc = new Notification({
+                data: encryptData(newNotif)
+              });
+              await notificationDoc.save();
+
+              data.notificationSent.shipmentExpireSoon = true;
+              hasUpdated = true;
+            }
+          } else if (diffDays < 0) {
+            if (!data.notificationSent.shipmentExpired) {
+              const newNotif = {
+                title: 'LC Latest Shipment Date Expired',
+                message: `LC No: ${lcNoStr}${importerStr ? ` (${importerStr})` : ''} latest shipment date expired on ${formattedShipmentDate}.`,
+                targetRoles,
+                targetUsers: [],
+                isSystemic: true,
+                readByUsers: [],
+                createdBy: 'system',
+                createdByName: 'System Scheduler'
+              };
+
+              const notificationDoc = new Notification({
+                data: encryptData(newNotif)
+              });
+              await notificationDoc.save();
+
+              data.notificationSent.shipmentExpired = true;
+              hasUpdated = true;
+            }
+          } else if (diffDays > 7) {
+            if (data.notificationSent.shipmentExpireSoon || data.notificationSent.shipmentExpired) {
+              data.notificationSent.shipmentExpireSoon = false;
+              data.notificationSent.shipmentExpired = false;
+              hasUpdated = true;
+            }
+          }
+        }
+      }
+
+      if (hasUpdated) {
+        const encryptedData = encryptData(data);
+        await LCManagement.findByIdAndUpdate(record._id, { data: encryptedData });
+        console.log(`[SystemScheduler] Triggered LC notification update for LC No: ${lcNoStr}`);
+      }
+    }
+  } catch (err) {
+    console.error('[SystemScheduler] Error checking LC expiries:', err);
+  }
+};
+
 const checkAndRunBackup = async () => {
   // Check IP Expiry Notifications
   await checkIpExpiryNotifications();
+  // Check LC Expiry Notifications
+  await checkLcExpiryNotifications();
 
   try {
     let setting = await BackupSetting.findOne({});
