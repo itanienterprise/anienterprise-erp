@@ -85,6 +85,7 @@ const CostOfGoods = ({
         quantity: '',
         amount: '',
         indTruckFare: '',
+        truckChangeFare: '',
         slofCf: '',
         rebate: '2.9',
         rebateAmount: '',
@@ -443,7 +444,7 @@ const CostOfGoods = ({
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
-            const calculatedTotalBill = (parseFloat(formData.amount) || 0) + (parseFloat(formData.indTruckFare) || 0) + (parseFloat(formData.slofCf) || 0);
+            const calculatedTotalBill = (parseFloat(formData.amount) || 0) + (parseFloat(formData.indTruckFare) || 0) + (parseFloat(formData.truckChangeFare) || 0) + (parseFloat(formData.slofCf) || 0);
             const calculatedRebateAmount = (calculatedTotalBill * (parseFloat(formData.rebate) || 0)) / 100;
             const calculatedNetBill = calculatedTotalBill - calculatedRebateAmount;
             const qty = parseFloat(formData.quantity) || 0;
@@ -493,6 +494,7 @@ const CostOfGoods = ({
             quantity: '',
             amount: '',
             indTruckFare: '',
+            truckChangeFare: '',
             slofCf: '',
             totalBill: '',
             rebate: '2.9',
@@ -527,6 +529,7 @@ const CostOfGoods = ({
             quantity: record.quantity || '',
             amount: record.amount || '',
             indTruckFare: record.indTruckFare || '',
+            truckChangeFare: record.truckChangeFare || '',
             slofCf: record.slofCf || '',
             totalBill: record.totalBill || '',
             rebate: record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9'),
@@ -591,6 +594,7 @@ const CostOfGoods = ({
             (r.brand || '').toLowerCase().includes(query) ||
             (r.quantity || '').toString().toLowerCase().includes(query) ||
             (r.indTruckFare || '').toString().toLowerCase().includes(query) ||
+            (r.truckChangeFare || '').toString().toLowerCase().includes(query) ||
             (r.slofCf || '').toString().toLowerCase().includes(query) ||
             (r.totalBill || '').toString().toLowerCase().includes(query) ||
             (r.rebate || r.redate || '').toString().toLowerCase().includes(query) ||
@@ -633,7 +637,7 @@ const CostOfGoods = ({
 
     const sortedRecords = [...filteredRecords].sort((a, b) => {
         if (!sortConfig.key) return 0;
-        const numericKeys = ['amount', 'indTruckFare', 'slofCf', 'totalBill', 'rebate', 'rebateAmount', 'redate', 'redateAmount', 'netBill', 'rateKg', 'rsToDollar', 'rateKgUsd', 'dollarRateBdt', 'rateKgBdt', 'cfOtherExpense', 'costingKg', 'quantity'];
+        const numericKeys = ['amount', 'indTruckFare', 'truckChangeFare', 'slofCf', 'totalBill', 'rebate', 'rebateAmount', 'redate', 'redateAmount', 'netBill', 'rateKg', 'rsToDollar', 'rateKgUsd', 'dollarRateBdt', 'rateKgBdt', 'cfOtherExpense', 'costingKg', 'quantity'];
         if (numericKeys.includes(sortConfig.key)) {
             const aVal = parseFloat(a[sortConfig.key] !== undefined ? a[sortConfig.key] : (sortConfig.key === 'rebate' ? a.redate : (sortConfig.key === 'rebateAmount' ? a.redateAmount : 0))) || 0;
             const bVal = parseFloat(b[sortConfig.key] !== undefined ? b[sortConfig.key] : (sortConfig.key === 'rebate' ? b.redate : (sortConfig.key === 'rebateAmount' ? b.redateAmount : 0))) || 0;
@@ -1357,19 +1361,34 @@ const CostOfGoods = ({
                                 <input type="number" name="amount" value={formData.amount} onChange={handleInputChange} required placeholder="0.00" min="0" step="0.01" className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none" />
                             </div>
 
-                            {/* IND Truck Fare */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">IND Truck Fare</label>
-                                <input
-                                    type="number"
-                                    name="indTruckFare"
-                                    value={formData.indTruckFare}
-                                    onChange={handleInputChange}
-                                    placeholder="0.00"
-                                    min="0"
-                                    step="0.01"
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                />
+                            {/* IND Truck Fare & Truck Change Fare (Split into half) */}
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="IND TRUCK FARE">IND TRUCK FARE</label>
+                                    <input
+                                        type="number"
+                                        name="indTruckFare"
+                                        value={formData.indTruckFare}
+                                        onChange={handleInputChange}
+                                        placeholder="0.00"
+                                        min="0"
+                                        step="0.01"
+                                        className="w-full px-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="TRUCK CHANGE FARE">TRK CHG FARE</label>
+                                    <input
+                                        type="number"
+                                        name="truckChangeFare"
+                                        value={formData.truckChangeFare}
+                                        onChange={handleInputChange}
+                                        placeholder="0.00"
+                                        min="0"
+                                        step="0.01"
+                                        className="w-full px-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                    />
+                                </div>
                             </div>
 
                             {/* SLOF / CF */}
@@ -1396,8 +1415,9 @@ const CostOfGoods = ({
                                     value={(() => {
                                         const amount = parseFloat(formData.amount) || 0;
                                         const indTruckFare = parseFloat(formData.indTruckFare) || 0;
+                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
                                         const slofCf = parseFloat(formData.slofCf) || 0;
-                                        return (amount + indTruckFare + slofCf).toLocaleString() + ' RS';
+                                        return (amount + indTruckFare + truckChangeFare + slofCf).toLocaleString() + ' RS';
                                     })()}
                                     disabled
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
@@ -1427,8 +1447,9 @@ const CostOfGoods = ({
                                     value={(() => {
                                         const amount = parseFloat(formData.amount) || 0;
                                         const indTruckFare = parseFloat(formData.indTruckFare) || 0;
+                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
                                         const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + slofCf;
+                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
                                         const rebatePct = parseFloat(formData.rebate) || 0;
                                         const calculatedRebateVal = (totalBill * rebatePct) / 100;
                                         return calculatedRebateVal.toLocaleString() + ' RS';
@@ -1447,8 +1468,9 @@ const CostOfGoods = ({
                                     value={(() => {
                                         const amount = parseFloat(formData.amount) || 0;
                                         const indTruckFare = parseFloat(formData.indTruckFare) || 0;
+                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
                                         const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + slofCf;
+                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
                                         const rebatePct = parseFloat(formData.rebate) || 0;
                                         const calculatedRebateVal = (totalBill * rebatePct) / 100;
                                         const calculatedNetBill = totalBill - calculatedRebateVal;
@@ -1468,8 +1490,9 @@ const CostOfGoods = ({
                                     value={(() => {
                                         const amount = parseFloat(formData.amount) || 0;
                                         const indTruckFare = parseFloat(formData.indTruckFare) || 0;
+                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
                                         const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + slofCf;
+                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
                                         const rebatePct = parseFloat(formData.rebate) || 0;
                                         const calculatedRebateVal = (totalBill * rebatePct) / 100;
                                         const calculatedNetBill = totalBill - calculatedRebateVal;
@@ -1506,8 +1529,9 @@ const CostOfGoods = ({
                                     value={(() => {
                                         const amount = parseFloat(formData.amount) || 0;
                                         const indTruckFare = parseFloat(formData.indTruckFare) || 0;
+                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
                                         const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + slofCf;
+                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
                                         const rebatePct = parseFloat(formData.rebate) || 0;
                                         const calculatedRebateVal = (totalBill * rebatePct) / 100;
                                         const calculatedNetBill = totalBill - calculatedRebateVal;
@@ -1546,8 +1570,9 @@ const CostOfGoods = ({
                                     value={(() => {
                                         const amount = parseFloat(formData.amount) || 0;
                                         const indTruckFare = parseFloat(formData.indTruckFare) || 0;
+                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
                                         const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + slofCf;
+                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
                                         const rebatePct = parseFloat(formData.rebate) || 0;
                                         const calculatedRebateVal = (totalBill * rebatePct) / 100;
                                         const calculatedNetBill = totalBill - calculatedRebateVal;
@@ -1588,8 +1613,9 @@ const CostOfGoods = ({
                                     value={(() => {
                                         const amount = parseFloat(formData.amount) || 0;
                                         const indTruckFare = parseFloat(formData.indTruckFare) || 0;
+                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
                                         const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + slofCf;
+                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
                                         const rebatePct = parseFloat(formData.rebate) || 0;
                                         const calculatedRebateVal = (totalBill * rebatePct) / 100;
                                         const calculatedNetBill = totalBill - calculatedRebateVal;
@@ -1649,9 +1675,10 @@ const CostOfGoods = ({
                                 ['Quantity', viewData.quantity],
                                 ['Invoice Value', viewData.amount ? `${Number(viewData.amount).toLocaleString()} RS` : '—'],
                                 ['IND Truck Fare', viewData.indTruckFare ? `${Number(viewData.indTruckFare).toLocaleString()} RS` : '—'],
+                                ['Truck Change Fare', viewData.truckChangeFare ? `${Number(viewData.truckChangeFare).toLocaleString()} RS` : '—'],
                                 ['SLOF / CF', viewData.slofCf ? `${Number(viewData.slofCf).toLocaleString()} RS` : '—'],
                                 ['Total BILL', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     return sumVal ? `${Number(sumVal).toLocaleString()} RS` : '—';
                                 })()],
                                 ['Rebate %', (() => {
@@ -1659,20 +1686,20 @@ const CostOfGoods = ({
                                     return pct !== undefined && pct !== null && pct !== '' ? `${pct}%` : '—';
                                 })()],
                                 ['Rebate', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
                                     return rebateVal !== undefined && rebateVal !== null && rebateVal !== '' ? `${Number(rebateVal).toLocaleString()} RS` : '—';
                                 })()],
                                 ['Net Bill', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
                                     const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
                                     return netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString()} RS` : '—';
                                 })()],
                                 ['Rate/KG', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
                                     const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
@@ -1680,9 +1707,9 @@ const CostOfGoods = ({
                                     const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
                                     return rateKgVal !== undefined && rateKgVal !== null && rateKgVal !== '' ? `${Number(rateKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—';
                                 })()],
-                                ['Rs to Dollar Rate', viewData.rsToDollar || '—'],
+                                ['Rs to Dollar Rate', viewData.rsToDollar ? `${Number(viewData.rsToDollar).toLocaleString()} RS` : '—'],
                                 ['Rate/Kg USD', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
                                     const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
@@ -1694,7 +1721,7 @@ const CostOfGoods = ({
                                 })()],
                                 ['Dollar rate BDT', viewData.dollarRateBdt ? `${Number(viewData.dollarRateBdt).toLocaleString()} BDT` : '—'],
                                 ['Rate/KG BDT', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
                                     const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
@@ -1711,7 +1738,7 @@ const CostOfGoods = ({
                                     return val ? `${Number(val).toLocaleString()} BDT` : '—';
                                 })()],
                                 ['Costing/kg', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
                                     const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
                                     const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
                                     const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
