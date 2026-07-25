@@ -203,6 +203,7 @@ const CostOfGoods = ({
         const autoProduct = uniqueProducts.length === 1 ? uniqueProducts[0] : '';
 
         let autoBrand = '';
+        let autoCnfExpense = '9';
         if (autoProduct) {
             const selectedProductObj = products.find(p => 
                 (p.name || '').trim().toLowerCase() === autoProduct.trim().toLowerCase() ||
@@ -214,6 +215,13 @@ const CostOfGoods = ({
             ].filter(Boolean) : [];
             const uniqueBrands = [...new Set(availableBrands)];
             autoBrand = uniqueBrands.length === 1 ? uniqueBrands[0] : '';
+
+            if (selectedProductObj) {
+                const prodCnf = selectedProductObj.cnfOther || (selectedProductObj.cnf && selectedProductObj.other ? `${selectedProductObj.cnf} / ${selectedProductObj.other}` : selectedProductObj.cnf || selectedProductObj.other || '');
+                if (prodCnf && String(prodCnf).trim() !== '') {
+                    autoCnfExpense = String(prodCnf).trim();
+                }
+            }
         }
 
         setFormData(prev => ({
@@ -223,6 +231,7 @@ const CostOfGoods = ({
             exporter: lc.exporterName || lc.exporter || '',
             product: autoProduct,
             brand: autoBrand,
+            cfOtherExpense: autoCnfExpense,
             supplier: '' // Reset supplier on LC change since exporter changes
         }));
 
@@ -243,15 +252,44 @@ const CostOfGoods = ({
         const uniqueBrands = [...new Set(availableBrands)];
         const autoBrand = uniqueBrands.length === 1 ? uniqueBrands[0] : '';
 
+        let autoCnfExpense = '9';
+        if (selectedProductObj) {
+            const prodCnf = selectedProductObj.cnfOther || (selectedProductObj.cnf && selectedProductObj.other ? `${selectedProductObj.cnf} / ${selectedProductObj.other}` : selectedProductObj.cnf || selectedProductObj.other || '');
+            if (prodCnf && String(prodCnf).trim() !== '') {
+                autoCnfExpense = String(prodCnf).trim();
+            }
+        }
+
         setFormData(prev => ({
             ...prev,
             product: prodName,
-            brand: autoBrand
+            brand: autoBrand,
+            cfOtherExpense: autoCnfExpense
         }));
 
         setProductDropdownOpen(false);
         setHighlightedProductIndex(-1);
     };
+
+    // Auto fill C&F & Other Expense from selected product's cnfOther field if available
+    useEffect(() => {
+        if (!editingId && formData.product && products && products.length > 0) {
+            const selectedProductObj = products.find(p => 
+                (p.name || '').trim().toLowerCase() === formData.product.trim().toLowerCase() ||
+                (p.ipName || '').trim().toLowerCase() === formData.product.trim().toLowerCase()
+            );
+            if (selectedProductObj) {
+                const prodCnf = selectedProductObj.cnfOther || (selectedProductObj.cnf && selectedProductObj.other ? `${selectedProductObj.cnf} / ${selectedProductObj.other}` : selectedProductObj.cnf || selectedProductObj.other || '');
+                const val = (prodCnf && String(prodCnf).trim() !== '') ? String(prodCnf).trim() : '9';
+                setFormData(prev => {
+                    if (prev.cfOtherExpense !== val) {
+                        return { ...prev, cfOtherExpense: val };
+                    }
+                    return prev;
+                });
+            }
+        }
+    }, [formData.product, products, editingId]);
 
     // Filter suppliers where supplier.exporter matches selected exporter string
     const filteredSuppliersForExporter = suppliers.filter(s =>

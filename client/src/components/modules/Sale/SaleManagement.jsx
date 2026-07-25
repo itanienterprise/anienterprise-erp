@@ -1604,7 +1604,8 @@ const SaleManagement = ({
 
                     const itemsMatch = (s.items || []).some(item => {
                         const pName = (item.productName || item.product || '').toLowerCase();
-                        return pName.includes(query) || (item.brandEntries || []).some(e =>
+                        const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
+                        return pName.includes(query) || resolvedPName.includes(query) || (item.brandEntries || []).some(e =>
                             String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
                             String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
                         );
@@ -1621,6 +1622,7 @@ const SaleManagement = ({
                     s.customerName?.toLowerCase().includes(query) ||
                     s.companyName?.toLowerCase().includes(query) ||
                     s.productName?.toLowerCase().includes(query) ||
+                    resolveProductName(s.productName)?.toLowerCase().includes(query) ||
                     s.brand?.toLowerCase().includes(query);
 
                 if (matchesBasic) return true;
@@ -1632,6 +1634,7 @@ const SaleManagement = ({
                             (be.lcNo || '').toLowerCase().includes(query)
                         );
                         return item.productName?.toLowerCase().includes(query) ||
+                            resolveProductName(item.productName)?.toLowerCase().includes(query) ||
                             item.brand?.toLowerCase().includes(query) ||
                             itemLc.includes(query) ||
                             brandLcMatch;
@@ -1735,6 +1738,40 @@ const SaleManagement = ({
             .filter(p => p.status !== 'Inactive')
             .filter(p => p.name && p.name.toUpperCase() !== 'ANY PLACE OF INDIA')
             .filter(p => (p.name || '').toLowerCase().includes(portSearch.toLowerCase()));
+    };
+
+    const resolveProductName = (name) => {
+        if (!name) return '';
+        if (!products || !Array.isArray(products) || products.length === 0) return name;
+
+        const normalize = (str) => {
+            if (!str) return '';
+            let s = str.trim().toLowerCase();
+            if (s.endsWith('s')) {
+                s = s.slice(0, -1);
+            }
+            return s;
+        };
+
+        const target = normalize(name);
+        if (!target) return name;
+
+        // Try exact match first
+        const lowerName = name.trim().toLowerCase();
+        let found = products.find(p => 
+            (p.name || '').trim().toLowerCase() === lowerName || 
+            (p.ipName || '').trim().toLowerCase() === lowerName
+        );
+
+        if (found) return found.name;
+
+        // Try normalized match (ignoring plural 's')
+        found = products.find(p => 
+            normalize(p.name) === target || 
+            normalize(p.ipName) === target
+        );
+
+        return found ? found.name : name;
     };
 
     const getFilteredLCs = () => {
@@ -2193,7 +2230,7 @@ const SaleManagement = ({
                                                 <td className="px-6 py-5 align-top border-r border-gray-50/50" rowSpan={product.brandEntries?.length ? product.brandEntries.length + 1 : 1}>
                                                     <div className="flex items-center gap-2">
                                                         <div className="w-1.5 h-4 bg-blue-600 rounded-sm"></div>
-                                                        <span className="text-[13px] font-bold text-blue-800">{product.productName}</span>
+                                                        <span className="text-[13px] font-bold text-blue-800">{resolveProductName(product.productName)}</span>
                                                     </div>
                                                 </td>
                                                 {/* If there are no brand entries, render empty columns so layout doesn't break */}
@@ -2371,9 +2408,11 @@ const SaleManagement = ({
         }
         // Product
         if (saleFilters.productName) {
-            const hasProduct = (sale.items || []).some(item =>
-                (item.productName || item.product || '').toLowerCase().includes(saleFilters.productName.toLowerCase())
-            );
+            const hasProduct = (sale.items || []).some(item => {
+                const rawName = (item.productName || item.product || '').toLowerCase();
+                const resName = resolveProductName(item.productName || item.product || '').toLowerCase();
+                return rawName.includes(saleFilters.productName.toLowerCase()) || resName.includes(saleFilters.productName.toLowerCase());
+            });
             if (!hasProduct) return false;
         }
         // Brand filter
@@ -2858,7 +2897,7 @@ const SaleManagement = ({
                                                         </div>
                                                     </div>
                                                     {activeFilterDropdown === 'product' && (() => {
-                                                        const allProds = sales.flatMap(s => (s.items || []).map(i => i.productName || i.product)).filter(Boolean);
+                                                        const allProds = sales.flatMap(s => (s.items || []).map(i => resolveProductName(i.productName || i.product))).filter(Boolean);
                                                         const options = [...new Set(allProds)].sort();
                                                         const filtered = options.filter(p => p.toLowerCase().includes((saleFilterSearch.productSearch || '').toLowerCase()));
                                                         return filtered.length > 0 ? (
@@ -4530,7 +4569,7 @@ const SaleManagement = ({
                                                 <td className="px-3 py-4 whitespace-nowrap">
                                                     <div className="flex flex-col gap-1">
                                                         {items.map((it, idx) => (
-                                                            <div key={idx} className="font-bold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{it.productName || '-'}</div>
+                                                            <div key={idx} className="font-bold text-gray-800 border-b border-gray-100 last:border-0 pb-0.5">{resolveProductName(it.productName) || '-'}</div>
                                                         ))}
                                                     </div>
                                                 </td>

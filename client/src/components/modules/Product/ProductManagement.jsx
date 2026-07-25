@@ -32,6 +32,7 @@ const ProductManagement = ({
         ipName: '',
         name: '',
         category: '',
+        cnfOther: '',
         uom: 'kg',
         brands: [{ brand: '', quality: '', packetSize: '', purchasedPrice: '' }],
         description: ''
@@ -44,6 +45,7 @@ const ProductManagement = ({
             ipName: '',
             name: '',
             category: '',
+            cnfOther: '',
             uom: 'kg',
             brands: [{ brand: '', quality: '', packetSize: '', purchasedPrice: '' }],
             description: ''
@@ -119,6 +121,7 @@ const ProductManagement = ({
             ipName: product.ipName || '',
             name: product.name || '',
             category: product.category || '',
+            cnfOther: product.cnfOther || (product.cnf && product.other ? `${product.cnf} / ${product.other}` : product.cnf || product.other || ''),
             uom: product.uom || product.unit || 'kg',
             brands: product.brands && product.brands.length > 0
                 ? product.brands.map(b => ({
@@ -241,7 +244,7 @@ const ProductManagement = ({
                                         placeholder="Product name"
                                     />
                                 </div>
-                                <div className="col-span-2 md:col-span-3">
+                                <div className="col-span-2 md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                                     <input
                                         type="text"
@@ -251,7 +254,17 @@ const ProductManagement = ({
                                         placeholder="Category"
                                     />
                                 </div>
-                                <div className="col-span-2 md:col-span-3">
+                                <div className="col-span-2 md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">C&F & OTHER</label>
+                                    <input
+                                        type="text"
+                                        value={productFormData.cnfOther}
+                                        onChange={(e) => setProductFormData(prev => ({ ...prev, cnfOther: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                        placeholder="C&F & OTHER"
+                                    />
+                                </div>
+                                <div className="col-span-2 md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">UOM (Unit)</label>
                                     <select
                                         value={productFormData.uom}
@@ -389,6 +402,7 @@ const ProductManagement = ({
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Brand</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Quality</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Packet Size</th>
+                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">C&F & OTHER</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">UOM</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Price</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
@@ -417,6 +431,7 @@ const ProductManagement = ({
                                                     <div key={i}>{b.packetSize || '-'}</div>
                                                 )) || product.packetSize || '-'}
                                             </td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 align-top">{product.cnfOther || (product.cnf && product.other ? `${product.cnf} / ${product.other}` : product.cnf || product.other || '-')}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600 align-top">
                                                 {product.uom || product.unit || 'kg'}
                                             </td>

@@ -11,8 +11,43 @@ const SalesReport = ({
     saleFilters,
     setSaleFilters,
     searchQuery = '',
-    saleType = 'General'
+    saleType = 'General',
+    products = []
 }) => {
+    const resolveProductName = (name) => {
+        if (!name) return '';
+        if (!products || !Array.isArray(products) || products.length === 0) return name;
+
+        const normalize = (str) => {
+            if (!str) return '';
+            let s = str.trim().toLowerCase();
+            if (s.endsWith('s')) {
+                s = s.slice(0, -1);
+            }
+            return s;
+        };
+
+        const target = normalize(name);
+        if (!target) return name;
+
+        // Try exact match first
+        const lowerName = name.trim().toLowerCase();
+        let found = products.find(p => 
+            (p.name || '').trim().toLowerCase() === lowerName || 
+            (p.ipName || '').trim().toLowerCase() === lowerName
+        );
+
+        if (found) return found.name;
+
+        // Try normalized match (ignoring plural 's')
+        found = products.find(p => 
+            normalize(p.name) === target || 
+            normalize(p.ipName) === target
+        );
+
+        return found ? found.name : name;
+    };
+
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [expandedRows, setExpandedRows] = useState([]);
     const [filterSearchInputs, setFilterSearchInputs] = useState({ companySearch: '', invoiceSearch: '', productSearch: '', brandSearch: '', portSearch: '', indCnfSearch: '', bdCnfSearch: '' });
@@ -123,7 +158,7 @@ const SalesReport = ({
                 : [{ brandName: item.brand || '-', quantity: item.quantity, unitPrice: 0, totalAmount: item.totalAmount }];
 
             return entries.map((entry, subIdx) => ({
-                productName: item.productName || item.product || '-',
+                productName: resolveProductName(item.productName || item.product || '-'),
                 brand: entry.brandName || entry.brand || '-',
                 quantity: entry.quantity || 0,
                 bag: entry.bag || item.bag || 0,
@@ -140,7 +175,7 @@ const SalesReport = ({
 
         if (flatItems.length === 0) {
             flatItems.push({
-                productName: sale.productName || '-',
+                productName: resolveProductName(sale.productName || '-'),
                 brand: sale.brand || '-',
                 quantity: sale.quantity || 0,
                 bag: sale.bag || 0,

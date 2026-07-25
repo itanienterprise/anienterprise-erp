@@ -2699,6 +2699,7 @@ function App() {
         setSaleFilters={setSaleFilters}
         searchQuery={salesReportSearchQuery}
         saleType={currentView === 'border-sale-section' ? 'Border' : 'General'}
+        products={products}
       />
 
       {showProfile && (

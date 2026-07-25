@@ -2892,10 +2892,10 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 1: { cellWidth: 20, halign: 'center' },    // Date
                 2: { cellWidth: 25, halign: 'center' },    // LC No (Reduced)
                 3: { cellWidth: 30, noWrap: true },        // Importer
-                4: { cellWidth: 18, noWrap: true },        // Port
+                4: { cellWidth: 20, noWrap: true },        // Port
                 5: { cellWidth: 26, noWrap: true },        // IND C&F
                 6: { cellWidth: 26, noWrap: true },        // BD C&F
-                7: { cellWidth: 38, noWrap: true },        // Party Name
+                7: { cellWidth: 35, noWrap: true },        // Party Name
                 8: { cellWidth: 18, overflow: 'linebreak' }, // Product (Reduced)
                 9: { cellWidth: 22, halign: 'right' },     // Qty
                 10: { cellWidth: 12, halign: 'center' },   // Truck
@@ -4766,9 +4766,9 @@ export const generateLcBillHistoryReportPDF = (reportData, bankName, filters = {
         doc.setFontSize(8.5);
         doc.setTextColor(0);
         doc.setFont('helvetica', 'bold');
-        
+
         let currentY = cardY + 1.5;
-        
+
         currentY += cardLineHeight;
         doc.text("TOTAL MARGIN PAID", cardX + 4, currentY);
         doc.text(":", cardX + 42, currentY);
