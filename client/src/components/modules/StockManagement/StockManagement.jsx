@@ -311,7 +311,7 @@ const StockManagement = ({
                 const wBrand = normalizeStr(w.brand);
                 const wWh = normalizeStr(w.whName || w.warehouse);
                 const itemWh = normalizeStr(item.whName || item.warehouse);
-                const whMatch = !wWh || !itemWh || wWh === itemWh;
+                const whMatch = !historyFilters.warehouse || !wWh || !itemWh || wWh === itemWh;
                 const isBasicMatch = whMatch && wLC === targetLC && wProd === targetProd && wBrand === targetBrand && (wTruck === targetTruck || (!wTruck && !targetTruck));
                 if (!isBasicMatch) return false;
 
@@ -428,13 +428,34 @@ const StockManagement = ({
             return acc;
         }, {});
 
+        const transferDestKeys = new Set(
+            (warehouseData || [])
+                .filter(t => t.isTransferLog)
+                .map(t => `${(t.toWh || t.warehouse || '').trim().toLowerCase()}_${(t.productName || t.product || '').trim().toLowerCase()}_${(t.brand || '').trim().toLowerCase()}_${(t.lcNo || '').trim().toLowerCase()}`)
+        );
+
+        const knownLcSet = new Set(
+            (stockRecords || [])
+                .map(s => (s.lcNo || '').trim())
+                .filter(v => v && v !== '-' && v !== '—' && v !== '--')
+        );
+
         // Include unmatched warehouse records
         const unmatchedWhRecords = (warehouseData || []).filter(w => {
             if (w.recordType !== 'warehouse') return false;
             if (w.isTransferLog) return false;
+            if (w.isTransferredEntry) return false;
             if (consumedWhIds.has(w._id)) return false;
 
+            const wLc = (w.lcNo || '').trim();
+            if (wLc && knownLcSet.has(wLc)) return false;
+
+            const wWh = (w.whName || w.warehouse || '').trim().toLowerCase();
             const wProd = (w.productName || w.product || '').trim().toLowerCase();
+            const wBrand = (w.brand || '').trim().toLowerCase();
+            const destKey = `${wWh}_${wProd}_${wBrand}_${wLc}`;
+            if (transferDestKeys.has(destKey)) return false;
+
             if (wProd !== productName) return false;
 
             // Apply filters
@@ -660,13 +681,75 @@ const StockManagement = ({
             type: 'damage'
         }));
 
+        // 4. Flatten Transfer History (combining explicit transfer logs and legacy transferred warehouse records)
+        const explicitTransferLogs = (warehouseData || []).filter(w => w.isTransferLog);
+        const explicitLogKeys = new Set(
+            explicitTransferLogs.map(t => `${(t.fromWh || '').trim().toLowerCase()}_${(t.toWh || '').trim().toLowerCase()}_${(t.productName || t.product || '').trim().toLowerCase()}_${(t.brand || '').trim().toLowerCase()}_${(t.lcNo || '').trim()}`)
+        );
+
+        const synthesizedTransfers = [...explicitTransferLogs];
+        (warehouseData || []).forEach(w => {
+            if (w.isTransferLog) return;
+            if (w.recordType === 'warehouse' || (!w.recordType && (w.whName || w.warehouse) && (w.productName || w.product))) {
+                const wWh = (w.whName || w.warehouse || '').trim();
+                const wLc = (w.lcNo || '').trim();
+                const wProd = (w.productName || w.product || '').trim();
+                const wBrand = (w.brand || '').trim();
+
+                const parentStock = (stockRecords || []).find(s => {
+                    const sLc = (s.lcNo || '').trim();
+                    const sProd = (s.productName || s.product || '').trim();
+                    const sBrand = (s.brand || '').trim();
+                    return sLc === wLc && sProd.toLowerCase() === wProd.toLowerCase() && sBrand.toLowerCase() === wBrand.toLowerCase() && sLc !== '' && sLc !== '-';
+                });
+
+                if (parentStock) {
+                    const parentWh = (parentStock.whName || parentStock.warehouse || 'HILI').trim();
+                    if (parentWh.toLowerCase() !== wWh.toLowerCase()) {
+                        const synthKey = `${parentWh.toLowerCase()}_${wWh.toLowerCase()}_${wProd.toLowerCase()}_${wBrand.toLowerCase()}_${wLc}`;
+                        if (!explicitLogKeys.has(synthKey)) {
+                            synthesizedTransfers.push({
+                                ...w,
+                                isTransferLog: true,
+                                fromWh: parentWh,
+                                toWh: wWh,
+                                productName: wProd,
+                                brand: wBrand,
+                                lcNo: wLc,
+                                date: w.date || w.createdAt || parentStock.date || new Date().toISOString(),
+                                whQty: parseFloat(w.whQty || w.quantity) || 0,
+                                whPkt: parseFloat(w.whPkt || w.packet) || 0
+                            });
+                        }
+                    }
+                }
+            }
+        });
+
+        const transferFlattened = synthesizedTransfers.filter(w => {
+            const pMatch = (w.productName || w.product || '').trim().toLowerCase() === productName;
+            if (!pMatch) return false;
+            if (historyFilters.brand && (w.brand || '').trim().toLowerCase() !== historyFilters.brand.trim().toLowerCase()) return false;
+            if (historyFilters.lcNo && (w.lcNo || '').trim() !== historyFilters.lcNo.trim()) return false;
+            return true;
+        }).map(t => ({
+            ...t,
+            type: 'transfer',
+            date: t.date ? t.date.split('T')[0] : (t.createdAt ? t.createdAt.split('T')[0] : ''),
+            itemQty: parseFloat(t.whQty) || parseFloat(t.quantity) || 0,
+            itemPacket: parseFloat(t.whPkt) || parseFloat(t.packet) || 0,
+            fromWh: (t.fromWh || t.fromWarehouse || '').trim(),
+            toWh: (t.toWh || t.toWarehouse || '').trim()
+        }));
+
         setProductHistoryReportData({
             productName: viewRecord.data.productName,
             category: viewRecord.data.category,
             filters: historyFilters,
             purchaseHistory: purchaseFlattened,
             saleHistory: saleFlattened,
-            damageHistory: damageFlattened
+            damageHistory: damageFlattened,
+            transferHistory: transferFlattened
         });
         setShowProductHistoryReport(true);
     };
@@ -762,7 +845,13 @@ const StockManagement = ({
             // 2. Normalize Warehouse records
             const allDecryptedWh = whData.map(item => {
                 try {
-                    const decrypted = item;
+                    let decrypted = item.data ? decryptData(item.data) : item;
+                    if (typeof decrypted === 'string') {
+                        try { decrypted = decryptData(decrypted); } catch (e) { }
+                    }
+                    if (decrypted && typeof decrypted === 'object' && decrypted.data && typeof decrypted.data === 'string') {
+                        try { decrypted = decryptData(decrypted.data); } catch (e) { }
+                    }
                     const key = `${(decrypted.product || decrypted.productName || '').trim()}_${(decrypted.brand || '').trim()}`;
                     const globalStats = globalInHouseMap[key] || { pkt: 0, qty: 0 };
 
@@ -1369,6 +1458,7 @@ const StockManagement = ({
 
                             const updatedDest = {
                                 ...destRecord,
+                                isTransferredEntry: true,
                                 whQty: newWhQty,
                                 whPkt: newWhPkt,
                                 ...(destRecord.recordType === 'stock' && {
@@ -1391,6 +1481,7 @@ const StockManagement = ({
                                 whName: destWhName,
                                 warehouse: destWhName,
                                 recordType: 'warehouse',
+                                isTransferredEntry: true,
                                 manager: addWarehouseStockFormData.toManager || addWarehouseStockFormData.manager,
                                 location: addWarehouseStockFormData.toLocation || addWarehouseStockFormData.location,
                                 capacity: parseFloat(addWarehouseStockFormData.toCapacity) || parseFloat(addWarehouseStockFormData.capacity) || 0,

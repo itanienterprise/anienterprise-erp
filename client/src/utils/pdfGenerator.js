@@ -2258,7 +2258,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 };
 
 
-export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters, damageData = []) => {
+export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters, damageData = [], transferData = []) => {
     try {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.width;
@@ -2405,9 +2405,18 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 return acc;
             }, {}));
 
-            let currentBalance = 0;
+            const sortedTransferData = [...(transferData || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const aggregatedTransfer = Object.values(sortedTransferData.reduce((acc, t) => {
+                const key = `${t.date}_transfer_${t._id || t.id || Math.random()}`;
+                if (!acc[key]) acc[key] = { ...t, type: 'transfer', itemQty: 0 };
+                acc[key].itemQty += parseFloat(t.itemQty || t.whQty) || 0;
+                return acc;
+            }, {}));
 
-            const unifiedData = [...aggregatedPurchase, ...aggregatedSale, ...aggregatedDamage]
+            let currentBalance = 0;
+            const currentWh = (filters.warehouse || '').trim().toLowerCase();
+
+            const unifiedData = [...aggregatedPurchase, ...aggregatedSale, ...aggregatedDamage, ...aggregatedTransfer]
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(item => {
                     if (item.type === 'purchase') {
@@ -2416,6 +2425,25 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                         currentBalance -= item.itemQty;
                     } else if (item.type === 'damage') {
                         currentBalance -= item.itemQty;
+                    } else if (item.type === 'transfer') {
+                        const fromWhLower = (item.fromWh || '').trim().toLowerCase();
+                        const toWhLower = (item.toWh || '').trim().toLowerCase();
+                        const fromMatch = fromWhLower && (fromWhLower === currentWh || fromWhLower.includes(currentWh) || currentWh.includes(fromWhLower));
+                        const toMatch = toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
+
+                        if (currentWh) {
+                            if (fromMatch && !toMatch) {
+                                currentBalance -= item.itemQty;
+                            } else if (toMatch && !fromMatch) {
+                                currentBalance += item.itemQty;
+                            }
+                        } else {
+                            if (fromWhLower && !toWhLower) {
+                                currentBalance -= item.itemQty;
+                            } else if (!fromWhLower && toWhLower) {
+                                currentBalance += item.itemQty;
+                            }
+                        }
                     }
                     return { ...item, runningInHouse: currentBalance };
                 });
@@ -2437,18 +2465,46 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             }), { qty: 0 });
 
             const unifiedHead = [['Date', 'LC No', 'Exporter', 'Invoice', 'Party', 'Purchase', 'Sale', 'InHouse', 'Short', 'Damage']];
-            const unifiedBody = unifiedData.map(item => [
-                formatDate(item.date),
-                item.lcNo || '-',
-                item.itemExporter || '-',
-                item.invoiceNo || '-',
-                item.type === 'purchase' ? '-' : (item.companyName || '-'),
-                item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-',
-                item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-',
-                `${Math.round(item.runningInHouse).toLocaleString('en-US')} kg`,
-                item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-',
-                item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'
-            ]);
+            const unifiedBody = unifiedData.map(item => {
+                const fromWhLower = (item.fromWh || '').trim().toLowerCase();
+                const toWhLower = (item.toWh || '').trim().toLowerCase();
+                const fromMatch = fromWhLower && (fromWhLower === currentWh || fromWhLower.includes(currentWh) || currentWh.includes(fromWhLower));
+                const toMatch = toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
+                const isTransferOut = item.type === 'transfer' && (fromMatch || (!toMatch && fromMatch));
+                const isTransferIn = item.type === 'transfer' && (toMatch || (!fromMatch && toMatch));
+
+                let partyText = item.type === 'purchase' ? '-' : (item.companyName || '-');
+                if (item.type === 'transfer') {
+                    partyText = item.fromWh && item.toWh ? `Transfer (${item.fromWh} -> ${item.toWh})` : 'Transfer';
+                }
+
+                let purchaseVal = '-';
+                if (item.type === 'purchase') {
+                    purchaseVal = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                } else if (isTransferIn) {
+                    purchaseVal = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                }
+
+                let saleVal = '-';
+                if (item.type === 'sale') {
+                    saleVal = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                } else if (isTransferOut || (!currentWh && item.type === 'transfer')) {
+                    saleVal = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                }
+
+                return [
+                    formatDate(item.date),
+                    item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 4 ? item.lcNo.slice(-4) : item.lcNo) : '-',
+                    item.itemExporter || '-',
+                    item.invoiceNo || '-',
+                    partyText,
+                    purchaseVal,
+                    saleVal,
+                    `${Math.round(item.runningInHouse).toLocaleString('en-US')} kg`,
+                    item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-',
+                    item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'
+                ];
+            });
             const unifiedFoot = [[
                 { content: 'TOTAL HISTORY', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -2470,14 +2526,14 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
                 columnStyles: {
                     0: { cellWidth: 18, halign: 'center' }, // Date
-                    1: { cellWidth: 22, halign: 'center' }, // LC No
-                    2: { cellWidth: 24, halign: 'left', overflow: 'hidden' },   // Exporter
+                    1: { cellWidth: 15, halign: 'center' }, // LC No
+                    2: { cellWidth: 26, halign: 'left', overflow: 'hidden' },   // Exporter
                     3: { cellWidth: 16, halign: 'center' }, // Invoice
-                    4: { cellWidth: 28, halign: 'left', overflow: 'hidden' },   // Party
+                    4: { cellWidth: 30, halign: 'left', overflow: 'hidden' },   // Party
                     5: { cellWidth: 19, halign: 'right' },  // Purchase
                     6: { cellWidth: 19, halign: 'right' },  // Sale
-                    7: { cellWidth: 19, halign: 'right' },  // InHouse
-                    8: { cellWidth: 15, halign: 'right' },  // Short
+                    7: { cellWidth: 20, halign: 'right' },  // InHouse
+                    8: { cellWidth: 16, halign: 'right' },  // Short
                     9: { cellWidth: 16, halign: 'right' }   // Damage
                 },
                 margin: { left: margin, right: margin }
@@ -2500,7 +2556,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             const purchaseHead = [['Date', 'LC No', 'Exporter', 'Brand', 'Price', 'Bag', 'LC Qty', 'InHouse', 'Short']];
             const purchaseBody = sortedPurchaseData.map(item => [
                 formatDate(item.date),
-                item.lcNo || '-',
+                item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 4 ? item.lcNo.slice(-4) : item.lcNo) : '-',
                 item.itemExporter || '-',
                 item.itemBrand || '-',
                 parseFloat(item.itemPurchasedPrice || 0).toLocaleString('en-IN'),

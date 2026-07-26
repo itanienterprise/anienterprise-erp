@@ -82,50 +82,68 @@ const ProductHistoryReport = ({
 
     if (!isOpen || !reportData) return null;
 
-    const { productName, category, filters, purchaseHistory: rawPurchaseHistory, saleHistory: rawSaleHistory, damageHistory: rawDamageHistory } = reportData;
+    const { productName, category, filters, purchaseHistory: rawPurchaseHistory, saleHistory: rawSaleHistory, damageHistory: rawDamageHistory, transferHistory: rawTransferHistory } = reportData;
     const isFruitCategory = (category || '').toLowerCase() === 'fruit';
 
-    const partyOptions = [...new Set((rawSaleHistory || []).map(s => s.companyName).filter(Boolean))].sort();
+    const partyOptions = [...new Set((rawSaleHistory || []).map(s => (s.companyName || '').trim()).filter(Boolean))].sort();
     const brandOptions = [...new Set([
-        ...(rawPurchaseHistory || []).map(p => p.itemBrand),
-        ...(rawSaleHistory || []).map(s => s.itemBrand),
-        ...(rawDamageHistory || []).map(d => d.brand)
-    ].filter(Boolean))].sort();
+        ...(rawPurchaseHistory || []).map(p => p.itemBrand || p.brand),
+        ...(rawSaleHistory || []).map(s => s.itemBrand || s.brand),
+        ...(rawDamageHistory || []).map(d => d.brand),
+        ...(rawTransferHistory || []).map(t => t.brand)
+    ].map(b => (b || '').trim()).filter(Boolean))].sort();
     const isLcPlaceholder = (v) => !v || v.toString().trim() === '-' || v.toString().trim() === '—' || v.toString().trim() === '--';
     const lcOptions = [...new Set([
         ...(rawPurchaseHistory || []).map(p => p.lcNo),
         ...(rawSaleHistory || []).map(s => s.lcNo),
-        ...(rawDamageHistory || []).map(d => d.lcNo)
-    ].filter(v => !isLcPlaceholder(v)))].sort();
+        ...(rawDamageHistory || []).map(d => d.lcNo),
+        ...(rawTransferHistory || []).map(t => t.lcNo)
+    ].map(l => (l || '').trim()).filter(v => !isLcPlaceholder(v)))].sort();
     const warehouseOptions = [...new Set([
         ...(rawPurchaseHistory || []).map(p => p.warehouse || p.whName),
-        ...(rawSaleHistory || []).map(s => s.itemWarehouse),
-        ...(rawDamageHistory || []).map(d => d.warehouse || d.whName)
-    ].filter(Boolean))].sort();
+        ...(rawSaleHistory || []).map(s => s.itemWarehouse || s.warehouse || s.whName),
+        ...(rawDamageHistory || []).map(d => d.warehouse || d.whName),
+        ...(rawTransferHistory || []).flatMap(t => [t.fromWh, t.toWh])
+    ].map(w => (w || '').trim()).filter(Boolean))].sort();
 
     const purchaseHistory = (rawPurchaseHistory || []).filter(p => {
         if (modalFilters.startDate && p.date < modalFilters.startDate) return false;
         if (modalFilters.endDate && p.date > modalFilters.endDate) return false;
-        if (modalFilters.brand && (p.itemBrand || '').toLowerCase() !== modalFilters.brand.toLowerCase()) return false;
-        if (modalFilters.lcNo && (p.lcNo || '').trim() !== modalFilters.lcNo) return false;
-        if (modalFilters.warehouse && (p.warehouse || p.whName || '').trim().toLowerCase() !== modalFilters.warehouse.toLowerCase()) return false;
+        if (modalFilters.brand && (p.itemBrand || p.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
+        if (modalFilters.lcNo && (p.lcNo || '').trim() !== modalFilters.lcNo.trim()) return false;
+        if (modalFilters.warehouse && (p.warehouse || p.whName || '').trim().toLowerCase() !== modalFilters.warehouse.trim().toLowerCase()) return false;
         return true;
     });
     const saleHistory = (rawSaleHistory || []).filter(s => {
         if (modalFilters.startDate && s.date < modalFilters.startDate) return false;
         if (modalFilters.endDate && s.date > modalFilters.endDate) return false;
-        if (modalFilters.party && (s.companyName || '') !== modalFilters.party) return false;
-        if (modalFilters.brand && (s.itemBrand || '').toLowerCase() !== modalFilters.brand.toLowerCase()) return false;
-        if (modalFilters.lcNo && (s.lcNo || '').trim() !== modalFilters.lcNo) return false;
-        if (modalFilters.warehouse && (s.itemWarehouse || '').trim().toLowerCase() !== modalFilters.warehouse.toLowerCase()) return false;
+        if (modalFilters.party && (s.companyName || '').trim().toLowerCase() !== modalFilters.party.trim().toLowerCase()) return false;
+        if (modalFilters.brand && (s.itemBrand || s.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
+        if (modalFilters.lcNo && (s.lcNo || '').trim() !== modalFilters.lcNo.trim()) return false;
+        if (modalFilters.warehouse && (s.itemWarehouse || s.warehouse || s.whName || '').trim().toLowerCase() !== modalFilters.warehouse.trim().toLowerCase()) return false;
         return true;
     });
     const damageHistory = (rawDamageHistory || []).filter(d => {
         if (modalFilters.startDate && d.date < modalFilters.startDate) return false;
         if (modalFilters.endDate && d.date > modalFilters.endDate) return false;
-        if (modalFilters.brand && (d.brand || '').toLowerCase() !== modalFilters.brand.toLowerCase()) return false;
-        if (modalFilters.lcNo && (d.lcNo || '').trim() !== modalFilters.lcNo) return false;
-        if (modalFilters.warehouse && (d.warehouse || d.whName || '').trim().toLowerCase() !== modalFilters.warehouse.toLowerCase()) return false;
+        if (modalFilters.brand && (d.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
+        if (modalFilters.lcNo && (d.lcNo || '').trim() !== modalFilters.lcNo.trim()) return false;
+        if (modalFilters.warehouse && (d.warehouse || d.whName || '').trim().toLowerCase() !== modalFilters.warehouse.trim().toLowerCase()) return false;
+        return true;
+    });
+    const transferHistory = (rawTransferHistory || []).filter(t => {
+        if (modalFilters.startDate && t.date < modalFilters.startDate) return false;
+        if (modalFilters.endDate && t.date > modalFilters.endDate) return false;
+        if (modalFilters.brand && (t.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
+        if (modalFilters.lcNo && t.lcNo && (t.lcNo || '').trim() !== modalFilters.lcNo.trim()) return false;
+        if (modalFilters.warehouse) {
+            const whLower = modalFilters.warehouse.trim().toLowerCase();
+            const fromWhLower = (t.fromWh || '').trim().toLowerCase();
+            const toWhLower = (t.toWh || '').trim().toLowerCase();
+            const fromMatch = fromWhLower && (fromWhLower === whLower || fromWhLower.includes(whLower) || whLower.includes(fromWhLower));
+            const toMatch = toWhLower && (toWhLower === whLower || toWhLower.includes(whLower) || whLower.includes(toWhLower));
+            if (!fromMatch && !toMatch) return false;
+        }
         return true;
     });
 
@@ -178,10 +196,12 @@ const ProductHistoryReport = ({
         }, {}));
 
         const sales = saleHistory.map(s => ({ ...s, type: 'sale', itemQty: parseFloat(s.itemQty) || 0 }));
+        const transfers = transferHistory.map(t => ({ ...t, type: 'transfer', itemQty: parseFloat(t.itemQty || t.whQty) || 0 }));
 
-        const combined = [...purchases, ...sales, ...damages].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const combined = [...purchases, ...sales, ...damages, ...transfers].sort((a, b) => new Date(a.date) - new Date(b.date));
 
         let currentBalance = 0;
+        const currentWh = (modalFilters.warehouse || '').trim().toLowerCase();
         
         return combined.map(item => {
             if (item.type === 'purchase') {
@@ -190,6 +210,25 @@ const ProductHistoryReport = ({
                 currentBalance -= item.itemQty;
             } else if (item.type === 'damage') {
                 currentBalance -= item.itemQty;
+            } else if (item.type === 'transfer') {
+                const fromWhLower = (item.fromWh || '').trim().toLowerCase();
+                const toWhLower = (item.toWh || '').trim().toLowerCase();
+                const fromMatch = fromWhLower && (fromWhLower === currentWh || fromWhLower.includes(currentWh) || currentWh.includes(fromWhLower));
+                const toMatch = toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
+
+                if (currentWh) {
+                    if (fromMatch && !toMatch) {
+                        currentBalance -= item.itemQty;
+                    } else if (toMatch && !fromMatch) {
+                        currentBalance += item.itemQty;
+                    }
+                } else {
+                    if (fromWhLower && !toWhLower) {
+                        currentBalance -= item.itemQty;
+                    } else if (!fromWhLower && toWhLower) {
+                        currentBalance += item.itemQty;
+                    }
+                }
             }
             return { ...item, runningInHouse: currentBalance };
         });
@@ -222,7 +261,8 @@ const ProductHistoryReport = ({
                 totalAmount: totalSaleAmount
             },
             modalFilters,
-            damageHistory
+            damageHistory,
+            transferHistory
         );
     };
 
@@ -537,20 +577,35 @@ const ProductHistoryReport = ({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-900">
-                                            {unifiedHistory.map((item, idx) => (
-                                                <tr key={idx} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{formatDate(item.date)}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900 text-center ">{item.lcNo || '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{item.itemExporter || '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center">{item.invoiceNo || '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium whitespace-nowrap">{item.type === 'purchase' ? '-' : (item.companyName || '-')}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{item.type === 'sale' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-700 font-black">{Math.round(item.runningInHouse).toLocaleString('en-US')} kg</td>
-                                                    <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'}</td>
-                                                    <td className="px-2 py-1 text-[12px] text-right text-red-600 font-bold">{item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
-                                                </tr>
-                                            ))}
+                                            {unifiedHistory.map((item, idx) => {
+                                                const currentWh = (modalFilters.warehouse || '').trim().toLowerCase();
+                                                const fromWhLower = (item.fromWh || '').trim().toLowerCase();
+                                                const toWhLower = (item.toWh || '').trim().toLowerCase();
+                                                const fromMatch = fromWhLower && (fromWhLower === currentWh || fromWhLower.includes(currentWh) || currentWh.includes(fromWhLower));
+                                                const toMatch = toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
+                                                const isTransferOut = item.type === 'transfer' && (fromMatch || (!toMatch && fromMatch));
+                                                const isTransferIn = item.type === 'transfer' && (toMatch || (!fromMatch && toMatch));
+
+                                                let partyText = item.type === 'purchase' ? '-' : (item.companyName || '-');
+                                                if (item.type === 'transfer') {
+                                                    partyText = item.fromWh && item.toWh ? `Transfer (${item.fromWh} → ${item.toWh})` : 'Transfer';
+                                                }
+
+                                                return (
+                                                    <tr key={idx} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{formatDate(item.date)}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900 text-center ">{item.lcNo || '-'}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{item.itemExporter || '-'}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center">{item.invoiceNo || '-'}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium whitespace-nowrap">{partyText}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{item.type === 'purchase' || isTransferIn ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{item.type === 'sale' || isTransferOut ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-700 font-black">{Math.round(item.runningInHouse).toLocaleString('en-US')} kg</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'}</td>
+                                                        <td className="px-2 py-1 text-[12px] text-right text-red-600 font-bold">{item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                         <tfoot>
                                             <tr className="bg-gray-100 border-t-2 border-gray-900 font-black text-center">
