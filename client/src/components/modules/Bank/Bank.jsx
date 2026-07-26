@@ -77,6 +77,7 @@ const Bank = ({ onDeleteConfirm }) => {
         bankName: '',
         shortName: '',
         binNo: '',
+        openingBalance: '',
         branches: [{
             branch: '',
             accountName: '',
@@ -679,6 +680,7 @@ const Bank = ({ onDeleteConfirm }) => {
             bankName: '',
             shortName: '',
             binNo: '',
+            openingBalance: '',
             branches: [{
                 branch: '',
                 accountName: '',
@@ -737,6 +739,7 @@ const Bank = ({ onDeleteConfirm }) => {
             bankName: bank.bankName || '',
             shortName: bank.shortName || '',
             binNo: bank.binNo || '',
+            openingBalance: bank.openingBalance !== undefined ? bank.openingBalance : '',
             branches: branches,
             isIndian: bank.isIndian || false,
             status: bank.status || 'Active'
@@ -758,13 +761,15 @@ const Bank = ({ onDeleteConfirm }) => {
     };
 
     const displayBanks = useMemo(() => {
-        const flattened = banks.flatMap(bank => {
-            // Handle backwards compatibility for single-branch records
-            const branches = bank.branches || [{
-                branch: bank.branch,
-                accountName: bank.accountName,
-                accountNo: bank.accountNo
-            }];
+        const flattened = banks
+            .filter(bank => !bank.isIndian)
+            .flatMap(bank => {
+                // Handle backwards compatibility for single-branch records
+                const branches = bank.branches || [{
+                    branch: bank.branch,
+                    accountName: bank.accountName,
+                    accountNo: bank.accountNo
+                }];
 
             return branches.map((branch, idx) => ({
                 ...bank,
@@ -896,6 +901,20 @@ const Bank = ({ onDeleteConfirm }) => {
                                 value={formData.binNo}
                                 onChange={handleInputChange}
                                 placeholder="Enter BIN Number"
+                                autoComplete="off"
+                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
+                            />
+                        </div>
+
+                        <div className="col-span-1 space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Opening Balance</label>
+                            <input
+                                type="number"
+                                step="any"
+                                name="openingBalance"
+                                value={formData.openingBalance}
+                                onChange={handleInputChange}
+                                placeholder="Enter Opening Balance"
                                 autoComplete="off"
                                 className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
                             />
@@ -1264,17 +1283,6 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                             title="LC Bill History"
                                                                         >
                                                                             <EyeIcon className="w-4 h-4" />
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => setExpandedBranchKey(prev => prev === item.uniqueRowKey ? null : item.uniqueRowKey)}
-                                                                            className={`p-1.5 rounded-lg transition-all ${isBranchExpanded ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'}`}
-                                                                            title="View Charges"
-                                                                        >
-                                                                            {isBranchExpanded ? (
-                                                                                <ChevronUpIcon className="w-4 h-4" />
-                                                                            ) : (
-                                                                                <ChevronDownIcon className="w-4 h-4" />
-                                                                            )}
                                                                         </button>
                                                                         {!cannotAddEdit && (
                                                                             <button

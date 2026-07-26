@@ -303,12 +303,16 @@ const StockManagement = ({
             // excluding 'stock' entries to avoid double-counting the truck's arrival record
             const relatedWhRecords = (warehouseData || []).filter(w => {
                 if (w.recordType !== 'warehouse') return false;
+                if (w.isTransferLog) return false;
                 
                 const wLC = normalizeStr(w.lcNo);
                 const wTruck = normalizeStr(w.truckNo);
                 const wProd = normalizeStr(w.productName || w.product);
                 const wBrand = normalizeStr(w.brand);
-                const isBasicMatch = wLC === targetLC && wProd === targetProd && wBrand === targetBrand && (wTruck === targetTruck || (!wTruck && !targetTruck));
+                const wWh = normalizeStr(w.whName || w.warehouse);
+                const itemWh = normalizeStr(item.whName || item.warehouse);
+                const whMatch = !wWh || !itemWh || wWh === itemWh;
+                const isBasicMatch = whMatch && wLC === targetLC && wProd === targetProd && wBrand === targetBrand && (wTruck === targetTruck || (!wTruck && !targetTruck));
                 if (!isBasicMatch) return false;
 
                 // Date-aware matching to prevent duplicate assignment when same LC/Truck/Brand/Prod has multiple arrival dates
@@ -427,6 +431,7 @@ const StockManagement = ({
         // Include unmatched warehouse records
         const unmatchedWhRecords = (warehouseData || []).filter(w => {
             if (w.recordType !== 'warehouse') return false;
+            if (w.isTransferLog) return false;
             if (consumedWhIds.has(w._id)) return false;
 
             const wProd = (w.productName || w.product || '').trim().toLowerCase();
@@ -1384,10 +1389,13 @@ const StockManagement = ({
                         } else {
                             const newEntry = {
                                 whName: destWhName,
+                                warehouse: destWhName,
+                                recordType: 'warehouse',
                                 manager: addWarehouseStockFormData.toManager || addWarehouseStockFormData.manager,
                                 location: addWarehouseStockFormData.toLocation || addWarehouseStockFormData.location,
                                 capacity: parseFloat(addWarehouseStockFormData.toCapacity) || parseFloat(addWarehouseStockFormData.capacity) || 0,
                                 product: productEntry.productName,
+                                productName: productEntry.productName,
                                 brand: brandEntry.brand,
                                 lcNo: deduction.lcNo,
                                 truckNo: deduction.truckNo,

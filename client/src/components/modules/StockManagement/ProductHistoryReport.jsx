@@ -135,7 +135,7 @@ const ProductHistoryReport = ({
     const unifiedHistory = (() => {
         // First, group purchases by Date/LC/Truck to match UI grouping
         const purchases = Object.values(purchaseHistory.reduce((acc, p) => {
-            const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}`;
+            const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}_${p.whName || p.warehouse || ''}`;
             if (!acc[key]) {
                 acc[key] = { 
                     ...p, 
