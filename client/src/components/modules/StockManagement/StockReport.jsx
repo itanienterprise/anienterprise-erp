@@ -580,63 +580,88 @@ const StockReport = ({
                                     <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">#{index + 1}</span>
                                 </div>
                                 <div className="p-4 space-y-4">
-                                    {item.brandList.map((ent, bIndex) => (
-                                        <div key={bIndex} className="space-y-3 pb-4 last:pb-0 border-b last:border-0 border-gray-50">
-                                            <div className="flex justify-center items-center w-full">
-                                                <span className="text-lg sm:text-xl font-black text-blue-600 text-center">{ent.brand}</span>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                                                {reportType === 'price' ? (
-                                                    <>
-                                                        <div className="space-y-0.5">
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</p>
-                                                            <p className="text-sm font-black text-gray-900 uppercase">{ent.lcNo || '—'}</p>
-                                                        </div>
-                                                        <div className="space-y-0.5 text-right">
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Costing</p>
-                                                            <p className="text-sm font-black text-emerald-600">
-                                                                {ent.purchasedPrice ? `৳${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-                                                            </p>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <div className="space-y-0.5">
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Inhouse</p>
-                                                            <p className="text-xs font-bold text-gray-700">
-                                                                {(() => {
-                                                                    const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                                })()} BAG
-                                                            </p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.totalInHouseQuantity).toLocaleString('en-US')} kg</p>
-                                                        </div>
-                                                        <div className="space-y-0.5 text-right">
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sale</p>
-                                                            <p className="text-xs font-bold text-gray-700">
-                                                                {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG
-                                                            </p>
-                                                            <p className="text-sm font-black text-gray-900">{Math.round(ent.saleQuantity).toLocaleString('en-US')} kg</p>
-                                                        </div>
-                                                    </>
-                                                )}
-                                                <div className="col-span-full w-full pt-3 pb-2 border-t border-gray-100 flex flex-col items-center justify-center text-center">
-                                                    <p className="text-[10px] sm:text-xs font-bold text-blue-400 uppercase tracking-[0.1em] mb-1">Remaining Inhouse</p>
-                                                    <div className="flex flex-col items-center justify-center w-full space-y-0.5">
-                                                        <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
-                                                            {(() => {
-                                                                const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
-                                                                return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
-                                                            })()} BAG
-                                                        </p>
-                                                        <p className="text-lg sm:text-xl font-black text-blue-600 text-center">
-                                                            {Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg
-                                                        </p>
+                                    {item.brandList.map((ent, bIndex) => {
+                                        const brandNameLower = (ent.brand || '').trim().toLowerCase();
+                                        const showBrandHeader = bIndex === 0 || (item.brandList[bIndex - 1]?.brand || '').trim().toLowerCase() !== brandNameLower;
+                                        const isLastOfBrandGroup = bIndex === item.brandList.length - 1 || (item.brandList[bIndex + 1]?.brand || '').trim().toLowerCase() !== brandNameLower;
+                                        const sameBrandEntries = item.brandList.filter(b => (b.brand || '').trim().toLowerCase() === brandNameLower);
+                                        const hasMultipleLcs = sameBrandEntries.length > 1;
+
+                                        const brandTotalQty = hasMultipleLcs ? sameBrandEntries.reduce((sum, b) => sum + (parseFloat(b.inHouseQuantity) || 0), 0) : 0;
+                                        const brandTotalPktRemainder = hasMultipleLcs ? calculatePktRemainder(brandTotalQty, ent.packetSize || 30) : null;
+
+                                        return (
+                                            <div key={bIndex} className="space-y-3 pb-4 last:pb-0 border-b last:border-0 border-gray-50">
+                                                {showBrandHeader && (
+                                                    <div className="flex justify-center items-center w-full pt-1">
+                                                        <span className="text-lg sm:text-xl font-black text-blue-600 text-center">{ent.brand}</span>
                                                     </div>
+                                                )}
+                                                <div className="space-y-2 pt-2">
+                                                    {reportType === 'price' ? (
+                                                        <>
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <span className="font-bold text-gray-400 uppercase tracking-wider">LC No :</span>
+                                                                <span className="font-black text-gray-900 uppercase">{ent.lcNo || '—'}</span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <span className="font-bold text-gray-400 uppercase tracking-wider">Costing :</span>
+                                                                <span className="font-black text-emerald-600">
+                                                                    {ent.purchasedPrice ? `৳${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <span className="font-bold text-gray-400 uppercase tracking-wider">Quantity :</span>
+                                                                <span className="font-black text-gray-900 text-right">
+                                                                    {(() => {
+                                                                        const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                                        return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                    })()} BAG ({Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg)
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <span className="font-bold text-gray-400 uppercase tracking-wider">Total Inhouse :</span>
+                                                                <span className="font-black text-gray-900 text-right">
+                                                                    {(() => {
+                                                                        const { whole, remainder } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
+                                                                        return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                    })()} BAG ({Math.round(ent.totalInHouseQuantity).toLocaleString('en-US')} kg)
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <span className="font-bold text-gray-400 uppercase tracking-wider">Sale :</span>
+                                                                <span className="font-black text-gray-900 text-right">
+                                                                    {Number.isInteger(parseFloat(ent.salePacket)) ? parseFloat(ent.salePacket) : (parseFloat(ent.salePacket) || 0).toFixed(2)} BAG ({Math.round(ent.saleQuantity).toLocaleString('en-US')} kg)
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-100">
+                                                                <span className="font-bold text-blue-500 uppercase tracking-wider">Remaining Inhouse :</span>
+                                                                <span className="font-black text-blue-600 text-right">
+                                                                    {(() => {
+                                                                        const { whole, remainder } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                                        return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                    })()} BAG ({Math.round(ent.inHouseQuantity).toLocaleString('en-US')} kg)
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    )}
                                                 </div>
+                                                {isLastOfBrandGroup && hasMultipleLcs && (
+                                                    <div className="mt-2 pt-2 border-t-2 border-blue-200 bg-blue-50/60 rounded-xl p-2.5 space-y-1">
+                                                        <div className="flex items-center justify-between text-xs font-black text-blue-900">
+                                                            <span className="uppercase">{(ent.brand || 'No Brand').trim()} Total :</span>
+                                                            <span className="text-right text-blue-700">
+                                                                {brandTotalPktRemainder.whole}{brandTotalPktRemainder.remainder !== 0 ? ` - ${Math.abs(brandTotalPktRemainder.remainder)} kg` : ''} BAG ({Math.round(brandTotalQty).toLocaleString('en-US')} kg)
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                     <div className="mt-2 pt-3 border-t-2 border-dashed border-gray-100 bg-blue-50/30 -mx-4 -mb-4 p-4">
                                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Product Summary</p>
                                         <div className="grid grid-cols-2 gap-4">
@@ -685,15 +710,15 @@ const StockReport = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
-            <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-2 pt-10 sm:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
+            <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar (Hidden on Print) */}
-                <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 border-b border-gray-100 print:hidden gap-2">
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
-                            <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                <div className="flex flex-row items-center justify-between px-3 sm:px-8 py-2.5 sm:py-4 border-b border-gray-100 print:hidden gap-1.5 sm:gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-shrink-0">
+                        <div className="w-7 h-7 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
+                            <BarChartIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-blue-600" />
                         </div>
-                        <h3 className="text-base sm:text-lg lg:text-xl font-black text-gray-800 truncate leading-none">Stock Report</h3>
+                        <h3 className="text-xs sm:text-lg lg:text-xl font-black text-gray-800 truncate leading-none">Stock Report</h3>
                     </div>
 
                     {/* Quick Search Bar */}
@@ -718,19 +743,19 @@ const StockReport = ({
                         )}
                     </div>
 
-                    <div className="flex items-center justify-end gap-1.5 sm:gap-3 flex-shrink-0">
+                    <div className="flex items-center justify-end gap-1 sm:gap-3 flex-shrink-0">
                         <div className="relative group no-print">
                             <select
                                 value={reportType}
                                 onChange={(e) => setReportType(e.target.value)}
-                                className="appearance-none bg-white border border-gray-200 text-gray-700 py-2.5 pl-4 pr-10 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all cursor-pointer hover:border-gray-300"
+                                className="appearance-none bg-white border border-gray-200 text-gray-700 py-1.5 sm:py-2.5 pl-2.5 sm:pl-4 pr-6 sm:pr-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all cursor-pointer hover:border-gray-300"
                             >
                                 <option value="short">Short Report</option>
                                 <option value="detailed">Details Report</option>
                                 {canShowRate && <option value="price">Price Report</option>}
                             </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
-                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 sm:px-3 text-gray-400">
+                                <svg className="fill-current h-3.5 w-3.5 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
                                     <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                                 </svg>
                             </div>
@@ -740,12 +765,12 @@ const StockReport = ({
                             <button
                                 ref={filterButtonRef}
                                 onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || Object.values(stockFilters).some(v => Array.isArray(v) ? v.length > 0 : v !== '')
+                                className={`w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || Object.values(stockFilters).some(v => Array.isArray(v) ? v.length > 0 : v !== '')
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
                                     : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
                                     }`}
                             >
-                                <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showFilterPanel || Object.values(stockFilters).some(v => Array.isArray(v) ? v.length > 0 : v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${showFilterPanel || Object.values(stockFilters).some(v => Array.isArray(v) ? v.length > 0 : v !== '') ? 'text-white' : 'text-gray-400'}`} />
                             </button>
 
                             {/* Floating Filter Panel */}
@@ -982,10 +1007,10 @@ const StockReport = ({
                                 </>
                             )}
                         </div>
-                        <button onClick={() => generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages, searchQuery)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
-                            <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                        <button onClick={() => generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages, searchQuery)} className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
+                            <PrinterIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                         </button>
-                        <button onClick={onClose} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" /></button>
+                        <button onClick={onClose} className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-3.5 h-3.5 sm:w-6 sm:h-6 text-gray-500" /></button>
                     </div>
                 </div>
 
