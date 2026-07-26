@@ -76,12 +76,22 @@ const SaleManagement = ({
     const [bdCnfSearch, setBdCnfSearch] = useState('');
     const [exporterSearch, setExporterSearch] = useState('');
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
     const [originalData, setOriginalData] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [showBag, setShowBag] = useState(() => {
+        const saved = localStorage.getItem('sale_showBag_default');
+        return saved !== null ? saved === 'true' : true;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('sale_showBag_default', showBag ? 'true' : 'false');
+    }, [showBag]);
 
     const [showBulkRateModal, setShowBulkRateModal] = useState(false);
     const [lcRecords, setLcRecords] = useState([]);
     const [lcSearch, setLcSearch] = useState('');
+    const [orderSearch, setOrderSearch] = useState('');
     const [bulkRate, setBulkRate] = useState('');
 
     const handleBulkRateUpdate = async () => {
@@ -235,6 +245,8 @@ const SaleManagement = ({
     }, [currentUser]);
 
     const canApprove = hasPermission(currentUser, 'sales', 'special');
+    const canViewSaleRequest = hasPermission(currentUser, 'sales', 'saleRequest');
+    const canViewEditRequest = hasPermission(currentUser, 'sales', 'editRequest');
 
     // Fine-grained permission flags from System Access
     const canAdd    = hasPermission(currentUser, 'sales', 'add');
@@ -402,10 +414,15 @@ const SaleManagement = ({
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
             const { _id, createdAt: _createdAt, ...rest } = sale;
 
+            const finalStatus = newStatus === 'accepted' 
+                ? ((parseFloat(sale.paidAmount || 0) >= parseFloat(sale.totalAmount || 0) && parseFloat(sale.totalAmount || 0) > 0) ? 'Complete' : 'Pending')
+                : newStatus;
+
             const updatedData = {
                 ...rest,
-                status: newStatus,
-                ...(newStatus === 'Pending' ? { acceptedBy: actionBy } : {}),
+                status: finalStatus,
+                isEdited: false,
+                ...(newStatus === 'Pending' || newStatus === 'accepted' ? { acceptedBy: actionBy } : {}),
                 ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {}),
             };
 
@@ -559,6 +576,7 @@ const SaleManagement = ({
     const [formData, setFormData] = useState({
         date: '',
         invoiceNo: '',
+        orderNo: '',
         challanNo: '',
         truckNo: '',
         customerId: '',
@@ -654,7 +672,12 @@ const SaleManagement = ({
         }
         // eslint-disable-next-line react-hooks/set-state-in-effect
         if (setSearchQuery) setSearchQuery('');
-        setIsRequestedOnly(false);
+        if (saleType === 'Order') {
+            setIsRequestedOnly(true);
+        } else {
+            setIsRequestedOnly(false);
+        }
+        setIsEditRequestedOnly(false);
     }, [saleType, setSaleFilters, setSearchQuery]);
 
     const _generateInvoiceNo = () => {
@@ -693,6 +716,9 @@ const SaleManagement = ({
                     (s.invoiceNo || '').startsWith('BS') ||
                     (!s.saleType && !!(s.lcNo || s.port || s.importer));
 
+                if (saleType === 'Order') {
+                    return true;
+                }
                 if (saleType === 'General') {
                     return !isBorder && (sTypeLow === 'general' || sTypeLow === 'general sale' || !s.saleType || (s.invoiceNo || '').startsWith('GS'));
                 }
@@ -1271,7 +1297,14 @@ const SaleManagement = ({
 
             let response;
             if (editingId) {
-                response = await axios.put(url, formData);
+                const origStatus = (originalData?.status || '').toLowerCase();
+                const isAcceptedEdit = origStatus !== 'requested';
+                const isAdminUser = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+                const payload = { 
+                    ...formData, 
+                    isEdited: isAdminUser ? false : (isAcceptedEdit ? true : false)
+                };
+                response = await axios.put(url, payload);
             } else {
                 response = await axios.post(url, formData);
             }
@@ -1712,7 +1745,8 @@ const SaleManagement = ({
                 (activeDropdown === 'port' && !e.target.closest('.port-dropdown-container')) ||
                 (activeDropdown === 'indianCnF' && !e.target.closest('.ind-cnf-dropdown-container')) ||
                 (activeDropdown === 'bdCnf' && !e.target.closest('.bd-cnf-dropdown-container')) ||
-                (activeDropdown === 'lcNo' && !e.target.closest('.lc-dropdown-container'))
+                (activeDropdown === 'lcNo' && !e.target.closest('.lc-dropdown-container')) ||
+                (activeDropdown === 'orderNo' && !e.target.closest('.order-dropdown-container'))
             ) {
                 setActiveDropdown(null);
             }
@@ -1720,6 +1754,144 @@ const SaleManagement = ({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
+
+    const getFilteredOrders = () => {
+        return allSalesRecords.filter(item => {
+            const sType = (item.saleType || '').toLowerCase();
+            const inv = (item.invoiceNo || item.orderNo || '').toUpperCase();
+            const st = (item.status || '').toLowerCase();
+            const isOrd = sType === 'order' || inv.startsWith('ORD') || st === 'requested';
+            if (!isOrd) return false;
+
+            if (orderSearch) {
+                const q = orderSearch.toLowerCase();
+                const ordNo = (item.orderNo || item.invoiceNo || '').toLowerCase();
+                const comp = (item.companyName || item.customerName || '').toLowerCase();
+                return ordNo.includes(q) || comp.includes(q);
+            }
+            return true;
+        });
+    };
+
+    const handleOrderSelect = (order) => {
+        if (!order) {
+            setFormData(prev => ({ ...prev, orderNo: '' }));
+            setOrderSearch('');
+        } else {
+            const ordId = order.orderNo || order.invoiceNo || '';
+            const comp = order.companyName || order.customerName || '';
+            const custName = order.customerName || order.companyName || '';
+            const phone = order.phone || order.contact || '';
+            const address = order.address || '';
+
+            setCompanyNameSearch(comp);
+
+            const mappedItems = (order.items && order.items.length > 0) ? order.items.map(item => {
+                const mappedBrandEntries = (item.brandEntries && item.brandEntries.length > 0) ? item.brandEntries.map(be => {
+                    const pktSize = parseFloat(be.packetSize) || 30;
+                    const qty = parseFloat(be.quantity) || 0;
+                    const rawBag = (be.bag !== undefined && be.bag !== null && be.bag !== '') ? be.bag : (be.packet !== undefined && be.packet !== null && be.packet !== '') ? be.packet : '';
+                    const bagVal = rawBag !== '' ? rawBag : (pktSize > 0 && qty > 0 ? (qty / pktSize) : '');
+                    const rateVal = (be.unitPrice !== undefined && be.unitPrice !== null && be.unitPrice !== '') ? be.unitPrice : (be.rate !== undefined && be.rate !== null && be.rate !== '') ? be.rate : '';
+                    const totalVal = (be.totalAmount !== undefined && be.totalAmount !== null && be.totalAmount !== '') ? be.totalAmount : (qty > 0 && rateVal !== '' ? (qty * parseFloat(rateVal)) : '');
+
+                    return {
+                        ...be,
+                        brand: be.brand || be.brandName || '',
+                        brandName: be.brandName || be.brand || '',
+                        warehouseName: be.warehouseName || be.warehouse || '',
+                        warehouseId: be.warehouseId || '',
+                        bag: bagVal,
+                        packet: bagVal,
+                        packetSize: pktSize,
+                        quantity: qty || '',
+                        unitPrice: rateVal,
+                        rate: rateVal,
+                        totalAmount: totalVal
+                    };
+                }) : [{
+                    lcNo: '',
+                    brand: '',
+                    brandName: '',
+                    inhouseQty: '',
+                    warehouseId: '',
+                    warehouseName: '',
+                    warehouseQty: '',
+                    bag: '',
+                    packet: '',
+                    quantity: '',
+                    unitPrice: '',
+                    totalAmount: ''
+                }];
+
+                return {
+                    ...item,
+                    productId: item.productId || '',
+                    productName: item.productName || item.product || '',
+                    uom: item.uom || 'QTY',
+                    brandEntries: mappedBrandEntries
+                };
+            }) : (formData.items || []);
+
+            const subtotal = mappedItems.reduce((sum, p) =>
+                sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.totalAmount) || 0), 0)
+            , 0);
+
+            const disc = parseFloat(order.discount !== undefined && order.discount !== null ? order.discount : (formData.discount || 0));
+            const paid = parseFloat(order.paidAmount !== undefined && order.paidAmount !== null ? order.paidAmount : (formData.paidAmount || 0));
+            const grandTotal = Math.max(0, subtotal - disc);
+            const due = Math.max(0, grandTotal - paid);
+
+            setFormData(prev => ({
+                ...prev,
+                orderNo: ordId,
+                companyName: comp,
+                customerName: custName,
+                contact: phone,
+                address: address,
+                discount: order.discount !== undefined && order.discount !== null ? order.discount : prev.discount,
+                paidAmount: order.paidAmount !== undefined && order.paidAmount !== null ? order.paidAmount : prev.paidAmount,
+                totalAmount: grandTotal.toFixed(2),
+                dueAmount: due.toFixed(2),
+                items: mappedItems
+            }));
+            setOrderSearch('');
+        }
+        setActiveDropdown(null);
+        setHighlightedIndex(-1);
+    };
+
+    const getOrderQtyForBrand = (prodName, bName = '', whName = '') => {
+        if (!prodName) return 0;
+        const pLower = prodName.trim().toLowerCase();
+        const bLower = bName ? bName.trim().toLowerCase() : '';
+        const wLower = whName ? whName.trim().toLowerCase() : '';
+
+        let totalOrd = 0;
+        allSalesRecords.forEach(s => {
+            const sType = (s.saleType || '').toLowerCase();
+            const inv = (s.invoiceNo || s.orderNo || '').toUpperCase();
+            const st = (s.status || '').toLowerCase();
+            const isOrd = sType === 'order' || inv.startsWith('ORD') || st === 'requested';
+            if (!isOrd) return;
+
+            (s.items || []).forEach(it => {
+                const itProd = (it.productName || it.product || '').trim().toLowerCase();
+                if (itProd === pLower) {
+                    (it.brandEntries || []).forEach(be => {
+                        const beBrand = (be.brand || be.brandName || '').trim().toLowerCase();
+                        const beWh = (be.warehouseName || be.warehouse || '').trim().toLowerCase();
+                        if (!bLower || beBrand === bLower) {
+                            if (!wLower || !beWh || beWh === wLower) {
+                                totalOrd += (parseFloat(be.quantity) || 0);
+                            }
+                        }
+                    });
+                }
+            });
+        });
+        return Math.round(totalOrd);
+    };
 
     const getFilteredImporters = () => {
         return importersList
@@ -2300,13 +2472,25 @@ const SaleManagement = ({
         return sales.filter(s => (s.status || '').toLowerCase().includes('requested')).length;
     }, [sales]);
 
+    const editRequestedCount = useMemo(() => {
+        return sales.filter(s => s.isEdited === true && (s.status || '').toLowerCase() !== 'requested').length;
+    }, [sales]);
+
     // Apply search + advanced filters
     const displayedSales = sales.filter(sale => {
-        const matchesRequestFilter = isRequestedOnly
-            ? (sale.status || '').toLowerCase().includes('requested') && (sale.status || '').toLowerCase() !== 'rejected'
-            : !(sale.status || '').toLowerCase().includes('requested') && (sale.status || '').toLowerCase() !== 'rejected';
+        const statusLower = (sale.status || '').toLowerCase();
+        if (statusLower === 'rejected') return false;
 
-        if (!matchesRequestFilter) return false;
+        const isReq = statusLower === 'requested';
+        const isEditReq = sale.isEdited === true && !isReq;
+
+        if (isRequestedOnly) {
+            if (!isReq) return false;
+        } else if (isEditRequestedOnly) {
+            if (!isEditReq) return false;
+        } else {
+            if (isReq || isEditReq) return false;
+        }
 
         // Text search
         if (searchQuery) {
@@ -2458,7 +2642,7 @@ const SaleManagement = ({
         <div className="sale-management-container">
             <div className="sale-mgmt-header">
                 <div className="w-full md:w-auto">
-                    <h2 className="sale-mgmt-title">{saleType} Sale Management</h2>
+                    <h2 className="sale-mgmt-title">{saleType === 'Order' ? 'Order Management' : `${saleType} Sale Management`}</h2>
                 </div>
 
                 {!showForm && (
@@ -2476,17 +2660,39 @@ const SaleManagement = ({
                             />
                         </div>
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setIsRequestedOnly(!isRequestedOnly)}
-                                className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
-                            >
-                                Requested
-                                {requestedCount > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
-                                        {requestedCount}
-                                    </span>
-                                )}
-                            </button>
+                            {canViewSaleRequest && (
+                                <button
+                                    onClick={() => {
+                                        setIsRequestedOnly(!isRequestedOnly);
+                                        setIsEditRequestedOnly(false);
+                                    }}
+                                    className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
+                                >
+                                    Sale Request
+                                    {requestedCount > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                            {requestedCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
+
+                            {canViewEditRequest && (
+                                <button
+                                    onClick={() => {
+                                        setIsEditRequestedOnly(!isEditRequestedOnly);
+                                        setIsRequestedOnly(false);
+                                    }}
+                                    className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isEditRequestedOnly ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-amber-300 hover:text-amber-600'}`}
+                                >
+                                    Edit Request
+                                    {editRequestedCount > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-amber-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                            {editRequestedCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -2541,6 +2747,27 @@ const SaleManagement = ({
                                         </div>
 
                                         <div className="space-y-5">
+                                            {/* Show Bag Control */}
+                                            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                                <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">SHOW BAG</span>
+                                                <div className="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl border border-gray-200/60">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowBag(true)}
+                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${showBag ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                    >
+                                                        Enable
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowBag(false)}
+                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${!showBag ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                    >
+                                                        Disable
+                                                    </button>
+                                                </div>
+                                            </div>
+
                                             {/* Quick Range */}
                                             <div className="space-y-2 text-center">
                                                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
@@ -2948,21 +3175,21 @@ const SaleManagement = ({
                                                         const filtered = brands.filter(b => b.toLowerCase().includes((saleFilterSearch.brandSearch || '').toLowerCase()));
                                                         return filtered.length > 0 ? (
                                                             <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                {filtered.map(b => (
-                                                                    <button key={b} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, brand: b })); setSaleFilterSearch(prev => ({ ...prev, brandSearch: b })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
-                                                                        {b}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        ) : null;
-                                                    })()}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-                        </div>
+                                                                 {filtered.map(b => (
+                                                                     <button key={b} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, brand: b })); setSaleFilterSearch(prev => ({ ...prev, brandSearch: b })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                         {b}
+                                                                     </button>
+                                                                 ))}
+                                                             </div>
+                                                         ) : null;
+                                                     })()}
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </>
+                             )}
+                         </div>
 
                         <button
                             onClick={() => {
@@ -3040,7 +3267,7 @@ const SaleManagement = ({
                         autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10"
                     >
-                        <div className={`grid grid-cols-1 gap-4 col-span-2 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-3'}`}>
+                        <div className={`grid grid-cols-1 gap-4 col-span-2 ${saleType === 'Border' ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
                             <CustomDatePicker
                                 label="Date"
                                 name="date"
@@ -3049,6 +3276,75 @@ const SaleManagement = ({
                                 compact={true}
                                 readOnly={isFieldReadOnly(originalData?.date)}
                             />
+                            {saleType !== 'Border' && (
+                                <div className="sale-mgmt-input-group relative order-dropdown-container">
+                                    <label className="sale-mgmt-label">Order ID</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="orderNo"
+                                            placeholder={formData.orderNo || "Search Order..."}
+                                            value={activeDropdown === 'orderNo' ? orderSearch : formData.orderNo}
+                                            readOnly={isFieldReadOnly(originalData?.orderNo)}
+                                            onChange={(e) => {
+                                                if (isFieldReadOnly(originalData?.orderNo)) return;
+                                                setOrderSearch(e.target.value);
+                                                setActiveDropdown('orderNo');
+                                                setHighlightedIndex(-1);
+                                                handleInputChange(e);
+                                            }}
+                                            autoComplete="off"
+                                            onFocus={() => {
+                                                if (isFieldReadOnly(originalData?.orderNo)) return;
+                                                setOrderSearch(formData.orderNo || '');
+                                                setActiveDropdown('orderNo');
+                                                setHighlightedIndex(-1);
+                                            }}
+                                            onKeyDown={(e) => !isFieldReadOnly(originalData?.orderNo) && handleDropdownKeyDown(e, 'orderNo', getFilteredOrders(), handleOrderSelect)}
+                                            className={`sale-mgmt-input pr-14 ${formData.orderNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'} ${isFieldReadOnly(originalData?.orderNo) ? 'bg-gray-50' : ''}`}
+                                        />
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {formData.orderNo && (
+                                                <button type="button" onClick={() => handleOrderSelect(null)} className="text-gray-400 hover:text-red-500">
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'orderNo' ? null : 'orderNo')}
+                                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                            >
+                                                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'orderNo' ? 'rotate-180' : ''}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {activeDropdown === 'orderNo' && getFilteredOrders().length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {getFilteredOrders().map((ord, idx) => {
+                                                const ordId = ord.orderNo || ord.invoiceNo || '-';
+                                                const comp = ord.companyName || ord.customerName || '-';
+                                                return (
+                                                    <button
+                                                        key={ord._id || `ord-${idx}`}
+                                                        type="button"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            handleOrderSelect(ord);
+                                                        }}
+                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                        className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.orderNo === ordId ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-blue-600">{ordId}</span>
+                                                            <span className="text-[11px] text-gray-500">{comp} | {formatDate(ord.date)}</span>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             <div className="sale-mgmt-input-group" style={saleType !== 'Border' ? { display: 'none' } : {}}>
                                 <label className="sale-mgmt-label">Invoice No</label>
                                 <input autoComplete="off" type="text" name="invoiceNo" value={formData.invoiceNo} readOnly placeholder="Auto-generated" className="sale-mgmt-input sale-mgmt-input-readonly cursor-default" />
@@ -3724,10 +4020,9 @@ const SaleManagement = ({
                                             </button>
                                         )}
 
-                                        <div className={`${saleType === 'Border' ? 'flex flex-row items-center gap-4' : 'flex flex-col md:flex-row md:items-center gap-4 mb-6'}`}>
-                                            {/* LC No Selection */}
+                                        <div className="flex flex-row items-center gap-4 mb-6 px-4">
                                             {/* Product Selection */}
-                                            <div className={`space-y-1.5 relative px-4 product-dropdown-container flex-1`}>
+                                            <div className="space-y-1.5 relative product-dropdown-container flex-1">
                                                 <label className="sale-mgmt-item-label">Product</label>
                                                 <div className="relative">
                                                     <input
@@ -3797,9 +4092,17 @@ const SaleManagement = ({
                                                 </div>
                                             </div>
 
+                                            {/* Order QTY Display after Product on same line */}
+                                            <div className="space-y-1.5 flex-1 md:max-w-[180px]">
+                                                <label className="sale-mgmt-item-label">Order QTY</label>
+                                                <div className="h-10 flex items-center justify-center bg-purple-50/50 border border-purple-100 rounded-xl text-sm font-bold text-purple-900 shadow-sm">
+                                                    {getOrderQtyForBrand(item.productName)} kg
+                                                </div>
+                                            </div>
+
                                             {/* UOM Selector for General Sales */}
                                             {saleType !== 'Border' && (
-                                                <div className="space-y-1.5 px-4 flex-1 md:max-w-[200px]">
+                                                <div className="space-y-1.5 flex-1 md:max-w-[200px]">
                                                     <label className="sale-mgmt-item-label">UOM</label>
                                                     <div className="flex items-center bg-gray-50/50 p-1 rounded-xl border border-gray-100/50 h-10 shadow-inner group/uom">
                                                         <button
@@ -3821,6 +4124,7 @@ const SaleManagement = ({
                                                     </div>
                                                 </div>
                                             )}
+                                        </div>
 
                                             {saleType === 'Border' && (
                                                 <div className="flex-[3] space-y-4 pt-1">
@@ -3892,7 +4196,6 @@ const SaleManagement = ({
                                                     ))}
                                                 </div>
                                             )}
-                                        </div>
 
                                         {saleType !== 'Border' && (
                                             <div className="space-y-1">
@@ -4266,7 +4569,7 @@ const SaleManagement = ({
                                     <div className="text-2xl font-black text-gray-900">৳ {parseFloat(formData.totalAmount).toLocaleString('en-IN')}</div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-bold text-gray-700">Truck Fare</label>
+                                    <label className="text-sm font-bold text-gray-700">Paid Amount</label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
                                         <input autoComplete="off"
@@ -4286,26 +4589,49 @@ const SaleManagement = ({
                                         ৳ {parseFloat(formData.dueAmount).toLocaleString('en-IN')}
                                     </div>
                                 </div>
-                                <div className="flex flex-col md:flex-row items-center justify-between border-t border-gray-100 pt-4 mt-2">
-                                    <div className="flex-1 w-full text-center md:text-left mb-4 md:mb-0">
-                                        {submitStatus === 'success' && (
-                                            <p className="text-green-600 font-medium flex items-center justify-center md:justify-start animate-bounce">
-                                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                                                Sale saved successfully!
-                                            </p>
-                                        )}
-                                        {submitStatus === 'error' && (
-                                            <p className="text-red-600 font-medium flex items-center justify-center md:justify-start">
-                                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                                Failed to save sale. Please try again.
-                                            </p>
-                                        )}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-gray-700">Status</label>
+                                    <div className="relative">
+                                        <select
+                                            name="status"
+                                            value={(formData.status === 'accepted' || formData.status === 'Complete') ? 'Complete' : 'Pending'}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                const newStatus = val === 'Complete' ? 'accepted' : 'Pending';
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    status: newStatus
+                                                }));
+                                            }}
+                                            className={`w-full pl-4 pr-10 py-2.5 bg-white border rounded-xl font-bold text-sm outline-none transition-all cursor-pointer appearance-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ${(formData.status === 'accepted' || formData.status === 'Complete')
+                                                ? 'border-emerald-300 text-emerald-700 bg-emerald-50/50'
+                                                : 'border-amber-300 text-amber-700 bg-amber-50/50'
+                                                }`}
+                                        >
+                                            <option value="Pending" className="text-amber-700 font-bold">Pending</option>
+                                            <option value="Complete" className="text-emerald-700 font-bold">Complete</option>
+                                        </select>
+                                        <ChevronDownIcon className="w-4 h-4 text-gray-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                                     </div>
-                                    <div className="flex justify-end w-full md:w-auto relative z-10">
+                                </div>
+                                <div className="col-span-full flex flex-col items-center justify-center border-t border-blue-100/60 pt-4 mt-2 gap-3 w-full text-center">
+                                    {submitStatus === 'success' && (
+                                        <p className="text-green-600 font-medium flex items-center justify-center animate-bounce">
+                                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                            Sale saved successfully!
+                                        </p>
+                                    )}
+                                    {submitStatus === 'error' && (
+                                        <p className="text-red-600 font-medium flex items-center justify-center">
+                                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                            Failed to save sale. Please try again.
+                                        </p>
+                                    )}
+                                    <div className="flex items-center justify-center w-full relative z-10">
                                         <button
                                             type="submit"
                                             disabled={isSubmitting}
-                                            className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            className={`px-10 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
                                             {isSubmitting ? (
                                                 <span className="flex items-center">
@@ -4478,10 +4804,13 @@ const SaleManagement = ({
                                             <div className="flex items-center justify-center">Total {renderSortIcon('totalAmount')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('paidAmount')}>
-                                            <div className="flex items-center justify-center">Truck Fare {renderSortIcon('paidAmount')}</div>
+                                            <div className="flex items-center justify-center">Paid {renderSortIcon('paidAmount')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('dueAmount')}>
                                             <div className="flex items-center justify-center">Balance {renderSortIcon('dueAmount')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
+                                            <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center">Actions</th>
                                     </tr>
@@ -4489,9 +4818,9 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan="17" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                    <tr><td colSpan="18" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
-                                    <tr><td colSpan="17" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan="18" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = !collapsedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -4665,11 +4994,15 @@ const SaleManagement = ({
                                                     <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
                                                 ) : (
                                                     <div className="flex flex-col gap-2">
-                                                        {items.map((it, idx) => (
-                                                            <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                {it.lcNo || sale.lcNo || '-'}
-                                                            </div>
-                                                        ))}
+                                                        {items.map((it, idx) => {
+                                                            const rawLc = it.lcNo || sale.lcNo || '-';
+                                                            const displayLc = (!rawLc || rawLc === '-') ? '-' : (/^\d+$/.test(rawLc.toString().trim()) && rawLc.toString().trim().length > 4 ? rawLc.toString().trim().slice(-4) : rawLc.toString().trim());
+                                                            return (
+                                                                <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    {displayLc}
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
                                             </td>
@@ -4825,12 +5158,57 @@ const SaleManagement = ({
                                                     })()}
                                                 </div>
                                             </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                {(() => {
+                                                    const storedDue = parseFloat(sale.dueAmount);
+                                                    const storedTotal = parseFloat(sale.totalAmount) || 0;
+                                                    let dueVal = 0;
+                                                    if (!isNaN(storedDue) && (storedDue > 0 || storedTotal > 0)) {
+                                                        dueVal = storedDue;
+                                                    } else {
+                                                        const calculatedTotal = items.reduce((sum, it) => {
+                                                            const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                                                            return sum + (qty * parseFloat(it.unitPrice || 0));
+                                                        }, 0);
+                                                        dueVal = Math.max(0, calculatedTotal - parseFloat(sale.discount || 0) - parseFloat(sale.paidAmount || 0));
+                                                    }
+                                                    const st = (sale.status || '').toLowerCase();
+                                                    if (st === 'requested') {
+                                                        return (
+                                                            <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                                Requested
+                                                            </span>
+                                                        );
+                                                    }
+                                                    if (st === 'rejected') {
+                                                        return (
+                                                            <span className="px-2.5 py-1 bg-red-50 text-red-700 rounded-full text-xs font-bold border border-red-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                                                Rejected
+                                                            </span>
+                                                        );
+                                                    }
+                                                    const isComplete = st === 'complete' || st === 'accepted' || (st !== 'pending' && dueVal <= 0);
+                                                    return isComplete ? (
+                                                        <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                            Complete
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                            Pending
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
                                             <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center justify-center gap-1.5">
-                                                    {sale.status === 'Requested' ? (
+                                                    {(sale.status === 'Requested' || sale.isEdited === true) ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
-                                                            {canEditRequestedSale(sale) && (
+                                                            {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                             )}
                                                             {canApprove && (
@@ -4963,10 +5341,10 @@ const SaleManagement = ({
                                             )}
                                             {isExpanded ? (
                                                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                    {sale.status === 'Requested' ? (
+                                                    {(sale.status === 'Requested' || sale.isEdited === true) ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
-                                                            {canEditRequestedSale(sale) && (
+                                                            {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
                                                             )}
                                                             {canApprove && (
@@ -5062,7 +5440,7 @@ const SaleManagement = ({
                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</span>
                                                                 <span className="text-gray-400 font-bold">:</span>
                                                                 <span className="font-bold text-gray-800">
-                                                                    {it.uom === 'BAG'
+                                                                    {(it.uom === 'BAG' && showBag)
                                                                         ? `${parseFloat(it.bag || 0).toLocaleString('en-US')} Bag`
                                                                         : `${parseFloat(it.quantity || 0).toLocaleString('en-US')} kg`}
                                                                 </span>
@@ -5102,6 +5480,54 @@ const SaleManagement = ({
                                                 <span className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Balance</span>
                                                 <span className="text-orange-400 font-bold">:</span>
                                                 <span className="font-black text-orange-700">৳{parseFloat(sale.dueAmount || 0).toLocaleString('en-IN')}</span>
+
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</span>
+                                                <span className="text-gray-400 font-bold">:</span>
+                                                <span>
+                                                    {(() => {
+                                                        const storedDue = parseFloat(sale.dueAmount);
+                                                        const storedTotal = parseFloat(sale.totalAmount) || 0;
+                                                        let dueVal = 0;
+                                                        if (!isNaN(storedDue) && (storedDue > 0 || storedTotal > 0)) {
+                                                            dueVal = storedDue;
+                                                        } else {
+                                                            const calculatedTotal = items.reduce((sum, it) => {
+                                                                const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                                                                return sum + (qty * parseFloat(it.unitPrice || 0));
+                                                            }, 0);
+                                                            dueVal = Math.max(0, calculatedTotal - parseFloat(sale.discount || 0) - parseFloat(sale.paidAmount || 0));
+                                                        }
+                                                        const st = (sale.status || '').toLowerCase();
+                                                        if (st === 'requested') {
+                                                            return (
+                                                                <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                                    Requested
+                                                                </span>
+                                                            );
+                                                        }
+                                                        if (st === 'rejected') {
+                                                            return (
+                                                                <span className="px-2.5 py-1 bg-red-50 text-red-700 rounded-full text-xs font-bold border border-red-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                                                    Rejected
+                                                                </span>
+                                                            );
+                                                        }
+                                                        const isComplete = st === 'complete' || st === 'accepted' || (st !== 'pending' && dueVal <= 0);
+                                                        return isComplete ? (
+                                                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                                Complete
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                                Pending
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </span>
                                             </div>
                                         </>
                                     )}

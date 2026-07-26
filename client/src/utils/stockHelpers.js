@@ -25,6 +25,10 @@ export const getGroupedBrandList = (brandList) => {
                 periodArrivalPacket: 0,
                 saleQuantity: 0,
                 salePacket: 0,
+                orderQuantity: 0,
+                orderPacket: 0,
+                saleableQuantity: 0,
+                saleablePacket: 0,
                 sweepedQuantity: 0,
                 sweepedPacket: 0,
                 damageQuantity: 0,
@@ -43,6 +47,10 @@ export const getGroupedBrandList = (brandList) => {
         groups[key].periodArrivalPacket += b.periodArrivalPacket || 0;
         groups[key].saleQuantity += b.saleQuantity || 0;
         groups[key].salePacket += b.salePacket || 0;
+        groups[key].orderQuantity += b.orderQuantity || 0;
+        groups[key].orderPacket += b.orderPacket || 0;
+        groups[key].saleableQuantity += b.saleableQuantity || 0;
+        groups[key].saleablePacket += b.saleablePacket || 0;
         groups[key].sweepedQuantity += b.sweepedQuantity || 0;
         groups[key].sweepedPacket += b.sweepedPacket || 0;
         groups[key].damageQuantity += b.damageQuantity || 0;
@@ -258,6 +266,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 openingPacket: 0, openingQuantity: 0,
                 periodArrivalPacket: 0, periodArrivalQuantity: 0,
                 salePacket: 0, saleQuantity: 0,
+                orderPacket: 0, orderQuantity: 0,
                 sweepedPacket: 0, sweepedQuantity: 0,
                 damagePacket: 0, damageQuantity: 0,
                 inHousePacket: 0, inHouseQuantity: 0,
@@ -277,6 +286,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 openingPacket: 0, openingQuantity: 0,
                 periodArrivalPacket: 0, periodArrivalQuantity: 0,
                 salePacket: 0, saleQuantity: 0,
+                orderPacket: 0, orderQuantity: 0,
                 sweepedPacket: 0, sweepedQuantity: 0,
                 damagePacket: 0, damageQuantity: 0,
                 inHousePacket: 0, inHouseQuantity: 0,
@@ -306,7 +316,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (!brandObj._salesResolved) {
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
-                if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+                if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
                 if (endDate && sDate > endDate) return;
@@ -352,11 +362,20 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                                 consumedSales.add(saleEntryId);
 
+                                 const sType = (sale.saleType || '').toLowerCase();
+                                const inv = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
+                                const isOrder = sType === 'order' || inv.startsWith('ORD') || sStatus === 'requested';
+
                                 if (isBeforeSale) {
                                     brandObj.openingQuantity -= sq;
                                     brandObj.openingPacket -= sp;
                                     acc[key].openingQuantity -= sq;
                                     acc[key].openingPacket -= sp;
+                                } else if (isOrder) {
+                                    brandObj.orderQuantity += sq;
+                                    brandObj.orderPacket += sp;
+                                    acc[key].orderQuantity += sq;
+                                    acc[key].orderPacket += sp;
                                 } else {
                                     brandObj.saleQuantity += sq;
                                     brandObj.salePacket += sp;
@@ -612,11 +631,21 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         const pSize = brandObj.packetSize || 30;
                         sp = sq / pSize;
                     }
+
+                    const sType = (sale.saleType || '').toLowerCase();
+                    const inv = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
+                    const isOrder = sType === 'order' || inv.startsWith('ORD') || sStatus === 'requested';
+
                     if (isBefore) {
                         brandObj.openingQuantity -= sq;
                         brandObj.openingPacket -= sp;
                         group.openingQuantity -= sq;
                         group.openingPacket -= sp;
+                    } else if (isOrder) {
+                        brandObj.orderQuantity += sq;
+                        brandObj.orderPacket += sp;
+                        group.orderQuantity += sq;
+                        group.orderPacket += sp;
                     } else {
                         brandObj.saleQuantity += sq;
                         brandObj.salePacket += sp;
@@ -643,6 +672,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const closingQty = openingAfterShortage - saleQty - damageQty;
             const closingPkt = openingPktAfterShortage - b.salePacket - (b.damagePacket || 0);
 
+            const orderQty = b.orderQuantity || 0;
+            const orderPkt = b.orderPacket || 0;
+            const saleableQty = closingQty - orderQty;
+            const saleablePkt = closingPkt - orderPkt;
+
             const cleanVal = (v) => Math.abs(v) < 0.001 ? 0 : v;
 
             return {
@@ -653,6 +687,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 periodArrivalPacket: cleanVal(b.periodArrivalPacket),
                 saleQuantity: cleanVal(saleQty),
                 salePacket: cleanVal(b.salePacket),
+                orderQuantity: cleanVal(orderQty),
+                orderPacket: cleanVal(orderPkt),
+                saleableQuantity: cleanVal(saleableQty),
+                saleablePacket: cleanVal(saleablePkt),
                 sweepedQuantity: cleanVal(shortageQty),
                 sweepedPacket: cleanVal(b.sweepedPacket),
                 damageQuantity: cleanVal(damageQty),
@@ -704,6 +742,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             : groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
         const salePkt = brandList.reduce((sum, b) => sum + b.salePacket, 0);
         const damagePkt = brandList.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
+        const orderQty = brandList.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
+        const orderPkt = brandList.reduce((sum, b) => sum + (b.orderPacket || 0), 0);
+        const saleableQty = inHouseQty - orderQty;
+        const saleablePkt = inHousePkt - orderPkt;
 
         const groupPktSize = brandList.find(b => (b.packetSize || 0) > 0)?.packetSize || products.find(p => (p.name || p.productName || '').trim().toLowerCase() === group.productName.toLowerCase())?.packetSize || 30;
 
@@ -719,6 +761,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             inHousePacket: inHousePkt,
             saleQuantity: saleQty,
             salePacket: salePkt,
+            orderQuantity: orderQty,
+            orderPacket: orderPkt,
+            saleableQuantity: saleableQty,
+            saleablePacket: saleablePkt,
             damageQuantity: damageQty,
             damagePacket: damagePkt
         };

@@ -26,7 +26,15 @@ export const MODULES_LIST = [
             { key: 'showRate', label: 'Show Rate' }
         ]
     },
-    { key: 'sales', label: 'Sales & Reports', specialLabel: 'Approve Sale' },
+    { 
+        key: 'sales', 
+        label: 'Sales & Reports', 
+        specialLabels: [
+            { key: 'special', label: 'Approve Sale' },
+            { key: 'saleRequest', label: 'Sale Request' },
+            { key: 'editRequest', label: 'Edit Request' }
+        ]
+    },
     { key: 'profitLoss', label: 'Profit & Loss' },
     { key: 'costOfGoods', label: 'Cost of Goods' },
     { key: 'paymentCollection', label: 'Payment Collection' },

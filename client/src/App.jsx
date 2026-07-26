@@ -52,6 +52,7 @@ import LCReport from './components/modules/LCReceive/LCReport';
 import ProductHistoryReport from './components/modules/StockManagement/ProductHistoryReport';
 import SalesReport from './components/modules/Sale/SalesReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
+import OrderManagement from './components/modules/Order/OrderManagement';
 import ProfitLoss from './components/modules/Sale/ProfitLoss';
 import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
 import SystemAccess from './components/modules/Employee/SystemAccess';
@@ -313,26 +314,40 @@ function App() {
       const hasRequestedLC = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !!item.lcNo);
       const hasRequestedStockMgmt = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !item.lcNo);
 
+      const hasRequestedOrder = salesData.some(item => {
+        const status = (item.status || '').toLowerCase();
+        const type = (item.saleType || '').toLowerCase();
+        const isOrder = type === 'order' || (item.invoiceNo || item.orderNo || '').startsWith('ORD');
+        const isReq = status === 'requested';
+        const isEditReq = item.isEdited === true && !isReq;
+        return isOrder && (isReq || isEditReq);
+      });
+
       const hasRequestedGeneralSale = salesData.some(item => {
         const status = (item.status || '').toLowerCase();
         const type = (item.saleType || '').toLowerCase();
         const isGeneral = type === 'general' || (item.invoiceNo || '').startsWith('GS');
-        return status === 'requested' && isGeneral;
+        const isReq = status === 'requested';
+        const isEditReq = item.isEdited === true && !isReq;
+        return isGeneral && (isReq || isEditReq);
       });
 
       const hasRequestedBorderSale = salesData.some(item => {
         const status = (item.status || '').toLowerCase();
         const type = (item.saleType || '').toLowerCase();
         const isBorder = type === 'border' || (item.invoiceNo || '').startsWith('BS');
-        return status === 'requested' && isBorder;
+        const isReq = status === 'requested';
+        const isEditReq = item.isEdited === true && !isReq;
+        return isBorder && (isReq || isEditReq);
       });
 
       setPendingModules({
         lc: hasRequestedLC,
         stock: hasRequestedStockMgmt,
-        sale: hasRequestedGeneralSale || hasRequestedBorderSale,
+        sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder,
         lcReceive: hasRequestedLC,
         stockManagement: hasRequestedStockMgmt,
+        order: hasRequestedOrder,
         generalSale: hasRequestedGeneralSale,
         borderSale: hasRequestedBorderSale
       });
@@ -669,7 +684,7 @@ function App() {
   const [warehouseData, setWarehouseData] = useState([]);
   const [salesRecords, setSalesRecords] = useState([]);
   const [stockFilters, setStockFilters] = useState({
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: new Date(Date.now() - 86400000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
     warehouse: 'All Warehouses', brand: '', importer: '', exporter: '', productName: '', category: ''
   });
@@ -1840,6 +1855,17 @@ function App() {
             refreshPendingIndicators={fetchPendingEntries}
           />
         );
+      case 'order-sale-section':
+        return (
+          <OrderManagement
+            key={refreshKey}
+            currentUser={currentUser}
+            addNotification={addNotification}
+            fetchSalesGlobal={fetchSales}
+            refreshPendingIndicators={fetchPendingEntries}
+            onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+          />
+        );
       case 'general-sale-section':
         return (
           <SaleManagement
@@ -2481,8 +2507,18 @@ function App() {
                   <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${saleDropdownOpen ? 'transform rotate-180' : ''}`} />
                 </div>
               </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
+                  <button
+                    onClick={() => { handleViewChange('order-sale-section'); }}
+                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'order-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                  >
+                    <div className="flex items-center">
+                      <ShoppingCartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Order</span>
+                    </div>
+                    {pendingModules.order && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                  </button>
                   <button
                     onClick={() => { handleViewChange('general-sale-section'); }}
                     className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}

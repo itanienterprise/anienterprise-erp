@@ -97,6 +97,15 @@ const StockManagement = ({
     const canShowRate = hasPermission(currentUser, 'stock', 'showRate');
 
     // Filtering & Search (Main View)
+    const [showBag, setShowBag] = useState(() => {
+        const saved = localStorage.getItem('stock_showBag_default');
+        return saved !== null ? saved === 'true' : true;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('stock_showBag_default', showBag ? 'true' : 'false');
+    }, [showBag]);
+
     const [stockSearchQuery, setStockSearchQuery] = useState('');
     const [showStockFilterPanel, setShowStockFilterPanel] = useState(false);
     // stockFilters lifted to App.jsx
@@ -2246,7 +2255,9 @@ const StockManagement = ({
 
     const gridClass = showRate
         ? "grid grid-cols-[2fr_1.5fr_1.5fr_1.5fr_1.5fr_1fr] gap-4"
-        : "grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_1fr] gap-4";
+        : showBag
+            ? "grid grid-cols-[2.2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_0.8fr] gap-3"
+            : "grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_0.8fr] gap-4";
 
     return (
         <div className="stock-management-container space-y-6">
@@ -2308,13 +2319,34 @@ const StockManagement = ({
                                              <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-100">
                                                  <h4 className="font-bold text-gray-900 tracking-tight">Advance Filter</h4>
                                                  <button onClick={() => {
+                                                     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
                                                      const today = new Date().toISOString().split('T')[0];
-                                                     setStockFilters({ startDate: today, endDate: today, warehouse: 'All Warehouses', brand: [], importer: '', productName: [] });
+                                                     setStockFilters({ startDate: yesterday, endDate: today, warehouse: 'All Warehouses', brand: [], importer: '', productName: [] });
                                                      setFilterSearchInputs({ warehouseSearch: '', importerSearch: '', brandSearch: '', productSearch: '' });
                                                      setShowStockFilterPanel(false);
                                                  }} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">RESET ALL</button>
                                              </div>
                                             <div className="space-y-4">
+                                                {/* Show Bag Toggle / Radio Control */}
+                                                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                                    <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">SHOW BAG</span>
+                                                    <div className="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl border border-gray-200/60">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowBag(true)}
+                                                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${showBag ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                        >
+                                                            Enable
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowBag(false)}
+                                                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${!showBag ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                        >
+                                                            Disable
+                                                        </button>
+                                                    </div>
+                                                </div>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <CustomDatePicker label="From Date" value={stockFilters.startDate} onChange={(e) => setStockFilters({ ...stockFilters, startDate: e.target.value })} compact={true} />
                                                     <CustomDatePicker label="To Date" value={stockFilters.endDate} onChange={(e) => setStockFilters({ ...stockFilters, endDate: e.target.value })} compact={true} rightAlign={true} />
@@ -2545,30 +2577,35 @@ const StockManagement = ({
                         </div>
                     </div>
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 md:gap-4 mb-6">
+                    <div className={`grid grid-cols-2 ${showBag ? 'md:grid-cols-4 lg:grid-cols-8' : 'md:grid-cols-3 lg:grid-cols-5'} gap-3 md:gap-4 mb-6`}>
                         {[
                             {
                                 label: 'TOTAL BAG',
+                                show: showBag,
                                 value: `${(totalOpeningPktWhole || 0).toLocaleString('en-US')}`,
                                 bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600'
                             },
                             {
                                 label: 'TOTAL QUANTITY',
+                                show: true,
                                 value: `${Math.round(totalQuantity || 0).toLocaleString('en-US')} ${unit}`,
                                 bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600'
                             },
                             {
                                 label: 'TOTAL SALE BAG',
+                                show: showBag,
                                 value: `${(totalSalePktWhole || 0).toLocaleString('en-IN')} - ${(totalSalePktDecimalKg || 0).toLocaleString('en-IN')} ${unit}`,
                                 bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600'
                             },
                             {
                                 label: 'TOTAL SALE QTY',
+                                show: true,
                                 value: `${Math.round(totalSaleQty || 0).toLocaleString('en-US')} ${unit}`,
                                 bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600'
                             },
                             {
                                 label: 'INHOUSE BAG',
+                                show: showBag,
                                 value: `${(totalInHousePktWhole || 0).toLocaleString('en-US')} - ${Math.round(totalInHousePktDecimalKg || 0).toLocaleString('en-US')} ${unit}`,
                                 bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50',
                                 borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100',
@@ -2577,6 +2614,7 @@ const StockManagement = ({
                             },
                             {
                                 label: 'INHOUSE QTY',
+                                show: true,
                                 value: `${Math.round(totalInHouseQty || 0).toLocaleString('en-US')} ${unit}`,
                                 bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50',
                                 borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100',
@@ -2585,15 +2623,17 @@ const StockManagement = ({
                             },
                             {
                                 label: 'SHORTAGE',
+                                show: true,
                                 value: `${Math.round(totalShortage || 0).toLocaleString('en-IN')} ${unit}`,
                                 bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600'
                             },
                             {
                                 label: 'DAMAGE',
+                                show: true,
                                 value: `${Math.round(totalDamageQty || 0).toLocaleString('en-IN')} ${unit}`,
                                 bgColor: 'bg-red-50/50', borderColor: 'border-red-100', textColor: 'text-red-700', labelColor: 'text-red-600'
                             },
-                        ].map((card, i) => (
+                        ].filter(card => card.show).map((card, i) => (
                             <div key={i} className={`bg-white border ${card.bgColor} ${card.borderColor} p-3 md:p-4 rounded-2xl shadow-sm transition-all hover:shadow-md hover:scale-[1.02] flex flex-col justify-between h-full`}>
                                 <div className={`text-[10px] md:text-[11px] font-bold ${card.labelColor} uppercase tracking-wider mb-1 whitespace-nowrap`}>{card.label}</div>
                                 <div>
@@ -3297,16 +3337,39 @@ const StockManagement = ({
                                                     <div className="text-center text-purple-800">LC No</div>
                                                     <div className="text-center text-purple-800">Rate</div>
                                                 </>
-                                            ) : (
+                                            ) : showBag ? (
                                                 <>
                                                     <div className="text-center text-blue-800">Opening Stock Bag</div>
                                                     <div className="text-center text-blue-800">Opening Stock QTY</div>
                                                     <div className="text-center text-orange-800">Sale BAG</div>
                                                     <div className="text-center text-orange-800">Sale QTY</div>
                                                 </>
+                                            ) : (
+                                                <>
+                                                    <div className="text-center text-blue-800">Opening Stock QTY</div>
+                                                    <div className="text-center text-orange-800">Sale QTY</div>
+                                                </>
                                             )}
-                                            <div className="text-center text-green-800">Closing Stock Bag</div>
+                                            {showBag && <div className="text-center text-green-800">Closing Stock Bag</div>}
                                             <div className="text-center text-green-800">Closing Stock QTY</div>
+
+                                            {/* Order & Saleable Headers */}
+                                            {(!canShowRate || !showRate) && (
+                                                showBag ? (
+                                                    <>
+                                                        <div className="text-center text-purple-800">Order Bag</div>
+                                                        <div className="text-center text-purple-800">Order Qty</div>
+                                                        <div className="text-center text-teal-800">Saleable Bag</div>
+                                                        <div className="text-center text-teal-800">Saleable Qty</div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="text-center text-purple-800">Order Qty</div>
+                                                        <div className="text-center text-teal-800">Saleable Qty</div>
+                                                    </>
+                                                )
+                                            )}
+
                                             <div className="text-center text-gray-500">Status</div>
                                         </div>
                                     </th>
@@ -3374,7 +3437,7 @@ const StockManagement = ({
                                                                                     {brand.purchasedPrice ? `৳${parseFloat(brand.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                                                                                 </div>
                                                                             </>
-                                                                        ) : (
+                                                                        ) : showBag ? (
                                                                             <>
                                                                                 {/* Opening Stock */}
                                                                                 <div className="text-sm text-blue-800 bg-blue-50/50 px-2 py-1 rounded-lg text-center font-bold">
@@ -3398,18 +3461,64 @@ const StockManagement = ({
                                                                                     {Math.round(brand.saleQuantity || 0).toLocaleString('en-US')}
                                                                                 </div>
                                                                             </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className="text-sm text-blue-900 bg-blue-50/50 px-2 py-1 rounded-lg text-center font-bold">
+                                                                                    {Math.round(brand.openingQuantity || 0).toLocaleString('en-US')}
+                                                                                </div>
+                                                                                <div className="text-sm text-orange-900 bg-orange-50/50 px-2 py-1 rounded-lg text-center font-bold">
+                                                                                    {Math.round(brand.saleQuantity || 0).toLocaleString('en-US')}
+                                                                                </div>
+                                                                            </>
                                                                         )}
 
                                                                         {/* Closing Stock */}
-                                                                        <div className="text-sm text-green-800 bg-green-50/50 px-2 py-1 rounded-lg text-center font-bold border border-green-100/50">
-                                                                            {(() => {
-                                                                                const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize);
-                                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
-                                                                            })()}
-                                                                        </div>
+                                                                        {showBag && (
+                                                                            <div className="text-sm text-green-800 bg-green-50/50 px-2 py-1 rounded-lg text-center font-bold border border-green-100/50">
+                                                                                {(() => {
+                                                                                    const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize);
+                                                                                    return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                })()}
+                                                                            </div>
+                                                                        )}
                                                                         <div className="text-sm text-green-900 bg-green-50/50 px-2 py-1 rounded-lg text-center font-black border border-green-100/50">
                                                                             {Math.round(brand.inHouseQuantity).toLocaleString('en-US')}
                                                                         </div>
+
+                                                                        {/* Order & Saleable Cells */}
+                                                                        {(!canShowRate || !showRate) && (
+                                                                            showBag ? (
+                                                                                <>
+                                                                                    <div className="text-sm text-purple-800 bg-purple-50/50 px-2 py-1 rounded-lg text-center font-bold">
+                                                                                        {(() => {
+                                                                                            const { whole, remainder } = calculatePktRemainder(brand.orderQuantity, brand.packetSize);
+                                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                        })()}
+                                                                                    </div>
+                                                                                    <div className="text-sm text-purple-900 bg-purple-50/50 px-2 py-1 rounded-lg text-center font-bold">
+                                                                                        {Math.round(brand.orderQuantity || 0).toLocaleString('en-US')}
+                                                                                    </div>
+                                                                                    <div className="text-sm text-teal-800 bg-teal-50/50 px-2 py-1 rounded-lg text-center font-bold border border-teal-100/50">
+                                                                                        {(() => {
+                                                                                            const { whole, remainder } = calculatePktRemainder(brand.saleableQuantity, brand.packetSize);
+                                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                        })()}
+                                                                                    </div>
+                                                                                    <div className="text-sm text-teal-900 bg-teal-50/50 px-2 py-1 rounded-lg text-center font-black border border-teal-100/50">
+                                                                                        {Math.round(brand.saleableQuantity || 0).toLocaleString('en-US')}
+                                                                                    </div>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <div className="text-sm text-purple-900 bg-purple-50/50 px-2 py-1 rounded-lg text-center font-bold">
+                                                                                        {Math.round(brand.orderQuantity || 0).toLocaleString('en-US')}
+                                                                                    </div>
+                                                                                    <div className="text-sm text-teal-900 bg-teal-50/50 px-2 py-1 rounded-lg text-center font-black border border-teal-100/50">
+                                                                                        {Math.round(brand.saleableQuantity || 0).toLocaleString('en-US')}
+                                                                                    </div>
+                                                                                </>
+                                                                            )
+                                                                        )}
 
                                                                         <div className="text-center overflow-hidden">
                                                                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${Math.round(brand.inHouseQuantity) > 0 ? 'bg-emerald-50 text-emerald-600' : Math.round(brand.inHouseQuantity) < 0 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
@@ -3452,7 +3561,7 @@ const StockManagement = ({
                                                                     <div className="text-center"></div>
                                                                     <div className="text-center"></div>
                                                                 </>
-                                                            ) : (
+                                                            ) : showBag ? (
                                                                 <>
                                                                     {/* Total Opening */}
                                                                     <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
@@ -3477,18 +3586,68 @@ const StockManagement = ({
                                                                         {Math.round(group.saleQuantity).toLocaleString('en-US')}
                                                                     </div>
                                                                 </>
+                                                            ) : (
+                                                                <>
+                                                                    {/* Total Opening QTY */}
+                                                                    <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
+                                                                        {Math.round(group.openingQuantity).toLocaleString('en-US')}
+                                                                    </div>
+                                                                    {/* Total Sale QTY */}
+                                                                    <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
+                                                                        {Math.round(group.saleQuantity).toLocaleString('en-US')}
+                                                                    </div>
+                                                                </>
                                                             )}
                                                             {/* Total Closing */}
-                                                            <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
-                                                                {(() => {
-                                                                    const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                    const { whole, remainder = 0 } = calculatePktRemainder(group.inHouseQuantity, pktSize);
-                                                                    return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
-                                                                })()}
-                                                            </div>
+                                                            {showBag && (
+                                                                <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
+                                                                    {(() => {
+                                                                        const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                        const { whole, remainder = 0 } = calculatePktRemainder(group.inHouseQuantity, pktSize);
+                                                                        return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                    })()}
+                                                                </div>
+                                                            )}
                                                             <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
                                                                 {Math.round(group.inHouseQuantity).toLocaleString('en-US')}
                                                             </div>
+
+                                                            {/* Total Order & Saleable */}
+                                                            {(!canShowRate || !showRate) && (
+                                                                showBag ? (
+                                                                    <>
+                                                                        <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
+                                                                            {(() => {
+                                                                                const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                                const { whole, remainder = 0 } = calculatePktRemainder(group.orderQuantity, pktSize);
+                                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                            })()}
+                                                                        </div>
+                                                                        <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
+                                                                            {Math.round(group.orderQuantity || 0).toLocaleString('en-US')}
+                                                                        </div>
+                                                                        <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
+                                                                            {(() => {
+                                                                                const pktSize = group.brandList?.[0]?.packetSize || 0;
+                                                                                const { whole, remainder = 0 } = calculatePktRemainder(group.saleableQuantity, pktSize);
+                                                                                return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                            })()}
+                                                                        </div>
+                                                                        <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
+                                                                            {Math.round(group.saleableQuantity || 0).toLocaleString('en-US')}
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
+                                                                            {Math.round(group.orderQuantity || 0).toLocaleString('en-US')}
+                                                                        </div>
+                                                                        <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
+                                                                            {Math.round(group.saleableQuantity || 0).toLocaleString('en-US')}
+                                                                        </div>
+                                                                    </>
+                                                                )
+                                                            )}
                                                             <div className="text-center"></div>
                                                         </div>
                                                     </div>
