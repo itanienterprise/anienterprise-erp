@@ -676,10 +676,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             if (qCmp !== 0) return qCmp;
             return a.brand.localeCompare(b.brand);
         }).filter(b => {
-            // In price report mode, show both positive and negative (pre-sold) stocks, but filter out zero stock
-            if (isPriceReport) {
-                return Math.round(Math.abs(b.inHouseQuantity || 0)) >= 1;
-            }
             return (
                 Math.round(Math.abs(b.openingQuantity || 0)) >= 1 || 
                 Math.round(Math.abs(b.periodArrivalQuantity || 0)) >= 1 || 

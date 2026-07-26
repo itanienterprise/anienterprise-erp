@@ -2159,9 +2159,8 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        const filters = showRate ? { ...stockFilters, reportType: 'price' } : stockFilters;
-        return calculateStockData(stockRecords, filters, stockSearchQuery, warehouseData, salesRecords, products, damages);
-    }, [stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products, damages, showRate]);
+        return calculateStockData(stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products, damages);
+    }, [stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products, damages]);
 
     const isStockGroupSelected = (productName) => {
         const groupItems = stockRecords.filter(r => r.productName === productName);
