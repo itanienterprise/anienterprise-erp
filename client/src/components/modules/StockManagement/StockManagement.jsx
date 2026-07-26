@@ -35,6 +35,27 @@ const SortIcon = ({ config, columnKey }) => {
         : <ChevronDownIcon className="w-3 h-3 ml-1 text-blue-500" />;
 };
 
+const isLcMatch = (targetLc, filterLc) => {
+    if (!filterLc) return true;
+    if (!targetLc) return false;
+    const rawTarget = targetLc.toString().trim().toLowerCase();
+    const rawFilter = filterLc.toString().trim().toLowerCase();
+    if (!rawTarget || !rawFilter) return false;
+    if (rawTarget === rawFilter) return true;
+
+    if (rawTarget.endsWith(rawFilter) || rawFilter.endsWith(rawTarget)) return true;
+    if (rawTarget.includes(rawFilter) || rawFilter.includes(rawTarget)) return true;
+
+    const normTarget = rawTarget.replace(/^0+/, '');
+    const normFilter = rawFilter.replace(/^0+/, '');
+    if (normTarget && normFilter) {
+        if (normTarget === normFilter) return true;
+        if (normTarget.endsWith(normFilter) || normFilter.endsWith(normTarget)) return true;
+        if (normTarget.includes(normFilter) || normFilter.includes(normTarget)) return true;
+    }
+    return false;
+};
+
 const StockManagement = ({
     stockRecords,
     setStockRecords,
@@ -266,7 +287,7 @@ const StockManagement = ({
             if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
             if (historyFilters.warehouse && (item.warehouse || item.whName || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return false;
-            if (historyFilters.lcNo && (item.lcNo || '').trim() !== historyFilters.lcNo) return false;
+            if (historyFilters.lcNo && !isLcMatch(item.lcNo, historyFilters.lcNo)) return false;
             if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
             if (historyFilters.brand) {
                 const brandLower = historyFilters.brand.toLowerCase();
@@ -278,7 +299,7 @@ const StockManagement = ({
             }
 
             if (!searchLower) return true;
-            const matchesLC = (item.lcNo || '').trim().toLowerCase().includes(searchLower);
+            const matchesLC = isLcMatch(item.lcNo, searchLower);
             const matchesPort = (item.port || '').trim().toLowerCase().includes(searchLower);
             const matchesImporter = (item.importer || '').trim().toLowerCase().includes(searchLower);
             const matchesTruck = (item.truckNo || '').trim().toLowerCase().includes(searchLower);
@@ -533,24 +554,26 @@ const StockManagement = ({
     const activeSaleHistory = useMemo(() => {
         if (!viewRecord) return [];
         const searchLower = historySearchQuery.toLowerCase().trim();
-        const productName = (viewRecord.data.productName || '').trim().toLowerCase();
+        const productName = (viewRecord.data.productName || viewRecord.productName || viewRecord.name || '').trim().toLowerCase();
 
         const filteredSales = (salesRecords || []).filter(sale => {
             const status = (sale.status || '').toLowerCase();
-            if (status !== 'accepted' && status !== 'pending') return false;
+            if (status && (status.includes('rejected') || status.includes('deleted'))) return false;
 
-            const hasMatchingProduct = (sale.items || []).some(item =>
+            const matchingItems = (sale.items || []).filter(item =>
                 (item.productName || '').trim().toLowerCase() === productName
             );
-            if (!hasMatchingProduct) return false;
+            if (matchingItems.length === 0) return false;
+
             if (historyFilters.startDate && sale.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && sale.date > historyFilters.endDate) return false;
             
             if (historyFilters.lcNo) {
-                const matchesLc = (sale.lcNo || '').trim() === historyFilters.lcNo ||
-                    (sale.items || []).some(item =>
-                        (item.productName || '').trim().toLowerCase() === productName &&
-                        (item.lcNo || '').trim() === historyFilters.lcNo
+                const filterLc = historyFilters.lcNo;
+                const matchesLc = isLcMatch(sale.lcNo, filterLc) ||
+                    matchingItems.some(item =>
+                        isLcMatch(item.lcNo, filterLc) ||
+                        (item.brandEntries || []).some(entry => isLcMatch(entry.lcNo, filterLc))
                     );
                 if (!matchesLc) return false;
             }
@@ -561,14 +584,15 @@ const StockManagement = ({
                 const matchesCompany = (sale.companyName || '').toLowerCase().includes(searchLower);
                 const matchesCustomer = (sale.customerName || '').toLowerCase().includes(searchLower);
                 const matchesPhone = (sale.contact || '').toLowerCase().includes(searchLower);
-                const matchesLC = (sale.lcNo || '').toLowerCase().includes(searchLower) ||
-                    (sale.items || []).some(item =>
-                        (item.productName || '').trim().toLowerCase() === productName &&
-                        (item.lcNo || '').toLowerCase().includes(searchLower)
+                const matchesLC = isLcMatch(sale.lcNo, searchLower) ||
+                    matchingItems.some(item =>
+                        isLcMatch(item.lcNo, searchLower) ||
+                        (item.brandEntries || []).some(entry => isLcMatch(entry.lcNo, searchLower))
                     );
-                const matchesItemBrand = (sale.items || [])
-                    .filter(item => (item.productName || '').trim().toLowerCase() === productName)
-                    .some(item => (item.brandEntries || []).some(entry => (entry.brand || '').toLowerCase().includes(searchLower)));
+                const matchesItemBrand = matchingItems.some(item =>
+                    (item.brand || '').toLowerCase().includes(searchLower) ||
+                    (item.brandEntries || []).some(entry => (entry.brand || '').toLowerCase().includes(searchLower))
+                );
                 return matchesInvoice || matchesCompany || matchesCustomer || matchesPhone || matchesItemBrand || matchesLC;
             }
             return true;
@@ -580,19 +604,28 @@ const StockManagement = ({
                 (item.productName || '').trim().toLowerCase() === productName
             );
             matchingItems.forEach(item => {
-                (item.brandEntries || []).forEach(entry => {
-                    const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : (item.lcNo || sale.lcNo || '');
-                    if (historyFilters.lcNo && entryLc.trim() !== historyFilters.lcNo) return;
+                const itemBrandEntries = (item.brandEntries && item.brandEntries.length > 0) 
+                    ? item.brandEntries 
+                    : [{ brand: item.brand || '', quantity: item.quantity, packet: item.packet, warehouseName: item.whName || item.warehouse || sale.whName || sale.warehouse || '', lcNo: item.lcNo || sale.lcNo || '' }];
+
+                itemBrandEntries.forEach(entry => {
+                    const rawEntryLc = (entry.lcNo || '').trim();
+                    const rawItemLc = (item.lcNo || '').trim();
+                    const rawSaleLc = (sale.lcNo || '').trim();
+                    const entryLc = rawEntryLc || rawItemLc || rawSaleLc || '';
+
+                    if (historyFilters.lcNo && !isLcMatch(entryLc, historyFilters.lcNo) && !isLcMatch(sale.lcNo, historyFilters.lcNo)) return;
                     if (historyFilters.brand && (entry.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return;
-                    if (historyFilters.warehouse && (entry.warehouseName || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return;
+                    if (historyFilters.warehouse && (entry.warehouseName || sale.whName || sale.warehouse || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return;
+
                     if (searchLower) {
-                        const matchesEnv = (sale.invoiceNo || '').toLowerCase().includes(searchLower) ||
-                            (sale.companyName || '').toLowerCase().includes(searchLower) ||
-                            (sale.customerName || '').toLowerCase().includes(searchLower) ||
-                            (sale.contact || '').toLowerCase().includes(searchLower) ||
-                            entryLc.toLowerCase().includes(searchLower);
+                        const matchesInvoice = (sale.invoiceNo || '').toLowerCase().includes(searchLower);
+                        const matchesCompany = (sale.companyName || '').toLowerCase().includes(searchLower);
+                        const matchesCustomer = (sale.customerName || '').toLowerCase().includes(searchLower);
+                        const matchesPhone = (sale.contact || '').toLowerCase().includes(searchLower);
+                        const matchesLC = isLcMatch(entryLc, searchLower) || isLcMatch(sale.lcNo, searchLower);
                         const matchesBrand = (entry.brand || '').toLowerCase().includes(searchLower);
-                        if (!matchesEnv && !matchesBrand) return;
+                        if (!matchesInvoice && !matchesCompany && !matchesCustomer && !matchesPhone && !matchesLC && !matchesBrand) return;
                     }
 
                     const brandLower = (entry.brand || '').trim().toLowerCase();
@@ -672,7 +705,8 @@ const StockManagement = ({
         const damageFlattened = (damages || []).filter(d => {
             const pMatch = (d.productName || '').trim().toLowerCase() === productName;
             const bMatch = !historyFilters.brand || (d.brand || '').trim().toLowerCase() === historyFilters.brand.toLowerCase();
-            return pMatch && bMatch;
+            const lcMatch = !historyFilters.lcNo || isLcMatch(d.lcNo, historyFilters.lcNo);
+            return pMatch && bMatch && lcMatch;
         }).map(d => ({
             ...d,
             itemBrand: d.brand,
@@ -730,7 +764,7 @@ const StockManagement = ({
             const pMatch = (w.productName || w.product || '').trim().toLowerCase() === productName;
             if (!pMatch) return false;
             if (historyFilters.brand && (w.brand || '').trim().toLowerCase() !== historyFilters.brand.trim().toLowerCase()) return false;
-            if (historyFilters.lcNo && (w.lcNo || '').trim() !== historyFilters.lcNo.trim()) return false;
+            if (historyFilters.lcNo && !isLcMatch(w.lcNo, historyFilters.lcNo)) return false;
             return true;
         }).map(t => ({
             ...t,
@@ -3124,7 +3158,9 @@ const StockManagement = ({
                         {stockData.displayRecords.length === 0 ? (
                             <div className="p-8 text-center text-gray-400 font-medium italic">No stock records found</div>
                         ) : (
-                            stockData.displayRecords.map((group, gIdx) => {
+                            stockData.displayRecords
+                                .filter(group => !expandedProducts || group.productName === expandedProducts)
+                                .map((group, gIdx) => {
                                 const isExpanded = expandedProducts === group.productName;
                                 
                                 // Calculate brand spans for this group's brandList
@@ -3283,7 +3319,9 @@ const StockManagement = ({
                                         <td colSpan="8" className="px-6 py-12 text-center text-gray-400 font-medium italic">No stock records found</td>
                                     </tr>
                                 ) : (
-                                    stockData.displayRecords.map((group, gIdx) => {
+                                    stockData.displayRecords
+                                        .filter(group => !expandedProducts || group.productName === expandedProducts)
+                                        .map((group, gIdx) => {
                                         // Calculate brand spans for this group's brandList
                                         const brandSpans = [];
                                         group.brandList.forEach((ent, i) => {

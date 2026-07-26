@@ -20,6 +20,27 @@ const SortIcon = ({ config, columnKey }) => {
         : <ChevronDownIcon className="w-3 h-3 ml-1 text-blue-500" />;
 };
 
+const isLcMatch = (targetLc, filterLc) => {
+    if (!filterLc) return true;
+    if (!targetLc) return false;
+    const rawTarget = targetLc.toString().trim().toLowerCase();
+    const rawFilter = filterLc.toString().trim().toLowerCase();
+    if (!rawTarget || !rawFilter) return false;
+    if (rawTarget === rawFilter) return true;
+
+    if (rawTarget.endsWith(rawFilter) || rawFilter.endsWith(rawTarget)) return true;
+    if (rawTarget.includes(rawFilter) || rawFilter.includes(rawTarget)) return true;
+
+    const normTarget = rawTarget.replace(/^0+/, '');
+    const normFilter = rawFilter.replace(/^0+/, '');
+    if (normTarget && normFilter) {
+        if (normTarget === normFilter) return true;
+        if (normTarget.endsWith(normFilter) || normFilter.endsWith(normTarget)) return true;
+        if (normTarget.includes(normFilter) || normFilter.includes(normTarget)) return true;
+    }
+    return false;
+};
+
 const StockHistoryModal = ({
     viewRecord,
     setViewRecord,
@@ -83,7 +104,7 @@ const StockHistoryModal = ({
 
             if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
-            if (historyFilters.lcNo && (item.lcNo || '').trim() !== historyFilters.lcNo) return false;
+            if (historyFilters.lcNo && !isLcMatch(item.lcNo, historyFilters.lcNo)) return false;
             if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
             if (historyFilters.warehouse && (item.warehouse || item.whName || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return false;
             if (historyFilters.brand) {
@@ -275,7 +296,7 @@ const StockHistoryModal = ({
             const wDate = wDateVal ? wDateVal.toString().split('T')[0] : '';
             if (historyFilters.startDate && wDate < historyFilters.startDate) return false;
             if (historyFilters.endDate && wDate > historyFilters.endDate) return false;
-            if (historyFilters.lcNo && (w.lcNo || '').trim() !== historyFilters.lcNo) return false;
+            if (historyFilters.lcNo && !isLcMatch(w.lcNo, historyFilters.lcNo)) return false;
             if (historyFilters.port && (w.port || '').trim() !== historyFilters.port) return false;
             if (historyFilters.warehouse && (w.whName || w.warehouse || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return false;
             if (historyFilters.brand && (w.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return false;
@@ -347,25 +368,22 @@ const StockHistoryModal = ({
 
         const filteredSales = (salesRecords || []).filter(sale => {
             const status = (sale.status || '').toLowerCase();
-            if (status !== 'accepted' && status !== 'pending') return false;
+            if (status && (status.includes('rejected') || status.includes('deleted'))) return false;
 
-            const hasMatchingProduct = (sale.items || []).some(item =>
+            const matchingItems = (sale.items || []).filter(item =>
                 (item.productName || '').trim().toLowerCase() === productName
             );
-            if (!hasMatchingProduct) return false;
+            if (matchingItems.length === 0) return false;
+
             if (historyFilters.startDate && sale.date < historyFilters.startDate) return false;
             if (historyFilters.endDate && sale.date > historyFilters.endDate) return false;
             
             if (historyFilters.lcNo) {
-                const matchesLc = (sale.lcNo || '').trim() === historyFilters.lcNo ||
-                    (sale.items || []).some(item =>
-                        (item.productName || '').trim().toLowerCase() === productName &&
-                        (
-                            (item.lcNo || '').trim() === historyFilters.lcNo ||
-                            (item.brandEntries || []).some(entry =>
-                                (entry.lcNo || '').trim() === historyFilters.lcNo
-                            )
-                        )
+                const filterLc = historyFilters.lcNo;
+                const matchesLc = isLcMatch(sale.lcNo, filterLc) ||
+                    matchingItems.some(item =>
+                        isLcMatch(item.lcNo, filterLc) ||
+                        (item.brandEntries || []).some(entry => isLcMatch(entry.lcNo, filterLc))
                     );
                 if (!matchesLc) return false;
             }
@@ -376,17 +394,15 @@ const StockHistoryModal = ({
                 const matchesCompany = (sale.companyName || '').toLowerCase().includes(searchLower);
                 const matchesCustomer = (sale.customerName || '').toLowerCase().includes(searchLower);
                 const matchesPhone = (sale.contact || '').toLowerCase().includes(searchLower);
-                const matchesLC = (sale.lcNo || '').toLowerCase().includes(searchLower) ||
-                    (sale.items || []).some(item =>
-                        (item.productName || '').trim().toLowerCase() === productName &&
-                        (
-                            (item.lcNo || '').toLowerCase().includes(searchLower) ||
-                            (item.brandEntries || []).some(entry => (entry.lcNo || '').toLowerCase().includes(searchLower))
-                        )
+                const matchesLC = isLcMatch(sale.lcNo, searchLower) ||
+                    matchingItems.some(item =>
+                        isLcMatch(item.lcNo, searchLower) ||
+                        (item.brandEntries || []).some(entry => isLcMatch(entry.lcNo, searchLower))
                     );
-                const matchesItemBrand = (sale.items || [])
-                    .filter(item => (item.productName || '').trim().toLowerCase() === productName)
-                    .some(item => (item.brandEntries || []).some(entry => (entry.brand || '').toLowerCase().includes(searchLower)));
+                const matchesItemBrand = matchingItems.some(item =>
+                    (item.brand || '').toLowerCase().includes(searchLower) ||
+                    (item.brandEntries || []).some(entry => (entry.brand || '').toLowerCase().includes(searchLower))
+                );
                 return matchesInvoice || matchesCompany || matchesCustomer || matchesPhone || matchesItemBrand || matchesLC;
             }
             return true;
@@ -398,11 +414,31 @@ const StockHistoryModal = ({
                 (item.productName || '').trim().toLowerCase() === productName
             );
             matchingItems.forEach(item => {
-                (item.brandEntries || []).forEach(entry => {
-                    const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : (item.lcNo || sale.lcNo || '');
-                    if (historyFilters.lcNo && entryLc.trim() !== historyFilters.lcNo) return;
+                const itemBrandEntries = (item.brandEntries && item.brandEntries.length > 0) 
+                    ? item.brandEntries 
+                    : [{ brand: item.brand || '', quantity: item.quantity, packet: item.packet, warehouseName: item.whName || item.warehouse || sale.whName || sale.warehouse || '', lcNo: item.lcNo || sale.lcNo || '' }];
+
+                itemBrandEntries.forEach(entry => {
+                    const rawEntryLc = (entry.lcNo || '').trim();
+                    const rawItemLc = (item.lcNo || '').trim();
+                    const rawSaleLc = (sale.lcNo || '').trim();
+                    const entryLc = rawEntryLc || rawItemLc || rawSaleLc || '';
+
+                    if (historyFilters.lcNo && !isLcMatch(entryLc, historyFilters.lcNo) && !isLcMatch(sale.lcNo, historyFilters.lcNo)) return;
                     if (historyFilters.brand && (entry.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return;
-                    if (historyFilters.warehouse && (entry.warehouseName || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return;
+                    if (historyFilters.warehouse && (entry.warehouseName || sale.whName || sale.warehouse || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return;
+
+                    if (searchLower) {
+                        const matchesInvoice = (sale.invoiceNo || '').toLowerCase().includes(searchLower);
+                        const matchesCompany = (sale.companyName || '').toLowerCase().includes(searchLower);
+                        const matchesCustomer = (sale.customerName || '').toLowerCase().includes(searchLower);
+                        const matchesPhone = (sale.contact || '').toLowerCase().includes(searchLower);
+                        const matchesLC = isLcMatch(entryLc, searchLower) || isLcMatch(sale.lcNo, searchLower);
+                        const matchesBrand = (entry.brand || '').toLowerCase().includes(searchLower);
+                        if (!matchesInvoice && !matchesCompany && !matchesCustomer && !matchesPhone && !matchesLC && !matchesBrand) return;
+                    }
+                    if (historyFilters.brand && (entry.brand || '').trim().toLowerCase() !== historyFilters.brand.toLowerCase()) return;
+                    if (historyFilters.warehouse && (entry.warehouseName || sale.whName || sale.warehouse || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return;
                     
                     const brandLower = (entry.brand || '').trim().toLowerCase();
                     let purchaseRecord = stockRecords.find(s =>
@@ -504,7 +540,8 @@ const StockHistoryModal = ({
         const damageFlattened = (damages || []).filter(d => {
             const pMatch = (d.productName || '').trim().toLowerCase() === productName;
             const bMatch = !historyFilters.brand || (d.brand || '').trim().toLowerCase() === historyFilters.brand.toLowerCase();
-            return pMatch && bMatch;
+            const lcMatch = !historyFilters.lcNo || isLcMatch(d.lcNo, historyFilters.lcNo);
+            return pMatch && bMatch && lcMatch;
         }).map(d => ({
             ...d,
             itemBrand: d.brand,
@@ -562,7 +599,7 @@ const StockHistoryModal = ({
             const pMatch = (w.productName || w.product || '').trim().toLowerCase() === productName;
             if (!pMatch) return false;
             if (historyFilters.brand && (w.brand || '').trim().toLowerCase() !== historyFilters.brand.trim().toLowerCase()) return false;
-            if (historyFilters.lcNo && (w.lcNo || '').trim() !== historyFilters.lcNo.trim()) return false;
+            if (historyFilters.lcNo && !isLcMatch(w.lcNo, historyFilters.lcNo)) return false;
             return true;
         }).map(t => ({
             ...t,

@@ -110,7 +110,7 @@ const ProductHistoryReport = ({
         if (modalFilters.startDate && p.date < modalFilters.startDate) return false;
         if (modalFilters.endDate && p.date > modalFilters.endDate) return false;
         if (modalFilters.brand && (p.itemBrand || p.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
-        if (modalFilters.lcNo && (p.lcNo || '').trim() !== modalFilters.lcNo.trim()) return false;
+        if (modalFilters.lcNo && !isLcMatch(p.lcNo, modalFilters.lcNo)) return false;
         if (modalFilters.warehouse && (p.warehouse || p.whName || '').trim().toLowerCase() !== modalFilters.warehouse.trim().toLowerCase()) return false;
         return true;
     });
@@ -119,7 +119,7 @@ const ProductHistoryReport = ({
         if (modalFilters.endDate && s.date > modalFilters.endDate) return false;
         if (modalFilters.party && (s.companyName || '').trim().toLowerCase() !== modalFilters.party.trim().toLowerCase()) return false;
         if (modalFilters.brand && (s.itemBrand || s.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
-        if (modalFilters.lcNo && (s.lcNo || '').trim() !== modalFilters.lcNo.trim()) return false;
+        if (modalFilters.lcNo && !isLcMatch(s.lcNo, modalFilters.lcNo)) return false;
         if (modalFilters.warehouse && (s.itemWarehouse || s.warehouse || s.whName || '').trim().toLowerCase() !== modalFilters.warehouse.trim().toLowerCase()) return false;
         return true;
     });
@@ -127,7 +127,7 @@ const ProductHistoryReport = ({
         if (modalFilters.startDate && d.date < modalFilters.startDate) return false;
         if (modalFilters.endDate && d.date > modalFilters.endDate) return false;
         if (modalFilters.brand && (d.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
-        if (modalFilters.lcNo && (d.lcNo || '').trim() !== modalFilters.lcNo.trim()) return false;
+        if (modalFilters.lcNo && !isLcMatch(d.lcNo, modalFilters.lcNo)) return false;
         if (modalFilters.warehouse && (d.warehouse || d.whName || '').trim().toLowerCase() !== modalFilters.warehouse.trim().toLowerCase()) return false;
         return true;
     });
@@ -135,7 +135,7 @@ const ProductHistoryReport = ({
         if (modalFilters.startDate && t.date < modalFilters.startDate) return false;
         if (modalFilters.endDate && t.date > modalFilters.endDate) return false;
         if (modalFilters.brand && (t.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
-        if (modalFilters.lcNo && t.lcNo && (t.lcNo || '').trim() !== modalFilters.lcNo.trim()) return false;
+        if (modalFilters.lcNo && !isLcMatch(t.lcNo, modalFilters.lcNo)) return false;
         if (modalFilters.warehouse) {
             const whLower = modalFilters.warehouse.trim().toLowerCase();
             const fromWhLower = (t.fromWh || '').trim().toLowerCase();
