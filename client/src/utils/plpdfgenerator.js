@@ -366,7 +366,8 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
             const coverNote = lc?.marineCoverNote || '';
             const cnDate = lc?.marineCNDate ? formatDate(lc.marineCNDate) : '';
             const insuranceCo = lc?.insuranceCo || 'CONTINENTAL INSURANCE LIMITED';
-            const amnd = record.lcAmendment ? `& ${record.lcAmendment}` : '';
+            const amndText = record.lcAmendment ? record.lcAmendment.replace(/AMENDMENT\s*NO/gi, 'ADDN NO').replace(/AMENDMENT/gi, 'ADDN NO') : '';
+            const amnd = amndText ? `& ${amndText}` : '';
             let coverNoteAmnd = amnd;
             if (record.lcAmendment && lc?.amendments?.length > 0) {
                 const cleanLcAmendment = record.lcAmendment.toUpperCase();
@@ -377,7 +378,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
                 if (!matchedAmnd) {
                     matchedAmnd = lc.amendments[lc.amendments.length - 1];
                 }
-                if (matchedAmnd && matchedAmnd.addnNo) {
+                if (matchedAmnd && (matchedAmnd.addnNo || matchedAmnd.amendmentNo)) {
                     let amndDate = matchedAmnd.addnDate || matchedAmnd.amendmentDate;
                     let amndDateStr = amndDate ? formatDate(amndDate) : '';
                     if (!amndDateStr) {
@@ -386,7 +387,8 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
                             amndDateStr = dateMatch[1];
                         }
                     }
-                    coverNoteAmnd = `& ADDN NO: ${matchedAmnd.addnNo}${amndDateStr ? `, DATE. ${amndDateStr}` : ''}`;
+                    const addnLabel = matchedAmnd.addnNo ? `ADDN NO: ${matchedAmnd.addnNo}` : `ADDN NO: ${matchedAmnd.amendmentNo}`;
+                    coverNoteAmnd = `& ${addnLabel}${amndDateStr ? `, DATE. ${amndDateStr}` : ''}`;
                 }
             }
             const piNo = pi?.piNumber || '';
@@ -616,7 +618,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
             if (!matchedAmnd) {
                 matchedAmnd = lc.amendments[lc.amendments.length - 1];
             }
-            if (matchedAmnd && matchedAmnd.addnNo) {
+            if (matchedAmnd && (matchedAmnd.addnNo || matchedAmnd.amendmentNo)) {
                 let amndDate = matchedAmnd.addnDate || matchedAmnd.amendmentDate;
                 let amndDateStr = amndDate ? formatDate(amndDate) : '';
                 if (!amndDateStr) {
@@ -625,18 +627,19 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
                         amndDateStr = dateMatch[1];
                     }
                 }
-                trCoverNote += ` & ADDN NO: ${matchedAmnd.addnNo}${amndDateStr ? `, DATE. ${amndDateStr}` : ''}`;
+                const addnLabel = matchedAmnd.addnNo ? `ADDN NO: ${matchedAmnd.addnNo}` : `ADDN NO: ${matchedAmnd.amendmentNo}`;
+                trCoverNote += ` & ${addnLabel}${amndDateStr ? `, DATE. ${amndDateStr}` : ''}`;
             }
         }
-        
-        const amndNoMatch = record.lcAmendment.match(/AMENDMENT\s*NO-?\s*([^\s]+)/i);
+
+        const amndNoMatch = record.lcAmendment.match(/(?:AMENDMENT|ADDN)\s*NO-?\s*([^\s]+)/i);
         const amndDateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
         const amndNo = amndNoMatch ? amndNoMatch[1] : '';
         const amndDate = amndDateMatch ? amndDateMatch[1] : '';
         if (amndNo) {
             trAmendmentLine = `AMENDMENT NO - ${amndNo}${amndDate ? ` DATE: ${amndDate}` : ''}`;
         } else {
-            trAmendmentLine = record.lcAmendment;
+            trAmendmentLine = record.lcAmendment.replace(/ADDN\s*NO/gi, 'AMENDMENT NO').replace(/ADDN/gi, 'AMENDMENT NO');
         }
     }
 

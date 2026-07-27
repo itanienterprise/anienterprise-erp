@@ -1864,6 +1864,9 @@ function App() {
             fetchSalesGlobal={fetchSales}
             refreshPendingIndicators={fetchPendingEntries}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
+            setShowSalesReport={setShowSalesReport}
+            setSalesReportData={setFilteredSalesForReport}
+            setSalesReportSearchQuery={setSalesReportSearchQuery}
           />
         );
       case 'general-sale-section':
@@ -2734,7 +2737,7 @@ function App() {
         saleFilters={saleFilters}
         setSaleFilters={setSaleFilters}
         searchQuery={salesReportSearchQuery}
-        saleType={currentView === 'border-sale-section' ? 'Border' : 'General'}
+        saleType={currentView === 'order-sale-section' ? 'Order' : currentView === 'border-sale-section' ? 'Border' : 'General'}
         products={products}
       />
 

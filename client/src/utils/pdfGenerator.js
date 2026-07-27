@@ -2720,6 +2720,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
 
 export const generateSalesReportPDF = (reportData, filters, summary, saleType = 'General') => {
     try {
+        const isOrderReport = (saleType || '').toUpperCase() === 'ORDER';
         const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
 
         // --- Configuration ---
@@ -2749,7 +2750,8 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text(`${saleType.toUpperCase()} SALES REPORT`, pageWidth / 2, 34, { align: 'center' });
+        const reportTitleText = (saleType || '').toUpperCase() === 'ORDER' ? 'ORDER REPORT' : `${(saleType || '').toUpperCase()} SALES REPORT`;
+        doc.text(reportTitleText, pageWidth / 2, 34, { align: 'center' });
 
         // --- Info Row ---
         let yPos = 47;
@@ -2780,37 +2782,48 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             // Create flattened list of all entries across all items
             const flatItems = sale.flatItems ? sale.flatItems.map(fItem => ({
                 ...fItem,
+                price: fItem.price !== undefined && fItem.price !== null ? fItem.price : (fItem.rate || fItem.unitPrice || 0),
+                total: fItem.total !== undefined && fItem.total !== null ? fItem.total : (fItem.amount || fItem.totalAmount || (parseFloat(fItem.quantity || 0) * parseFloat(fItem.price || fItem.rate || 0))),
                 bag: fItem.bag !== undefined ? fItem.bag : 0,
                 uom: fItem.uom || 'QTY'
             })) : (sale.items || []).flatMap(item => {
                 const entries = (item.brandEntries && item.brandEntries.length > 0)
                     ? item.brandEntries
-                    : [{ brandName: item.brand || '-', quantity: item.quantity, bag: item.bag, unitPrice: 0, totalAmount: item.totalAmount, uom: item.uom }];
+                    : [{ brandName: item.brand || '-', quantity: item.quantity, bag: item.bag, rate: item.rate || item.unitPrice || item.price, amount: item.amount || item.totalAmount || item.total, uom: item.uom }];
 
-                return entries.map((entry, subIdx) => ({
-                    productName: item.productName || item.product || '-',
-                    brand: entry.brandName || entry.brand || '-',
-                    quantity: entry.quantity || 0,
-                    bag: entry.bag || item.bag || 0,
-                    truck: entry.truck || sale.truck || '-',
-                    price: entry.unitPrice || 0,
-                    total: entry.totalAmount || 0,
-                    lcNo: (entry.lcNo !== undefined && entry.lcNo !== null) ? (entry.lcNo || '-') : (item.lcNo || sale.lcNo || '-'),
-                    uom: entry.uom || item.uom || 'QTY',
-                    isFirstInProduct: subIdx === 0,
-                    productSpan: entries.length
-                }));
+                return entries.map((entry, subIdx) => {
+                    const qty = parseFloat(entry.quantity || item.quantity || 0);
+                    const prc = entry.rate !== undefined && entry.rate !== '' && entry.rate !== null ? parseFloat(entry.rate) : parseFloat(entry.unitPrice || entry.price || item.rate || item.unitPrice || item.price || 0);
+                    const tot = entry.amount !== undefined && entry.amount !== '' && entry.amount !== null ? parseFloat(entry.amount) : (entry.totalAmount !== undefined ? parseFloat(entry.totalAmount) : (entry.total !== undefined ? parseFloat(entry.total) : (item.amount || item.totalAmount || item.total || (qty * prc))));
+
+                    return {
+                        productName: item.productName || item.product || '-',
+                        brand: entry.brandName || entry.brand || item.brand || '-',
+                        quantity: qty,
+                        bag: entry.bag || item.bag || 0,
+                        truck: entry.truck || sale.truck || '-',
+                        price: prc,
+                        total: tot,
+                        lcNo: (entry.lcNo !== undefined && entry.lcNo !== null) ? (entry.lcNo || '-') : (item.lcNo || sale.lcNo || '-'),
+                        uom: entry.uom || item.uom || 'QTY',
+                        isFirstInProduct: subIdx === 0,
+                        productSpan: entries.length
+                    };
+                });
             });
 
             // If no items, fallback to sale level
             if (flatItems.length === 0) {
+                const qty = parseFloat(sale.quantity || 0);
+                const prc = parseFloat(sale.rate || sale.unitPrice || sale.price || 0);
+                const tot = parseFloat(sale.amount || sale.totalAmount || sale.total || (qty * prc));
                 flatItems.push({
                     productName: sale.productName || '-',
                     brand: sale.brand || '-',
-                    quantity: sale.quantity || 0,
+                    quantity: qty,
                     bag: sale.bag || 0,
-                    price: 0,
-                    total: sale.totalAmount || 0,
+                    price: prc,
+                    total: tot,
                     lcNo: sale.lcNo || '-',
                     uom: sale.uom || 'QTY',
                     isFirstInProduct: true,
@@ -2818,105 +2831,134 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 });
             }
 
-            flatItems.forEach((item, idx) => {
-                const row = [];
+        flatItems.forEach((item, idx) => {
+            const row = [];
 
+            if (isOrderReport) {
                 if (idx === 0) {
                     row.push({ content: (slNum++).toString(), rowSpan: flatItems.length, styles: { halign: 'center' } });
                     row.push({ content: formatDate(sale.date), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                    row.push({ content: (sale.orderNo || sale.invoiceNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                    row.push({ content: (sale.companyName || sale.customerName || '-'), rowSpan: flatItems.length });
+                    row.push({ content: (sale.location || sale.address || sale.customerAddress || '-'), rowSpan: flatItems.length });
                 }
-
-                if (item.isFirstInProduct) {
-                    if (saleType !== 'Border') {
-                        row.push({ content: (item.lcNo && item.lcNo !== '-' ? item.lcNo.slice(-4) : '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
-                    } else {
-                        row.push({ content: (item.lcNo || '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
-                    }
-                }
-
-                if (saleType !== 'Border' && idx === 0) {
-                    row.push({ content: (sale.challanNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
-                    row.push({ content: (sale.truckNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
-                }
-
+                row.push(item.warehouseName || item.warehouse || sale.warehouse || '-');
+                row.push(item.productName || '-');
+                row.push(item.brand || '-');
+                row.push({ content: parseFloat(item.quantity || 0).toLocaleString('en-US'), styles: { halign: 'right' } });
+                row.push({ content: parseFloat(item.price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right' } });
+                row.push({ content: parseFloat(item.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right' } });
                 if (idx === 0) {
-                    if (saleType !== 'Border') {
-                        row.push({ content: (sale.invoiceNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
-                    }
-
-                    if (saleType === 'Border') {
-                        row.push({ content: (sale.importer || '-'), rowSpan: flatItems.length });
-                        row.push({ content: (sale.port || '-'), rowSpan: flatItems.length });
-                        row.push({ content: (sale.indianCnF || '-'), rowSpan: flatItems.length });
-                        row.push({ content: (sale.bdCnf || '-'), rowSpan: flatItems.length });
-                        row.push({ content: (sale.companyName || sale.customerName || '-'), rowSpan: flatItems.length });
-                    } else {
-                        row.push({ content: (sale.companyName || '-'), rowSpan: flatItems.length });
-                    }
+                    row.push({ content: (sale.remark || sale.remarks || sale.note || '-'), rowSpan: flatItems.length });
                 }
+                tableRows.push(row);
+                return;
+            }
 
-                if (item.isFirstInProduct) {
-                    row.push({ content: item.productName, rowSpan: item.productSpan });
-                }
+            if (idx === 0) {
+                row.push({ content: (slNum++).toString(), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                row.push({ content: formatDate(sale.date), rowSpan: flatItems.length, styles: { halign: 'center' } });
+            }
 
+            if (item.isFirstInProduct) {
                 if (saleType !== 'Border') {
-                    row.push(item.brand);
-                }
-
-                if (saleType !== 'Border' && item.uom === 'BAG') {
-                    row.push(parseFloat(item.bag).toLocaleString('en-US') + ' Bag');
+                    row.push({ content: (item.lcNo && item.lcNo !== '-' ? item.lcNo.slice(-4) : '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
                 } else {
-                    row.push(parseFloat(item.quantity).toLocaleString('en-US') + (saleType === 'Border' ? '' : ' kg'));
+                    row.push({ content: (item.lcNo || '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
+                }
+            }
+
+            if (saleType !== 'Border' && idx === 0) {
+                row.push({ content: (sale.challanNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                row.push({ content: (sale.truckNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
+            }
+
+            if (idx === 0) {
+                if (saleType !== 'Border') {
+                    row.push({ content: (sale.orderNo || sale.invoiceNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
                 }
 
                 if (saleType === 'Border') {
-                    row.push(item.truck || sale.truck || '-');
+                    row.push({ content: (sale.importer || '-'), rowSpan: flatItems.length });
+                    row.push({ content: (sale.port || '-'), rowSpan: flatItems.length });
+                    row.push({ content: (sale.indianCnF || '-'), rowSpan: flatItems.length });
+                    row.push({ content: (sale.bdCnf || '-'), rowSpan: flatItems.length });
+                    row.push({ content: (sale.companyName || sale.customerName || '-'), rowSpan: flatItems.length });
+                } else {
+                    row.push({ content: (sale.companyName || '-'), rowSpan: flatItems.length });
                 }
+            }
 
-                row.push(saleType === 'Border'
-                    ? (parseFloat(item.price) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
-                    : (parseFloat(item.price) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-                row.push(saleType === 'Border'
-                    ? (parseFloat(item.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
-                    : (parseFloat(item.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            if (item.isFirstInProduct) {
+                row.push({ content: item.productName, rowSpan: item.productSpan });
+            }
 
-                if (saleType !== 'Border' && idx === 0) {
-                    row.push({ content: (parseFloat(sale.paidAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
-                    row.push({ content: ((parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
-                }
+            if (saleType !== 'Border') {
+                row.push(item.brand);
+            }
 
-                tableRows.push(row);
-            });
+            if (saleType !== 'Border' && item.uom === 'BAG') {
+                row.push(parseFloat(item.bag).toLocaleString('en-US') + ' Bag');
+            } else {
+                row.push(parseFloat(item.quantity).toLocaleString('en-US') + (saleType === 'Border' ? '' : ' kg'));
+            }
+
+            if (saleType === 'Border') {
+                row.push(item.truck || sale.truck || '-');
+            }
+
+            row.push(saleType === 'Border'
+                ? (parseFloat(item.price) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+                : (parseFloat(item.price) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            row.push(saleType === 'Border'
+                ? (parseFloat(item.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+                : (parseFloat(item.total) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
+            if (saleType !== 'Border' && idx === 0) {
+                row.push({ content: (parseFloat(sale.paidAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
+                row.push({ content: ((parseFloat(sale.totalAmount || 0) - parseFloat(sale.paidAmount || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), rowSpan: flatItems.length, styles: { halign: 'right' } });
+            }
+
+            tableRows.push(row);
         });
+    });
 
-        const totalTrucks = saleType === 'Border' ? reportData.reduce((sum, sale) => {
-            const items = sale.items || [];
-            const truckTotal = items.reduce((iSum, item) => {
-                const brandEntries = item.brandEntries || [];
-                return iSum + brandEntries.reduce((bSum, entry) => bSum + (parseFloat(entry.truck) || 0), 0);
-            }, 0);
-            return sum + (items.length > 0 ? truckTotal : (parseFloat(sale.truck) || 0));
-        }, 0) : 0;
+    const totalTrucks = saleType === 'Border' ? reportData.reduce((sum, sale) => {
+        const items = sale.items || [];
+        const truckTotal = items.reduce((iSum, item) => {
+            const brandEntries = item.brandEntries || [];
+            return iSum + brandEntries.reduce((bSum, entry) => bSum + (parseFloat(entry.truck) || 0), 0);
+        }, 0);
+        return sum + (items.length > 0 ? truckTotal : (parseFloat(sale.truck) || 0));
+    }, 0) : 0;
 
-        const totalDiscount = reportData.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0);
+    const totalDiscount = reportData.reduce((sum, s) => sum + (parseFloat(s.discount) || 0), 0);
 
-        const headRow = saleType === 'Border'
-            ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
-            : [['SL', 'Date', 'LC No', 'CH No', 'Truck No', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
+    const headRow = isOrderReport
+        ? [['SL', 'Date', 'Order No', 'Company', 'Location', 'Warehouse', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Remark']]
+        : saleType === 'Border'
+        ? [['SL', 'Date', 'LC No', 'Importer', 'Port', 'IND C&F', 'BD C&F', 'Party Name', 'Product', 'Qty', 'Truck', 'Price', 'Total']]
+        : [['SL', 'Date', 'LC No', 'CH No', 'Truck No', 'Invoice', 'Company', 'Product', 'Brand', 'Qty', 'Price', 'Total', 'Truck Fare', 'Balance']];
 
-        const footRow = [[
-            { content: 'GRAND TOTAL', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
-            { content: saleType === 'Border' ? summary.totalQty.toLocaleString('en-US') : (summary.totalQty.toLocaleString('en-US') + ' kg'), styles: { halign: 'right', fontStyle: 'bold' } },
-            { content: saleType === 'Border' ? totalTrucks.toLocaleString('en-US') : '', styles: { halign: 'center', fontStyle: 'bold' } },
-            ...(saleType === 'Border' ? [
-                { content: '', styles: { halign: 'right', fontStyle: 'bold' } }
-            ] : []),
-            { content: saleType === 'Border' ? summary.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : summary.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
-            ...(saleType === 'Border' ? [] : [
-                { content: summary.totalPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: (summary.totalAmount - summary.totalPaid).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
-            ])
-        ]];
+    const footRow = isOrderReport ? [[
+        { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: summary.totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: '', styles: { halign: 'right' } },
+        { content: summary.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: '', styles: { halign: 'center' } }
+    ]] : [[
+        { content: 'GRAND TOTAL', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: saleType === 'Border' ? summary.totalQty.toLocaleString('en-US') : (summary.totalQty.toLocaleString('en-US') + ' kg'), styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: saleType === 'Border' ? totalTrucks.toLocaleString('en-US') : '', styles: { halign: 'center', fontStyle: 'bold' } },
+        ...(saleType === 'Border' ? [
+            { content: '', styles: { halign: 'right', fontStyle: 'bold' } }
+        ] : []),
+        { content: saleType === 'Border' ? summary.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : summary.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+        ...(saleType === 'Border' ? [] : [
+            { content: summary.totalPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: (summary.totalAmount - summary.totalPaid).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+        ])
+    ]];
 
         autoTable(doc, {
             startY: yPos + 10,
@@ -2943,7 +2985,20 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 fillColor: [240, 240, 240],
                 fontStyle: 'bold'
             },
-            columnStyles: saleType === 'Border' ? {
+            columnStyles: isOrderReport ? {
+                0: { cellWidth: 10, halign: 'center' },     // SL
+                1: { cellWidth: 20, halign: 'center' },     // Date
+                2: { cellWidth: 22, halign: 'center' },     // Order No
+                3: { cellWidth: 36, overflow: 'linebreak' },// Company
+                4: { cellWidth: 25, overflow: 'linebreak' },// Location
+                5: { cellWidth: 24, overflow: 'linebreak' },// Warehouse
+                6: { cellWidth: 32, overflow: 'linebreak' },// Product
+                7: { cellWidth: 32, overflow: 'linebreak' },// Brand
+                8: { cellWidth: 18, halign: 'right' },      // Qty
+                9: { cellWidth: 18, halign: 'right' },      // Price
+                10: { cellWidth: 24, halign: 'right' },     // Total
+                11: { cellWidth: 26, overflow: 'linebreak' } // Remark
+            } : saleType === 'Border' ? {
                 0: { cellWidth: 10, halign: 'center' },     // SL
                 1: { cellWidth: 20, halign: 'center' },    // Date
                 2: { cellWidth: 25, halign: 'center' },    // LC No (Reduced)

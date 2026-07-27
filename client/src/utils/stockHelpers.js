@@ -118,6 +118,16 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     const consumedSales = new Set(); // Track consumed sale entries to prevent double-counting across quality grades
     const consumedDamages = new Set(); // Track consumed damages to prevent double-counting
 
+    // Build Set of orders fulfilled by General Sales to avoid double-counting in Order Qty
+    const fulfilledOrdersSet = new Set();
+    salesRecords.forEach(s => {
+        const sType = (s.saleType || '').toLowerCase();
+        const sStatus = (s.status || '').toLowerCase();
+        if (sType !== 'order' && (sStatus === 'accepted' || sStatus === 'pending' || sStatus === 'complete') && s.orderNo) {
+            fulfilledOrdersSet.add(s.orderNo.trim().toUpperCase());
+        }
+    });
+
     // 1. Process Primary Stock Records (LC Receive)
     stockRecords.forEach(item => {
         const itemStatus = (item.status || '').toLowerCase();
@@ -316,7 +326,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (!brandObj._salesResolved) {
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
-                if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'requested') return;
+                if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
                 if (endDate && sDate > endDate) return;
@@ -362,25 +372,36 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                                 consumedSales.add(saleEntryId);
 
-                                 const sType = (sale.saleType || '').toLowerCase();
+                                const sType = (sale.saleType || '').toLowerCase();
                                 const inv = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
-                                const isOrder = sType === 'order' || inv.startsWith('ORD') || sStatus === 'requested';
+                                const ordNo = (sale.orderNo || sale.invoiceNo || '').toUpperCase();
+                                const isOrder = sType === 'order' || inv.startsWith('ORD');
 
-                                if (isBeforeSale) {
-                                    brandObj.openingQuantity -= sq;
-                                    brandObj.openingPacket -= sp;
-                                    acc[key].openingQuantity -= sq;
-                                    acc[key].openingPacket -= sp;
-                                } else if (isOrder) {
-                                    brandObj.orderQuantity += sq;
-                                    brandObj.orderPacket += sp;
-                                    acc[key].orderQuantity += sq;
-                                    acc[key].orderPacket += sp;
+                                if (isOrder) {
+                                    if (fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo)) return;
+                                    if (isBeforeSale) {
+                                        brandObj.openingQuantity -= sq;
+                                        brandObj.openingPacket -= sp;
+                                        acc[key].openingQuantity -= sq;
+                                        acc[key].openingPacket -= sp;
+                                    } else {
+                                        brandObj.orderQuantity += sq;
+                                        brandObj.orderPacket += sp;
+                                        acc[key].orderQuantity += sq;
+                                        acc[key].orderPacket += sp;
+                                    }
                                 } else {
-                                    brandObj.saleQuantity += sq;
-                                    brandObj.salePacket += sp;
-                                    acc[key].saleQuantity += sq;
-                                    acc[key].salePacket += sp;
+                                    if (isBeforeSale) {
+                                        brandObj.openingQuantity -= sq;
+                                        brandObj.openingPacket -= sp;
+                                        acc[key].openingQuantity -= sq;
+                                        acc[key].openingPacket -= sp;
+                                    } else {
+                                        brandObj.saleQuantity += sq;
+                                        brandObj.salePacket += sp;
+                                        acc[key].saleQuantity += sq;
+                                        acc[key].salePacket += sp;
+                                    }
                                 }
                             }
                         });
@@ -474,7 +495,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     // 5. Second Pass: General Products (from sales)
     salesRecords.forEach(sale => {
         const sStatus = (sale.status || '').toLowerCase();
-        if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+        if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete') return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
         (sale.items || []).forEach((si, siIdx) => {
@@ -634,23 +655,34 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                     const sType = (sale.saleType || '').toLowerCase();
                     const inv = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
-                    const isOrder = sType === 'order' || inv.startsWith('ORD') || sStatus === 'requested';
+                    const ordNo = (sale.orderNo || sale.invoiceNo || '').toUpperCase();
+                    const isOrder = sType === 'order' || inv.startsWith('ORD');
 
-                    if (isBefore) {
-                        brandObj.openingQuantity -= sq;
-                        brandObj.openingPacket -= sp;
-                        group.openingQuantity -= sq;
-                        group.openingPacket -= sp;
-                    } else if (isOrder) {
-                        brandObj.orderQuantity += sq;
-                        brandObj.orderPacket += sp;
-                        group.orderQuantity += sq;
-                        group.orderPacket += sp;
+                    if (isOrder) {
+                        if (fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo)) return;
+                        if (isBefore) {
+                            brandObj.openingQuantity -= sq;
+                            brandObj.openingPacket -= sp;
+                            group.openingQuantity -= sq;
+                            group.openingPacket -= sp;
+                        } else {
+                            brandObj.orderQuantity += sq;
+                            brandObj.orderPacket += sp;
+                            group.orderQuantity += sq;
+                            group.orderPacket += sp;
+                        }
                     } else {
-                        brandObj.saleQuantity += sq;
-                        brandObj.salePacket += sp;
-                        group.saleQuantity += sq;
-                        group.salePacket += sp;
+                        if (isBefore) {
+                            brandObj.openingQuantity -= sq;
+                            brandObj.openingPacket -= sp;
+                            group.openingQuantity -= sq;
+                            group.openingPacket -= sp;
+                        } else {
+                            brandObj.saleQuantity += sq;
+                            brandObj.salePacket += sp;
+                            group.saleQuantity += sq;
+                            group.salePacket += sp;
+                        }
                     }
                 }
             });

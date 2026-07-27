@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from '../../../utils/api';
 import {
     PlusIcon, EditIcon, TrashIcon, SearchIcon, FunnelIcon, EyeIcon, XIcon,
-    ShoppingCartIcon, ChevronDownIcon, ChevronUpIcon, RotateCcwIcon, DownloadIcon, CheckIcon
+    ShoppingCartIcon, ChevronDownIcon, ChevronUpIcon, RotateCcwIcon, DownloadIcon, CheckIcon, BarChartIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
@@ -14,7 +14,10 @@ const OrderManagement = ({
     addNotification,
     fetchSalesGlobal,
     refreshPendingIndicators,
-    onDeleteConfirm
+    onDeleteConfirm,
+    setShowSalesReport,
+    setSalesReportData,
+    setSalesReportSearchQuery
 }) => {
     // --- State Management ---
     const [sales, setSales] = useState([]);
@@ -1018,6 +1021,19 @@ const OrderManagement = ({
                                 </>
                             )}
                         </div>
+
+                        {/* Report Button */}
+                        <button
+                            onClick={() => {
+                                if (setSalesReportData) setSalesReportData(getFilteredData);
+                                if (setSalesReportSearchQuery) setSalesReportSearchQuery(searchQuery);
+                                if (setShowSalesReport) setShowSalesReport(true);
+                            }}
+                            className="sale-mgmt-btn-action sale-mgmt-btn-white"
+                        >
+                            <BarChartIcon className="w-5 h-5" />
+                            <span>Report</span>
+                        </button>
 
                         {/* Add Order Button */}
                         <button

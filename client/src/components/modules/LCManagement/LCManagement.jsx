@@ -6294,7 +6294,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 ipNo: updatedIpNumbers[0] || '',
                 lcAmendment: latestState.amendmentNo === 'Original LC'
                     ? ''
-                    : `${latestState.amendmentNo} DATE: ${formatDate(latestState.amendmentDate)}`,
+                    : (latestState.addnNo
+                        ? `ADDN NO: ${latestState.addnNo} DATE: ${formatDate(latestState.addnDate || latestState.amendmentDate)}`
+                        : `${latestState.amendmentNo} DATE: ${formatDate(latestState.amendmentDate)}`),
                 amendments: currentAmendments
             };
 
@@ -8636,6 +8638,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             <div className="space-y-1.5">
                                                 <CustomDatePicker
                                                     label="ADDN Date"
+                                                    name="addnDate"
                                                     value={amendmentFormData.addnDate}
                                                     onChange={(e) => setAmendmentFormData(prev => ({ ...prev, addnDate: e.target.value }))}
                                                     compact={true}
