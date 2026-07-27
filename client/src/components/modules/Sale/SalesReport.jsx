@@ -180,7 +180,17 @@ const SalesReport = ({
         }
 
         return true;
-    }).sort((a, b) => new Date(a.date) - new Date(b.date));
+    }).sort((a, b) => {
+        const d1 = new Date(a.date || 0).getTime();
+        const d2 = new Date(b.date || 0).getTime();
+        if (d1 !== d2) return d1 - d2;
+        const invA = String(a.invoiceNo || a.orderNo || '').toUpperCase();
+        const invB = String(b.invoiceNo || b.orderNo || '').toUpperCase();
+        if (invA && invB) {
+            return invA.localeCompare(invB, undefined, { numeric: true, sensitivity: 'base' });
+        }
+        return (a.createdAt || a._id || 0) > (b.createdAt || b._id || 0) ? 1 : -1;
+    });
 
     // Construct flat items per sale, applying search query filters to display only matching products/brands/LCs
     const salesWithItems = filteredSales.map(sale => {
@@ -1028,7 +1038,7 @@ const SalesReport = ({
                                                                     <td className="border-r border-gray-900 px-1 py-1 text-[12px] text-right text-gray-900">{parseFloat(item.price || 0).toLocaleString('en-IN')}</td>
                                                                     <td className="border-r border-gray-900 px-1 py-1 text-[12px] text-right font-bold text-gray-900">{parseFloat(item.total || 0).toLocaleString('en-IN')}</td>
                                                                     {idx === 0 && (
-                                                                        <td rowSpan={flatItems.length} className="px-1 py-1 text-[12px] text-gray-900">{sale.remark || sale.remarks || sale.note || '-'}</td>
+                                                                        <td rowSpan={flatItems.length} className="px-1 py-1 text-[12px] text-gray-900">{sale.remark || sale.remarks || sale.notes || sale.note || '-'}</td>
                                                                     )}
                                                                 </>
                                                             ) : (

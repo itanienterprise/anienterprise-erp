@@ -1470,6 +1470,20 @@ const OrderManagement = ({
                             </span>
                         </div>
 
+                        <div>
+                            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">
+                                Remark
+                            </label>
+                            <input
+                                type="text"
+                                name="notes"
+                                value={formData.notes || ''}
+                                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                                placeholder="Enter remark..."
+                                className="sale-mgmt-input w-full"
+                            />
+                        </div>
+
                         <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                             <button
                                 type="button"
