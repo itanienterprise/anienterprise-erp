@@ -8,6 +8,7 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { calculatePktRemainder } from '../../../utils/stockHelpers';
+import { hasPermission } from '../../../utils/permissionHelper';
 
 const OrderManagement = ({
     currentUser,
@@ -24,6 +25,14 @@ const OrderManagement = ({
     const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // --- Permission Checks ---
+    const canAdd = useMemo(() => hasPermission(currentUser, 'order', 'add') || hasPermission(currentUser, 'sales', 'add'), [currentUser]);
+    const canEdit = useMemo(() => hasPermission(currentUser, 'order', 'edit') || hasPermission(currentUser, 'sales', 'edit'), [currentUser]);
+    const canDelete = useMemo(() => hasPermission(currentUser, 'order', 'delete') || hasPermission(currentUser, 'sales', 'delete'), [currentUser]);
+    const canApprove = useMemo(() => hasPermission(currentUser, 'order', 'special') || hasPermission(currentUser, 'sales', 'special'), [currentUser]);
+    const canViewOrderRequest = useMemo(() => hasPermission(currentUser, 'order', 'orderRequest') || hasPermission(currentUser, 'sales', 'saleRequest'), [currentUser]);
+    const canViewEditRequest = useMemo(() => hasPermission(currentUser, 'order', 'editRequest') || hasPermission(currentUser, 'sales', 'editRequest'), [currentUser]);
 
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
@@ -907,35 +916,39 @@ const OrderManagement = ({
 
                         {/* Order Request Toggle Pills */}
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => {
-                                    setIsRequestedOnly(!isRequestedOnly);
-                                    setIsEditRequestedOnly(false);
-                                }}
-                                className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
-                            >
-                                Order Request
-                                {requestedCount > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
-                                        {requestedCount}
-                                    </span>
-                                )}
-                            </button>
+                            {canViewOrderRequest && (
+                                <button
+                                    onClick={() => {
+                                        setIsRequestedOnly(!isRequestedOnly);
+                                        setIsEditRequestedOnly(false);
+                                    }}
+                                    className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-red-300 hover:text-red-600'}`}
+                                >
+                                    Requested
+                                    {requestedCount > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                            {requestedCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
 
-                            <button
-                                onClick={() => {
-                                    setIsEditRequestedOnly(!isEditRequestedOnly);
-                                    setIsRequestedOnly(false);
-                                }}
-                                className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isEditRequestedOnly ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-amber-300 hover:text-amber-600'}`}
-                            >
-                                Edit Request
-                                {editRequestedCount > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-amber-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
-                                        {editRequestedCount}
-                                    </span>
-                                )}
-                            </button>
+                            {canViewEditRequest && (
+                                <button
+                                    onClick={() => {
+                                        setIsEditRequestedOnly(!isEditRequestedOnly);
+                                        setIsRequestedOnly(false);
+                                    }}
+                                    className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isEditRequestedOnly ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-amber-300 hover:text-amber-600'}`}
+                                >
+                                    Edit Request
+                                    {editRequestedCount > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-amber-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                            {editRequestedCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1036,12 +1049,14 @@ const OrderManagement = ({
                         </button>
 
                         {/* Add Order Button */}
-                        <button
-                            onClick={handleOpenCreateForm}
-                            className="sale-mgmt-btn-action sale-mgmt-btn-blue"
-                        >
-                            <span className="flex items-center gap-2"><span className="text-xl leading-none">+</span> Add Order</span>
-                        </button>
+                        {canAdd && (
+                            <button
+                                onClick={handleOpenCreateForm}
+                                className="sale-mgmt-btn-action sale-mgmt-btn-blue"
+                            >
+                                <span className="flex items-center gap-2"><span className="text-xl leading-none">+</span> Add Order</span>
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -1610,14 +1625,16 @@ const OrderManagement = ({
                                                     >
                                                         <EyeIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button
-                                                        onClick={() => handleEdit(order)}
-                                                        className="text-gray-400 hover:text-blue-600 transition-colors p-1"
-                                                        title="Edit Order"
-                                                    >
-                                                        <EditIcon className="w-5 h-5" />
-                                                    </button>
-                                                    {isRequested && (
+                                                    {canEdit && (
+                                                        <button
+                                                            onClick={() => handleEdit(order)}
+                                                            className="text-gray-400 hover:text-blue-600 transition-colors p-1"
+                                                            title="Edit Order"
+                                                        >
+                                                            <EditIcon className="w-5 h-5" />
+                                                        </button>
+                                                    )}
+                                                    {isRequested && canApprove && (
                                                         <>
                                                             <button
                                                                 onClick={() => handleStatusUpdate(order, 'Accepted')}
@@ -1635,13 +1652,15 @@ const OrderManagement = ({
                                                             </button>
                                                         </>
                                                     )}
-                                                    <button
-                                                        onClick={() => handleDeleteOrder(order)}
-                                                        className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                                                        title="Delete Order"
-                                                    >
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
+                                                    {canDelete && (
+                                                        <button
+                                                            onClick={() => handleDeleteOrder(order)}
+                                                            className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                                                            title="Delete Order"
+                                                        >
+                                                            <TrashIcon className="w-5 h-5" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

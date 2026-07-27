@@ -14,6 +14,15 @@ export const MODULES_LIST = [
     { key: 'pi', label: 'PI Management' },
     { key: 'packingList', label: 'Packing List' },
     { key: 'trSetup', label: 'TR Setup' },
+    { 
+        key: 'order', 
+        label: 'Order', 
+        specialLabels: [
+            { key: 'special', label: 'Approve Order' },
+            { key: 'orderRequest', label: 'Order Request' },
+            { key: 'editRequest', label: 'Edit Request' }
+        ]
+    },
     { key: 'product', label: 'Product Management' },
     { key: 'customer', label: 'Customer Management' },
     { key: 'lcReceive', label: 'LC Receive', specialLabel: 'Approve LC' },
@@ -120,8 +129,8 @@ export const getDefaultPermissionsForRole = (role) => {
             defaults[key] = permsObj;
         });
     } else if (roleLower === 'sales manager') {
-        // Sales Manager can access products, customers, sales, payment, bank, insurance, insurancePayment, returnProduct
-        const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+        // Sales Manager can access products, customers, sales, order, payment, bank, insurance, insurancePayment, returnProduct
+        const salesModules = ['product', 'customer', 'sales', 'order', 'profitLoss', 'costOfGoods', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
         salesModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -174,7 +183,7 @@ export const getDefaultPermissionsForRole = (role) => {
         });
     } else {
         // General staff gets read-only access to standard work modules
-        const staffModules = ['product', 'customer', 'stock', 'sales'];
+        const staffModules = ['product', 'customer', 'stock', 'sales', 'order'];
         staffModules.forEach(key => {
             defaults[key] = { view: true, add: false, edit: false, delete: false, special: false };
         });
