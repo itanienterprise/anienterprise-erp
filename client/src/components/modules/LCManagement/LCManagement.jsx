@@ -3503,7 +3503,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <p className="text-sm font-bold text-gray-800">{data.marineCoverNote || '-'}</p>
                                             {activeMilestone.addnNo && (
                                                 <p className="text-[11px] font-bold text-amber-600 mt-1 whitespace-nowrap">
-                                                    ADDN: {activeMilestone.addnNo}
+                                                    AMENDMENT NO: {activeMilestone.addnNo}
                                                 </p>
                                             )}
                                         </div>
@@ -6295,7 +6295,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 lcAmendment: latestState.amendmentNo === 'Original LC'
                     ? ''
                     : (latestState.addnNo
-                        ? `ADDN NO: ${latestState.addnNo} DATE: ${formatDate(latestState.addnDate || latestState.amendmentDate)}`
+                        ? `AMENDMENT NO: ${latestState.addnNo} DATE: ${formatDate(latestState.addnDate || latestState.amendmentDate)}`
                         : `${latestState.amendmentNo} DATE: ${formatDate(latestState.amendmentDate)}`),
                 amendments: currentAmendments
             };
@@ -9314,7 +9314,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                             <span>{record.lcNo}</span>
                                                             {record.amendments?.length > 0 && (
                                                                 <span className="self-start px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                                    {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                                    AMENDMENT
                                                                 </span>
                                                             )}
                                                             {record.enableValueQtyAdjustment && (
@@ -10010,7 +10010,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         <span className="text-sm font-black text-gray-955 font-sans tracking-tight">{record.lcNo}</span>
                                                         {record.amendments?.length > 0 && (
                                                             <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-150/40 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                                {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                                AMENDMENT
                                                             </span>
                                                         )}
                                                         {record.enableValueQtyAdjustment && (
@@ -10052,7 +10052,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         <span className="font-black text-gray-955 font-sans text-[11px]">{record.lcNo}</span>
                                                         {record.amendments?.length > 0 && (
                                                             <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide leading-none">
-                                                                {record.lcAmendment?.split(' ')[0] || 'Amended'}
+                                                                AMENDMENT
                                                             </span>
                                                         )}
                                                         {record.enableValueQtyAdjustment && (
