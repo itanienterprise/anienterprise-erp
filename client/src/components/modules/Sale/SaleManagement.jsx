@@ -1759,8 +1759,12 @@ const SaleManagement = ({
         return allSalesRecords.filter(item => {
             const sType = (item.saleType || '').toLowerCase();
             const inv = (item.invoiceNo || item.orderNo || '').toUpperCase();
+            
+            // Exclude Border Sales (BS...) from the Order ID dropdown
+            if (sType === 'border' || inv.startsWith('BS')) return false;
+
             const st = (item.status || '').toLowerCase();
-            const isOrd = sType === 'order' || inv.startsWith('ORD') || st === 'requested';
+            const isOrd = sType === 'order' || inv.startsWith('ORD') || item.isOrderEntry || (st === 'requested' && sType !== 'border' && !inv.startsWith('BS'));
             if (!isOrd) return false;
 
             if (orderSearch) {
@@ -1786,8 +1790,12 @@ const SaleManagement = ({
 
             setCompanyNameSearch(comp);
 
-            const mappedItems = (order.items && order.items.length > 0) ? order.items.map(item => {
-                const mappedBrandEntries = (item.brandEntries && item.brandEntries.length > 0) ? item.brandEntries.map(be => {
+            const mappedItems = (order.items && order.items.length > 0) ? order.items.map((item, pIdx) => {
+                const existingProduct = formData.items && formData.items[pIdx];
+                const mappedBrandEntries = (item.brandEntries && item.brandEntries.length > 0) ? item.brandEntries.map((be, bIdx) => {
+                    const existingBrand = existingProduct && existingProduct.brandEntries && existingProduct.brandEntries[bIdx];
+                    const preservedLcNo = be.lcNo || (existingBrand ? existingBrand.lcNo : '') || '';
+
                     const pktSize = parseFloat(be.packetSize) || 30;
                     const qty = parseFloat(be.quantity) || 0;
                     const rawBag = (be.bag !== undefined && be.bag !== null && be.bag !== '') ? be.bag : (be.packet !== undefined && be.packet !== null && be.packet !== '') ? be.packet : '';
@@ -1797,6 +1805,7 @@ const SaleManagement = ({
 
                     return {
                         ...be,
+                        lcNo: preservedLcNo,
                         brand: be.brand || be.brandName || '',
                         brandName: be.brandName || be.brand || '',
                         warehouseName: be.warehouseName || be.warehouse || '',
@@ -1810,7 +1819,7 @@ const SaleManagement = ({
                         totalAmount: totalVal
                     };
                 }) : [{
-                    lcNo: '',
+                    lcNo: (existingProduct && existingProduct.brandEntries && existingProduct.brandEntries[0]) ? existingProduct.brandEntries[0].lcNo : '',
                     brand: '',
                     brandName: '',
                     inhouseQty: '',

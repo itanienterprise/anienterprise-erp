@@ -550,7 +550,7 @@ const OrderManagement = ({
         setFormData({
             ...initialFormState,
             date: new Date().toISOString().split('T')[0],
-            invoiceNo: generateInvoiceNo()
+            invoiceNo: ''
         });
         setShowForm(true);
     };
@@ -586,6 +586,7 @@ const OrderManagement = ({
 
         setIsSubmitting(true);
         try {
+            const finalInvoiceNo = editingId ? (formData.invoiceNo || generateInvoiceNo()) : generateInvoiceNo();
             const totalAmount = calculateOrderTotal(formData.items);
             const isAdminUser = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
             const origStatus = (originalData?.status || '').toLowerCase();
@@ -593,8 +594,8 @@ const OrderManagement = ({
 
             const payload = {
                 date: formData.date,
-                invoiceNo: formData.invoiceNo,
-                orderNo: formData.invoiceNo,
+                invoiceNo: finalInvoiceNo,
+                orderNo: finalInvoiceNo,
                 companyName: formData.companyName || formData.customerName,
                 customerName: formData.customerName || formData.companyName,
                 phone: formData.phone,
@@ -610,10 +611,10 @@ const OrderManagement = ({
 
             if (editingId) {
                 await axios.put(`${API_BASE_URL}/api/sales/${editingId}`, payload);
-                if (addNotification) addNotification(`Order ${formData.invoiceNo} updated successfully!`, 'success');
+                if (addNotification) addNotification(`Order ${finalInvoiceNo} updated successfully!`, 'success');
             } else {
                 await axios.post(`${API_BASE_URL}/api/sales`, payload);
-                if (addNotification) addNotification(`New Order ${formData.invoiceNo} created!`, 'success');
+                if (addNotification) addNotification(`New Order ${finalInvoiceNo} created!`, 'success');
             }
 
             setShowForm(false);
@@ -1317,22 +1318,9 @@ const OrderManagement = ({
                                 compact={true}
                             />
 
-                            <div className="sale-mgmt-input-group">
-                                <label className="sale-mgmt-label">Order No</label>
-                                <input
-                                    autoComplete="off"
-                                    type="text"
-                                    name="invoiceNo"
-                                    required
-                                    value={formData.invoiceNo}
-                                    onChange={(e) => setFormData({ ...formData, invoiceNo: e.target.value })}
-                                    className="sale-mgmt-input font-bold text-blue-600"
-                                />
-                            </div>
-
-                            {/* Company / Customer Name Searchable Dropdown */}
+                            {/* Company Name Searchable Dropdown */}
                             <div className="sale-mgmt-input-group relative company-dropdown-container">
-                                <label className="sale-mgmt-label">Company / Customer Name</label>
+                                <label className="sale-mgmt-label">Company Name</label>
                                 <div className="relative">
                                     <input
                                         type="text"
@@ -1343,7 +1331,7 @@ const OrderManagement = ({
                                             setCompanyNameSearch(e.target.value);
                                             setActiveDropdown('companyName');
                                             setHighlightedIndex(-1);
-                                            setFormData(prev => ({ ...prev, companyName: e.target.value, customerName: e.target.value }));
+                                            setFormData(prev => ({ ...prev, companyName: e.target.value }));
                                         }}
                                         onFocus={() => {
                                             setCompanyNameSearch(formData.companyName || '');
@@ -1397,6 +1385,19 @@ const OrderManagement = ({
                                         ))}
                                     </div>
                                 )}
+                            </div>
+
+                            {/* Customer Name Field */}
+                            <div className="sale-mgmt-input-group">
+                                <label className="sale-mgmt-label">Customer Name</label>
+                                <input
+                                    autoComplete="off"
+                                    type="text"
+                                    placeholder="Customer name..."
+                                    value={formData.customerName}
+                                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                                    className="sale-mgmt-input"
+                                />
                             </div>
 
                             <div className="sale-mgmt-input-group">
