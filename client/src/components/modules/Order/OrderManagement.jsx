@@ -236,8 +236,7 @@ const OrderManagement = ({
             const filtered = data.filter(item => {
                 const sType = (item.saleType || '').toLowerCase();
                 const inv = (item.invoiceNo || item.orderNo || '').toUpperCase();
-                const st = (item.status || '').toLowerCase();
-                return sType === 'order' || inv.startsWith('ORD') || st === 'requested';
+                return sType === 'order' || inv.startsWith('ORD') || item.isOrderEntry === true;
             });
 
             setSales(filtered);
