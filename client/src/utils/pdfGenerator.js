@@ -852,7 +852,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 const boxY = yPos - 5;
 
                 doc.setDrawColor(0);
-                doc.setLineWidth(0.2);
+doc.setLineWidth(0.2);
                 doc.rect(boxX, boxY, boxWidth, boxHeight);
                 doc.text(label, pageWidth / 2, boxY + 5, { align: 'center' });
 
@@ -865,298 +865,171 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             const qualityEndRowIndices = new Set();
             const customLinesToDraw = [];
 
-
-            const sortedDisplayRecords = [...currentStockData.displayRecords].sort((a, b) => a.productName.localeCompare(b.productName));
+            const sortedDisplayRecords = [...currentStockData.displayRecords].sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
             sortedDisplayRecords.forEach((item, index) => {
-                // Legitimate quality check - only separate if there's actual quality data
-                const qualityGroups = item.brandList.reduce((acc, ent) => {
-                    const q = (ent.quality || '-').toUpperCase().trim();
-                    // Ensure the entity visually reflects the properly capitalized string for display
-                    if (q !== '-') ent.quality = q;
-                    if (!acc[q]) acc[q] = [];
-                    acc[q].push(ent);
-                    return acc;
-                }, {});
+                const brands = item.brandList || [];
 
-                const qEntries = Object.entries(qualityGroups);
-                const hasQuals = qEntries.length > 1 || (qEntries.length === 1 && qEntries[0][0] !== '-');
-
-                const hasSubTotal = true;
-                const brandsCount = item.brandList.length;
-                const hasQualSubTotals = hasQuals && qEntries.length > 1;
-                const qualSubTotalCount = hasQualSubTotals ? qEntries.length : 0;
-                const totalRowsForProduct = brandsCount + (hasQuals ? 1 : 0) + (hasSubTotal ? 1 : 0) + qualSubTotalCount;
-
-                let isFirstRowOfProduct = true;
-
-                // --- 1. PRODUCT HEADER ROW (MOSUR DAL style for products with qualities) ---
-                if (hasQuals) {
-                    const headRow = [];
-                    // SL Column
-                    headRow.push({
-                        content: (index + 1).toString(),
-                        styles: { valign: 'middle', halign: 'center', fontStyle: 'bold', lineWidth: 0 }
-                    });
-                    // Product Name Header (Stays strictly in Product Name Column)
-                    headRow.push({
-                        content: (item.productName || '-').toUpperCase(),
-                        styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], lineWidth: 0 }
-                    });
-                    // Empty Brand Column
-                    headRow.push({
-                        content: '',
-                        styles: { fillColor: [248, 248, 248] }
-                    });
-                    // Numeric placeholders
-                    const emptyDataColsCount = reportType === 'detailed' ? 6 : (reportType === 'price' ? 4 : 2);
-                    for (let i = 0; i < emptyDataColsCount; i++) {
-                        headRow.push({ content: '', styles: { fillColor: [248, 248, 248] } });
-                    }
-
-                    tableRows.push(headRow);
-                    isFirstRowOfProduct = false; // SL already pushed
-                }
-
-                // --- 2. DETAIL ROWS ---
-                qEntries.forEach(([quality, brands], qIdx) => {
-                    let isFirstRowOfQuality = true;
-                    let lastBrand = null;
-
-                    // Pre-calculate brand spans within this quality group
-                    const brandSpans = [];
-                    let lastB = null;
-                    let lastBIdx = -1;
-                    brands.forEach((b, i) => {
-                        const brandName = (b.brand || 'No Brand').trim().toUpperCase();
-                        if (brandName !== lastB) {
-                            lastB = brandName;
-                            lastBIdx = i;
-                            brandSpans[i] = { name: b.brand, span: 1 };
-                        } else {
-                            brandSpans[lastBIdx].span++;
-                            brandSpans[i] = { name: b.brand, span: 0 };
-                        }
-                    });
-
-                    brands.forEach((ent, bIdx) => {
-                        const row = [];
-
-                        // Column 0: SL
-                        if (!hasQuals && isFirstRowOfProduct) {
-                            row.push({
-                                content: (index + 1).toString(),
-                                styles: { valign: 'middle', halign: 'center', fontStyle: 'bold', lineWidth: 0 }
-                            });
-                        } else {
-                            row.push({
-                                content: '',
-                                styles: { valign: 'middle', halign: 'center', lineWidth: 0 }
-                            });
-                        }
-
-                        // Column 1: PRODUCT NAME / Quality
-                        if (hasQuals) {
-                            if (isFirstRowOfQuality) {
-                                row.push({
-                                    content: (quality === '-' ? '' : quality).toUpperCase(),
-                                    styles: { valign: 'middle', halign: 'center', fontStyle: 'bold', lineWidth: 0 }
-                                });
-                            } else {
-                                row.push({
-                                    content: '',
-                                    styles: { valign: 'middle', halign: 'center', lineWidth: 0 }
-                                });
-                            }
-                        } else {
-                            if (isFirstRowOfProduct) {
-                                row.push({
-                                    content: (item.productName || '-').toUpperCase(),
-                                    styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', lineWidth: 0 }
-                                });
-                            } else {
-                                row.push({
-                                    content: '',
-                                    styles: { valign: 'middle', halign: 'center', lineWidth: 0 }
-                                });
-                            }
-                        }
-
-                        // Column 2: Brand
-                        const rawBrand = ent.brand || '-';
-                        const brandCompareName = rawBrand.trim().toUpperCase();
-                        if (brandCompareName !== lastBrand) {
-                            lastBrand = brandCompareName;
-                            row.push({
-                                content: rawBrand,
-                                styles: { halign: 'left' }
-                            });
-                        } else {
-                            row.push({
-                                content: '',
-                                styles: { halign: 'left' }
-                            });
-                        }
-
-                        // Detailed Numeric Data
-                        if (reportType === 'detailed') {
-                            const tQty = parseFloat(ent.totalInHouseQuantity) || 0;
-                            const tSize = parseFloat(ent.packetSize) || 0;
-                            const { whole: tW, remainder: tR } = calculatePktRemainderLocal(tQty, tSize);
-                            row.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { halign: 'right' } });
-                            row.push({ content: Math.round(tQty).toLocaleString('en-US'), styles: { halign: 'right' } });
-
-                            const sQty = parseFloat(ent.saleQuantity) || 0;
-                            const sSize = parseFloat(ent.packetSize) || 0;
-                            const { whole: sW, remainder: sR } = calculatePktRemainderLocal(sQty, sSize);
-                            row.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { halign: 'right' } });
-                            row.push({ content: Math.round(sQty).toLocaleString('en-US'), styles: { halign: 'right' } });
-                        }
-
-                        // Price Report Columns
-                        if (reportType === 'price') {
-                            row.push({ content: ent.lcNo || '—', styles: { halign: 'left' } });
-                            row.push({ content: ent.purchasedPrice ? `TK ${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—', styles: { halign: 'right' } });
-                        }
-
-                        // Closing Data
-                        const rQty = parseFloat(ent.inHouseQuantity) || 0;
-                        const rSize = parseFloat(ent.packetSize) || 0;
-                        const { whole: rW, remainder: rR } = calculatePktRemainderLocal(rQty, rSize);
-                        row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
-                        row.push({ content: Math.round(rQty).toLocaleString('en-US'), styles: { halign: 'right' } });
-
-                        if (bIdx === brands.length - 1) {
-                            const isLastQualityOfProduct = qIdx === qEntries.length - 1;
-                            if (!hasQualSubTotals && (!isLastQualityOfProduct || !hasSubTotal)) {
-                                boldBottomRowIndices.add(tableRows.length);
-                            }
-                            qualityEndRowIndices.add(tableRows.length);
-                            row.isQualityEnd = true;
-                        }
-                        tableRows.push(row);
-
-                        // Check if we need to insert a Brand Total row for brands with multiple LCs
-                        let startIdx = bIdx;
-                        while (startIdx > 0 && brandSpans[startIdx].span === 0) {
-                            startIdx--;
-                        }
-                        const spanInfo = brandSpans[startIdx];
-                        const isLastOfBrandGroup = bIdx === startIdx + spanInfo.span - 1;
-                        const hasMultipleLcs = spanInfo.span > 1;
-
-                        if (reportType === 'price' && hasMultipleLcs && isLastOfBrandGroup) {
-                            const brandGroup = brands.slice(startIdx, startIdx + spanInfo.span);
-                            const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
-                            const pktSize = ent.packetSize || 30;
-                            const { whole, remainder } = calculatePktRemainderLocal(totalQty, pktSize);
-
-                            const brandTotalRow = [];
-                            // Column 0: SL
-                            brandTotalRow.push({
-                                content: '',
-                                styles: { lineWidth: 0 }
-                            });
-                            // Column 1 & 2: Brand Total (colSpan 4)
-                            brandTotalRow.push({
-                                content: `${ent.brand || 'No Brand'} TOTAL`,
-                                colSpan: 4,
-                                styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248], lineWidth: 0 }
-                            });
-                            // Column 5: BAG
-                            brandTotalRow.push({
-                                content: `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`,
-                                styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
-                            });
-                            // Column 6: QUANTITY
-                            brandTotalRow.push({
-                                content: Math.round(totalQty).toLocaleString('en-US'),
-                                styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
-                            });
-
-                            brandTotalRow.isBrandTotal = true;
-                            boldBottomRowIndices.add(tableRows.length);
-                            tableRows.push(brandTotalRow);
-                        }
-
-                        isFirstRowOfProduct = false;
-                        isFirstRowOfQuality = false;
-                    });
-
-                    // --- Quality Sub Total Row ---
-                    if (hasQualSubTotals) {
-                        const qualSubRow = [];
-                        // Column 0: SL (empty)
-                        qualSubRow.push({
-                            content: '',
-                            styles: { fillColor: [245, 245, 250], lineWidth: 0 }
-                        });
-                        // Column 1 & 2: Quality TOTAL (colSpan: 2)
-                        qualSubRow.push({
-                            content: `${quality} TOTAL`,
-                            colSpan: reportType === 'price' ? 4 : 2,
-                            styles: { fontStyle: 'bolditalic', halign: 'right', fillColor: [245, 245, 250], lineWidth: 0 }
-                        });
-
-                        if (reportType === 'detailed') {
-                            const qTotalIHQty = brands.reduce((s, e) => s + (parseFloat(e.totalInHouseQuantity) || 0), 0);
-                            const qPktSize = parseFloat(brands[0]?.packetSize) || 0;
-                            const { whole: tW, remainder: tR } = calculatePktRemainderLocal(qTotalIHQty, qPktSize);
-                            qualSubRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
-                            qualSubRow.push({ content: Math.round(qTotalIHQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
-
-                            const qSaleQty = brands.reduce((s, e) => s + (parseFloat(e.saleQuantity) || 0), 0);
-                            const { whole: sW, remainder: sR } = calculatePktRemainderLocal(qSaleQty, qPktSize);
-                            qualSubRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
-                            qualSubRow.push({ content: Math.round(qSaleQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
-                        }
-
-                        const qCloseQty = brands.reduce((s, e) => s + (parseFloat(e.inHouseQuantity) || 0), 0);
-                        const qPktSize2 = parseFloat(brands[0]?.packetSize) || 0;
-                        const { whole: rW2, remainder: rR2 } = calculatePktRemainderLocal(qCloseQty, qPktSize2);
-                        qualSubRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
-                        qualSubRow.push({ content: Math.round(qCloseQty).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [245, 245, 250] } });
-
-                        boldBottomRowIndices.add(tableRows.length);
-                        qualSubRow.isSubTotal = true;
-                        tableRows.push(qualSubRow);
+                // Pre-calculate brand spans within consecutive matching brand names
+                const brandSpans = [];
+                let lastB = null;
+                let lastBIdx = -1;
+                brands.forEach((b, i) => {
+                    const brandName = (b.brand || 'No Brand').trim().toUpperCase();
+                    if (brandName !== lastB) {
+                        lastB = brandName;
+                        lastBIdx = i;
+                        brandSpans[i] = { name: b.brand, span: 1 };
+                    } else {
+                        brandSpans[lastBIdx].span++;
+                        brandSpans[i] = { name: b.brand, span: 0 };
                     }
                 });
 
-                // --- 3. SUB TOTAL ROW ---
-                if (hasSubTotal) {
-                    const subRow = [];
-                    // Column 0: SL (empty)
-                    subRow.push({
-                        content: '',
-                        styles: { fillColor: [248, 248, 248], lineWidth: 0 }
-                    });
-                    // Column 1 & 2: SUB TOTAL
-                    subRow.push({
-                        content: 'SUB TOTAL',
-                        colSpan: reportType === 'price' ? 4 : 2,
-                        styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], lineWidth: 0 }
-                    });
+                brands.forEach((ent, bIdx) => {
+                    const row = [];
 
-                    if (reportType === 'detailed') {
-                        const tSize = item.brandList[0]?.packetSize || 0;
-                        const { whole: tW, remainder: tR } = calculatePktRemainderLocal(item.totalInHouseQuantity, tSize);
-                        subRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                        subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-
-                        const { whole: sW, remainder: sR } = calculatePktRemainderLocal(item.saleQuantity, tSize);
-                        subRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                        subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    // Column 0: SL (only on first row of product)
+                    if (bIdx === 0) {
+                        row.push({
+                            content: (index + 1).toString(),
+                            styles: { valign: 'middle', halign: 'center', fontStyle: 'bold', lineWidth: 0 }
+                        });
+                    } else {
+                        row.push({
+                            content: '',
+                            styles: { valign: 'middle', halign: 'center', lineWidth: 0 }
+                        });
                     }
 
-                    const tSize = item.brandList[0]?.packetSize || 0;
-                    const { whole: rW, remainder: rR } = calculatePktRemainderLocal(item.inHouseQuantity, tSize);
-                    subRow.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
-                    subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    // Column 1: PRODUCT NAME (only on first row of product)
+                    if (bIdx === 0) {
+                        row.push({
+                            content: (item.productName || '-').toUpperCase(),
+                            styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', lineWidth: 0 }
+                        });
+                    } else {
+                        row.push({
+                            content: '',
+                            styles: { valign: 'middle', halign: 'center', lineWidth: 0 }
+                        });
+                    }
 
-                    boldBottomRowIndices.add(tableRows.length);
-                    subRow.isSubTotal = true;
-                    tableRows.push(subRow);
+                    // Column 2: Brand (with Quality if applicable and not redundant)
+                    const rawBrand = (ent.brand || 'No Brand').trim();
+                    const rawQuality = (ent.quality && ent.quality !== '-' && ent.quality !== 'NO QUALITY') ? ent.quality.trim() : '';
+                    let displayBrand = rawBrand;
+                    if (rawQuality && !rawBrand.toUpperCase().includes(rawQuality.toUpperCase())) {
+                        displayBrand = `${rawBrand} (${rawQuality})`;
+                    }
+
+                    const spanInfo = brandSpans[bIdx];
+                    if (spanInfo && spanInfo.span > 0) {
+                        row.push({
+                            content: displayBrand,
+                            styles: { halign: 'left' }
+                        });
+                    } else {
+                        row.push({
+                            content: '',
+                            styles: { halign: 'left' }
+                        });
+                    }
+
+                    // Detailed Numeric Data
+                    if (reportType === 'detailed') {
+                        const tQty = parseFloat(ent.totalInHouseQuantity) || 0;
+                        const tSize = parseFloat(ent.packetSize) || 0;
+                        const { whole: tW, remainder: tR } = calculatePktRemainderLocal(tQty, tSize);
+                        row.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { halign: 'right' } });
+                        row.push({ content: Math.round(tQty).toLocaleString('en-US'), styles: { halign: 'right' } });
+
+                        const sQty = parseFloat(ent.saleQuantity) || 0;
+                        const sSize = parseFloat(ent.packetSize) || 0;
+                        const { whole: sW, remainder: sR } = calculatePktRemainderLocal(sQty, sSize);
+                        row.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { halign: 'right' } });
+                        row.push({ content: Math.round(sQty).toLocaleString('en-US'), styles: { halign: 'right' } });
+                    }
+
+                    // Price Report Columns
+                    if (reportType === 'price') {
+                        row.push({ content: ent.lcNo || '—', styles: { halign: 'left' } });
+                        row.push({ content: ent.purchasedPrice ? `TK ${parseFloat(ent.purchasedPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—', styles: { halign: 'right' } });
+                    }
+
+                    // Closing Data
+                    const rQty = parseFloat(ent.inHouseQuantity) || 0;
+                    const rSize = parseFloat(ent.packetSize) || 0;
+                    const { whole: rW, remainder: rR } = calculatePktRemainderLocal(rQty, rSize);
+                    row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
+                    row.push({ content: Math.round(rQty).toLocaleString('en-US'), styles: { halign: 'right' } });
+
+                    tableRows.push(row);
+
+                    // Check if we need to insert a Brand Total row for brands with multiple LCs
+                    let startIdx = bIdx;
+                    while (startIdx > 0 && brandSpans[startIdx].span === 0) {
+                        startIdx--;
+                    }
+                    const bSpanInfo = brandSpans[startIdx];
+                    const isLastOfBrandGroup = bIdx === startIdx + bSpanInfo.span - 1;
+                    const hasMultipleLcs = bSpanInfo.span > 1;
+
+                    if (reportType === 'price' && hasMultipleLcs && isLastOfBrandGroup) {
+                        const brandGroup = brands.slice(startIdx, startIdx + bSpanInfo.span);
+                        const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
+                        const pktSize = ent.packetSize || 30;
+                        const { whole, remainder } = calculatePktRemainderLocal(totalQty, pktSize);
+
+                        const brandTotalRow = [];
+                        brandTotalRow.push({ content: '', styles: { lineWidth: 0 } });
+                        brandTotalRow.push({
+                            content: `${displayBrand} TOTAL`,
+                            colSpan: 4,
+                            styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248], lineWidth: 0 }
+                        });
+                        brandTotalRow.push({
+                            content: `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`,
+                            styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
+                        });
+                        brandTotalRow.push({
+                            content: Math.round(totalQty).toLocaleString('en-US'),
+                            styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] }
+                        });
+
+                        brandTotalRow.isBrandTotal = true;
+                        boldBottomRowIndices.add(tableRows.length);
+                        tableRows.push(brandTotalRow);
+                    }
+                });
+
+                // --- SUB TOTAL ROW FOR PRODUCT ---
+                const subRow = [];
+                subRow.push({ content: '', styles: { fillColor: [248, 248, 248], lineWidth: 0 } });
+                subRow.push({
+                    content: 'SUB TOTAL',
+                    colSpan: reportType === 'price' ? 4 : 2,
+                    styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 248, 248], lineWidth: 0 }
+                });
+
+                if (reportType === 'detailed') {
+                    const tSize = item.brandList[0]?.packetSize || 0;
+                    const { whole: tW, remainder: tR } = calculatePktRemainderLocal(item.totalInHouseQuantity, tSize);
+                    subRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+
+                    const { whole: sW, remainder: sR } = calculatePktRemainderLocal(item.saleQuantity, tSize);
+                    subRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }
+
+                const tSize2 = item.brandList[0]?.packetSize || 0;
+                const { whole: rW2, remainder: rR2 } = calculatePktRemainderLocal(item.inHouseQuantity, tSize2);
+                subRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+
+                subRow.isSubTotal = true;
+                boldBottomRowIndices.add(tableRows.length);
+                tableRows.push(subRow);
             });
 
             // Per-Warehouse Summary for Table Grand Total
