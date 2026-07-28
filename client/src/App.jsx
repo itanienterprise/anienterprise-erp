@@ -1785,6 +1785,7 @@ function App() {
             setShowStockReport={setShowStockReport}
             stockFilters={stockFilters}
             setStockFilters={setStockFilters}
+            warehouseData={warehouseData}
             salesRecords={salesRecords}
             fetchSales={fetchSales}
             damages={damages}

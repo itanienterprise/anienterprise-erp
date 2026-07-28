@@ -125,6 +125,7 @@ const StockManagement = ({
     setShowStockReport,
     stockFilters,
     setStockFilters,
+    warehouseData: externalWarehouseData,
     salesRecords,
     fetchSales,
     damages,
@@ -256,7 +257,34 @@ const StockManagement = ({
     const portFilterRef = useRef(null);
 
     // --- Add Stock to Warehouse State ---
-    const [warehouseData, setWarehouseData] = useState([]);
+    const [warehouseData, setWarehouseData] = useState(externalWarehouseData || []);
+
+    useEffect(() => {
+        if (externalWarehouseData && Array.isArray(externalWarehouseData) && externalWarehouseData.length > 0) {
+            setWarehouseData(externalWarehouseData);
+        }
+    }, [externalWarehouseData]);
+
+    useEffect(() => {
+        const fetchWarehouseData = async () => {
+            try {
+                const res = await axios.get(`${API_BASE_URL}/api/warehouses`);
+                if (Array.isArray(res.data)) {
+                    const dec = res.data.map(item => {
+                        let d = decryptData(item.data);
+                        if (d && d.data && typeof d.data === 'string') {
+                            try { d = decryptData(d.data); } catch (e) {}
+                        }
+                        return { ...item, ...(d || {}) };
+                    });
+                    setWarehouseData(dec);
+                }
+            } catch (e) {
+                console.error('Error fetching warehouses in StockManagement:', e);
+            }
+        };
+        fetchWarehouseData();
+    }, []);
     const [showAddWarehouseStockForm, setShowAddWarehouseStockForm] = useState(false);
     const [addWarehouseStockFormData, setAddWarehouseStockFormData] = useState({
         whName: '', manager: '', location: '', capacity: '',
