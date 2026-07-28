@@ -1094,31 +1094,61 @@ apiRouter.post('/api/sales', async (req, res) => {
 
     // Generate unique invoice number based on saleType
     const sType = saleData.saleType || 'General';
-    const prefix = (sType === 'Border' || sType === 'Border Sale') ? 'BS' : 'GS';
+    const isOrder = sType === 'Order' || sType === 'order' || (saleData.invoiceNo || saleData.orderNo || '').toUpperCase().startsWith('ORD') || saleData.isOrderEntry;
 
-    const allSales = await Sale.find();
-    const numbers = [];
-    for (const s of allSales) {
-      let d;
-      try {
-        d = decryptData(s.data);
-        if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
-          try { d = decryptData(d.data); } catch (e) { }
+    let newInvoiceNo = saleData.invoiceNo || saleData.orderNo;
+
+    if (!isOrder) {
+      const prefix = (sType === 'Border' || sType === 'Border Sale') ? 'BS' : 'GS';
+
+      const allSales = await Sale.find();
+      const numbers = [];
+      for (const s of allSales) {
+        let d;
+        try {
+          d = decryptData(s.data);
+          if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
+            try { d = decryptData(d.data); } catch (e) { }
+          }
+        } catch (e) {
+          console.error('Error decrypting sale during invoice generation:', e);
         }
-      } catch (e) {
-        console.error('Error decrypting sale during invoice generation:', e);
+
+        const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
+        if (invNo && invNo.startsWith(prefix)) {
+          const match = invNo.match(/\d+/);
+          if (match) numbers.push(parseInt(match[0]));
+        }
       }
 
-      const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
-      if (invNo && invNo.startsWith(prefix)) {
-        const match = invNo.match(/\d+/);
-        if (match) numbers.push(parseInt(match[0]));
+      const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+      newInvoiceNo = `${prefix}${nextNum.toString().padStart(4, '0')}`;
+      saleData.invoiceNo = newInvoiceNo;
+    } else {
+      if (!newInvoiceNo) {
+        const allSales = await Sale.find();
+        const numbers = [];
+        for (const s of allSales) {
+          let d;
+          try {
+            d = decryptData(s.data);
+            if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
+              try { d = decryptData(d.data); } catch (e) { }
+            }
+          } catch (e) { }
+
+          const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
+          if (invNo && invNo.toUpperCase().startsWith('ORD')) {
+            const match = invNo.match(/\d+/);
+            if (match) numbers.push(parseInt(match[0]));
+          }
+        }
+        const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+        newInvoiceNo = `ORD${nextNum.toString().padStart(4, '0')}`;
       }
+      saleData.invoiceNo = newInvoiceNo;
+      saleData.orderNo = newInvoiceNo;
     }
-
-    const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
-    const newInvoiceNo = `${prefix}${nextNum.toString().padStart(4, '0')}`;
-    saleData.invoiceNo = newInvoiceNo;
 
     // Detect if rate is missing
     if (saleData.items && Array.isArray(saleData.items)) {

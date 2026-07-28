@@ -712,18 +712,23 @@ const SaleManagement = ({
             // Filter by saleType
             const filteredSales = decryptedSales.filter(s => {
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                const invUpper = (s.invoiceNo || s.orderNo || '').toUpperCase();
+                const isOrderRecord = sTypeLow === 'order' || invUpper.startsWith('ORD') || s.isOrderEntry === true;
+
+                if (isOrderRecord && saleType !== 'Order') return false;
+
                 const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' ||
-                    (s.invoiceNo || '').startsWith('BS') ||
+                    invUpper.startsWith('BS') ||
                     (!s.saleType && !!(s.lcNo || s.port || s.importer));
 
                 if (saleType === 'Order') {
-                    return true;
+                    return isOrderRecord;
                 }
                 if (saleType === 'General') {
-                    return !isBorder && (sTypeLow === 'general' || sTypeLow === 'general sale' || !s.saleType || (s.invoiceNo || '').startsWith('GS'));
+                    return !isBorder && !isOrderRecord && (sTypeLow === 'general' || sTypeLow === 'general sale' || !s.saleType || invUpper.startsWith('GS'));
                 }
                 if (saleType === 'Border') {
-                    return isBorder;
+                    return isBorder && !isOrderRecord;
                 }
                 return sTypeLow === saleType.toLowerCase();
             });
