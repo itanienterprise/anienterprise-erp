@@ -57,30 +57,76 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     }, [activeDropdown]);
 
     const uniqueLcNos = useMemo(() => {
-        if (!stockRecords) return [];
-        return [...new Set(stockRecords.map(s => s.lcNo).filter(Boolean))].sort();
-    }, [stockRecords]);
+        let records = stockRecords || [];
+        if (formData.productName) {
+            const targetProd = formData.productName.trim().toLowerCase();
+            records = records.filter(s => {
+                const pName = (s.productName || s.product || '').trim().toLowerCase();
+                return pName === targetProd;
+            });
+        }
+        if (formData.brand) {
+            const targetBrand = formData.brand.trim().toLowerCase();
+            records = records.filter(s => {
+                const bName = (s.brand || s.quality || '').trim().toLowerCase();
+                return !targetBrand || bName === targetBrand || (bName === '-' && targetBrand === '') || (bName === '' && targetBrand === '-');
+            });
+        }
+        const hasEmptyLc = records.some(s => !s.lcNo || s.lcNo.trim() === '' || s.lcNo.trim() === '-');
+        const validLcs = [...new Set(records.map(s => s.lcNo).filter(lc => lc && lc.trim() !== '' && lc.trim() !== '-'))].sort();
+
+        return hasEmptyLc ? ['-', ...validLcs] : validLcs;
+    }, [stockRecords, formData.productName, formData.brand]);
 
     const filteredProducts = useMemo(() => {
-        if (!formData.lcNo) return [];
-        const targetLc = formData.lcNo.trim().toLowerCase();
-        const matchingStocks = stockRecords?.filter(s => (s.lcNo || '').trim().toLowerCase() === targetLc) || [];
+        let allProdList = Array.isArray(products) ? products : [];
+
+        const stockProdNames = new Set();
+        (stockRecords || []).forEach(s => {
+            const pName = s.productName || s.product;
+            if (pName) stockProdNames.add(pName);
+        });
+        (warehouseData || []).forEach(w => {
+            const pName = w.productName || w.product;
+            if (pName) stockProdNames.add(pName);
+        });
+
+        const existingNames = new Set((allProdList || []).map(p => typeof p === 'string' ? p : (p.name || '')));
+        stockProdNames.forEach(name => {
+            if (!existingNames.has(name)) {
+                allProdList = [...allProdList, { _id: name, name: name }];
+            }
+        });
+
+        if (!formData.lcNo) return allProdList;
+
+        const targetLc = (formData.lcNo || '').trim().toLowerCase();
+        const isGeneralLc = !targetLc || targetLc === '-';
+        const matchingStocks = stockRecords?.filter(s => {
+            const lc = (s.lcNo || '').trim().toLowerCase();
+            return isGeneralLc ? (!lc || lc === '-') : (lc === targetLc);
+        }) || [];
         const productNames = new Set(matchingStocks.map(s => s.productName || s.product).filter(Boolean));
         if (productNames.size > 0) {
-            return products?.filter(p => productNames.has(p.name)) || [];
+            return allProdList.filter(p => {
+                const pName = typeof p === 'string' ? p : (p.name || '');
+                return productNames.has(pName);
+            });
         }
-        return products || [];
-    }, [formData.lcNo, products, stockRecords]);
+        return allProdList;
+    }, [formData.lcNo, products, stockRecords, warehouseData]);
 
     const selectedProductBrands = useMemo(() => {
-        if (!formData.productName || !formData.lcNo) return [];
+        if (!formData.productName) return [];
         const targetProd = formData.productName.trim().toLowerCase();
-        const targetLc = formData.lcNo.trim().toLowerCase();
+        const targetLc = (formData.lcNo || '').trim().toLowerCase();
+        const isGeneralLc = !targetLc || targetLc === '-';
         
         const matches = stockRecords?.filter(s => {
             const prod = (s.productName || s.product || '').trim().toLowerCase();
             const lc = (s.lcNo || '').trim().toLowerCase();
-            return prod === targetProd && lc === targetLc;
+            const lcMatch = isGeneralLc ? (!lc || lc === '-') : (lc === targetLc);
+            return prod === targetProd && lcMatch;
         }) || [];
         
         const uniqueBrands = [...new Set(matches.map(s => s.brand).filter(Boolean))];
@@ -103,6 +149,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
 
         // Standardize "General / In Stock" name matching
         const isGeneralWH = targetWH === 'general / in stock' || targetWH === '';
+        const isGeneralLc = !targetLc || targetLc === '-';
 
         // 1. Sum physical warehouse stock from warehouseData
         const matches = warehouseData?.filter(w => {
@@ -119,7 +166,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             const brandMatch = !targetBrand || brand === targetBrand || (brand === '-' && targetBrand === '');
             
             // LC match
-            const lcMatch = !targetLc || lc === targetLc;
+            const lcMatch = isGeneralLc ? (!lc || lc === '-') : (lc === targetLc);
 
             return whMatch && prodMatch && brandMatch && lcMatch;
         });
@@ -347,101 +394,22 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">LC No</label>
-                            <div className="relative" ref={lcRef}>
-                                <div className="relative group">
-                                    <input
-                                        type="text"
-                                        placeholder="Search LC No..."
-                                        className="w-full pl-4 pr-16 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm hover:border-gray-300 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none font-medium placeholder:text-gray-400"
-                                        value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
-                                        onChange={(e) => {
-                                            setLcSearch(e.target.value);
-                                            setFormData({ ...formData, lcNo: e.target.value });
-                                            setActiveDropdown('lcNo');
-                                        }}
-                                        onFocus={() => {
-                                            setLcSearch(formData.lcNo || '');
-                                            setActiveDropdown('lcNo');
-                                        }}
-                                        autoComplete="off"
-                                    />
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                        {formData.lcNo && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setFormData({ ...formData, lcNo: '', productName: '', brand: '' });
-                                                    setProductSearch('');
-                                                    setBrandSearch('');
-                                                    setLcSearch('');
-                                                }}
-                                                className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-red-500 transition-colors"
-                                            >
-                                                <XIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
-                                            className="text-gray-400 hover:text-blue-500 transition-colors"
-                                        >
-                                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180 text-blue-500' : ''}`} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {activeDropdown === 'lcNo' && (
-                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
-                                        <div className="overflow-y-auto py-1">
-                                            {uniqueLcNos.filter(lc => (lc || '').toLowerCase().includes(lcSearch.toLowerCase())).map((lc, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setFormData({ ...formData, lcNo: lc, productName: '', brand: '' });
-                                                        setProductSearch('');
-                                                        setBrandSearch('');
-                                                        setLcSearch(lc);
-                                                        setActiveDropdown(null);
-                                                    }}
-                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
-                                                >
-                                                    <span className={formData.lcNo === lc ? 'text-blue-600 font-bold' : 'text-gray-700 font-medium'}>
-                                                        {lc}
-                                                    </span>
-                                                    {formData.lcNo === lc && <CheckIcon className="w-4 h-4 text-blue-600" />}
-                                                </button>
-                                            ))}
-                                            {uniqueLcNos.filter(lc => (lc || '').toLowerCase().includes(lcSearch.toLowerCase())).length === 0 && (
-                                                <div className="px-4 py-3 text-xs text-gray-400 text-center italic">No LC numbers found</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Product Name</label>
                             <div className="relative" ref={productRef}>
                                 <div className="relative group">
                                     <input
                                         type="text"
-                                        placeholder={!formData.lcNo ? "Select LC No first" : "Search products..."}
-                                        className={`w-full pl-4 pr-16 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm transition-all outline-none font-medium ${!formData.lcNo ? 'bg-gray-50/50 cursor-not-allowed opacity-60' : 'hover:border-gray-300 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500'}`}
+                                        placeholder="Search products..."
+                                        className="w-full pl-4 pr-16 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm transition-all outline-none font-medium hover:border-gray-300 focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500"
                                         value={activeDropdown === 'product' ? productSearch : formData.productName}
                                         onChange={(e) => {
-                                            if (!formData.lcNo) return;
                                             setProductSearch(e.target.value);
                                             setActiveDropdown('product');
                                         }}
                                         onFocus={() => {
-                                            if (!formData.lcNo) return;
                                             setProductSearch(formData.productName || '');
                                             setActiveDropdown('product');
                                         }}
-                                        disabled={!formData.lcNo}
                                         autoComplete="off"
                                     />
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -460,37 +428,45 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                         )}
                                         <button
                                             type="button"
-                                            onClick={() => formData.lcNo && setActiveDropdown(activeDropdown === 'product' ? null : 'product')}
+                                            onClick={() => setActiveDropdown(activeDropdown === 'product' ? null : 'product')}
                                             className="text-gray-400 hover:text-blue-500 transition-colors"
-                                            disabled={!formData.lcNo}
                                         >
                                             <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'product' ? 'rotate-180 text-blue-500' : ''}`} />
                                         </button>
                                     </div>
                                 </div>
 
-                                {activeDropdown === 'product' && formData.lcNo && (
+                                {activeDropdown === 'product' && (
                                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
                                         <div className="overflow-y-auto py-1">
-                                            {filteredProducts?.filter(p => (p.name || '').toLowerCase().includes(productSearch.toLowerCase())).map((p, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setFormData({ ...formData, productName: p.name, brand: '' });
-                                                        setProductSearch(p.name);
-                                                        setBrandSearch('');
-                                                        setActiveDropdown(null);
-                                                    }}
-                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
-                                                >
-                                                    <span className={formData.productName === p.name ? 'text-blue-600 font-bold' : 'text-gray-700 font-medium'}>
-                                                        {p.name}
-                                                    </span>
-                                                    {formData.productName === p.name && <CheckIcon className="w-4 h-4 text-blue-600" />}
-                                                </button>
-                                            ))}
-                                            {filteredProducts?.filter(p => (p.name || '').toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                                            {filteredProducts?.filter(p => {
+                                                const pName = typeof p === 'string' ? p : (p.name || '');
+                                                return pName.toLowerCase().includes(productSearch.toLowerCase());
+                                            }).map((p, idx) => {
+                                                const pName = typeof p === 'string' ? p : (p.name || '');
+                                                return (
+                                                    <button
+                                                        key={p._id || `prod-${idx}`}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, productName: pName, brand: '' });
+                                                            setProductSearch(pName);
+                                                            setBrandSearch('');
+                                                            setActiveDropdown(null);
+                                                        }}
+                                                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                    >
+                                                        <span className={formData.productName === pName ? 'text-blue-600 font-bold' : 'text-gray-700 font-medium'}>
+                                                            {pName}
+                                                        </span>
+                                                        {formData.productName === pName && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                    </button>
+                                                );
+                                            })}
+                                            {filteredProducts?.filter(p => {
+                                                const pName = typeof p === 'string' ? p : (p.name || '');
+                                                return pName.toLowerCase().includes(productSearch.toLowerCase());
+                                            }).length === 0 && (
                                                 <div className="px-4 py-3 text-xs text-gray-400 text-center italic">No products found</div>
                                             )}
                                         </div>
@@ -567,6 +543,78 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                             ))}
                                             {selectedProductBrands.filter(b => (b.brand || '').toLowerCase().includes(brandSearch.toLowerCase())).length === 0 && (
                                                 <div className="px-4 py-3 text-xs text-gray-400 text-center italic">No brands found</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">LC No</label>
+                            <div className="relative" ref={lcRef}>
+                                <div className="relative group">
+                                    <input
+                                        type="text"
+                                        placeholder="Search LC No..."
+                                        className="w-full pl-4 pr-16 py-2.5 bg-white border border-gray-200 rounded-xl text-sm shadow-sm hover:border-gray-300 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none font-medium placeholder:text-gray-400"
+                                        value={activeDropdown === 'lcNo' ? lcSearch : formData.lcNo}
+                                        onChange={(e) => {
+                                            setLcSearch(e.target.value);
+                                            setFormData(prev => ({ ...prev, lcNo: e.target.value }));
+                                            setActiveDropdown('lcNo');
+                                        }}
+                                        onFocus={() => {
+                                            setLcSearch(formData.lcNo || '');
+                                            setActiveDropdown('lcNo');
+                                        }}
+                                        autoComplete="off"
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                        {formData.lcNo && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setFormData(prev => ({ ...prev, lcNo: '' }));
+                                                    setLcSearch('');
+                                                }}
+                                                className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-red-500 transition-colors"
+                                            >
+                                                <XIcon className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveDropdown(activeDropdown === 'lcNo' ? null : 'lcNo')}
+                                            className="text-gray-400 hover:text-blue-500 transition-colors"
+                                        >
+                                            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'lcNo' ? 'rotate-180 text-blue-500' : ''}`} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {activeDropdown === 'lcNo' && (
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[110] max-h-60 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+                                        <div className="overflow-y-auto py-1">
+                                            {uniqueLcNos.filter(lc => (lc || '').toLowerCase().includes(lcSearch.toLowerCase())).map((lc, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({ ...prev, lcNo: lc }));
+                                                        setLcSearch(lc);
+                                                        setActiveDropdown(null);
+                                                    }}
+                                                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
+                                                >
+                                                    <span className={formData.lcNo === lc ? 'text-blue-600 font-bold' : 'text-gray-700 font-medium'}>
+                                                        {lc}
+                                                    </span>
+                                                    {formData.lcNo === lc && <CheckIcon className="w-4 h-4 text-blue-600" />}
+                                                </button>
+                                            ))}
+                                            {uniqueLcNos.filter(lc => (lc || '').toLowerCase().includes(lcSearch.toLowerCase())).length === 0 && (
+                                                <div className="px-4 py-3 text-xs text-gray-400 text-center italic">No LC numbers found</div>
                                             )}
                                         </div>
                                     </div>
