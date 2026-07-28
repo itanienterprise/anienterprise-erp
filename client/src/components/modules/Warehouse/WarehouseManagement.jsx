@@ -156,7 +156,15 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
             const logs = [];
             const allDecryptedWh = whData.map(item => {
                 try {
-                    const decrypted = item;
+                    let decrypted = item.data ? decryptData(item.data) : item;
+                    if (typeof decrypted === 'string') {
+                        try { decrypted = decryptData(decrypted); } catch (e) { }
+                    }
+                    if (decrypted && typeof decrypted === 'object' && decrypted.data && typeof decrypted.data === 'string') {
+                        try { decrypted = decryptData(decrypted.data); } catch (e) { }
+                    }
+                    if (!decrypted || typeof decrypted !== 'object') decrypted = item;
+
                     if (decrypted.isTransferLog) {
                         logs.push(decrypted);
                         return null;
@@ -165,17 +173,19 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                     const brand = (decrypted.brand || '').trim();
                     const key = `${prodName.toLowerCase()}|${brand.toLowerCase()}`;
 
-                    const whPkt = decrypted.whPkt !== undefined && decrypted.whPkt !== null ? decrypted.whPkt : 0;
-                    const whQty = decrypted.whQty !== undefined && decrypted.whQty !== null ? decrypted.whQty : 0;
+                    const whPkt = parseFloat(decrypted.whPkt ?? decrypted.inHousePacket ?? decrypted.inhousePkt ?? 0);
+                    const whQty = parseFloat(decrypted.whQty ?? decrypted.inHouseQuantity ?? decrypted.inhouseQty ?? 0);
 
-                    // A warehouse record is valid only if its source LC has positive total capacity
-                    const hasLCRecord = globalInHouseMap[key] && globalInHouseMap[key].qty > 0;
+                    // A warehouse record is valid if its source LC has positive capacity OR if it has physical warehouse quantity
+                    const hasLCRecord = (globalInHouseMap[key] && globalInHouseMap[key].qty > 0) || whQty > 0;
 
                     return {
                         ...decrypted,
                         productName: prodName,
                         whPkt,
                         whQty,
+                        inhousePkt: whPkt,
+                        inhouseQty: whQty,
                         packetSize: decrypted.packetSize || (parseFloat(whQty) > 0 && parseFloat(whPkt) > 0 ? (parseFloat(whQty) / parseFloat(whPkt)).toFixed(0) : 0),
                         _id: item._id,
                         recordType: 'warehouse',
@@ -513,12 +523,11 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
             };
 
             const { _id, recordType, createdAt, updatedAt, ...sourceDataToEncrypt } = updatedRecord;
-            const encryptedSource = encryptData(sourceDataToEncrypt);
 
             if (originalRecord.recordType === 'stock') {
-                await axios.put(`${API_BASE_URL}/api/stock/${originalRecord._id}`, { data: encryptedSource });
+                await axios.put(`${API_BASE_URL}/api/stock/${originalRecord._id}`, sourceDataToEncrypt);
             } else {
-                await axios.put(`${API_BASE_URL}/api/warehouses/${originalRecord._id}`, { data: encryptedSource });
+                await axios.put(`${API_BASE_URL}/api/warehouses/${originalRecord._id}`, sourceDataToEncrypt);
             }
 
             setWarehouseData(prev => prev.map(item => item._id === editingStock._id ? updatedRecord : item));

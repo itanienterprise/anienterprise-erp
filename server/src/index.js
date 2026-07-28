@@ -1069,9 +1069,14 @@ apiRouter.get('/api/warehouses', async (req, res) => {
     const records = await Warehouse.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       let d = decryptData(r.data);
-      // Auto-fallback for testing records that were double-encrypted by the bug
-      if (d && d.data && typeof d.data === 'string' && !d.whName && !d.name) {
-        try { d = decryptData(d.data); } catch (e) { /* ignore */ }
+      let attempts = 0;
+      while (d && typeof d === 'object' && d.data && typeof d.data === 'string' && attempts < 5) {
+        try {
+          const sub = decryptData(d.data);
+          if (sub) d = sub;
+          else break;
+        } catch (e) { break; }
+        attempts++;
       }
       return { ...d, _id: r._id, createdAt: r.createdAt };
     });
