@@ -92,20 +92,22 @@
 
 .date-picker-dropdown {
     position: absolute;
-    z-index: 120;
+    z-index: 1000;
     margin-top: 0.5rem;
     background-color: white;
     border: 1px solid #e5e7eb;
     border-radius: 1rem;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
     padding: 1.25rem;
     width: 350px;
+    max-width: calc(100vw - 2rem);
     left: 0;
 }
 
 .date-picker-dropdown.compact {
     padding: 0.75rem;
     width: 260px;
+    max-width: calc(100vw - 2rem);
 }
 
 .date-picker-dropdown.right-align {

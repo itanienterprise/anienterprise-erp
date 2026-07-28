@@ -2729,7 +2729,7 @@ const SaleManagement = ({
                                         className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-2xl z-[55]"
                                         onClick={() => setShowSaleFilterPanel(false)}
                                     />
-                                    <div ref={saleFilterRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200">
+                                    <div ref={saleFilterRef} className={`fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[450px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200 ${activeFilterDropdown ? 'overflow-visible' : 'max-h-[85vh] overflow-y-auto custom-scrollbar'}`}>
                                         {/* Filter Header */}
                                         <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
                                             <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
