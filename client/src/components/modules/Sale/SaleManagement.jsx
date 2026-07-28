@@ -1876,33 +1876,33 @@ const SaleManagement = ({
     };
 
     const getOrderQtyForBrand = (prodName, bName = '', whName = '') => {
-        if (!prodName) return 0;
+        if (!prodName || !formData.orderNo) return 0;
         const pLower = prodName.trim().toLowerCase();
         const bLower = bName ? bName.trim().toLowerCase() : '';
         const wLower = whName ? whName.trim().toLowerCase() : '';
+        const targetOrderNo = formData.orderNo.trim().toUpperCase();
+
+        const selectedOrder = allSalesRecords.find(s => {
+            const inv = (s.orderNo || s.invoiceNo || '').trim().toUpperCase();
+            return inv === targetOrderNo;
+        });
+
+        if (!selectedOrder) return 0;
 
         let totalOrd = 0;
-        allSalesRecords.forEach(s => {
-            const sType = (s.saleType || '').toLowerCase();
-            const inv = (s.invoiceNo || s.orderNo || '').toUpperCase();
-            const st = (s.status || '').toLowerCase();
-            const isOrd = sType === 'order' || inv.startsWith('ORD') || st === 'requested';
-            if (!isOrd) return;
-
-            (s.items || []).forEach(it => {
-                const itProd = (it.productName || it.product || '').trim().toLowerCase();
-                if (itProd === pLower) {
-                    (it.brandEntries || []).forEach(be => {
-                        const beBrand = (be.brand || be.brandName || '').trim().toLowerCase();
-                        const beWh = (be.warehouseName || be.warehouse || '').trim().toLowerCase();
-                        if (!bLower || beBrand === bLower) {
-                            if (!wLower || !beWh || beWh === wLower) {
-                                totalOrd += (parseFloat(be.quantity) || 0);
-                            }
+        (selectedOrder.items || []).forEach(it => {
+            const itProd = (it.productName || it.product || '').trim().toLowerCase();
+            if (itProd === pLower) {
+                (it.brandEntries || []).forEach(be => {
+                    const beBrand = (be.brand || be.brandName || '').trim().toLowerCase();
+                    const beWh = (be.warehouseName || be.warehouse || '').trim().toLowerCase();
+                    if (!bLower || beBrand === bLower) {
+                        if (!wLower || !beWh || beWh === wLower) {
+                            totalOrd += (parseFloat(be.quantity) || 0);
                         }
-                    });
-                }
-            });
+                    }
+                });
+            }
         });
         return Math.round(totalOrd);
     };
@@ -4106,13 +4106,15 @@ const SaleManagement = ({
                                                 </div>
                                             </div>
 
-                                            {/* Order QTY Display after Product on same line */}
-                                            <div className="space-y-1.5 flex-1 md:max-w-[180px]">
-                                                <label className="sale-mgmt-item-label">Order QTY</label>
-                                                <div className="h-10 flex items-center justify-center bg-purple-50/50 border border-purple-100 rounded-xl text-sm font-bold text-purple-900 shadow-sm">
-                                                    {getOrderQtyForBrand(item.productName)} kg
+                                            {/* Order QTY Display after Product on same line - only for selected order no */}
+                                            {formData.orderNo && (
+                                                <div className="space-y-1.5 flex-1 md:max-w-[180px]">
+                                                    <label className="sale-mgmt-item-label">Order QTY</label>
+                                                    <div className="h-10 flex items-center justify-center bg-purple-50/50 border border-purple-100 rounded-xl text-sm font-bold text-purple-900 shadow-sm">
+                                                        {getOrderQtyForBrand(item.productName)} kg
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
 
                                             {/* UOM Selector for General Sales */}
                                             {saleType !== 'Border' && (
