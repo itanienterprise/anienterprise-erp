@@ -2266,9 +2266,47 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
         const margin = 7; // Reduced margin to gain space
         const isFruitCategory = (category || '').toLowerCase() === 'fruit';
 
+        const parseReportDate = (dateVal) => {
+            if (!dateVal) return new Date(0);
+            if (dateVal instanceof Date) return dateVal;
+            const str = String(dateVal).trim();
+            if (!str || str === '-') return new Date(0);
+
+            if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(str)) {
+                const parts = str.split(/[\/\-]/);
+                const p1 = parseInt(parts[0], 10);
+                const p2 = parseInt(parts[1], 10);
+                const year = parseInt(parts[2], 10);
+
+                if (p1 > 12) return new Date(year, p2 - 1, p1);
+                if (p2 > 12) return new Date(year, p1 - 1, p2);
+                return new Date(year, p2 - 1, p1);
+            }
+
+            if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                const parts = str.split('T')[0].split('-');
+                const year = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10) - 1;
+                const day = parseInt(parts[2], 10);
+                return new Date(year, month, day);
+            }
+
+            const d = new Date(str);
+            return isNaN(d.getTime()) ? new Date(0) : d;
+        };
+
+        const compareReportHistoryItems = (a, b) => {
+            const timeA = parseReportDate(a.date).getTime();
+            const timeB = parseReportDate(b.date).getTime();
+            if (timeA !== timeB) return timeA - timeB;
+            if (a.type === 'purchase' && b.type !== 'purchase') return -1;
+            if (a.type !== 'purchase' && b.type === 'purchase') return 1;
+            return 0;
+        };
+
         // Ensure data is sorted ascending by date for reports
-        const sortedPurchaseData = [...purchaseData].sort((a, b) => new Date(a.date) - new Date(b.date));
-        const sortedSaleData = [...saleData].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const sortedPurchaseData = [...purchaseData].sort(compareReportHistoryItems);
+        const sortedSaleData = [...saleData].sort(compareReportHistoryItems);
 
         // --- Header ---
         doc.setFontSize(22);
@@ -2299,8 +2337,8 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
         // --- Helper for formatting date ---
         const formatDate = (dateStr) => {
             if (!dateStr) return '-';
-            const date = new Date(dateStr);
-            if (isNaN(date.getTime())) return dateStr;
+            const date = parseReportDate(dateStr);
+            if (isNaN(date.getTime()) || date.getTime() === 0) return dateStr;
             const day = String(date.getDate()).padStart(2, '0');
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const year = date.getFullYear();
@@ -2397,7 +2435,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 return acc;
             }, {}));
 
-            const sortedDamageData = [...(damageData || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const sortedDamageData = [...(damageData || [])].sort(compareReportHistoryItems);
             const aggregatedDamage = Object.values(sortedDamageData.reduce((acc, d) => {
                 const key = `${d.date}_damage_${d.brand || '-'}`;
                 if (!acc[key]) acc[key] = { ...d, type: 'damage', itemQty: 0 };
@@ -2405,7 +2443,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 return acc;
             }, {}));
 
-            const sortedTransferData = [...(transferData || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const sortedTransferData = [...(transferData || [])].sort(compareReportHistoryItems);
             const aggregatedTransfer = Object.values(sortedTransferData.reduce((acc, t) => {
                 const key = `${t.date}_transfer_${t._id || t.id || Math.random()}`;
                 if (!acc[key]) acc[key] = { ...t, type: 'transfer', itemQty: 0 };
@@ -2417,7 +2455,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             const currentWh = (filters.warehouse || '').trim().toLowerCase();
 
             const unifiedData = [...aggregatedPurchase, ...aggregatedSale, ...aggregatedDamage, ...aggregatedTransfer]
-                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .sort(compareReportHistoryItems)
                 .map(item => {
                     if (item.type === 'purchase') {
                         currentBalance += item.itemQty - (item.itemShortageQty || 0);

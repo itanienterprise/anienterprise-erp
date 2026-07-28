@@ -4,6 +4,85 @@ import { XIcon, FileTextIcon, BarChartIcon, PrinterIcon, FunnelIcon, ChevronDown
 import { generateProductHistoryPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
+const isLcMatch = (targetLc, filterLc) => {
+    if (!filterLc) return true;
+    if (!targetLc) return false;
+    const rawTarget = targetLc.toString().trim().toLowerCase();
+    const rawFilter = filterLc.toString().trim().toLowerCase();
+    if (!rawTarget || !rawFilter) return false;
+    if (rawTarget === rawFilter) return true;
+
+    if (rawTarget.endsWith(rawFilter) || rawFilter.endsWith(rawTarget)) return true;
+    if (rawTarget.includes(rawFilter) || rawFilter.includes(rawTarget)) return true;
+
+    const normTarget = rawTarget.replace(/^0+/, '');
+    const normFilter = rawFilter.replace(/^0+/, '');
+    if (normTarget && normFilter) {
+        if (normTarget === normFilter) return true;
+        if (normTarget.endsWith(normFilter) || normFilter.endsWith(normTarget)) return true;
+        if (normTarget.includes(normFilter) || normFilter.includes(normTarget)) return true;
+    }
+    return false;
+};
+
+const parseDate = (dateVal) => {
+    if (!dateVal) return new Date(0);
+    if (dateVal instanceof Date) return dateVal;
+    const str = String(dateVal).trim();
+    if (!str || str === '-') return new Date(0);
+
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(str)) {
+        const parts = str.split(/[\/\-]/);
+        const p1 = parseInt(parts[0], 10);
+        const p2 = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+
+        if (p1 > 12) {
+            return new Date(year, p2 - 1, p1);
+        }
+        if (p2 > 12) {
+            return new Date(year, p1 - 1, p2);
+        }
+        return new Date(year, p2 - 1, p1);
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+        const parts = str.split('T')[0].split('-');
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+    }
+
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? new Date(0) : d;
+};
+
+const compareHistoryItems = (a, b) => {
+    const timeA = parseDate(a.date).getTime();
+    const timeB = parseDate(b.date).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    if (a.type === 'purchase' && b.type !== 'purchase') return -1;
+    if (a.type !== 'purchase' && b.type === 'purchase') return 1;
+    return 0;
+};
+
+const isBeforeDate = (dateVal, filterDateStr) => {
+    if (!dateVal || !filterDateStr) return false;
+    const itemTime = parseDate(dateVal).getTime();
+    const filterTime = parseDate(filterDateStr).getTime();
+    if (itemTime === 0 || filterTime === 0) return false;
+    return itemTime < filterTime;
+};
+
+const isAfterDate = (dateVal, filterDateStr) => {
+    if (!dateVal || !filterDateStr) return false;
+    const itemTime = parseDate(dateVal).getTime();
+    const filterTime = parseDate(filterDateStr).getTime();
+    if (itemTime === 0 || filterTime === 0) return false;
+    return itemTime > filterTime;
+};
+
 const ProductHistoryReport = ({
     isOpen,
     onClose,
@@ -72,8 +151,8 @@ const ProductHistoryReport = ({
     }, [reportData]);
     const formatDate = (dateStr) => {
         if (!dateStr) return '';
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return dateStr;
+        const date = parseDate(dateStr);
+        if (isNaN(date.getTime()) || date.getTime() === 0) return dateStr;
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const year = date.getFullYear();
@@ -107,16 +186,18 @@ const ProductHistoryReport = ({
     ].map(w => (w || '').trim()).filter(Boolean))].sort();
 
     const purchaseHistory = (rawPurchaseHistory || []).filter(p => {
-        if (modalFilters.startDate && p.date < modalFilters.startDate) return false;
-        if (modalFilters.endDate && p.date > modalFilters.endDate) return false;
+        if ((parseFloat(p.itemQty) || 0) <= 0 && (parseFloat(p.itemInHouseQty) || 0) <= 0) return false;
+        if (modalFilters.startDate && isBeforeDate(p.date, modalFilters.startDate)) return false;
+        if (modalFilters.endDate && isAfterDate(p.date, modalFilters.endDate)) return false;
         if (modalFilters.brand && (p.itemBrand || p.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
         if (modalFilters.lcNo && !isLcMatch(p.lcNo, modalFilters.lcNo)) return false;
         if (modalFilters.warehouse && (p.warehouse || p.whName || '').trim().toLowerCase() !== modalFilters.warehouse.trim().toLowerCase()) return false;
         return true;
     });
     const saleHistory = (rawSaleHistory || []).filter(s => {
-        if (modalFilters.startDate && s.date < modalFilters.startDate) return false;
-        if (modalFilters.endDate && s.date > modalFilters.endDate) return false;
+        if ((parseFloat(s.itemQty) || 0) <= 0) return false;
+        if (modalFilters.startDate && isBeforeDate(s.date, modalFilters.startDate)) return false;
+        if (modalFilters.endDate && isAfterDate(s.date, modalFilters.endDate)) return false;
         if (modalFilters.party && (s.companyName || '').trim().toLowerCase() !== modalFilters.party.trim().toLowerCase()) return false;
         if (modalFilters.brand && (s.itemBrand || s.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
         if (modalFilters.lcNo && !isLcMatch(s.lcNo, modalFilters.lcNo)) return false;
@@ -124,16 +205,18 @@ const ProductHistoryReport = ({
         return true;
     });
     const damageHistory = (rawDamageHistory || []).filter(d => {
-        if (modalFilters.startDate && d.date < modalFilters.startDate) return false;
-        if (modalFilters.endDate && d.date > modalFilters.endDate) return false;
+        if ((parseFloat(d.itemQty || d.quantity) || 0) <= 0) return false;
+        if (modalFilters.startDate && isBeforeDate(d.date, modalFilters.startDate)) return false;
+        if (modalFilters.endDate && isAfterDate(d.date, modalFilters.endDate)) return false;
         if (modalFilters.brand && (d.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
         if (modalFilters.lcNo && !isLcMatch(d.lcNo, modalFilters.lcNo)) return false;
         if (modalFilters.warehouse && (d.warehouse || d.whName || '').trim().toLowerCase() !== modalFilters.warehouse.trim().toLowerCase()) return false;
         return true;
     });
     const transferHistory = (rawTransferHistory || []).filter(t => {
-        if (modalFilters.startDate && t.date < modalFilters.startDate) return false;
-        if (modalFilters.endDate && t.date > modalFilters.endDate) return false;
+        if ((parseFloat(t.itemQty || t.whQty) || 0) <= 0) return false;
+        if (modalFilters.startDate && isBeforeDate(t.date, modalFilters.startDate)) return false;
+        if (modalFilters.endDate && isAfterDate(t.date, modalFilters.endDate)) return false;
         if (modalFilters.brand && (t.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
         if (modalFilters.lcNo && !isLcMatch(t.lcNo, modalFilters.lcNo)) return false;
         if (modalFilters.warehouse) {
@@ -198,7 +281,7 @@ const ProductHistoryReport = ({
         const sales = saleHistory.map(s => ({ ...s, type: 'sale', itemQty: parseFloat(s.itemQty) || 0 }));
         const transfers = transferHistory.map(t => ({ ...t, type: 'transfer', itemQty: parseFloat(t.itemQty || t.whQty) || 0 }));
 
-        const combined = [...purchases, ...sales, ...damages, ...transfers].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const combined = [...purchases, ...sales, ...damages, ...transfers].sort(compareHistoryItems);
 
         let currentBalance = 0;
         const currentWh = (modalFilters.warehouse || '').trim().toLowerCase();

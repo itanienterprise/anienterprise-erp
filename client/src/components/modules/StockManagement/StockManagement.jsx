@@ -56,6 +56,51 @@ const isLcMatch = (targetLc, filterLc) => {
     return false;
 };
 
+const parseDate = (dateVal) => {
+    if (!dateVal) return new Date(0);
+    if (dateVal instanceof Date) return dateVal;
+    const str = String(dateVal).trim();
+    if (!str || str === '-') return new Date(0);
+
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(str)) {
+        const parts = str.split(/[\/\-]/);
+        const p1 = parseInt(parts[0], 10);
+        const p2 = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+
+        if (p1 > 12) return new Date(year, p2 - 1, p1);
+        if (p2 > 12) return new Date(year, p1 - 1, p2);
+        return new Date(year, p2 - 1, p1);
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+        const parts = str.split('T')[0].split('-');
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+    }
+
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? new Date(0) : d;
+};
+
+const isBeforeDate = (dateVal, filterDateStr) => {
+    if (!dateVal || !filterDateStr) return false;
+    const itemTime = parseDate(dateVal).getTime();
+    const filterTime = parseDate(filterDateStr).getTime();
+    if (itemTime === 0 || filterTime === 0) return false;
+    return itemTime < filterTime;
+};
+
+const isAfterDate = (dateVal, filterDateStr) => {
+    if (!dateVal || !filterDateStr) return false;
+    const itemTime = parseDate(dateVal).getTime();
+    const filterTime = parseDate(filterDateStr).getTime();
+    if (itemTime === 0 || filterTime === 0) return false;
+    return itemTime > filterTime;
+};
+
 const StockManagement = ({
     stockRecords,
     setStockRecords,
@@ -293,8 +338,8 @@ const StockManagement = ({
             const matchesProduct = (item.productName || item.product || '').trim().toLowerCase() === productName;
             if (!matchesProduct) return false;
 
-            if (historyFilters.startDate && item.date < historyFilters.startDate) return false;
-            if (historyFilters.endDate && item.date > historyFilters.endDate) return false;
+            if (historyFilters.startDate && isBeforeDate(item.date, historyFilters.startDate)) return false;
+            if (historyFilters.endDate && isAfterDate(item.date, historyFilters.endDate)) return false;
             if (historyFilters.warehouse && (item.warehouse || item.whName || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return false;
             if (historyFilters.lcNo && !isLcMatch(item.lcNo, historyFilters.lcNo)) return false;
             if (historyFilters.port && (item.port || '').trim() !== historyFilters.port) return false;
@@ -491,8 +536,8 @@ const StockManagement = ({
             // Apply filters
             const wDateVal = w.date || w.createdAt || w.updatedAt;
             const wDate = wDateVal ? wDateVal.toString().split('T')[0] : '';
-            if (historyFilters.startDate && wDate < historyFilters.startDate) return false;
-            if (historyFilters.endDate && wDate > historyFilters.endDate) return false;
+            if (historyFilters.startDate && isBeforeDate(wDateVal, historyFilters.startDate)) return false;
+            if (historyFilters.endDate && isAfterDate(wDateVal, historyFilters.endDate)) return false;
             if (historyFilters.lcNo && (w.lcNo || '').trim() !== historyFilters.lcNo) return false;
             if (historyFilters.port && (w.port || '').trim() !== historyFilters.port) return false;
             if (historyFilters.warehouse && (w.whName || w.warehouse || '').trim().toLowerCase() !== historyFilters.warehouse.toLowerCase()) return false;
@@ -574,8 +619,8 @@ const StockManagement = ({
             );
             if (matchingItems.length === 0) return false;
 
-            if (historyFilters.startDate && sale.date < historyFilters.startDate) return false;
-            if (historyFilters.endDate && sale.date > historyFilters.endDate) return false;
+            if (historyFilters.startDate && isBeforeDate(sale.date, historyFilters.startDate)) return false;
+            if (historyFilters.endDate && isAfterDate(sale.date, historyFilters.endDate)) return false;
             
             if (historyFilters.lcNo) {
                 const filterLc = historyFilters.lcNo;
@@ -618,6 +663,8 @@ const StockManagement = ({
                     : [{ brand: item.brand || '', quantity: item.quantity, packet: item.packet, warehouseName: item.whName || item.warehouse || sale.whName || sale.warehouse || '', lcNo: item.lcNo || sale.lcNo || '' }];
 
                 itemBrandEntries.forEach(entry => {
+                    const entryQty = parseFloat(entry.quantity) || parseFloat(item.quantity) || 0;
+                    if (entryQty <= 0) return;
                     const rawEntryLc = (entry.lcNo || '').trim();
                     const rawItemLc = (item.lcNo || '').trim();
                     const rawSaleLc = (sale.lcNo || '').trim();
