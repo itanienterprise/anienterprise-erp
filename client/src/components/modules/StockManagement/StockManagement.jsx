@@ -284,6 +284,12 @@ const StockManagement = ({
             }
         };
         fetchWarehouseData();
+        if (typeof fetchSales === 'function') {
+            fetchSales();
+        }
+        if (typeof fetchStockRecords === 'function') {
+            fetchStockRecords();
+        }
     }, []);
     const [showAddWarehouseStockForm, setShowAddWarehouseStockForm] = useState(false);
     const [addWarehouseStockFormData, setAddWarehouseStockFormData] = useState({

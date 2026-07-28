@@ -201,11 +201,43 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     });
 
     // 2. Process Warehouse Records (Transfers)
+    // First, build a set of transfer-destination keys to avoid double-counting
+    // When stock is transferred from WH-A to WH-B, WH-B gets a new warehouse record.
+    // If we also count that WH-B record as opening stock, the total is inflated.
+    const transferDestKeys = new Set(
+        (warehouseData || [])
+            .filter(t => t.isTransferLog)
+            .map(t => {
+                const toWh = (t.toWh || t.toWarehouse || '').trim().toLowerCase();
+                const prod = (t.productName || t.product || '').trim().toLowerCase();
+                const brand = (t.brand || '').trim().toLowerCase();
+                const lc = (t.lcNo || '').trim().toLowerCase();
+                return `${toWh}||${prod}||${brand}||${lc}`;
+            })
+    );
+
     warehouseData.forEach(whItem => {
         if (!whItem || whItem.isTransferLog) return;
         if ((whItem.location || '').trim().toLowerCase() === 'returned stock') return;
         if (whItem.recordType !== 'warehouse' && !whItem.productName && !whItem.product) return;
         if (seenRecords.has(whItem._id)) return;
+
+        // Skip warehouse records that are transfer destinations (they are already accounted
+        // for by the source warehouse record — avoid double-counting the transferred stock)
+        const whName = (whItem.whName || whItem.warehouse || '').trim().toLowerCase();
+        const whProd = (whItem.productName || whItem.product || '').trim().toLowerCase();
+        const whBrand = (whItem.brand || '').trim().toLowerCase();
+        const whLc = (whItem.lcNo || '').trim().toLowerCase();
+        const destKey = `${whName}||${whProd}||${whBrand}||${whLc}`;
+
+        // Only skip if there is an explicit transfer log pointing to this warehouse record
+        // AND a warehouse filter is NOT active (when warehouse-filtered, show that warehouse's own stock)
+        const isWhFilter = stockFilters.warehouse && stockFilters.warehouse !== 'All Warehouses';
+        if (!isWhFilter && transferDestKeys.has(destKey)) return;
+
+        // When warehouse filter IS active, only include records for that warehouse
+        if (isWhFilter && whName !== stockFilters.warehouse.trim().toLowerCase()) return;
+
         seenRecords.add(whItem._id);
 
         let resolvedPktSize = safeParse(whItem.packetSize ?? whItem.size);
