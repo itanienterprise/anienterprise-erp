@@ -79,14 +79,22 @@ const SaleManagement = ({
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
     const [originalData, setOriginalData] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
-    const [showBag, setShowBag] = useState(() => {
-        const saved = localStorage.getItem('sale_showBag_default');
-        return saved !== null ? saved === 'true' : true;
+    // Show Unit Preference (BAG | QTY | BOTH)
+    const [displayUnit, setDisplayUnit] = useState(() => {
+        const saved = localStorage.getItem('sale_displayUnit_default');
+        if (saved) return saved;
+        const oldShowBag = localStorage.getItem('sale_showBag_default');
+        if (oldShowBag === 'true') return 'BOTH';
+        if (oldShowBag === 'false') return 'QTY';
+        return 'BOTH';
     });
 
     useEffect(() => {
-        localStorage.setItem('sale_showBag_default', showBag ? 'true' : 'false');
-    }, [showBag]);
+        localStorage.setItem('sale_displayUnit_default', displayUnit);
+    }, [displayUnit]);
+
+    const showBag = displayUnit === 'BOTH' || displayUnit === 'BAG';
+    const showQty = displayUnit === 'BOTH' || displayUnit === 'QTY';
 
     const [showBulkRateModal, setShowBulkRateModal] = useState(false);
     const [lcRecords, setLcRecords] = useState([]);
@@ -2932,23 +2940,30 @@ const SaleManagement = ({
                                         </div>
 
                                         <div className="space-y-5">
-                                            {/* Show Bag Control */}
+                                            {/* Show Unit Control (BAG | QTY | BOTH) */}
                                             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                                                <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">SHOW BAG</span>
-                                                <div className="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl border border-gray-200/60">
+                                                <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">SHOW UNIT</span>
+                                                <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl border border-gray-200/60">
                                                     <button
                                                         type="button"
-                                                        onClick={() => setShowBag(true)}
-                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${showBag ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                        onClick={() => setDisplayUnit('BAG')}
+                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${displayUnit === 'BAG' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                                                     >
-                                                        Enable
+                                                        BAG
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => setShowBag(false)}
-                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${!showBag ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                        onClick={() => setDisplayUnit('QTY')}
+                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${displayUnit === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                                                     >
-                                                        Disable
+                                                        QTY
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDisplayUnit('BOTH')}
+                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${displayUnit === 'BOTH' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                    >
+                                                        BOTH
                                                     </button>
                                                 </div>
                                             </div>
