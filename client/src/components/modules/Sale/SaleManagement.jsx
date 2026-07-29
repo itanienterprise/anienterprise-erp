@@ -633,6 +633,7 @@ const SaleManagement = ({
         requestedBy: currentUser?.name || currentUser?.username || '',
         requestedByUsername: currentUser?.username || ''
     });
+    const [damagesRecords, setDamagesRecords] = useState([]);
 
     useEffect(() => {
         fetchSales();
@@ -640,6 +641,7 @@ const SaleManagement = ({
         fetchProducts();
         fetchWarehouses();
         fetchStockRecords();
+        fetchDamagesRecords();
         fetchImportersList();
         fetchPortsList();
         fetchCnfsList();
@@ -776,19 +778,54 @@ const SaleManagement = ({
     async function fetchWarehouses() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/warehouses`);
-            setWarehouses(Array.isArray(response.data) ? response.data : []);
+            const list = Array.isArray(response.data) ? response.data : [];
+            const decrypted = list.map(item => {
+                let d = item.data ? decryptData(item.data) : item;
+                if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                if (d && typeof d === 'object' && d.data && typeof d.data === 'string') {
+                    try { d = decryptData(d.data); } catch (e) { }
+                }
+                return d && typeof d === 'object' ? { ...d, _id: item._id } : item;
+            });
+            setWarehouses(decrypted);
         } catch (error) {
             console.error('Error fetching warehouses:', error);
         }
     };
+
     async function fetchStockRecords() {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/stock`);
-            // Stock records are now decrypted server-side or by axios interceptor
-            const decryptedStock = Array.isArray(response.data) ? response.data : [];
-            setStockRecords(decryptedStock);
+            const list = Array.isArray(response.data) ? response.data : [];
+            const decrypted = list.map(item => {
+                let d = item.data ? decryptData(item.data) : item;
+                if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                if (d && typeof d === 'object' && d.data && typeof d.data === 'string') {
+                    try { d = decryptData(d.data); } catch (e) { }
+                }
+                return d && typeof d === 'object' ? { ...d, _id: item._id } : item;
+            });
+            setStockRecords(decrypted);
         } catch (error) {
             console.error('Error fetching stock records:', error);
+        }
+    };
+
+    async function fetchDamagesRecords() {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/damages`);
+            const list = Array.isArray(response.data) ? response.data : [];
+            const decrypted = list.map(item => {
+                let d = item.data ? decryptData(item.data) : item;
+                if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                if (d && typeof d === 'object' && d.data && typeof d.data === 'string') {
+                    try { d = decryptData(d.data); } catch (e) { }
+                }
+                return d && typeof d === 'object' ? { ...d, _id: item._id } : item;
+            });
+            setDamagesRecords(decrypted);
+        } catch (error) {
+            console.error('Error fetching damages records:', error);
         }
     };
 
@@ -957,14 +994,35 @@ const SaleManagement = ({
                             const targetWh = (entry.warehouseName || '').toLowerCase().trim();
                             const wProd = (w.productName || w.product || '').toLowerCase().trim();
                             const targetProd = (item.productName || '').toLowerCase().trim();
-                            const wBrand = (w.brand || '').toLowerCase().trim();
-                            const targetBrand = (entry.brand || '').toLowerCase().trim();
-                            const wLc = (w.lcNo || '').toLowerCase().trim();
+                            const targetBrand = (entry.brand || entry.brandName || '').toLowerCase().trim();
                             const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
-                            const brandMatches = !targetBrand || wBrand === targetBrand;
-                            if (wName === targetWh && wProd === targetProd && brandMatches && (!targetLc || wLc === targetLc)) {
-                                totalWhQty += parseFloat(w.whQty) || 0;
+                            if (w.brandEntries && Array.isArray(w.brandEntries) && w.brandEntries.length > 0) {
+                                w.brandEntries.forEach(be => {
+                                    const beBrand = (be.brand || be.brandName || '').toLowerCase().trim();
+                                    const brandMatches = !targetBrand || beBrand === targetBrand;
+                                    const beWh = (be.warehouseName || be.warehouse || w.whName || w.warehouse || '').toLowerCase().trim();
+                                    const beProd = (be.productName || w.productName || w.product || '').toLowerCase().trim();
+                                    const beLc = (be.lcNo || w.lcNo || '').toLowerCase().trim();
+                                    if (beWh === targetWh && beProd === targetProd && brandMatches && (!targetLc || beLc === targetLc)) {
+                                        if (isBagUom) {
+                                            totalWhQty += parseFloat(be.whPkt || be.inHousePacket || be.inhousePkt || 0) || 0;
+                                        } else {
+                                            totalWhQty += parseFloat(be.whQty || be.inHouseQuantity || be.inhouseQty || 0) || 0;
+                                        }
+                                    }
+                                });
+                            } else {
+                                const wBrand = (w.brand || '').toLowerCase().trim();
+                                const wLc = (w.lcNo || '').toLowerCase().trim();
+                                const brandMatches = !targetBrand || wBrand === targetBrand;
+                                if (wName === targetWh && wProd === targetProd && brandMatches && (!targetLc || wLc === targetLc)) {
+                                    if (isBagUom) {
+                                        totalWhQty += parseFloat(w.whPkt || w.inHousePacket || w.inhousePkt || 0) || 0;
+                                    } else {
+                                        totalWhQty += parseFloat(w.whQty || w.inHouseQuantity || w.inhouseQty || 0) || 0;
+                                    }
+                                }
                             }
                         });
 
@@ -974,50 +1032,120 @@ const SaleManagement = ({
                             const targetWh = (entry.warehouseName || '').toLowerCase().trim();
                             const rProd = (record.productName || record.product || '').toLowerCase().trim();
                             const targetProd = (item.productName || '').toLowerCase().trim();
-                            const rBrand = (record.brand || '').toLowerCase().trim();
-                            const targetBrand = (entry.brand || '').toLowerCase().trim();
-                            const rLc = (record.lcNo || '').toLowerCase().trim();
+                            const targetBrand = (entry.brand || entry.brandName || '').toLowerCase().trim();
                             const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
                             if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
 
-                            const brandMatches = !targetBrand || rBrand === targetBrand;
-                            if (rName === targetWh && rProd === targetProd && brandMatches && (!targetLc || rLc === targetLc)) {
-                                totalWhQty += parseFloat(record.inHouseQuantity) || 0;
+                            if (record.brandEntries && Array.isArray(record.brandEntries) && record.brandEntries.length > 0) {
+                                record.brandEntries.forEach(be => {
+                                    const beBrand = (be.brand || be.brandName || '').toLowerCase().trim();
+                                    const brandMatches = !targetBrand || beBrand === targetBrand;
+                                    const beWh = (be.warehouse || be.whName || record.warehouse || record.whName || '').toLowerCase().trim();
+                                    const beProd = (be.productName || record.productName || record.product || '').toLowerCase().trim();
+                                    const beLc = (be.lcNo || record.lcNo || '').toLowerCase().trim();
+                                    if (beWh === targetWh && beProd === targetProd && brandMatches && (!targetLc || beLc === targetLc)) {
+                                        if (isBagUom) {
+                                            totalWhQty += parseFloat(be.inHousePacket || be.inhousePkt || be.whPkt || 0) || 0;
+                                        } else {
+                                            totalWhQty += parseFloat(be.inHouseQuantity || be.inhouseQty || be.whQty || 0) || 0;
+                                        }
+                                    }
+                                });
+                            } else {
+                                const rBrand = (record.brand || '').toLowerCase().trim();
+                                const rLc = (record.lcNo || '').toLowerCase().trim();
+                                const brandMatches = !targetBrand || rBrand === targetBrand;
+                                if (rName === targetWh && rProd === targetProd && brandMatches && (!targetLc || rLc === targetLc)) {
+                                    if (isBagUom) {
+                                        totalWhQty += parseFloat(record.inHousePacket || record.inhousePkt || record.whPkt || 0) || 0;
+                                    } else {
+                                        totalWhQty += parseFloat(record.inHouseQuantity || record.inhouseQty || record.whQty || 0) || 0;
+                                    }
+                                }
                             }
                         });
 
                         // Subtract ALL matching sales for this specific warehouse
                         allSalesRecords.forEach(s => {
+                            if (editingId && (s._id === editingId || s.invoiceNo === formData.invoiceNo || s.orderNo === formData.orderNo)) return;
                             const sStatus = (s.status || '').toLowerCase();
                             if (sStatus !== 'accepted' && sStatus !== 'pending') return;
-                            if (s.items) {
+                            if (s.items && Array.isArray(s.items)) {
                                 s.items.forEach(si => {
                                     const sProdName = (si.productName || '').toLowerCase().trim();
                                     const tProdName = (item.productName || '').toLowerCase().trim();
-                                    if (sProdName === tProdName && si.brandEntries) {
-                                        si.brandEntries.forEach(be => {
-                                            const sBrandName = (be.brand || '').toLowerCase().trim();
-                                            const tBrandName = (entry.brand || '').toLowerCase().trim();
-                                            const sWhName = (be.warehouseName || '').toLowerCase().trim();
-                                            const tWhName = (entry.warehouseName || '').toLowerCase().trim();
-                                            const tProdNameMatched = (item.productName || '').toLowerCase().trim();
-                                            const sLc = (be.lcNo || si.lcNo || s.lcNo || '').toLowerCase().trim();
-                                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
+                                    const tBrandName = (entry.brand || entry.brandName || '').toLowerCase().trim();
+                                    const tWhName = (entry.warehouseName || '').toLowerCase().trim();
+                                    const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
-                                            const brandMatches = !tBrandName ? true : (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdNameMatched));
+                                    if (sProdName === tProdName) {
+                                        if (si.brandEntries && Array.isArray(si.brandEntries) && si.brandEntries.length > 0) {
+                                            si.brandEntries.forEach(be => {
+                                                const sBrandName = (be.brand || be.brandName || '').toLowerCase().trim();
+                                                const sWhName = (be.warehouseName || be.whName || si.warehouseName || si.whName || '').toLowerCase().trim();
+                                                const sLc = (be.lcNo || si.lcNo || s.lcNo || '').toLowerCase().trim();
+
+                                                const brandMatches = !tBrandName ? true : (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdName));
+                                                if (brandMatches && sWhName === tWhName && (!targetLc || sLc === targetLc)) {
+                                                    if (isBagUom) {
+                                                        totalWhQty -= parseFloat(be.bag || be.packet || 0) || 0;
+                                                    } else {
+                                                        totalWhQty -= parseFloat(be.quantity || 0) || 0;
+                                                    }
+                                                }
+                                            });
+                                        } else {
+                                            const sBrandName = (si.brand || si.brandName || '').toLowerCase().trim();
+                                            const sWhName = (si.warehouseName || si.whName || '').toLowerCase().trim();
+                                            const sLc = (si.lcNo || s.lcNo || '').toLowerCase().trim();
+                                            const brandMatches = !tBrandName ? true : (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdName));
                                             if (brandMatches && sWhName === tWhName && (!targetLc || sLc === targetLc)) {
-                                                totalWhQty -= parseFloat(be.quantity) || 0;
+                                                if (isBagUom) {
+                                                    totalWhQty -= parseFloat(si.bag || si.packet || 0) || 0;
+                                                } else {
+                                                    totalWhQty -= parseFloat(si.quantity || 0) || 0;
+                                                }
                                             }
-                                        });
+                                        }
                                     }
                                 });
                             }
                         });
-                        totalWhQty = Math.max(0, totalWhQty);
+                        damagesRecords.forEach(d => {
+                            const dStatus = (d.status || '').toLowerCase();
+                            if (['rejected', 'requested'].includes(dStatus)) return;
+                            const dProd = (d.productName || d.product || '').toLowerCase().trim();
+                            const tProdName = (item.productName || '').toLowerCase().trim();
+                            const dBrand = (d.brand || '').toLowerCase().trim();
+                            const tBrandName = (entry.brand || entry.brandName || '').toLowerCase().trim();
+                            const dWh = (d.warehouse || d.whName || '').toLowerCase().trim();
+                            const tWhName = (entry.warehouseName || '').toLowerCase().trim();
+                            const dLc = (d.lcNo || '').toLowerCase().trim();
+                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
 
-                        if (updatedEntry.warehouseQty !== totalWhQty.toString()) {
-                            updatedEntry.warehouseQty = totalWhQty.toString();
+                            const brandMatches = !tBrandName ? true : (dBrand === tBrandName || ((dBrand === '' || dBrand === '-') && tBrandName === tProdName));
+
+                            if (dProd === tProdName && brandMatches && dWh === tWhName && (!targetLc || dLc === targetLc)) {
+                                if (isBagUom) {
+                                    let dp = parseFloat(d.packet || d.pkt || d.bag || 0) || 0;
+                                    if (dp <= 0) {
+                                        const dq = parseFloat(d.quantity || d.qty || 0) || 0;
+                                        const pktSize = parseFloat(entry.packetSize) || 30;
+                                        dp = dq / pktSize;
+                                    }
+                                    totalWhQty -= dp;
+                                } else {
+                                    totalWhQty -= parseFloat(d.quantity || d.qty || 0) || 0;
+                                }
+                            }
+                        });
+
+                        totalWhQty = Math.max(0, totalWhQty);
+                        const formattedStock = Number(totalWhQty.toFixed(2)).toString();
+
+                        if (updatedEntry.warehouseQty !== formattedStock) {
+                            updatedEntry.warehouseQty = formattedStock;
                             itemChanged = true;
                         }
                     } else {
@@ -1039,7 +1167,16 @@ const SaleManagement = ({
 
             return hasChanges ? { ...prev, items: newItems } : prev;
         });
-    }, [formData.items.map(i => i.productId).join(','), formData.items.map(i => i.brandEntries.map(e => `${e.brand}-${e.warehouseName}-${e.lcNo}`).join(',')).join('|'), stockRecords, warehouses, allSalesRecords]);
+    }, [
+        formData.items.map(i => i.productId).join(','),
+        formData.items.map(i => i.uom).join(','),
+        formData.items.map(i => i.brandEntries.map(e => `${e.brand}-${e.warehouseName}-${e.lcNo}`).join(',')).join('|'),
+        stockRecords,
+        warehouses,
+        allSalesRecords,
+        damagesRecords,
+        editingId
+    ]);
 
     const addProductItem = () => {
         setFormData(prev => ({
