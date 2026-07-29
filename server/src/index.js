@@ -1253,14 +1253,16 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
           return res.status(403).json({ message: 'Forbidden: You do not have permission to approve/reject requested entries.' });
         }
       } else {
-        const ownerUsername = existingData.requestedByUsername;
-        const currentUsername = userSession ? userSession.username : null;
-        if (!isAdmin && currentUsername !== ownerUsername) {
-          return res.status(403).json({ message: 'Forbidden: Only the owner of the requested sale can edit it before acceptance.' });
+        const ownerUsername = (existingData.requestedByUsername || existingData.createdByName || existingData.createdByUsername || '').toString().toLowerCase();
+        const currentUsername = userSession ? (userSession.username || '').toString().toLowerCase() : null;
+        const hasEditPerm = isAdmin || (userSession && userSession.permissions && userSession.permissions.sales && userSession.permissions.sales.edit === true);
+        if (!isAdmin && !hasEditPerm && ownerUsername && currentUsername !== ownerUsername) {
+          return res.status(403).json({ message: 'Forbidden: Only the owner of the requested entry can edit it before acceptance.' });
         }
       }
     } else {
-      if (!isAdmin) {
+      const hasEditPerm = isAdmin || (userSession && userSession.permissions && userSession.permissions.sales && userSession.permissions.sales.edit === true);
+      if (!hasEditPerm) {
         if (req.body.isCnfCommissionUpdate) {
           // Allow C&F commission updates to bypass the general rate missing and edit locks
         } else {
@@ -1268,7 +1270,7 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
           const alreadyEdited = existingData.isEdited === true;
 
           if (!wasRateMissing) {
-            return res.status(403).json({ message: 'Forbidden: You cannot edit a sale entry that already has a rate.' });
+            return res.status(403).json({ message: 'Forbidden: You do not have permission to edit this sale entry.' });
           }
           if (alreadyEdited) {
             return res.status(403).json({ message: 'Forbidden: You have already edited this entry once.' });

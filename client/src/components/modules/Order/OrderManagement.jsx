@@ -34,6 +34,24 @@ const OrderManagement = ({
     const canViewOrderRequest = useMemo(() => hasPermission(currentUser, 'order', 'orderRequest') || hasPermission(currentUser, 'sales', 'saleRequest'), [currentUser]);
     const canViewEditRequest = useMemo(() => hasPermission(currentUser, 'order', 'editRequest') || hasPermission(currentUser, 'sales', 'editRequest'), [currentUser]);
 
+    const canUserEditOrder = (order) => {
+        if (!order) return false;
+        if (!currentUser) return false;
+        const isFullAdmin = currentUser.username === 'admin' || (currentUser.role || '').toLowerCase() === 'admin';
+        if (isFullAdmin || canEdit) return true;
+
+        const st = (order.status || '').toLowerCase();
+        if (st === 'requested') {
+            const owner = order.requestedByUsername || order.createdByName || order.createdByUsername || order.createdBy;
+            const currentUsername = currentUser.username;
+            if (!owner) return true;
+            if (currentUsername && owner.toString().toLowerCase() === currentUsername.toString().toLowerCase()) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
@@ -2005,7 +2023,7 @@ const OrderManagement = ({
                                                     >
                                                         <EyeIcon className="w-5 h-5" />
                                                     </button>
-                                                    {canEdit && (
+                                                    {canUserEditOrder(order) && (
                                                         <button
                                                             onClick={() => handleEdit(order)}
                                                             className="text-gray-400 hover:text-blue-600 transition-colors p-1"

@@ -254,10 +254,18 @@ const SaleManagement = ({
     const canDelete = hasPermission(currentUser, 'sales', 'delete');
 
     const canUserEditSale = (sale) => {
-        if (!canEdit) return false;
-        if (isFullAdmin) return true;
-        // Non-admin can only edit if rate was missing and it hasn't been edited yet
-        return sale.rateMissing === true && sale.isEdited !== true;
+        if (!sale) return false;
+        const sStatus = (sale.status || '').toLowerCase();
+        if (sStatus === 'requested') {
+            const owner = sale.requestedByUsername || sale.createdByName || sale.createdByUsername || sale.createdBy;
+            const currentUsername = currentUser ? currentUser.username : null;
+            if (owner && currentUsername && owner.toString().toLowerCase() === currentUsername.toString().toLowerCase()) {
+                return true;
+            }
+            if (isFullAdmin || canEdit) return true;
+        }
+        if (!canEdit && !isFullAdmin) return false;
+        return true;
     };
 
     const canUserDeleteSale = (sale) => {
@@ -270,19 +278,23 @@ const SaleManagement = ({
     };
 
     const canEditRequestedSale = (sale) => {
-        if (!currentUser) return false;
-        const role = (currentUser.role || '').toLowerCase();
-        if (role === 'lc manager') return false;
-        if (currentUser.username === 'admin') return true;
-        if (role === 'admin') return true;
-        if (canEdit) return true;
-        const owner = sale.requestedByUsername;
-        return owner === currentUser.username;
+        if (!currentUser || !sale) return false;
+        if (currentUser.username === 'admin' || isFullAdmin || canEdit) return true;
+        const owner = sale.requestedByUsername || sale.createdByName || sale.createdByUsername || sale.createdBy;
+        const currentUsername = currentUser.username;
+        return !!(owner && currentUsername && owner.toString().toLowerCase() === currentUsername.toString().toLowerCase());
     };
 
     const isFieldReadOnly = (value) => {
-        if (isFullAdmin) return false;
+        if (isFullAdmin || canEdit) return false;
         if (!editingId) return false; // New entries are always editable
+        if (formData && (formData.status || '').toLowerCase() === 'requested') {
+            const owner = formData.requestedByUsername || formData.createdByName || formData.createdByUsername || formData.createdBy;
+            const currentUsername = currentUser ? currentUser.username : null;
+            if (owner && currentUsername && owner.toString().toLowerCase() === currentUsername.toString().toLowerCase()) {
+                return false;
+            }
+        }
         if (value === null || value === undefined) return false;
         if (typeof value === 'number') return value !== 0;
         if (typeof value === 'string') return value.trim() !== '' && value.trim() !== '0';
@@ -1446,7 +1458,14 @@ const SaleManagement = ({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const hasAccess = editingId ? canEdit : canAdd;
+        const isRequestedEdit = formData && (formData.status || '').toLowerCase() === 'requested';
+        const isOwner = isRequestedEdit && (() => {
+            const owner = formData.requestedByUsername || formData.createdByName || formData.createdByUsername || formData.createdBy;
+            const currentUsername = currentUser ? currentUser.username : null;
+            return !!(owner && currentUsername && owner.toString().toLowerCase() === currentUsername.toString().toLowerCase());
+        })();
+
+        const hasAccess = editingId ? (canEdit || isFullAdmin || isOwner) : canAdd;
         if (!hasAccess) {
             alert(`Forbidden: You do not have permission to ${editingId ? 'edit' : 'add'} sales`);
             return;
@@ -4161,7 +4180,7 @@ const SaleManagement = ({
                                     <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
                                     Product Details
                                 </h4>
-                                {(isFullAdmin || !editingId) && (
+                                {(isFullAdmin || canEdit || !editingId) && (
                                     <button
                                         type="button"
                                         onClick={addProductItem}
@@ -4176,7 +4195,7 @@ const SaleManagement = ({
                                 {formData.items.map((item, index) => (
                                     <div key={index} className="sale-mgmt-product-card group/item">
                                         {/* Remove Product Button */}
-                                        {formData.items.length > 1 && (isFullAdmin || !editingId) && (
+                                        {formData.items.length > 1 && (isFullAdmin || canEdit || !editingId) && (
                                             <button
                                                 type="button"
                                                 onClick={() => removeProductItem(index)}
@@ -4352,10 +4371,10 @@ const SaleManagement = ({
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex flex-row gap-1 items-center justify-center">
-                                                                    {entryIndex === item.brandEntries.length - 1 && (isFullAdmin || !editingId) && (
+                                                                    {entryIndex === item.brandEntries.length - 1 && (isFullAdmin || canEdit || !editingId) && (
                                                                         <button type="button" onClick={() => addBrandEntry(index)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90" title="Add Brand"><span className="text-xl font-bold">+</span></button>
                                                                     )}
-                                                                    {item.brandEntries.length > 1 && (isFullAdmin || !editingId) && (
+                                                                    {item.brandEntries.length > 1 && (isFullAdmin || canEdit || !editingId) && (
                                                                         <button type="button" onClick={() => removeBrandEntry(index, entryIndex)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Remove Brand"><TrashIcon className="w-3.5 h-3.5" /></button>
                                                                     )}
                                                                 </div>
@@ -4685,7 +4704,7 @@ const SaleManagement = ({
                                                                 </div>
                                                             </div>
                                                             <div className="flex flex-row items-center gap-0.5 shrink-0">
-                                                                {entryIndex === item.brandEntries.length - 1 && (isFullAdmin || !editingId) && (
+                                                                {(entryIndex === item.brandEntries.length - 1 && (isFullAdmin || canEdit || !editingId)) && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => addBrandEntry(index)}
@@ -4695,7 +4714,7 @@ const SaleManagement = ({
                                                                         <span className="text-xl font-black">+</span>
                                                                     </button>
                                                                 )}
-                                                                {item.brandEntries.length > 1 && (isFullAdmin || !editingId) && (
+                                                                {(item.brandEntries.length > 1 && (isFullAdmin || canEdit || !editingId)) && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => removeBrandEntry(index, entryIndex)}
