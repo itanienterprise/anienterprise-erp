@@ -852,7 +852,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 const boxY = yPos - 5;
 
                 doc.setDrawColor(0);
-doc.setLineWidth(0.2);
+                doc.setLineWidth(0.2);
                 doc.rect(boxX, boxY, boxWidth, boxHeight);
                 doc.text(label, pageWidth / 2, boxY + 5, { align: 'center' });
 
@@ -3129,11 +3129,11 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
             },
             columnStyles: {
                 0: { cellWidth: 10, halign: 'center', overflow: 'hidden' }, // SL
-                1: { cellWidth: 20, overflow: 'hidden' },                   // ID
-                2: { cellWidth: 45, overflow: 'hidden' },                   // Company
-                3: { cellWidth: 25, halign: 'center', overflow: 'hidden' }, // Last Trans. Day
-                4: { cellWidth: 35, halign: 'right', overflow: 'hidden' },  // Total Balance
-                5: { cellWidth: 55, overflow: 'hidden' }                    // Remark
+                1: { cellWidth: 15, overflow: 'hidden' },                   // ID
+                2: { cellWidth: 40, overflow: 'hidden' },                   // Company
+                3: { cellWidth: 15, halign: 'center', overflow: 'hidden' }, // Last Trans. Day
+                4: { cellWidth: 25, halign: 'right', overflow: 'hidden' },  // Total Balance
+                5: { cellWidth: 80, overflow: 'hidden' }                    // Remark
             },
             margin: { left: margin, right: margin }
         });
