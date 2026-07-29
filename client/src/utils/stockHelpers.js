@@ -69,8 +69,8 @@ export const getGroupedBrandList = (brandList) => {
         groups[key].salePacket += b.salePacket || 0;
         groups[key].orderQuantity += b.orderQuantity || 0;
         groups[key].orderPacket += b.orderPacket || 0;
-        groups[key].saleableQuantity += b.saleableQuantity || 0;
-        groups[key].saleablePacket += b.saleablePacket || 0;
+        groups[key].saleableQuantity = Math.max(0, groups[key].inHouseQuantity - groups[key].orderQuantity);
+        groups[key].saleablePacket = Math.max(0, groups[key].inHousePacket - groups[key].orderPacket);
         groups[key].sweepedQuantity += b.sweepedQuantity || 0;
         groups[key].sweepedPacket += b.sweepedPacket || 0;
         groups[key].damageQuantity += b.damageQuantity || 0;
@@ -81,6 +81,11 @@ export const getGroupedBrandList = (brandList) => {
         groups[key].totalInHousePacket += b.totalInHousePacket || 0;
         groups[key].closingQuantity += b.closingQuantity || 0;
         groups[key].closingPacket += b.closingPacket || 0;
+    });
+    // Ensure final saleable quantities match aggregated inHouse minus order quantities
+    Object.values(groups).forEach(g => {
+        g.saleableQuantity = Math.max(0, g.inHouseQuantity - g.orderQuantity);
+        g.saleablePacket = Math.max(0, g.inHousePacket - g.orderPacket);
     });
     return Object.values(groups);
 };
@@ -418,17 +423,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                                 if (isOrder) {
                                     if (fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo)) return;
-                                    if (isBeforeSale) {
-                                        brandObj.openingQuantity -= sq;
-                                        brandObj.openingPacket -= sp;
-                                        acc[key].openingQuantity -= sq;
-                                        acc[key].openingPacket -= sp;
-                                    } else {
-                                        brandObj.orderQuantity += sq;
-                                        brandObj.orderPacket += sp;
-                                        acc[key].orderQuantity += sq;
-                                        acc[key].orderPacket += sp;
-                                    }
+                                    brandObj.orderQuantity += sq;
+                                    brandObj.orderPacket += sp;
+                                    acc[key].orderQuantity += sq;
+                                    acc[key].orderPacket += sp;
                                 } else {
                                     if (isBeforeSale) {
                                         brandObj.openingQuantity -= sq;
@@ -704,17 +702,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
                     if (isOrder) {
                         if (fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo)) return;
-                        if (isBefore) {
-                            brandObj.openingQuantity -= sq;
-                            brandObj.openingPacket -= sp;
-                            group.openingQuantity -= sq;
-                            group.openingPacket -= sp;
-                        } else {
-                            brandObj.orderQuantity += sq;
-                            brandObj.orderPacket += sp;
-                            group.orderQuantity += sq;
-                            group.orderPacket += sp;
-                        }
+                        brandObj.orderQuantity += sq;
+                        brandObj.orderPacket += sp;
+                        group.orderQuantity += sq;
+                        group.orderPacket += sp;
                     } else {
                         if (isBefore) {
                             brandObj.openingQuantity -= sq;
@@ -750,8 +741,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             const orderQty = b.orderQuantity || 0;
             const orderPkt = b.orderPacket || 0;
-            const saleableQty = closingQty - orderQty;
-            const saleablePkt = closingPkt - orderPkt;
+            const saleableQty = Math.max(0, closingQty - orderQty);
+            const saleablePkt = Math.max(0, closingPkt - orderPkt);
 
             const cleanVal = (v) => Math.abs(v) < 0.001 ? 0 : v;
 
@@ -788,16 +779,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             if (qCmp !== 0) return qCmp;
             return a.brand.localeCompare(b.brand);
         }).filter(b => {
-            return (
-                Math.round(Math.abs(b.openingQuantity || 0)) >= 1 || 
-                Math.round(Math.abs(b.periodArrivalQuantity || 0)) >= 1 || 
-                Math.round(Math.abs(b.saleQuantity || 0)) >= 1 || 
-                Math.round(Math.abs(b.inHouseQuantity || 0)) >= 1 || 
-                Math.round(Math.abs(b.closingQuantity || 0)) >= 1 || 
-                Math.round(Math.abs(b.sweepedQuantity || 0)) >= 1 ||
-                Math.round(Math.abs(b.damageQuantity || 0)) >= 1 ||
-                Math.round(Math.abs(b.orderQuantity || 0)) >= 1
-            );
+            // Only include brands with positive closing/in-house stock (> 0.001)
+            return (b.inHouseQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001;
         });
 
         if (brandList.length === 0) return null;
@@ -815,8 +798,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const damagePkt = brandList.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
         const orderQty = brandList.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
         const orderPkt = brandList.reduce((sum, b) => sum + (b.orderPacket || 0), 0);
-        const saleableQty = inHouseQty - orderQty;
-        const saleablePkt = inHousePkt - orderPkt;
+        const saleableQty = Math.max(0, inHouseQty - orderQty);
+        const saleablePkt = Math.max(0, inHousePkt - orderPkt);
 
         const groupPktSize = brandList.find(b => (b.packetSize || 0) > 0)?.packetSize || products.find(p => (p.name || p.productName || '').trim().toLowerCase() === group.productName.toLowerCase())?.packetSize || 30;
 
