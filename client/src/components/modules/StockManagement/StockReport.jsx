@@ -29,6 +29,22 @@ const StockReport = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [filterSearchInputs, setFilterSearchInputs] = useState({ warehouseSearch: '', brandSearch: '', productSearch: '' });
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ warehouse: false, brand: false, product: false });
+
+    const [displayUnit, setDisplayUnit] = useState(() => {
+        const saved = localStorage.getItem('stock_displayUnit_default');
+        if (saved) return saved;
+        const oldShowBag = localStorage.getItem('stock_showBag_default');
+        if (oldShowBag === 'true') return 'BOTH';
+        if (oldShowBag === 'false') return 'QTY';
+        return 'BOTH';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('stock_displayUnit_default', displayUnit);
+    }, [displayUnit]);
+
+    const showBag = displayUnit === 'BOTH' || displayUnit === 'BAG';
+    const showQty = displayUnit === 'BOTH' || displayUnit === 'QTY';
     const initialFilterDropdownState = { warehouse: false, brand: false, product: false };
 
     useEffect(() => {
@@ -797,6 +813,33 @@ const StockReport = ({
                                         </div>
 
                                         <div className="space-y-3">
+                                            {/* Show Unit Control (BAG | QTY | BOTH) */}
+                                            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                                                <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">SHOW UNIT</span>
+                                                <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl border border-gray-200/60">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDisplayUnit('BAG')}
+                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${displayUnit === 'BAG' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                    >
+                                                        BAG
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDisplayUnit('QTY')}
+                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${displayUnit === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                    >
+                                                        QTY
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDisplayUnit('BOTH')}
+                                                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${displayUnit === 'BOTH' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                                    >
+                                                        BOTH
+                                                    </button>
+                                                </div>
+                                            </div>
                                             {/* Date Range */}
                                             <div className="space-y-2">
                                                 <CustomDatePicker
