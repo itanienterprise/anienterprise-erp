@@ -1103,6 +1103,7 @@ apiRouter.post('/api/sales', async (req, res) => {
 
       const allSales = await Sale.find();
       const numbers = [];
+      let maxDigits = 4;
       for (const s of allSales) {
         let d;
         try {
@@ -1117,17 +1118,25 @@ apiRouter.post('/api/sales', async (req, res) => {
         const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
         if (invNo && invNo.startsWith(prefix)) {
           const match = invNo.match(/\d+/);
-          if (match) numbers.push(parseInt(match[0]));
+          if (match) {
+            numbers.push(parseInt(match[0], 10));
+            if (match[0].length > maxDigits) maxDigits = match[0].length;
+          }
         }
       }
 
-      const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
-      newInvoiceNo = `${prefix}${nextNum.toString().padStart(4, '0')}`;
+      const setOfNums = new Set(numbers);
+      let nextNum = 1;
+      while (setOfNums.has(nextNum)) {
+        nextNum++;
+      }
+      newInvoiceNo = `${prefix}${nextNum.toString().padStart(maxDigits, '0')}`;
       saleData.invoiceNo = newInvoiceNo;
     } else {
       if (!newInvoiceNo) {
         const allSales = await Sale.find();
         const numbers = [];
+        let maxDigits = 4;
         for (const s of allSales) {
           let d;
           try {
@@ -1140,11 +1149,18 @@ apiRouter.post('/api/sales', async (req, res) => {
           const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
           if (invNo && invNo.toUpperCase().startsWith('ORD')) {
             const match = invNo.match(/\d+/);
-            if (match) numbers.push(parseInt(match[0]));
+            if (match) {
+              numbers.push(parseInt(match[0], 10));
+              if (match[0].length > maxDigits) maxDigits = match[0].length;
+            }
           }
         }
-        const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
-        newInvoiceNo = `ORD${nextNum.toString().padStart(4, '0')}`;
+        const setOfNums = new Set(numbers);
+        let nextNum = 1;
+        while (setOfNums.has(nextNum)) {
+          nextNum++;
+        }
+        newInvoiceNo = `ORD${nextNum.toString().padStart(maxDigits, '0')}`;
       }
       saleData.invoiceNo = newInvoiceNo;
       saleData.orderNo = newInvoiceNo;

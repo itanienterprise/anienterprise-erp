@@ -492,14 +492,29 @@ const OrderManagement = ({
         }
     };
 
-    // Auto-generate Order Invoice Number
+    // Auto-generate Order Invoice Number (fills missing sequence numbers e.g. ORD0002 if ORD0001 & ORD0003 exist)
     const generateInvoiceNo = () => {
-        const numbers = allSalesRecords
-            .map(s => (s.orderNo || s.invoiceNo || ''))
-            .filter(inv => typeof inv === 'string' && inv.toUpperCase().startsWith('ORD'))
-            .map(inv => parseInt(inv.replace(/\D/g, '')) || 0);
-        const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
-        return `ORD${(maxNum + 1).toString().padStart(4, '0')}`;
+        const numbers = [];
+        let maxDigits = 4;
+        allSalesRecords.forEach(s => {
+            const inv = s.orderNo || s.invoiceNo || '';
+            if (typeof inv === 'string' && inv.toUpperCase().startsWith('ORD')) {
+                const match = inv.match(/\d+/);
+                if (match) {
+                    numbers.push(parseInt(match[0], 10));
+                    if (match[0].length > maxDigits) {
+                        maxDigits = match[0].length;
+                    }
+                }
+            }
+        });
+
+        const setOfNums = new Set(numbers);
+        let nextNum = 1;
+        while (setOfNums.has(nextNum)) {
+            nextNum++;
+        }
+        return `ORD${nextNum.toString().padStart(maxDigits, '0')}`;
     };
 
     // --- Handlers for Sorting ---

@@ -683,14 +683,23 @@ const SaleManagement = ({
     const _generateInvoiceNo = () => {
         const prefix = saleType === 'Border' ? 'BS' : 'GS';
         // Extract all numeric parts from invoice numbers starting with the same prefix
-        const numbers = allSalesRecords
+        const numbers = [];
+        let maxDigits = 4;
+        allSalesRecords
             .filter(s => (s.invoiceNo || '').startsWith(prefix))
-            .map(s => {
+            .forEach(s => {
                 const match = (s.invoiceNo || '').match(/\d+/);
-                return match ? parseInt(match[0]) : 0;
+                if (match) {
+                    numbers.push(parseInt(match[0], 10));
+                    if (match[0].length > maxDigits) maxDigits = match[0].length;
+                }
             });
-        const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
-        return `${prefix}${nextNum.toString().padStart(4, '0')}`;
+        const setOfNums = new Set(numbers);
+        let nextNum = 1;
+        while (setOfNums.has(nextNum)) {
+            nextNum++;
+        }
+        return `${prefix}${nextNum.toString().padStart(maxDigits, '0')}`;
     };
 
     /* Moved to backend for better uniqueness
