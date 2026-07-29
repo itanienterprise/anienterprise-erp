@@ -6294,9 +6294,13 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 ipNo: updatedIpNumbers[0] || '',
                 lcAmendment: latestState.amendmentNo === 'Original LC'
                     ? ''
-                    : (latestState.addnNo
-                        ? `AMENDMENT NO: ${latestState.addnNo} DATE: ${formatDate(latestState.addnDate || latestState.amendmentDate)}`
-                        : `${latestState.amendmentNo} DATE: ${formatDate(latestState.amendmentDate)}`),
+                    : (() => {
+                        let rawNo = latestState.addnNo || latestState.amendmentNo || '';
+                        let amndDate = formatDate(latestState.addnDate || latestState.amendmentDate);
+                        let numMatch = rawNo.match(/(?:ADDN|AMENDMENT|ADDN\s*NO|AMENDMENT\s*NO)[\:\-\s]*0*(\d{1,3})/i) || rawNo.match(/(\d{1,3})/);
+                        let cleanNo = numMatch ? numMatch[1].padStart(2, '0') : '01';
+                        return amndDate ? `AMENDMENT NO: ${cleanNo} DATE: ${amndDate}` : `AMENDMENT NO: ${cleanNo}`;
+                    })(),
                 amendments: currentAmendments
             };
 
@@ -8624,20 +8628,20 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
                                         <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-1.5 text-left">
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">ADDN Number</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Number</label>
                                                 <input
                                                     type="text"
                                                     name="addnNo"
                                                     value={amendmentFormData.addnNo || ''}
                                                     onChange={(e) => setAmendmentFormData(prev => ({ ...prev, addnNo: e.target.value }))}
-                                                    placeholder="e.g. ADDN-01"
+                                                    placeholder="e.g. 01"
                                                     className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
                                                 />
                                             </div>
 
                                             <div className="space-y-1.5">
                                                 <CustomDatePicker
-                                                    label="ADDN Date"
+                                                    label="Amendment Date"
                                                     name="addnDate"
                                                     value={amendmentFormData.addnDate}
                                                     onChange={(e) => setAmendmentFormData(prev => ({ ...prev, addnDate: e.target.value }))}

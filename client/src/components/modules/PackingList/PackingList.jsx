@@ -448,7 +448,30 @@ function PackingList({
             invoiceStyle: rawPi.invoiceStyle || 'Style 2 AAS',
             bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : '',
             branchName: matchedLcByPi ? (matchedLcByPi.bankBranch || '') : '',
-            lcAmendment: matchedLcByPi ? (matchedLcByPi.lcAmendment || '') : '',
+            lcAmendment: (() => {
+                if (!isRevised) return '';
+                // Determine exact amendment number from selected revision (e.g. 'Revised 1' -> '01', 'Revised 2' -> '02')
+                const revNumMatch = (revisionNo || '').match(/\d+/);
+                const amndIndex = revNumMatch ? parseInt(revNumMatch[0], 10) : 1;
+                const amndNoStr = String(amndIndex).padStart(2, '0');
+
+                // 1. Check selected PI revision object for reviseDate / amendmentDate / date
+                let amndDateVal = selectedRev.reviseDate || selectedRev.amendmentDate;
+                
+                // 2. Check matched LC amendments array at corresponding index
+                if (!amndDateVal && matchedLcByPi && Array.isArray(matchedLcByPi.amendments) && matchedLcByPi.amendments[amndIndex - 1]) {
+                    const targetAmnd = matchedLcByPi.amendments[amndIndex - 1];
+                    amndDateVal = targetAmnd.amendmentDate || targetAmnd.addnDate || targetAmnd.date;
+                }
+
+                // 3. Fallback to selectedRev date or matched LC main amendmentDate
+                if (!amndDateVal) {
+                    amndDateVal = selectedRev.date || matchedLcByPi?.amendmentDate || matchedLcByPi?.addnDate || matchedLcByPi?.openingDate || rawPi.date;
+                }
+
+                const formattedDate = amndDateVal ? formatDate(amndDateVal) : '';
+                return formattedDate ? `AMENDMENT NO: ${amndNoStr} DATE: ${formattedDate}` : `AMENDMENT NO: ${amndNoStr}`;
+            })(),
             descriptionGoods: rawPi.descriptionGoods || '',
             termsDeliveryPayment: rawPi.termsDeliveryPayment || '',
             totalAmount: isRevised ? String(revisedTotalAmount.toFixed(2)) : (selectedRev.totalAmount || rawPi.totalAmount || ''),
@@ -684,7 +707,7 @@ function PackingList({
             invoiceStyle: record.invoiceStyle || 'Style 2 AAS',
             bankName: record.bankName || '',
             branchName: record.branchName || '',
-            lcAmendment: record.lcAmendment || '',
+            lcAmendment: (record.lcAmendment || '').replace(/ADDN\s*NO[:\-\s]*/gi, 'AMENDMENT NO: ').replace(/ADDN-/gi, 'AMENDMENT-').replace(/ADDN/gi, 'AMENDMENT'),
             descriptionGoods: record.descriptionGoods || '',
             termsDeliveryPayment: record.termsDeliveryPayment || '',
             totalAmount: record.totalAmount || '',
