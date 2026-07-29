@@ -144,7 +144,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const sType = (s.saleType || '').toLowerCase();
         const sStatus = (s.status || '').toLowerCase();
         const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry;
-        if (isOrder && (sStatus === 'requested' || sStatus === 'accepted' || sStatus === 'pending')) {
+        if (isOrder && (sStatus === 'accepted' || sStatus === 'pending')) {
             const invNo = (s.invoiceNo || s.orderNo || '').trim().toUpperCase();
             if (invNo) activeOrdersSet.add(invNo);
         }
@@ -364,12 +364,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const isOrderSale = (sale.saleType || '').toLowerCase() === 'order' ||
                     (sale.invoiceNo || sale.orderNo || '').toUpperCase().startsWith('ORD') ||
                     sale.isOrderEntry === true;
-                // Allow 'requested' only for order-type entries; regular sales need accepted/pending/complete
-                if (isOrderSale) {
-                    if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete' && sStatus !== 'requested') return;
-                } else {
-                    if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete') return;
-                }
+                if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
                 if (endDate && sDate > endDate) return;
