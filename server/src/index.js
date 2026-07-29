@@ -1125,11 +1125,7 @@ apiRouter.post('/api/sales', async (req, res) => {
         }
       }
 
-      const setOfNums = new Set(numbers);
-      let nextNum = 1;
-      while (setOfNums.has(nextNum)) {
-        nextNum++;
-      }
+      const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
       newInvoiceNo = `${prefix}${nextNum.toString().padStart(maxDigits, '0')}`;
       saleData.invoiceNo = newInvoiceNo;
     } else {
@@ -1146,6 +1142,9 @@ apiRouter.post('/api/sales', async (req, res) => {
             }
           } catch (e) { }
 
+          const st = (s.status || (d ? d.status : '') || '').toLowerCase();
+          if (st !== 'requested') continue;
+
           const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
           if (invNo && invNo.toUpperCase().startsWith('ORD')) {
             const match = invNo.match(/\d+/);
@@ -1155,11 +1154,7 @@ apiRouter.post('/api/sales', async (req, res) => {
             }
           }
         }
-        const setOfNums = new Set(numbers);
-        let nextNum = 1;
-        while (setOfNums.has(nextNum)) {
-          nextNum++;
-        }
+        const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
         newInvoiceNo = `ORD${nextNum.toString().padStart(maxDigits, '0')}`;
       }
       saleData.invoiceNo = newInvoiceNo;
@@ -1247,10 +1242,14 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
       try { existingData = decryptData(existingData.data); } catch (e) { }
     }
 
-    if (existingData && existingData.status === 'Requested') {
-      const isStatusChange = req.body.status !== existingData.status;
+    const existingStatus = (existingData?.status || '').toLowerCase();
+    const isRequestedStatus = existingStatus === 'requested';
+
+    if (existingData && isRequestedStatus) {
+      const isStatusChange = (req.body.status || '').toLowerCase() !== existingStatus;
       if (isStatusChange) {
-        const canApprove = userSession && (['admin', 'incharge', 'sales manager'].includes((userSession.role || '').toLowerCase()) || userSession.username === 'admin');
+        const userRole = (userSession?.role || '').toLowerCase();
+        const canApprove = userSession && (['admin', 'incharge', 'sales manager'].includes(userRole) || userSession.username === 'admin');
         if (!canApprove) {
           return res.status(403).json({ message: 'Forbidden: You do not have permission to approve/reject requested entries.' });
         }

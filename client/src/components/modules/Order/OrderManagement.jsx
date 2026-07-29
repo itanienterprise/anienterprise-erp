@@ -492,11 +492,14 @@ const OrderManagement = ({
         }
     };
 
-    // Auto-generate Order Invoice Number (fills missing sequence numbers e.g. ORD0002 if ORD0001 & ORD0003 exist)
+    // Auto-generate Order Invoice Number (starts from ORD0001 for requested orders)
     const generateInvoiceNo = () => {
         const numbers = [];
         let maxDigits = 4;
         allSalesRecords.forEach(s => {
+            const st = (s.status || '').toLowerCase();
+            if (st !== 'requested') return;
+
             const inv = s.orderNo || s.invoiceNo || '';
             if (typeof inv === 'string' && inv.toUpperCase().startsWith('ORD')) {
                 const match = inv.match(/\d+/);
@@ -509,12 +512,8 @@ const OrderManagement = ({
             }
         });
 
-        const setOfNums = new Set(numbers);
-        let nextNum = 1;
-        while (setOfNums.has(nextNum)) {
-            nextNum++;
-        }
-        return `ORD${nextNum.toString().padStart(maxDigits, '0')}`;
+        const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+        return `ORD${(maxNum + 1).toString().padStart(maxDigits, '0')}`;
     };
 
     // --- Handlers for Sorting ---
@@ -658,7 +657,8 @@ const OrderManagement = ({
             if (refreshPendingIndicators) refreshPendingIndicators();
         } catch (err) {
             console.error(`Error updating order status to ${newStatus}:`, err);
-            alert('Failed to update order status');
+            const msg = err.response?.data?.message || 'Failed to update order status';
+            alert(msg);
         }
     };
 

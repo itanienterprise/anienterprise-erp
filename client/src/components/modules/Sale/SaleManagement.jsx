@@ -689,7 +689,11 @@ const SaleManagement = ({
         const numbers = [];
         let maxDigits = 4;
         allSalesRecords
-            .filter(s => (s.invoiceNo || '').startsWith(prefix))
+            .filter(s => {
+                const st = (s.status || '').toLowerCase();
+                if (saleType === 'Order') return st === 'requested' && (s.invoiceNo || '').startsWith(prefix);
+                return st !== 'rejected' && st !== 'cancelled' && (s.invoiceNo || '').startsWith(prefix);
+            })
             .forEach(s => {
                 const match = (s.invoiceNo || '').match(/\d+/);
                 if (match) {
@@ -697,11 +701,7 @@ const SaleManagement = ({
                     if (match[0].length > maxDigits) maxDigits = match[0].length;
                 }
             });
-        const setOfNums = new Set(numbers);
-        let nextNum = 1;
-        while (setOfNums.has(nextNum)) {
-            nextNum++;
-        }
+        const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
         return `${prefix}${nextNum.toString().padStart(maxDigits, '0')}`;
     };
 
