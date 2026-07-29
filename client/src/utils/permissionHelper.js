@@ -20,7 +20,8 @@ export const MODULES_LIST = [
         specialLabels: [
             { key: 'special', label: 'Approve Order' },
             { key: 'orderRequest', label: 'Order Request' },
-            { key: 'editRequest', label: 'Edit Request' }
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' }
         ]
     },
     { key: 'product', label: 'Product Management' },
@@ -41,7 +42,8 @@ export const MODULES_LIST = [
         specialLabels: [
             { key: 'special', label: 'Approve Sale' },
             { key: 'saleRequest', label: 'Sale Request' },
-            { key: 'editRequest', label: 'Edit Request' }
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' }
         ]
     },
     { key: 'profitLoss', label: 'Profit & Loss' },

@@ -33,6 +33,7 @@ const OrderManagement = ({
     const canApprove = useMemo(() => hasPermission(currentUser, 'order', 'special') || hasPermission(currentUser, 'sales', 'special'), [currentUser]);
     const canViewOrderRequest = useMemo(() => hasPermission(currentUser, 'order', 'orderRequest') || hasPermission(currentUser, 'sales', 'saleRequest'), [currentUser]);
     const canViewEditRequest = useMemo(() => hasPermission(currentUser, 'order', 'editRequest') || hasPermission(currentUser, 'sales', 'editRequest'), [currentUser]);
+    const canApproveEditRequest = useMemo(() => hasPermission(currentUser, 'order', 'approveEditRequest') || hasPermission(currentUser, 'sales', 'approveEditRequest') || canApprove, [currentUser]);
 
     const canUserEditOrder = (order) => {
         if (!order) return false;

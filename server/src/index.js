@@ -1249,8 +1249,8 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
       if (isStatusChange) {
         const userRole = (userSession?.role || '').toLowerCase();
         const hasSpecialPerm = userSession && userSession.permissions && (
-          (userSession.permissions.order && userSession.permissions.order.special === true) ||
-          (userSession.permissions.sales && userSession.permissions.sales.special === true)
+          (userSession.permissions.order && (userSession.permissions.order.special === true || userSession.permissions.order.approveEditRequest === true)) ||
+          (userSession.permissions.sales && (userSession.permissions.sales.special === true || userSession.permissions.sales.approveEditRequest === true))
         );
         const canApprove = isAdmin || ['admin', 'incharge', 'sales manager'].includes(userRole) || hasSpecialPerm;
         if (!canApprove) {
