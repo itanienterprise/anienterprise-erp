@@ -1248,7 +1248,11 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
       const isStatusChange = (req.body.status || '').toLowerCase() !== existingStatus;
       if (isStatusChange) {
         const userRole = (userSession?.role || '').toLowerCase();
-        const canApprove = userSession && (['admin', 'incharge', 'sales manager'].includes(userRole) || userSession.username === 'admin');
+        const hasSpecialPerm = userSession && userSession.permissions && (
+          (userSession.permissions.order && userSession.permissions.order.special === true) ||
+          (userSession.permissions.sales && userSession.permissions.sales.special === true)
+        );
+        const canApprove = isAdmin || ['admin', 'incharge', 'sales manager'].includes(userRole) || hasSpecialPerm;
         if (!canApprove) {
           return res.status(403).json({ message: 'Forbidden: You do not have permission to approve/reject requested entries.' });
         }
