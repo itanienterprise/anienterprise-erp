@@ -633,9 +633,6 @@ const OrderManagement = ({
         const numbers = [];
         let maxDigits = 4;
         allSalesRecords.forEach(s => {
-            const st = (s.status || '').toLowerCase();
-            if (st !== 'requested') return;
-
             const inv = s.orderNo || s.invoiceNo || '';
             if (typeof inv === 'string' && inv.toUpperCase().startsWith('ORD')) {
                 const match = inv.match(/\d+/);
@@ -735,7 +732,6 @@ const OrderManagement = ({
 
         setIsSubmitting(true);
         try {
-            const finalInvoiceNo = editingId ? (formData.invoiceNo || generateInvoiceNo()) : generateInvoiceNo();
             const totalAmount = calculateOrderTotal(formData.items);
             const isAdminUser = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
             const origStatus = (originalData?.status || '').toLowerCase();
@@ -743,8 +739,6 @@ const OrderManagement = ({
 
             const payload = {
                 date: formData.date,
-                invoiceNo: finalInvoiceNo,
-                orderNo: finalInvoiceNo,
                 companyName: formData.companyName || formData.customerName,
                 customerName: formData.customerName || formData.companyName,
                 phone: formData.phone,
@@ -760,11 +754,16 @@ const OrderManagement = ({
             };
 
             if (editingId) {
+                // For edits, preserve the existing invoice number
+                payload.invoiceNo = formData.invoiceNo;
+                payload.orderNo = formData.invoiceNo;
                 await axios.put(`${API_BASE_URL}/api/sales/${editingId}`, payload);
-                if (addNotification) addNotification(`Order ${finalInvoiceNo} updated successfully!`, 'success');
+                if (addNotification) addNotification(`Order ${formData.invoiceNo} updated successfully!`, 'success');
             } else {
-                await axios.post(`${API_BASE_URL}/api/sales`, payload);
-                if (addNotification) addNotification(`New Order ${finalInvoiceNo} created!`, 'success');
+                // For new orders, let the server generate the invoice number
+                const res = await axios.post(`${API_BASE_URL}/api/sales`, payload);
+                const savedInvoiceNo = res.data?.invoiceNo || res.data?.orderNo || 'New Order';
+                if (addNotification) addNotification(`New Order ${savedInvoiceNo} created!`, 'success');
             }
 
             setShowForm(false);

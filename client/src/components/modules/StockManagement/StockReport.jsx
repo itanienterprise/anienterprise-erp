@@ -95,13 +95,10 @@ const StockReport = ({
         });
     };
 
-    // --- Local Stock Data Recalculation for Price Report ---
+    // --- Stock Data for Report (uses unified calculated stockData) ---
     const activeStockData = React.useMemo(() => {
-        if (reportType === 'price') {
-            return calculateStockData(stockRecords, { ...stockFilters, reportType: 'price' }, '', warehouseData, salesRecords, products, damages);
-        }
         return stockData;
-    }, [stockData, reportType, stockRecords, stockFilters, warehouseData, salesRecords, products, damages]);
+    }, [stockData]);
 
     // --- Search & Filter Logic ---
     const filteredRecords = React.useMemo(() => {
@@ -122,9 +119,12 @@ const StockReport = ({
                         selectedBrands.includes((b.brand || '').toLowerCase().trim())
                     );
                     if (filteredBrands.length > 0) {
-                        const groupedBrands = getGroupedBrandList(filteredBrands);
-                        const inHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
-                        const totalInHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
+                        const inHouseQuantity = reportType === 'price'
+                            ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0)
+                            : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                        const totalInHouseQuantity = reportType === 'price'
+                            ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0)
+                            : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
                         const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
                         const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
                         return {
@@ -158,9 +158,12 @@ const StockReport = ({
 
             if (filteredBrands.length > 0) {
                 // IMPORTANT: Recalculate item-level totals for the filtered brands
-                const groupedBrands = getGroupedBrandList(filteredBrands);
-                const inHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
-                const totalInHouseQuantity = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
+                const inHouseQuantity = reportType === 'price'
+                    ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0)
+                    : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                const totalInHouseQuantity = reportType === 'price'
+                    ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0)
+                    : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
                 const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
                 const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
 

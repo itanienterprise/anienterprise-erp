@@ -138,13 +138,29 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     const consumedSales = new Set(); // Track consumed sale entries to prevent double-counting across quality grades
     const consumedDamages = new Set(); // Track consumed damages to prevent double-counting
 
+    // Build Set of active pending order numbers
+    const activeOrdersSet = new Set();
+    salesRecords.forEach(s => {
+        const sType = (s.saleType || '').toLowerCase();
+        const sStatus = (s.status || '').toLowerCase();
+        const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry;
+        if (isOrder && (sStatus === 'requested' || sStatus === 'accepted' || sStatus === 'pending')) {
+            const invNo = (s.invoiceNo || s.orderNo || '').trim().toUpperCase();
+            if (invNo) activeOrdersSet.add(invNo);
+        }
+    });
+
     // Build Set of orders fulfilled by General Sales to avoid double-counting in Order Qty
     const fulfilledOrdersSet = new Set();
     salesRecords.forEach(s => {
         const sType = (s.saleType || '').toLowerCase();
         const sStatus = (s.status || '').toLowerCase();
-        if (sType !== 'order' && (sStatus === 'accepted' || sStatus === 'pending' || sStatus === 'complete') && s.orderNo) {
-            fulfilledOrdersSet.add(s.orderNo.trim().toUpperCase());
+        const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry;
+        if (!isOrder && (sStatus === 'accepted' || sStatus === 'pending' || sStatus === 'complete') && s.orderNo) {
+            const ordNo = s.orderNo.trim().toUpperCase();
+            if (!activeOrdersSet.has(ordNo)) {
+                fulfilledOrdersSet.add(ordNo);
+            }
         }
     });
 
@@ -310,7 +326,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         if (!acc[key].brands[subKey]) {
             acc[key].brands[subKey] = {
-                brand: item.brand || 'No Brand',
+                brand: (item.brand || 'No Brand').trim(),
                 quality: item.quality || '-',
                 openingPacket: 0, openingQuantity: 0,
                 periodArrivalPacket: 0, periodArrivalQuantity: 0,
@@ -345,7 +361,15 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (!brandObj._salesResolved) {
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
-                if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete') return;
+                const isOrderSale = (sale.saleType || '').toLowerCase() === 'order' ||
+                    (sale.invoiceNo || sale.orderNo || '').toUpperCase().startsWith('ORD') ||
+                    sale.isOrderEntry === true;
+                // Allow 'requested' only for order-type entries; regular sales need accepted/pending/complete
+                if (isOrderSale) {
+                    if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete' && sStatus !== 'requested') return;
+                } else {
+                    if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete') return;
+                }
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
                 if (endDate && sDate > endDate) return;
@@ -360,19 +384,20 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             let beQualityRaw = rq !== '-' ? rq : (be.quality || '-');
                             let beQuality = beQualityRaw.trim().toLowerCase();
 
-                            if (beBrand === normBrand && beQuality === '-' && normQuality !== '-') {
-                                beQuality = normQuality;
-                            }
-
-                            if (beBrand === normBrand && beQuality === normQuality) {
-                                const saleLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim().toLowerCase();
-                                const stockLc = (item.lcNo || '').trim().toLowerCase();
+                            if (beBrand === normBrand && (beQuality === '-' || normQuality === '-' || beQuality === normQuality)) {
+                                const saleLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim();
+                                const stockLc = (item.lcNo || '').trim();
                                 if (saleLc && stockLc && !isLcMatch(saleLc, stockLc) && !isLcMatch(stockLc, saleLc)) return;
                                 if (stockFilters.lcNo && !isLcMatch(saleLc, stockFilters.lcNo)) return;
                                 if (stockSearchQuery) {
                                     const q = stockSearchQuery.toLowerCase();
-                                    const matchesQuery = normBrand.includes(q) || keyLower.includes(q) || saleLc.includes(q);
+                                    const matchesQuery = normBrand.includes(q) || keyLower.includes(q) || saleLc.toLowerCase().includes(q);
                                     if (!matchesQuery) return;
+                                }
+
+                                if (saleLc) {
+                                    if (!brandObj.lcNo) brandObj.lcNo = saleLc;
+                                    if (!brandObj.lcNos.includes(saleLc)) brandObj.lcNos.push(saleLc);
                                 }
 
                                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
@@ -443,14 +468,19 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const dWh = (damage.warehouse || '').trim().toLowerCase();
 
                 if (dProdName === keyLower && dBrand === normBrand) {
-                    const damageLc = (damage.lcNo || '').trim().toLowerCase();
-                    const stockLc = (item.lcNo || '').trim().toLowerCase();
+                    const damageLc = (damage.lcNo || '').trim();
+                    const stockLc = (item.lcNo || '').trim();
                     if (damageLc && stockLc && !isLcMatch(damageLc, stockLc) && !isLcMatch(stockLc, damageLc)) return;
                     if (stockFilters.lcNo && !isLcMatch(damageLc, stockFilters.lcNo)) return;
                     if (stockSearchQuery) {
                         const q = stockSearchQuery.toLowerCase();
-                        const matchesQuery = dProdName.includes(q) || dBrand.includes(q) || damageLc.includes(q);
+                        const matchesQuery = normBrand.includes(q) || keyLower.includes(q) || damageLc.toLowerCase().includes(q);
                         if (!matchesQuery) return;
+                    }
+
+                    if (damageLc) {
+                        if (!brandObj.lcNo) brandObj.lcNo = damageLc;
+                        if (!brandObj.lcNos.includes(damageLc)) brandObj.lcNos.push(damageLc);
                     }
                     if (isWhFilter) {
                         const filterWH = stockFilters.warehouse.toLowerCase();
@@ -595,7 +625,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     if (resolvedPktSize <= 0) resolvedPktSize = 30; // fallback default
 
                     group.brands[subKey] = {
-                        brand: be.brand || 'No Brand',
+                        brand: (be.brand || 'No Brand').trim(),
                         quality: resolvedQ || '-',
                         openingPacket: 0, openingQuantity: 0, periodArrivalPacket: 0, periodArrivalQuantity: 0,
                         salePacket: 0, saleQuantity: 0, sweepedPacket: 0, sweepedQuantity: 0,
@@ -755,10 +785,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             };
         });
 
-        // If not a price report, group by quality and brand name!
-        if (!isPriceReport) {
-            brandList = getGroupedBrandList(brandList);
-        }
+        // Group by quality and brand name
+        brandList = getGroupedBrandList(brandList);
 
         brandList = brandList.sort((a, b) => {
             const qCmp = (a.quality || '-').localeCompare(b.quality || '-');
@@ -772,7 +800,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 Math.round(Math.abs(b.inHouseQuantity || 0)) >= 1 || 
                 Math.round(Math.abs(b.closingQuantity || 0)) >= 1 || 
                 Math.round(Math.abs(b.sweepedQuantity || 0)) >= 1 ||
-                Math.round(Math.abs(b.damageQuantity || 0)) >= 1
+                Math.round(Math.abs(b.damageQuantity || 0)) >= 1 ||
+                Math.round(Math.abs(b.orderQuantity || 0)) >= 1
             );
         });
 
@@ -782,15 +811,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
         // In price report mode, sum inHouseQty directly from individual brandList entries (already filtered
         // to positive-closing-stock only), to avoid negative-LC values being merged and reducing the total.
-        const inHouseQty = isPriceReport
-            ? brandList.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0)
-            : groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
+        const inHouseQty = brandList.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
         const saleQty = brandList.reduce((sum, b) => sum + b.saleQuantity, 0);
         const damageQty = brandList.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
-        const openingPkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
-        const inHousePkt = isPriceReport
-            ? brandList.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0)
-            : groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
+        const openingPkt = brandList.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
+        const inHousePkt = brandList.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
         const salePkt = brandList.reduce((sum, b) => sum + b.salePacket, 0);
         const damagePkt = brandList.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
         const orderQty = brandList.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
@@ -853,12 +878,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         // Apply brand filter if active
         if (stockFilters.brand) {
             filteredBrands = filteredBrands.filter(b => (b.brand || '').trim() === stockFilters.brand);
+        } else if (isPriceReport) {
+            // In Price Report mode, keep all LC entries with positive remaining stock
+            filteredBrands = filteredBrands.filter(b => (b.inHouseQuantity || 0) > 0.001);
         } else {
-            // Otherwise just filter out empty stocks
-            filteredBrands = filteredBrands.filter(b => Math.abs(Math.round(b.inHouseQuantity)) >= 1);
+            // Standard view: keep items with positive in-house stock or active pending orders
+            filteredBrands = filteredBrands.filter(b => 
+                (b.inHouseQuantity || 0) > 0.001 ||
+                (b.orderQuantity || 0) > 0.001
+            );
         }
 
-        if (filteredBrands.length === 0 && (!stockFilters.brand || Math.abs(Math.round(group.inHouseQuantity)) < 1)) {
+        if (filteredBrands.length === 0) {
             return null;
         }
 
