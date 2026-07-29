@@ -869,6 +869,7 @@ const SaleManagement = ({
             const newItems = prev.items.map(item => {
                 if (!item.productId) return item;
 
+                const isBagUom = item.uom === 'BAG';
                 let itemChanged = false;
                 const newBrandEntries = item.brandEntries.map(entry => {
                     let updatedEntry = { ...entry };
@@ -1309,15 +1310,18 @@ const SaleManagement = ({
                     // Border Sale: Total depends on selected UOM (QTY or Truck)
                     if (name === 'truck' || name === 'quantity' || name === 'bag' || name === 'unitPrice' || name === 'uom') {
                         const activeUOM = name === 'uom' ? value : entry.uom;
-                        const bSize = parseFloat(String(entry.bagSize || '').replace(/[^0-9.]/g, '')) || 0;
+                        const rawSize = entry.bagSize || entry.packetSize || product.packetSize || products.find(p => p._id === product.productId || (p.name || p.productName || '').toLowerCase().trim() === (product.productName || '').toLowerCase().trim())?.packetSize;
+                        const bSize = parseFloat(String(rawSize || '').replace(/[^0-9.]/g, '')) || 30;
 
                         if (name === 'quantity' && bSize > 0) {
-                            entry.bag = (parseFloat(value) / bSize).toFixed(2);
+                            const valNum = parseFloat(value);
+                            entry.bag = isNaN(valNum) || value === '' ? '' : Number.isInteger(valNum / bSize) ? (valNum / bSize).toString() : (valNum / bSize).toFixed(2);
                         } else if (name === 'bag' && bSize > 0) {
-                            entry.quantity = (parseFloat(value) * bSize).toFixed(2);
+                            const valNum = parseFloat(value);
+                            entry.quantity = isNaN(valNum) || value === '' ? '' : Number.isInteger(valNum * bSize) ? (valNum * bSize).toString() : (valNum * bSize).toFixed(2);
                         }
 
-                        const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
+                        const qty = parseFloat(entry.quantity) || 0;
                         const truck = parseFloat(name === 'truck' ? value : entry.truck) || 0;
                         const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
 
@@ -1331,17 +1335,20 @@ const SaleManagement = ({
                 } else {
                     // General Sale: Total = Quantity * Price OR Bag * Price based on selected UOM
                     if (name === 'quantity' || name === 'bag' || name === 'unitPrice') {
-                        const bSize = parseFloat(String(entry.bagSize || '').replace(/[^0-9.]/g, '')) || 0;
+                        const rawSize = entry.bagSize || entry.packetSize || product.packetSize || products.find(p => p._id === product.productId || (p.name || p.productName || '').toLowerCase().trim() === (product.productName || '').toLowerCase().trim())?.packetSize;
+                        const bSize = parseFloat(String(rawSize || '').replace(/[^0-9.]/g, '')) || 30;
 
                         if (name === 'quantity' && bSize > 0) {
-                            entry.bag = (parseFloat(value) / bSize).toFixed(2);
+                            const valNum = parseFloat(value);
+                            entry.bag = isNaN(valNum) || value === '' ? '' : Number.isInteger(valNum / bSize) ? (valNum / bSize).toString() : (valNum / bSize).toFixed(2);
                         } else if (name === 'bag' && bSize > 0) {
-                            entry.quantity = (parseFloat(value) * bSize).toFixed(2);
+                            const valNum = parseFloat(value);
+                            entry.quantity = isNaN(valNum) || value === '' ? '' : Number.isInteger(valNum * bSize) ? (valNum * bSize).toString() : (valNum * bSize).toFixed(2);
                         }
 
                         const activeUOM = product.uom || 'QTY';
-                        const qty = parseFloat(name === 'quantity' ? value : entry.quantity) || 0;
-                        const bag = parseFloat(name === 'bag' ? value : entry.bag) || 0;
+                        const qty = parseFloat(entry.quantity) || 0;
+                        const bag = parseFloat(entry.bag) || 0;
                         const price = parseFloat(name === 'unitPrice' ? value : entry.unitPrice) || 0;
 
                         if (activeUOM === 'BAG') {
