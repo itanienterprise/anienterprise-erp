@@ -261,6 +261,7 @@ const SaleManagement = ({
     };
 
     const canUserDeleteSale = (sale) => {
+        if (sale && (sale.status || '').toLowerCase() === 'requested') return false;
         return canDelete;
     };
 
@@ -504,11 +505,13 @@ const SaleManagement = ({
         );
     };
 
-    const hasActiveFilters = Object.entries(saleFilters).some(([key, val]) => {
-        if (key === 'quickRange') return val !== 'all' && val !== 'custom' && val !== '';
+    const activeFilterCount = Object.entries(saleFilters).filter(([key, val]) => {
+        if (key === 'quickRange') return val !== 'all' && val !== 'monthly' && val !== 'custom' && val !== '';
         if (key === 'selectedMonth' || key === 'selectedYear') return false;
         return val !== '';
-    });
+    }).length;
+
+    const hasActiveFilters = activeFilterCount > 0;
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -2736,11 +2739,7 @@ const SaleManagement = ({
                                 <span>Filter</span>
                                 {hasActiveFilters && (
                                     <span className="flex items-center justify-center w-4 h-4 text-[10px] font-black bg-white text-blue-600 rounded-full ml-1">
-                                        {Object.entries(saleFilters).filter(([key, val]) => {
-                                            if (key === 'quickRange') return val !== 'all' && val !== 'custom' && val !== '';
-                                            if (key === 'selectedMonth' || key === 'selectedYear') return false;
-                                            return val !== '';
-                                        }).length}
+                                        {activeFilterCount}
                                     </span>
                                 )}
                             </button>

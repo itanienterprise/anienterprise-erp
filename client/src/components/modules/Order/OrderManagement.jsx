@@ -913,13 +913,15 @@ const OrderManagement = ({
         };
     }, [getFilteredData]);
 
-    const hasActiveFilters = useMemo(() => {
-        return Object.entries(saleFilters).some(([key, val]) => {
-            if (key === 'quickRange') return val !== 'all' && val !== 'custom' && val !== '';
+    const activeFilterCount = useMemo(() => {
+        return Object.entries(saleFilters).filter(([key, val]) => {
+            if (key === 'quickRange') return val !== 'all' && val !== 'monthly' && val !== 'custom' && val !== '';
             if (key === 'selectedMonth' || key === 'selectedYear') return false;
             return val !== '';
-        });
+        }).length;
     }, [saleFilters]);
+
+    const hasActiveFilters = activeFilterCount > 0;
 
     return (
         <div className="sale-management-container">
@@ -997,7 +999,7 @@ const OrderManagement = ({
                                 <span>Filter</span>
                                 {hasActiveFilters && (
                                     <span className="flex items-center justify-center w-4 h-4 text-[10px] font-black bg-white text-blue-600 rounded-full ml-1">
-                                        !
+                                        {activeFilterCount}
                                     </span>
                                 )}
                             </button>
@@ -1886,7 +1888,7 @@ const OrderManagement = ({
                                                             </button>
                                                         </>
                                                     )}
-                                                    {canDelete && (
+                                                    {!isRequested && canDelete && (
                                                         <button
                                                             onClick={() => handleDeleteOrder(order)}
                                                             className="text-gray-400 hover:text-red-600 transition-colors p-1"
