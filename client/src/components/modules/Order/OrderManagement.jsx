@@ -614,12 +614,13 @@ const OrderManagement = ({
                 phone: formData.phone,
                 address: formData.address,
                 notes: formData.notes,
-                status: formData.status,
+                status: formData.status || 'Requested',
                 saleType: 'Order',
                 uom: 'QTY',
                 items: formData.items,
                 totalAmount: totalAmount,
-                isEdited: (editingId && !isAdminUser && isAcceptedEdit) ? true : false
+                isEdited: (editingId && !isAdminUser && isAcceptedEdit) ? true : false,
+                isOrderEntry: true
             };
 
             if (editingId) {
@@ -636,7 +637,8 @@ const OrderManagement = ({
             if (refreshPendingIndicators) refreshPendingIndicators();
         } catch (err) {
             console.error('Error saving order:', err);
-            alert('Failed to save order. Please try again.');
+            const msg = err.response?.data?.message || 'Failed to save order. Please try again.';
+            alert(msg);
         } finally {
             setIsSubmitting(false);
         }
@@ -644,13 +646,20 @@ const OrderManagement = ({
 
     const handleStatusUpdate = async (order, newStatus) => {
         try {
-            const payload = {
-                ...order,
-                status: newStatus
-            };
-            await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, payload);
-            if (addNotification) {
-                addNotification(`Order ${order.invoiceNo || order.orderNo} ${newStatus.toLowerCase()} successfully!`, 'success');
+            if (newStatus === 'Rejected') {
+                await axios.delete(`${API_BASE_URL}/api/sales/${order._id}`);
+                if (addNotification) {
+                    addNotification(`Order ${order.invoiceNo || order.orderNo} rejected and removed successfully!`, 'success');
+                }
+            } else {
+                const payload = {
+                    ...order,
+                    status: newStatus
+                };
+                await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, payload);
+                if (addNotification) {
+                    addNotification(`Order ${order.invoiceNo || order.orderNo} ${newStatus.toLowerCase()} successfully!`, 'success');
+                }
             }
             fetchOrders();
             if (fetchSalesGlobal) fetchSalesGlobal();
