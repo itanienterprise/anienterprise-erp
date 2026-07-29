@@ -1129,7 +1129,7 @@ apiRouter.post('/api/sales', async (req, res) => {
       newInvoiceNo = `${prefix}${nextNum.toString().padStart(maxDigits, '0')}`;
       saleData.invoiceNo = newInvoiceNo;
     } else {
-      if (!newInvoiceNo) {
+        if (!newInvoiceNo) {
         const allSales = await Sale.find();
         const numbers = [];
         let maxDigits = 4;
@@ -1141,9 +1141,6 @@ apiRouter.post('/api/sales', async (req, res) => {
               try { d = decryptData(d.data); } catch (e) { }
             }
           } catch (e) { }
-
-          const st = (s.status || (d ? d.status : '') || '').toLowerCase();
-          if (st !== 'requested') continue;
 
           const invNo = s.invoiceNo || (d ? d.invoiceNo : '');
           if (invNo && invNo.toUpperCase().startsWith('ORD')) {
