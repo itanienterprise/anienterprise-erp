@@ -3437,7 +3437,7 @@ const SaleManagement = ({
                         <div className="sale-mgmt-card-value text-red-700">৳ {stats.totalDiscount.toLocaleString('en-IN')}</div>
                     </div>
                     <div className="sale-mgmt-card sale-mgmt-card-emerald">
-                        <div className="sale-mgmt-card-label text-emerald-600">Total Paid</div>
+                        <div className="sale-mgmt-card-label text-emerald-600">Truck Fare</div>
                         <div className="sale-mgmt-card-value text-emerald-700">৳ {stats.totalPaid.toLocaleString('en-IN')}</div>
                     </div>
                     <div className="sale-mgmt-card sale-mgmt-card-orange">
@@ -4771,7 +4771,7 @@ const SaleManagement = ({
                                     <div className="text-2xl font-black text-gray-900">৳ {parseFloat(formData.totalAmount).toLocaleString('en-IN')}</div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-bold text-gray-700">Paid Amount</label>
+                                    <label className="text-sm font-bold text-gray-700">Truck Fare</label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">৳</span>
                                         <input autoComplete="off"
@@ -5006,7 +5006,7 @@ const SaleManagement = ({
                                             <div className="flex items-center justify-center">Total {renderSortIcon('totalAmount')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('paidAmount')}>
-                                            <div className="flex items-center justify-center">Paid {renderSortIcon('paidAmount')}</div>
+                                            <div className="flex items-center justify-center">Truck Fare {renderSortIcon('paidAmount')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('dueAmount')}>
                                             <div className="flex items-center justify-center">Balance {renderSortIcon('dueAmount')}</div>
@@ -5675,7 +5675,7 @@ const SaleManagement = ({
                                                 <span className="text-blue-400 font-bold">:</span>
                                                 <span className="font-black text-gray-900">৳{parseFloat(sale.totalAmount).toLocaleString('en-IN')}</span>
 
-                                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Paid</span>
+                                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Truck Fare</span>
                                                 <span className="text-emerald-400 font-bold">:</span>
                                                 <span className="font-black text-emerald-700">৳{parseFloat(sale.paidAmount || 0).toLocaleString('en-IN')}</span>
 
