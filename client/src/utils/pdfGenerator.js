@@ -967,6 +967,19 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     if (showBag) row.push({ content: `${rW}${rR !== 0 ? ` - ${Math.abs(rR)} kg` : ''}`, styles: { halign: 'right' } });
                     if (showQty) row.push({ content: Math.round(rQty).toLocaleString('en-US'), styles: { halign: 'right' } });
 
+                    // Order & Saleable Data for Short Report
+                    if (reportType === 'short') {
+                        const ordQty = parseFloat(ent.orderQuantity) || 0;
+                        const { whole: ordW, remainder: ordR } = calculatePktRemainderLocal(ordQty, rSize);
+                        if (showBag) row.push({ content: `${ordW}${ordR !== 0 ? ` - ${Math.abs(ordR)} kg` : ''}`, styles: { halign: 'right' } });
+                        if (showQty) row.push({ content: Math.round(ordQty).toLocaleString('en-US'), styles: { halign: 'right' } });
+
+                        const salQty = parseFloat(ent.saleableQuantity) || 0;
+                        const { whole: salW, remainder: salR } = calculatePktRemainderLocal(salQty, rSize);
+                        if (showBag) row.push({ content: `${salW}${salR !== 0 ? ` - ${Math.abs(salR)} kg` : ''}`, styles: { halign: 'right' } });
+                        if (showQty) row.push({ content: Math.round(salQty).toLocaleString('en-US'), styles: { halign: 'right' } });
+                    }
+
                     tableRows.push(row);
 
                     // Check if we need to insert a Brand Total row for brands with multiple LCs
@@ -1035,6 +1048,16 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 if (showBag) subRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 if (showQty) subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
+                if (reportType === 'short') {
+                    const { whole: ordW2, remainder: ordR2 } = calculatePktRemainderLocal(item.orderQuantity, tSize2);
+                    if (showBag) subRow.push({ content: `${ordW2}${ordR2 !== 0 ? ` - ${Math.abs(ordR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    if (showQty) subRow.push({ content: Math.round(item.orderQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+
+                    const { whole: salW2, remainder: salR2 } = calculatePktRemainderLocal(item.saleableQuantity, tSize2);
+                    if (showBag) subRow.push({ content: `${salW2}${salR2 !== 0 ? ` - ${Math.abs(salR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                    if (showQty) subRow.push({ content: Math.round(item.saleableQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
+                }
+
                 subRow.isSubTotal = true;
                 boldBottomRowIndices.add(tableRows.length);
                 tableRows.push(subRow);
@@ -1052,6 +1075,20 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.inHouseQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.inHousePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
                 return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
             })();
+
+            const whOrderPktStr = (() => {
+                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.orderPacket) || 0)), 0), 0);
+                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.orderQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.orderPacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+                return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+            })();
+            const totalOrderQty = currentStockData.displayRecords.reduce((sum, item) => sum + (item.orderQuantity || 0), 0);
+
+            const whSaleablePktStr = (() => {
+                const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, Math.floor(parseFloat(ent.saleablePacket) || 0)), 0), 0);
+                const totalRem = Math.round(currentStockData.displayRecords.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.max(0, (parseFloat(ent.saleableQuantity) || 0)) - (Math.max(0, Math.floor(parseFloat(ent.saleablePacket) || 0)) * (parseFloat(ent.packetSize) || 0)), 0), 0));
+                return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+            })();
+            const totalSaleableQty = currentStockData.displayRecords.reduce((sum, item) => sum + (item.saleableQuantity || 0), 0);
 
             const whTotalSalePktStr = (() => {
                 const totalWhole = currentStockData.displayRecords.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + Math.floor(parseFloat(ent.salePacket) || 0), 0), 0);
@@ -1074,6 +1111,13 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             if (showBag) grandTotalRow.push({ content: whInHousePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
             if (showQty) grandTotalRow.push({ content: Math.round(currentStockData.totalInHouseQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
 
+            if (reportType === 'short') {
+                if (showBag) grandTotalRow.push({ content: whOrderPktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+                if (showQty) grandTotalRow.push({ content: Math.round(totalOrderQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+                if (showBag) grandTotalRow.push({ content: whSaleablePktStr, styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+                if (showQty) grandTotalRow.push({ content: Math.round(totalSaleableQty).toString(), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 240, 240] } });
+            }
+
             boldBottomRowIndices.add(tableRows.length);
             grandTotalRow.isSubTotal = true;
             tableRows.push(grandTotalRow);
@@ -1083,18 +1127,22 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             if (reportType === 'price') {
                 headCols.push('LC NO', 'COSTING');
                 if (showBag) headCols.push('BAG');
-                if (showQty) headCols.push('QUANTITY');
+                if (showQty) headCols.push('QTY (KG)');
             } else if (reportType === 'detailed') {
                 if (showBag) headCols.push('Opening Stock BAG');
-                if (showQty) headCols.push('Opening Stock QTY');
+                if (showQty) headCols.push('Opening Stock QTY (KG)');
                 if (showBag) headCols.push('SALE BAG');
-                if (showQty) headCols.push('SALE QTY');
+                if (showQty) headCols.push('SALE QTY (KG)');
                 if (showBag) headCols.push('Closing Stock BAG');
-                if (showQty) headCols.push('Closing Stock QTY');
+                if (showQty) headCols.push('Closing Stock QTY (KG)');
             } else {
                 // short report
-                if (showBag) headCols.push('BAG');
-                if (showQty) headCols.push('QUANTITY');
+                if (showBag) headCols.push('Closing BAG');
+                if (showQty) headCols.push('Closing QTY (KG)');
+                if (showBag) headCols.push('Order BAG');
+                if (showQty) headCols.push('Order QTY (KG)');
+                if (showBag) headCols.push('Saleable BAG');
+                if (showQty) headCols.push('Saleable QTY (KG)');
             }
 
             const pdfHead = [headCols];
@@ -1128,15 +1176,29 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     return styles;
                 } else {
                     // short report
-                    const styles = {
-                        0: { cellWidth: 10, halign: 'center', lineWidth: 0 },
-                        1: { cellWidth: 50, lineWidth: 0 },
-                        2: { cellWidth: showBag && showQty ? 70 : 100, lineWidth: 0 }
-                    };
-                    let colIdx = 3;
-                    if (showBag) styles[colIdx++] = { cellWidth: showBag && showQty ? 35 : 40, halign: 'right' };
-                    if (showQty) styles[colIdx++] = { cellWidth: showBag && showQty ? 35 : 40, halign: 'right' };
-                    return styles;
+                    const hasBothUnits = showBag && showQty;
+                    if (hasBothUnits) {
+                        return {
+                            0: { cellWidth: 8, halign: 'center', lineWidth: 0 },
+                            1: { cellWidth: 32, lineWidth: 0 },
+                            2: { cellWidth: 38, lineWidth: 0 },
+                            3: { cellWidth: 20, halign: 'right' },
+                            4: { cellWidth: 20, halign: 'right' },
+                            5: { cellWidth: 20, halign: 'right' },
+                            6: { cellWidth: 20, halign: 'right' },
+                            7: { cellWidth: 21, halign: 'right' },
+                            8: { cellWidth: 21, halign: 'right' }
+                        };
+                    } else {
+                        return {
+                            0: { cellWidth: 8, halign: 'center', lineWidth: 0 },
+                            1: { cellWidth: 42, lineWidth: 0 },
+                            2: { cellWidth: 50, lineWidth: 0 },
+                            3: { cellWidth: 33, halign: 'right' },
+                            4: { cellWidth: 33, halign: 'right' },
+                            5: { cellWidth: 34, halign: 'right' }
+                        };
+                    }
                 }
             };
 

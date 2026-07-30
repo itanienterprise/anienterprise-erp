@@ -339,19 +339,40 @@ const StockReport = ({
                                         <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider" colSpan={showBag && showQty ? 2 : 1}>Sale</th>
                                     </>
                                 )}
-                                <th className="px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={showBag && showQty ? 2 : 1}>Closing Stock</th>
+                                {reportType === 'short' ? (
+                                    <>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={showBag && showQty ? 2 : 1}>Closing Stock</th>
+                                        <th className="border-r border-gray-900 px-1 py-1 text-center text-[11px] font-bold text-purple-900 uppercase tracking-wider border-b border-gray-900" colSpan={showBag && showQty ? 2 : 1}>Order Stock</th>
+                                        <th className="px-1 py-1 text-center text-[11px] font-bold text-teal-900 uppercase tracking-wider border-b border-gray-900" colSpan={showBag && showQty ? 2 : 1}>Saleable Stock</th>
+                                    </>
+                                ) : (
+                                    <th className="px-1 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider border-b border-gray-900" colSpan={showBag && showQty ? 2 : 1}>Closing Stock</th>
+                                )}
                             </tr>
                             <tr className="bg-gray-50 border-b border-gray-900">
                                 {reportType === 'detailed' && (
                                     <>
                                         {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">BAG</th>}
-                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">QTY</th>}
+                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">QTY (KG)</th>}
                                         {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">BAG</th>}
-                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">QTY</th>}
+                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
                                     </>
                                 )}
-                                {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">BAG</th>}
-                                {showQty && <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">QTY</th>}
+                                {reportType === 'short' ? (
+                                    <>
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">BAG</th>}
+                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-purple-900 uppercase tracking-wider w-[7%]">BAG</th>}
+                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-purple-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-teal-900 uppercase tracking-wider w-[7%]">BAG</th>}
+                                        {showQty && <th className="px-2 py-1 text-right text-[12px] font-bold text-teal-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
+                                    </>
+                                ) : (
+                                    <>
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">BAG</th>}
+                                        {showQty && <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">QTY (KG)</th>}
+                                    </>
+                                )}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-900">
@@ -488,9 +509,39 @@ const StockReport = ({
                                                                 </td>
                                                             )}
                                                             {showQty && (
-                                                                <td className="px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-black">
+                                                                <td className={`${reportType === 'short' ? 'border-r border-gray-900' : ''} px-2 py-1 text-[13px] text-right text-gray-900 align-top whitespace-nowrap font-black`}>
                                                                     {Math.round(ent.inHouseQuantity || 0).toLocaleString('en-US')}
                                                                 </td>
+                                                            )}
+                                                            {reportType === 'short' && (
+                                                                <>
+                                                                    {showBag && (
+                                                                        <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-purple-800 align-top whitespace-nowrap font-medium">
+                                                                            {(() => {
+                                                                                const { whole, remainder } = calculatePktRemainder(ent.orderQuantity, ent.packetSize || 30);
+                                                                                return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                            })()}
+                                                                        </td>
+                                                                    )}
+                                                                    {showQty && (
+                                                                        <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-purple-900 align-top whitespace-nowrap font-black">
+                                                                            {Math.round(ent.orderQuantity || 0).toLocaleString('en-US')}
+                                                                        </td>
+                                                                    )}
+                                                                    {showBag && (
+                                                                        <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-teal-800 align-top whitespace-nowrap font-medium">
+                                                                            {(() => {
+                                                                                const { whole, remainder } = calculatePktRemainder(ent.saleableQuantity, ent.packetSize || 30);
+                                                                                return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                            })()}
+                                                                        </td>
+                                                                    )}
+                                                                    {showQty && (
+                                                                        <td className="px-2 py-1 text-[13px] text-right text-teal-900 align-top whitespace-nowrap font-black">
+                                                                            {Math.round(ent.saleableQuantity || 0).toLocaleString('en-US')}
+                                                                        </td>
+                                                                    )}
+                                                                </>
                                                             )}
                                                          </tr>
                                                          {reportType === 'price' && hasMultipleLcs && isLastOfBrandGroup && (() => {
@@ -562,9 +613,41 @@ const StockReport = ({
                                                     </td>
                                                 )}
                                                 {showQty && (
-                                                    <td className="px-2 py-1.5 text-[13px] text-right font-black text-blue-800 align-top whitespace-nowrap">
+                                                    <td className={`${reportType === 'short' ? 'border-r border-gray-900' : ''} px-2 py-1.5 text-[13px] text-right font-black text-blue-800 align-top whitespace-nowrap`}>
                                                         {Math.round(item.inHouseQuantity).toLocaleString('en-US')}
                                                     </td>
+                                                )}
+                                                {reportType === 'short' && (
+                                                    <>
+                                                        {showBag && (
+                                                            <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-purple-900 align-top whitespace-nowrap">
+                                                                {(() => {
+                                                                    const pktSize = item.packetSize || brands[0]?.packetSize || 30;
+                                                                    const { whole, remainder } = calculatePktRemainder(item.orderQuantity, pktSize);
+                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                })()}
+                                                            </td>
+                                                        )}
+                                                        {showQty && (
+                                                            <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-black text-purple-900 align-top whitespace-nowrap">
+                                                                {Math.round(item.orderQuantity).toLocaleString('en-US')}
+                                                            </td>
+                                                        )}
+                                                        {showBag && (
+                                                            <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-teal-900 align-top whitespace-nowrap">
+                                                                {(() => {
+                                                                    const pktSize = item.packetSize || brands[0]?.packetSize || 30;
+                                                                    const { whole, remainder } = calculatePktRemainder(item.saleableQuantity, pktSize);
+                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                })()}
+                                                            </td>
+                                                        )}
+                                                        {showQty && (
+                                                            <td className="px-2 py-1.5 text-[13px] text-right font-black text-teal-900 align-top whitespace-nowrap">
+                                                                {Math.round(item.saleableQuantity).toLocaleString('en-US')}
+                                                            </td>
+                                                        )}
+                                                    </>
                                                 )}
                                             </tr>
                                         </React.Fragment>
@@ -620,9 +703,41 @@ const StockReport = ({
                                         </td>
                                     )}
                                     {showQty && (
-                                        <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900">
+                                        <td className={`${reportType === 'short' ? 'border-r border-gray-900' : ''} px-2 py-1.5 text-[14px] text-right font-black text-gray-900`}>
                                             {Math.round(totals.totalInHouseQty)}
                                         </td>
+                                    )}
+                                    {reportType === 'short' && (
+                                        <>
+                                            {showBag && (
+                                                <td className="px-2 py-1.5 text-[14px] text-right font-black text-purple-900 border-r border-gray-900">
+                                                    {(() => {
+                                                        const totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                        const totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-IN')} kg` : ''}`;
+                                                    })()}
+                                                </td>
+                                            )}
+                                            {showQty && (
+                                                <td className="px-2 py-1.5 text-[14px] text-right font-black text-purple-900 border-r border-gray-900">
+                                                    {Math.round(records.reduce((sum, item) => sum + (item.orderQuantity || 0), 0))}
+                                                </td>
+                                            )}
+                                            {showBag && (
+                                                <td className="px-2 py-1.5 text-[14px] text-right font-black text-teal-900 border-r border-gray-900">
+                                                    {(() => {
+                                                        const totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                        const totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-IN')} kg` : ''}`;
+                                                    })()}
+                                                </td>
+                                            )}
+                                            {showQty && (
+                                                <td className="px-2 py-1.5 text-[14px] text-right font-black text-teal-900">
+                                                    {Math.round(records.reduce((sum, item) => sum + (item.saleableQuantity || 0), 0))}
+                                                </td>
+                                            )}
+                                        </>
                                     )}
                                 </tr>
                             </tfoot>

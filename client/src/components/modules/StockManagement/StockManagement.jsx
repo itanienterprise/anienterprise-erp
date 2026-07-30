@@ -2680,7 +2680,7 @@ const StockManagement = ({
                         </div>
                     </div>
                     {/* Summary Cards */}
-                    <div className={`grid grid-cols-2 ${showBag ? 'md:grid-cols-4 lg:grid-cols-8' : 'md:grid-cols-3 lg:grid-cols-5'} gap-3 md:gap-4 mb-6`}>
+                    <div className={`grid grid-cols-2 ${displayUnit === 'BOTH' ? 'md:grid-cols-4 lg:grid-cols-8' : (displayUnit === 'BAG' ? 'md:grid-cols-3 lg:grid-cols-3' : 'md:grid-cols-3 lg:grid-cols-5')} gap-3 md:gap-4 mb-6`}>
                         {[
                             {
                                 label: 'TOTAL BAG',
@@ -2690,7 +2690,7 @@ const StockManagement = ({
                             },
                             {
                                 label: 'TOTAL QUANTITY',
-                                show: true,
+                                show: showQty,
                                 value: `${Math.round(totalQuantity || 0).toLocaleString('en-US')} ${unit}`,
                                 bgColor: 'bg-blue-50/50', borderColor: 'border-blue-100', textColor: 'text-blue-700', labelColor: 'text-blue-600'
                             },
@@ -2702,7 +2702,7 @@ const StockManagement = ({
                             },
                             {
                                 label: 'TOTAL SALE QTY',
-                                show: true,
+                                show: showQty,
                                 value: `${Math.round(totalSaleQty || 0).toLocaleString('en-US')} ${unit}`,
                                 bgColor: 'bg-orange-50/50', borderColor: 'border-orange-100', textColor: 'text-orange-700', labelColor: 'text-orange-600'
                             },
@@ -2717,7 +2717,7 @@ const StockManagement = ({
                             },
                             {
                                 label: 'INHOUSE QTY',
-                                show: true,
+                                show: showQty,
                                 value: `${Math.round(totalInHouseQty || 0).toLocaleString('en-US')} ${unit}`,
                                 bgColor: (totalInHouseQty || 0) < 0 ? 'bg-blue-50/50' : 'bg-emerald-50/50',
                                 borderColor: (totalInHouseQty || 0) < 0 ? 'border-blue-100' : 'border-emerald-100',
@@ -2726,13 +2726,13 @@ const StockManagement = ({
                             },
                             {
                                 label: 'SHORTAGE',
-                                show: true,
+                                show: showQty,
                                 value: `${Math.round(totalShortage || 0).toLocaleString('en-IN')} ${unit}`,
                                 bgColor: 'bg-rose-50/50', borderColor: 'border-rose-100', textColor: 'text-rose-700', labelColor: 'text-rose-600'
                             },
                             {
                                 label: 'DAMAGE',
-                                show: true,
+                                show: showQty,
                                 value: `${Math.round(totalDamageQty || 0).toLocaleString('en-IN')} ${unit}`,
                                 bgColor: 'bg-red-50/50', borderColor: 'border-red-100', textColor: 'text-red-700', labelColor: 'text-red-600'
                             },
@@ -3443,21 +3443,21 @@ const StockManagement = ({
                                             ) : (
                                                 <>
                                                     {showBag && <div className="text-center text-blue-800">Opening Stock Bag</div>}
-                                                    {showQty && <div className="text-center text-blue-800">Opening Stock QTY</div>}
+                                                    {showQty && <div className="text-center text-blue-800">Opening Stock QTY (KG)</div>}
                                                     {showBag && <div className="text-center text-orange-800">Sale BAG</div>}
-                                                    {showQty && <div className="text-center text-orange-800">Sale QTY</div>}
+                                                    {showQty && <div className="text-center text-orange-800">Sale QTY (KG)</div>}
                                                 </>
                                             )}
                                             {showBag && <div className="text-center text-green-800">Closing Stock Bag</div>}
-                                            {showQty && <div className="text-center text-green-800">Closing Stock QTY</div>}
+                                            {showQty && <div className="text-center text-green-800">Closing Stock QTY (KG)</div>}
 
                                             {/* Order & Saleable Headers */}
                                             {(!canShowRate || !showRate) && (
                                                 <>
                                                     {showBag && <div className="text-center text-purple-800">Order Bag</div>}
-                                                    {showQty && <div className="text-center text-purple-800">Order Qty</div>}
+                                                    {showQty && <div className="text-center text-purple-800">Order Qty (KG)</div>}
                                                     {showBag && <div className="text-center text-teal-800">Saleable Bag</div>}
-                                                    {showQty && <div className="text-center text-teal-800">Saleable Qty</div>}
+                                                    {showQty && <div className="text-center text-teal-800">Saleable Qty (KG)</div>}
                                                 </>
                                             )}
 
