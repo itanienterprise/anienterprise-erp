@@ -141,6 +141,7 @@ const StockManagement = ({
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
     const canTransfer = hasPermission(currentUser, 'stock', 'special');
     const canShowRate = hasPermission(currentUser, 'stock', 'showRate');
+    const effectiveShowRate = canShowRate && showRate;
 
     // Filtering & Search (Main View)
     const [displayUnit, setDisplayUnit] = useState(() => {
@@ -2351,7 +2352,7 @@ const StockManagement = ({
 
     const minWidthClass = displayUnit === 'BOTH' ? 'min-w-[1200px]' : 'min-w-[900px]';
 
-    const gridClass = showRate
+    const gridClass = effectiveShowRate
         ? "grid grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1fr)] gap-3"
         : displayUnit === 'BOTH'
             ? "grid grid-cols-[minmax(0,1.8fr)_repeat(10,minmax(0,1fr))_minmax(0,0.9fr)] gap-2"
@@ -3364,7 +3365,8 @@ const StockManagement = ({
                                                             const spanInfo = brandSpans[startIdx] || { span: 1 };
                                                             const isLastOfBrandGroup = bIdx === startIdx + spanInfo.span - 1;
                                                             const hasMultipleLcs = spanInfo.span > 1;
-                                                            const showBrandName = !showRate || (brandSpans[bIdx]?.span > 0);
+                                                            const effectiveShowRate = canShowRate && showRate;
+                                                            const showBrandName = !effectiveShowRate || (brandSpans[bIdx]?.span > 0);
 
                                                             return (
                                                                 <React.Fragment key={bIdx}>
@@ -3374,7 +3376,7 @@ const StockManagement = ({
                                                                                 <span className="font-black text-gray-900 text-base truncate">
                                                                                     {showBrandName ? (brand.brand || '-').trim() : ""}
                                                                                 </span>
-                                                                                {showRate && (
+                                                                                {effectiveShowRate && (
                                                                                     <div className="flex flex-wrap gap-2 my-0.5">
                                                                                         <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-bold bg-purple-50 border border-purple-100 text-purple-700">
                                                                                             LC: {brand.lcNo || '—'}
@@ -3399,7 +3401,7 @@ const StockManagement = ({
                                                                             </div>
                                                                         </div>
                                                                     </div>
-                                                                    {showRate && hasMultipleLcs && isLastOfBrandGroup && (
+                                                                    {effectiveShowRate && hasMultipleLcs && isLastOfBrandGroup && (
                                                                         <div className="bg-purple-50/20 rounded-xl p-3 border border-dashed border-purple-200 space-y-1.5 mt-1">
                                                                             <div className="flex justify-between items-center w-full">
                                                                                 <span className="text-xs font-black text-purple-950 uppercase tracking-wider">{(brand.brand || '-').trim()} Total</span>
@@ -3437,7 +3439,7 @@ const StockManagement = ({
                                     <th colSpan="8" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                         <div className={`${gridClass} ${minWidthClass} whitespace-nowrap`}>
                                             <div className="text-left text-gray-900 pr-2 truncate min-w-0">Brand</div>
-                                            {canShowRate && showRate ? (
+                                            {effectiveShowRate ? (
                                                 <>
                                                     <div className="text-center text-purple-800 truncate min-w-0">LC No</div>
                                                     <div className="text-center text-purple-800 truncate min-w-0">Rate</div>
@@ -3454,7 +3456,7 @@ const StockManagement = ({
                                             {showQty && <div className="text-center text-green-800 truncate min-w-0" title="Closing Stock QTY (KG)">{displayUnit === 'BOTH' ? 'Closing QTY (KG)' : 'Closing Stock QTY (KG)'}</div>}
 
                                             {/* Order & Saleable Headers */}
-                                            {(!canShowRate || !showRate) && (
+                                            {!effectiveShowRate && (
                                                 <>
                                                     {showBag && <div className="text-center text-purple-800 truncate min-w-0" title="Order Bag">Order Bag</div>}
                                                     {showQty && <div className="text-center text-purple-800 truncate min-w-0" title="Order Qty (KG)">Order Qty (KG)</div>}
@@ -3510,7 +3512,8 @@ const StockManagement = ({
                                                                 const spanInfo = brandSpans[startIdx] || { span: 1 };
                                                                 const isLastOfBrandGroup = bIdx === startIdx + spanInfo.span - 1;
                                                                 const hasMultipleLcs = spanInfo.span > 1;
-                                                                const showBrandName = !showRate || (brandSpans[bIdx]?.span > 0);
+                                                                const effectiveShowRate = canShowRate && showRate;
+                                                                const showBrandName = !effectiveShowRate || (brandSpans[bIdx]?.span > 0);
 
                                                                 return (
                                                                     <React.Fragment key={bIdx}>
@@ -3519,7 +3522,7 @@ const StockManagement = ({
                                                                                 {showBrandName ? (brand.brand || '-').trim() : ""}
                                                                             </div>
 
-                                                                            {showRate ? (
+                                                                            {effectiveShowRate ? (
                                                                                 <>
                                                                                     {/* LC No */}
                                                                                     <div className="text-sm text-purple-800 bg-purple-50/50 px-2 py-1 rounded-lg text-center font-bold">
@@ -3580,7 +3583,7 @@ const StockManagement = ({
                                                                             )}
 
                                                                             {/* Order & Saleable Cells */}
-                                                                            {(!canShowRate || !showRate) && (
+                                                                            {!effectiveShowRate && (
                                                                                 <>
                                                                                     {showBag && (
                                                                                         <div className="text-sm text-purple-800 bg-purple-50/50 px-2 py-1 rounded-lg text-center font-bold">
@@ -3617,7 +3620,7 @@ const StockManagement = ({
                                                                                 </span>
                                                                             </div>
                                                                         </div>
-                                                                        {showRate && hasMultipleLcs && isLastOfBrandGroup && (
+                                                                        {effectiveShowRate && hasMultipleLcs && isLastOfBrandGroup && (
                                                                             <div className={`${gridClass} ${minWidthClass} items-center whitespace-nowrap border-t border-dashed border-purple-200 pt-1.5 pb-1 mt-1 bg-purple-50/20 rounded-lg px-2`}>
                                                                                 <div className="text-xs text-purple-950 font-black uppercase tracking-wider">{(brand.brand || '-').trim()} Total</div>
                                                                                 <div></div>
@@ -3647,7 +3650,7 @@ const StockManagement = ({
                                                                 <div className="flex items-center gap-1">
                                                                     <span className="text-xs font-black text-blue-950 uppercase tracking-wider">Total:</span>
                                                                 </div>
-                                                                {showRate ? (
+                                                                {effectiveShowRate ? (
                                                                     <>
                                                                         <div className="text-center"></div>
                                                                         <div className="text-center"></div>
@@ -3703,7 +3706,7 @@ const StockManagement = ({
                                                                 )}
 
                                                                 {/* Total Order & Saleable */}
-                                                                {(!canShowRate || !showRate) && (
+                                                                {!effectiveShowRate && (
                                                                     <>
                                                                         {showBag && (
                                                                             <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
@@ -4096,14 +4099,13 @@ const StockManagement = ({
                                                                 <th onClick={() => requestSort('history', 'importer')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                                     <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
                                                                 </th>
-                                                                <th onClick={() => requestSort('history', 'exporter')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                    <div className="flex items-center">Exporter <SortIcon config={sortConfig.history} columnKey="exporter" /></div>
-                                                                </th>
                                                                 <th onClick={() => requestSort('history', 'truckNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                                     <div className="flex items-center">Truck <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
                                                                 </th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
-                                                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Purchase Price</th>
+                                                                {canShowRate && showRate && (
+                                                                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Purchase Price</th>
+                                                                )}
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">BAG</th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
                                                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">InHouse Pkt</th>
@@ -4114,7 +4116,7 @@ const StockManagement = ({
                                                         <tbody className="divide-y divide-gray-100">
                                                             {visibleHistory.length === 0 ? (
                                                                 <tr>
-                                                                    <td colSpan="14" className="px-6 py-12 text-center text-gray-400 font-medium italic">No history records found</td>
+                                                                    <td colSpan={canShowRate && showRate ? "14" : "13"} className="px-6 py-12 text-center text-gray-400 font-medium italic">No history records found</td>
                                                                 </tr>
                                                             ) : (
                                                                 visibleHistory.map((item, idx) => (
@@ -4140,13 +4142,15 @@ const StockManagement = ({
                                                                                 ))}
                                                                             </div>
                                                                         </td>
-                                                                        <td className="px-3 py-3 align-top">
-                                                                            <div className="space-y-1">
-                                                                                {validEntries(item).map((entry, eIdx) => (
-                                                                                    <div key={eIdx} className="text-sm text-gray-600">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString('en-IN')}</div>
-                                                                                ))}
-                                                                            </div>
-                                                                        </td>
+                                                                        {canShowRate && showRate && (
+                                                                            <td className="px-3 py-3 align-top">
+                                                                                <div className="space-y-1">
+                                                                                    {validEntries(item).map((entry, eIdx) => (
+                                                                                        <div key={eIdx} className="text-sm text-gray-600">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString('en-IN')}</div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </td>
+                                                                        )}
                                                                         <td className="px-3 py-3 align-top font-bold">
                                                                             <div className="space-y-1">
                                                                                 {validEntries(item).map((entry, eIdx) => (
@@ -4268,7 +4272,9 @@ const StockManagement = ({
                                                                                     <div key={eIdx} className={`${eIdx !== 0 ? 'border-t border-gray-100 pt-3' : ''}`}>
                                                                                         <div className="flex justify-between items-center mb-2">
                                                                                             <span className="text-sm font-bold text-gray-900">{entry.brand}</span>
-                                                                                            <span className="text-xs font-medium text-gray-500">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString('en-IN')}</span>
+                                                                                            {canShowRate && showRate && (
+                                                                                                <span className="text-xs font-medium text-gray-500">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString('en-IN')}</span>
+                                                                                            )}
                                                                                         </div>
                                                                                         <div className="grid grid-cols-2 gap-3">
                                                                                             <div className="flex flex-col bg-white p-2 rounded-lg border border-gray-100">
@@ -4320,10 +4326,12 @@ const StockManagement = ({
                                                     <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Sale Quantity</div>
                                                     <div className="text-lg sm:text-2xl font-black text-emerald-700">{totalSaleQty.toLocaleString('en-US')} {unit}</div>
                                                 </div>
-                                                <div className="bg-blue-50/10 border border-blue-100 p-4 sm:p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
-                                                    <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">Total Sale Amount</div>
-                                                    <div className="text-lg sm:text-2xl font-black text-blue-700">৳ {totalSaleAmount.toLocaleString('en-IN')}</div>
-                                                </div>
+                                                {canShowRate && showRate && (
+                                                    <div className="bg-blue-50/10 border border-blue-100 p-4 sm:p-6 rounded-2xl shadow-sm transition-all hover:shadow-md">
+                                                        <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-1">Total Sale Amount</div>
+                                                        <div className="text-lg sm:text-2xl font-black text-blue-700">৳ {totalSaleAmount.toLocaleString('en-IN')}</div>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
@@ -4357,17 +4365,21 @@ const StockManagement = ({
                                                                         <div className="flex items-center justify-end">Truck <SortIcon config={sortConfig.history} columnKey="itemTruck" /></div>
                                                                     </th>
                                                                 )}
-                                                                <th onClick={() => requestSort('history', 'itemPrice')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
-                                                                    <div className="flex items-center justify-end">Price <SortIcon config={sortConfig.history} columnKey="itemPrice" /></div>
-                                                                </th>
-                                                                <th onClick={() => requestSort('history', 'itemTotal')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
-                                                                    <div className="flex items-center justify-end">Total <SortIcon config={sortConfig.history} columnKey="itemTotal" /></div>
-                                                                </th>
+                                                                {canShowRate && showRate && (
+                                                                    <>
+                                                                        <th onClick={() => requestSort('history', 'itemPrice')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
+                                                                            <div className="flex items-center justify-end">Price <SortIcon config={sortConfig.history} columnKey="itemPrice" /></div>
+                                                                        </th>
+                                                                        <th onClick={() => requestSort('history', 'itemTotal')} className="px-3 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors text-right">
+                                                                            <div className="flex items-center justify-end">Total <SortIcon config={sortConfig.history} columnKey="itemTotal" /></div>
+                                                                        </th>
+                                                                    </>
+                                                                )}
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-50">
                                                             {flattenedSaleHistory.length === 0 ? (
-                                                                <tr><td colSpan={isFruitHistory ? "10" : "9"} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
+                                                                <tr><td colSpan={isFruitHistory ? (canShowRate && showRate ? "10" : "8") : (canShowRate && showRate ? "9" : "7")} className="px-6 py-20 text-center text-gray-400 font-medium">No sale history found for this product</td></tr>
                                                             ) : (
                                                                 flattenedSaleHistory.map((sale, sIdx) => (
                                                                     <tr key={sIdx} className="hover:bg-blue-50/20 transition-all group border-b border-gray-50">
@@ -4396,12 +4408,16 @@ const StockManagement = ({
                                                                         {isFruitHistory && (
                                                                             <td className="px-3 py-3 text-sm text-gray-600 font-medium text-right">{sale.itemTruck || '-'}</td>
                                                                         )}
-                                                                        <td className="px-3 py-3 text-right">
-                                                                            <div className="text-sm font-medium text-gray-600">৳{sale.itemPrice.toLocaleString('en-IN')}</div>
-                                                                        </td>
-                                                                        <td className="px-3 py-3 text-right">
-                                                                            <div className="text-sm font-black text-blue-600 group-hover:text-blue-700">৳{sale.itemTotal.toLocaleString('en-IN')}</div>
-                                                                        </td>
+                                                                        {canShowRate && showRate && (
+                                                                            <>
+                                                                                <td className="px-3 py-3 text-right">
+                                                                                    <div className="text-sm font-medium text-gray-600">৳{sale.itemPrice.toLocaleString('en-IN')}</div>
+                                                                                </td>
+                                                                                <td className="px-3 py-3 text-right">
+                                                                                    <div className="text-sm font-black text-blue-600 group-hover:text-blue-700">৳{sale.itemTotal.toLocaleString('en-IN')}</div>
+                                                                                </td>
+                                                                            </>
+                                                                        )}
                                                                     </tr>
                                                                 ))
                                                             )}

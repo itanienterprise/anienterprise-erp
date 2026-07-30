@@ -49,13 +49,19 @@ const StockReport = ({
 
     useEffect(() => {
         if (isOpen) {
-            if (showRate) {
+            if (showRate && canShowRate) {
                 setReportType('price');
             } else {
                 setReportType('short');
             }
         }
-    }, [isOpen, showRate]);
+    }, [isOpen, showRate, canShowRate]);
+
+    useEffect(() => {
+        if (!canShowRate && reportType === 'price') {
+            setReportType('short');
+        }
+    }, [canShowRate, reportType]);
 
     const selectedProductsList = React.useMemo(() => {
         if (!stockFilters.productName) return [];
