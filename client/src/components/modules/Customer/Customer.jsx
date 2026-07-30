@@ -1075,8 +1075,8 @@ const Customer = ({
                                         <tbody className="divide-y divide-gray-50">
                                             {getFilteredAndSortedData().map(c => {
                                                 // Calculate this customer's total due
-                                                const custSales = c.salesHistory || [];
-                                                const custPayments = c.paymentHistory || [];
+                                                const custSales = (c.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested');
+                                                const custPayments = (c.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested');
 
                                                 const totalSalesAmount = custSales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
                                                 const totalSalesPaid = custSales.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
@@ -1128,8 +1128,8 @@ const Customer = ({
                                     {/* Mobile Card View */}
                                     <div className="block md:hidden px-1 py-4 space-y-3">
                                         {getFilteredAndSortedData().map(c => {
-                                            const custSales = c.salesHistory || [];
-                                            const custPayments = c.paymentHistory || [];
+                                            const custSales = (c.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested');
+                                            const custPayments = (c.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested');
 
                                             const totalSalesAmount = custSales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
                                             const totalSalesPaid = custSales.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);

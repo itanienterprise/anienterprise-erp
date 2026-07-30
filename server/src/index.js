@@ -1259,16 +1259,22 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
       } else {
         const ownerUsername = (existingData.requestedByUsername || existingData.createdByName || existingData.createdByUsername || '').toString().toLowerCase();
         const currentUsername = userSession ? (userSession.username || '').toString().toLowerCase() : null;
-        const hasEditPerm = isAdmin || (userSession && userSession.permissions && userSession.permissions.sales && userSession.permissions.sales.edit === true);
+        const hasEditPerm = isAdmin || (userSession && userSession.permissions && (
+          (userSession.permissions.sales && userSession.permissions.sales.edit === true) ||
+          (userSession.permissions.order && userSession.permissions.order.edit === true)
+        ));
         if (!isAdmin && !hasEditPerm && ownerUsername && currentUsername !== ownerUsername) {
           return res.status(403).json({ message: 'Forbidden: Only the owner of the requested entry can edit it before acceptance.' });
         }
       }
     } else {
-      const hasEditPerm = isAdmin || (userSession && userSession.permissions && userSession.permissions.sales && userSession.permissions.sales.edit === true);
+      const hasEditPerm = isAdmin || (userSession && userSession.permissions && (
+        (userSession.permissions.sales && userSession.permissions.sales.edit === true) ||
+        (userSession.permissions.order && userSession.permissions.order.edit === true)
+      ));
       if (!hasEditPerm) {
-        if (req.body.isCnfCommissionUpdate) {
-          // Allow C&F commission updates to bypass the general rate missing and edit locks
+        if (req.body.isCnfCommissionUpdate || req.body.isEdited === true) {
+          // Allow C&F commission updates & edit request submissions to bypass strict edit locks
         } else {
           const wasRateMissing = existingData.rateMissing === true;
           const alreadyEdited = existingData.isEdited === true;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, ChevronUpIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { generateMoneyReceiptPDF } from '../../../utils/pdfGenerator';
@@ -28,6 +28,24 @@ const PaymentCollection = () => {
     const canDelete = hasPermission(currentUser, 'paymentCollection', 'delete');
     const canManage = canEdit || canDelete;
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+    const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const canApprove = hasPermission(currentUser, 'paymentCollection', 'special') || hasPermission(currentUser, 'paymentCollection', 'approve') || isAdmin;
+    const canApproveEditRequest = hasPermission(currentUser, 'paymentCollection', 'approveEditRequest') || canApprove;
+    const canViewEditRequest = hasPermission(currentUser, 'paymentCollection', 'editRequest') || canApprove;
+
+    // Requested & Edit Request Toggle Filters
+    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
+
+    const requestedCount = useMemo(() => {
+        const unique = new Set(payments.filter(p => (p.status || '').toLowerCase() === 'requested').map(p => p.receiptNo || p.id));
+        return unique.size;
+    }, [payments]);
+
+    const editRequestedCount = useMemo(() => {
+        const unique = new Set(payments.filter(p => p.isEdited === true && (p.status || '').toLowerCase() !== 'requested').map(p => p.receiptNo || p.id));
+        return unique.size;
+    }, [payments]);
 
     // Edit States
     const [isEditMode, setIsEditMode] = useState(false);
@@ -350,6 +368,46 @@ const PaymentCollection = () => {
         }
     };
 
+    const handleStatusUpdate = async (paymentGroup, newStatus) => {
+        try {
+            setIsSubmitting(true);
+            const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`);
+            const customer = custRes.data;
+
+            if (newStatus === 'Rejected') {
+                if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
+                    // Revert edit request
+                    const updatedHistory = (customer.paymentHistory || []).map(p => {
+                        if (p.receiptNo === paymentGroup.receiptNo) {
+                            return { ...p, isEdited: false };
+                        }
+                        return p;
+                    });
+                    await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
+                } else {
+                    // Remove requested payment
+                    const updatedHistory = (customer.paymentHistory || []).filter(p => p.receiptNo !== paymentGroup.receiptNo);
+                    await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
+                }
+            } else {
+                // Accept
+                const updatedHistory = (customer.paymentHistory || []).map(p => {
+                    if (p.receiptNo === paymentGroup.receiptNo) {
+                        return { ...p, status: 'Accepted', isEdited: false };
+                    }
+                    return p;
+                });
+                await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
+            }
+            fetchPayments();
+        } catch (error) {
+            console.error('Error updating payment status:', error);
+            alert('Failed to update payment status');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const handleEditInitiation = (payment) => {
         setIsEditMode(true);
         setEditingPayment(payment);
@@ -402,6 +460,7 @@ const PaymentCollection = () => {
             }, 0);
 
             const nextReceiptNo = `RC-${String(lastReceiptNo + 1).padStart(4, '0')}`;
+            const initialStatus = 'Requested';
             const paymentEntries = newPayment.items
                 .filter(item => parseFloat(item.amount) > 0)
                 .map((item, idx) => ({
@@ -415,7 +474,8 @@ const PaymentCollection = () => {
                     receiveBy: item.receiveBy,
                     place: item.place,
                     reference: newPayment.reference,
-                    status: newPayment.status,
+                    status: initialStatus,
+                    isEdited: false,
                     discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
                     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                 }));
@@ -459,6 +519,7 @@ const PaymentCollection = () => {
             // Remove all existing payment history items belonging to this receiptNo
             const remainingHistory = (customer.paymentHistory || []).filter(p => p.receiptNo !== editingPayment.receiptNo);
 
+            const isEditReq = (!isAdmin && !canApprove);
             // Map all items currently in the form to reconstructed payment history entries
             const updatedPaymentEntries = activeItems.map((item, idx) => ({
                 receiptNo: editingPayment.receiptNo,
@@ -471,10 +532,11 @@ const PaymentCollection = () => {
                 receiveBy: item.receiveBy,
                 place: item.place,
                 reference: newPayment.reference,
-                status: newPayment.status,
+                status: editingPayment.status || 'Accepted',
+                isEdited: isEditReq ? true : false,
                 // The discount is stored only on the first item to prevent duplicate totals
                 discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
-                id: item.id
+                id: item.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
             }));
 
             // Prepend new payment entries to the remaining history list
@@ -619,16 +681,26 @@ const PaymentCollection = () => {
             ((p.customerName || '').toLowerCase().includes(filters.customer.toLowerCase()) ||
                 (p.companyName || '').toLowerCase().includes(filters.customer.toLowerCase()));
 
+        if (isRequestedOnly) {
+            return matchSearch && isDateMatch && matchMethod && matchBankName && matchBranch && matchCustomer && (p.status || '').toLowerCase() === 'requested';
+        }
+        if (isEditRequestedOnly) {
+            return matchSearch && isDateMatch && matchMethod && matchBankName && matchBranch && matchCustomer && p.isEdited === true && (p.status || '').toLowerCase() !== 'requested';
+        }
+
         return matchSearch && isDateMatch && matchMethod && matchBankName && matchBranch && matchCustomer;
     });
 
     const calculateCustomerBalance = (customer) => {
         if (!customer) return 0;
-        const totalAmount = (customer.salesHistory || []).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        const totalSalesPaid = (customer.salesHistory || []).reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
-        const totalDiscount = (customer.salesHistory || []).reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
-        const totalHistoryPaid = (customer.paymentHistory || []).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        const totalHistoryDiscount = (customer.paymentHistory || []).reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+        const validSales = (customer.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested');
+        const validPayments = (customer.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested');
+
+        const totalAmount = validSales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        const totalSalesPaid = validSales.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
+        const totalDiscount = validSales.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+        const totalHistoryPaid = validPayments.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        const totalHistoryDiscount = validPayments.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
         return Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid - totalHistoryDiscount);
     };
 
@@ -636,7 +708,7 @@ const PaymentCollection = () => {
     const currentBalance = calculateCustomerBalance(selectedCustomerForBalance);
     const totalCollection = newPayment.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
     const totalAmountCollected = payments
-        .filter(p => p.customerId === newPayment.customerId)
+        .filter(p => p.customerId === newPayment.customerId && (p.status || '').toLowerCase() !== 'requested')
         .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
     return (
@@ -647,18 +719,54 @@ const PaymentCollection = () => {
                         <h2 className="text-2xl font-black text-gray-900 tracking-tight">Payment Collection</h2>
                     </div>
 
-                    {/* Center Aligned Search Bar */}
-                    <div className="flex-1 w-full max-w-none md:max-w-md mx-auto relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    {/* Center Aligned Search Bar & Requested / Edit Request Toggles */}
+                    <div className="flex-1 w-full max-w-none md:max-w-xl mx-auto flex flex-col items-center gap-2">
+                        <div className="w-full relative group">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search by customer, company, ID or method..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
+                            />
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Search by customer, company, ID or method..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
-                        />
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    setIsRequestedOnly(!isRequestedOnly);
+                                    setIsEditRequestedOnly(false);
+                                }}
+                                className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
+                            >
+                                Requested
+                                {requestedCount > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                        {requestedCount}
+                                    </span>
+                                )}
+                            </button>
+
+                            {canViewEditRequest && (
+                                <button
+                                    onClick={() => {
+                                        setIsEditRequestedOnly(!isEditRequestedOnly);
+                                        setIsRequestedOnly(false);
+                                    }}
+                                    className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isEditRequestedOnly ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-amber-300 hover:text-amber-600'}`}
+                                >
+                                    Edit Request
+                                    {editRequestedCount > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-amber-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                            {editRequestedCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     <div className="w-full md:w-auto flex flex-row items-center justify-between md:justify-end gap-2">
@@ -1014,6 +1122,9 @@ const PaymentCollection = () => {
                                     <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('amount')}>
                                         <div className="flex items-center justify-center">Amount {renderSortIcon('amount')}</div>
                                     </th>
+                                    <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
+                                        <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
+                                    </th>
                                     <th className="sale-mgmt-th text-center">Actions</th>
                                 </tr>
                             </thead>
@@ -1021,7 +1132,7 @@ const PaymentCollection = () => {
                                 {isLoading ? (
                                     Array(5).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan={canManage ? 8 : 7} className="px-6 py-12 text-center">
+                                            <td colSpan={9} className="px-6 py-12 text-center">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
                                                         <DollarSignIcon className="w-6 h-6 text-blue-500" />
@@ -1045,6 +1156,8 @@ const PaymentCollection = () => {
                                                     companyName: payment.companyName,
                                                     customerName: payment.customerName,
                                                     customerId: payment.customerId,
+                                                    status: payment.status,
+                                                    isEdited: payment.isEdited,
                                                     items: []
                                                 };
                                                 groups.push(group);
@@ -1139,6 +1252,18 @@ const PaymentCollection = () => {
                                                             </div>
                                                         )}
                                                     </td>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center whitespace-nowrap`}>
+                                                        {group.isEdited === true ? (
+                                                            <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                                Edit Requested
+                                                            </span>
+                                                        ) : (
+                                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${group.status === 'Requested' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
+                                                                {group.status === 'Requested' ? 'Requested' : (group.status || 'Accepted')}
+                                                            </span>
+                                                        )}
+                                                    </td>
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center`} onClick={(e) => e.stopPropagation()}>
                                                         <div className="flex items-center justify-center gap-1.5">
                                                             <button
@@ -1157,7 +1282,25 @@ const PaymentCollection = () => {
                                                                     <EditIcon className="w-5 h-5" />
                                                                 </button>
                                                             )}
-                                                            {canDelete && (
+                                                            {(group.status === 'Requested' ? canApprove : (group.isEdited === true && (canApproveEditRequest || canApprove))) && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => handleStatusUpdate(group, 'Accepted')}
+                                                                        className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
+                                                                        title="Accept Collection"
+                                                                    >
+                                                                        <CheckIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleStatusUpdate(group, 'Rejected')}
+                                                                        className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                                                        title="Reject Collection"
+                                                                    >
+                                                                        <XIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            {group.status !== 'Requested' && !group.isEdited && canDelete && (
                                                                 <button
                                                                     onClick={() => handleDeletePayment(group.items[0])}
                                                                     className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
