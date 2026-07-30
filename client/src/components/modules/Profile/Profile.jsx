@@ -188,12 +188,14 @@ const Profile = ({ currentUser, onClose }) => {
                             <>
                                 <div className="profile-info-main text-center">
                                     <h2 className="profile-name">{userData.name}</h2>
-                                    <div className="profile-badge-container">
-                                        <span className="profile-role-badge">
-                                            <ShieldIcon className="w-3 h-3 mr-1" />
-                                            {userData.role}
-                                        </span>
-                                    </div>
+                                    {(currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin') && (
+                                        <div className="profile-badge-container">
+                                            <span className="profile-role-badge">
+                                                <ShieldIcon className="w-3 h-3 mr-1" />
+                                                {userData.role}
+                                            </span>
+                                        </div>
+                                    )}
                                     <p className="profile-designation">{userData.designation}</p>
                                 </div>
 
