@@ -35,11 +35,12 @@ const Customer = ({
     const [customers, setCustomers] = useState([]);
     const [gatePasses, setGatePasses] = useState([]);
     const [lcRecords, setLcRecords] = useState([]);
+    const [purchasesList, setPurchasesList] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewData, setViewData] = useState(null);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
-    const [activeHistoryTab, setActiveHistoryTab] = useState('sales'); // 'sales', 'payment', or 'gp'
+    const [activeHistoryTab, setActiveHistoryTab] = useState('sales'); // 'purchase', 'sales', 'payment', or 'gp'
     const [historySortConfig, setHistorySortConfig] = useState({ key: 'date', direction: 'asc' });
     const [status, setStatus] = useState('Active'); // status state for form
     const [formData, setFormData] = useState({
@@ -263,14 +264,16 @@ const Customer = ({
     const fetchCustomers = async () => {
         setIsLoading(true);
         try {
-            const [decryptedCustomers, gpRecords, lcData] = await Promise.all([
+            const [decryptedCustomers, gpRecords, lcData, purchasesData] = await Promise.all([
                 api.get('/api/customers'),
                 api.get('/api/lc-gp'),
-                api.get('/api/lc-management')
+                api.get('/api/lc-management'),
+                api.get('/api/purchases').catch(() => [])
             ]);
             setCustomers(decryptedCustomers);
             setGatePasses(gpRecords);
             setLcRecords(Array.isArray(lcData) ? lcData : []);
+            setPurchasesList(Array.isArray(purchasesData) ? purchasesData : []);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -536,6 +539,107 @@ const Customer = ({
             return 0;
         });
     }, [viewData, historySearchQuery, historyFilters, historySortConfig]);
+
+    // Calculate Filtered Purchase History Data
+    const filteredPurchaseHistory = useMemo(() => {
+        const directHistory = viewData?.purchaseHistory || [];
+        const matchedPurchases = (purchasesList || []).filter(p => {
+            if ((p.status || '').toLowerCase() === 'requested') return false;
+            return (
+                p.customerId === viewData?._id ||
+                p.customerId === viewData?.customerId ||
+                (p.companyName && p.companyName.toLowerCase() === (viewData?.companyName || '').toLowerCase()) ||
+                (p.customerName && p.customerName.toLowerCase() === (viewData?.customerName || '').toLowerCase()) ||
+                (p.supplierName && (
+                    p.supplierName.toLowerCase() === (viewData?.companyName || '').toLowerCase() ||
+                    p.supplierName.toLowerCase() === (viewData?.customerName || '').toLowerCase()
+                ))
+            );
+        }).flatMap(p => {
+            if (p.items && Array.isArray(p.items)) {
+                return p.items.flatMap(item => {
+                    if (item.brandEntries && Array.isArray(item.brandEntries)) {
+                        return item.brandEntries.map(b => ({
+                            _id: `${p._id}-${item.productName}-${b.brand}`,
+                            purchaseNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
+                            date: p.date,
+                            product: item.productName || item.product,
+                            brand: b.brand,
+                            quantity: b.qty || 0,
+                            rate: b.rate || 0,
+                            amount: b.total || (parseFloat(b.qty || 0) * parseFloat(b.rate || 0)),
+                            discount: p.discount || 0,
+                            warehouse: p.warehouse || '-',
+                            status: p.status || 'Completed'
+                        }));
+                    }
+                    return [{
+                        _id: `${p._id}-${item.productName}`,
+                        purchaseNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
+                        date: p.date,
+                        product: item.productName || item.product,
+                        brand: item.brand || '-',
+                        quantity: item.qty || item.quantity || 0,
+                        rate: item.rate || 0,
+                        amount: item.total || item.amount || 0,
+                        discount: p.discount || 0,
+                        warehouse: p.warehouse || '-',
+                        status: p.status || 'Completed'
+                    }];
+                });
+            }
+            return [{
+                _id: p._id,
+                purchaseNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
+                date: p.date,
+                product: p.product || p.productName || '-',
+                brand: p.brand || '-',
+                quantity: p.quantity || p.qty || 0,
+                rate: p.rate || 0,
+                amount: p.totalAmount || p.amount || 0,
+                discount: p.discount || 0,
+                warehouse: p.warehouse || '-',
+                status: p.status || 'Completed'
+            }];
+        });
+
+        const combined = [...directHistory, ...matchedPurchases];
+
+        const filtered = combined.filter(item => {
+            const matchesSearch = !historySearchQuery ||
+                ((item.purchaseNo || item.invoiceNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.product || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.brand || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.warehouse || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
+
+            const matchesFilters =
+                (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
+                (!historyFilters.endDate || new Date(item.date) <= new Date(historyFilters.endDate)) &&
+                (!historyFilters.product || item.product === historyFilters.product);
+
+            return matchesSearch && matchesFilters;
+        });
+
+        if (!historySortConfig.key) return filtered;
+
+        return [...filtered].sort((a, b) => {
+            const { key, direction } = historySortConfig;
+            let aVal = a[key];
+            let bVal = b[key];
+
+            if (key === 'date') {
+                aVal = new Date(a.date);
+                bVal = new Date(b.date);
+            } else if (key === 'amount' || key === 'rate' || key === 'quantity' || key === 'discount') {
+                aVal = parseFloat(a[key]) || 0;
+                bVal = parseFloat(b[key]) || 0;
+            }
+
+            if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [viewData, purchasesList, historySearchQuery, historyFilters, historySortConfig]);
 
     const filteredPaymentHistory = useMemo(() => {
         const filtered = (viewData?.paymentHistory || []).filter(item => {
@@ -1252,7 +1356,17 @@ const Customer = ({
                                             </div>
                                             <input
                                                 type="text"
-                                                placeholder={activeHistoryTab === 'sales' ? 'Search sales history...' : activeHistoryTab === 'payment' ? 'Search payment history...' : activeHistoryTab === 'gp' ? 'Search G.P history...' : 'Search all history...'}
+                                                placeholder={
+                                                    activeHistoryTab === 'purchase'
+                                                        ? 'Search purchase history...'
+                                                        : activeHistoryTab === 'sales'
+                                                        ? 'Search sales history...'
+                                                        : activeHistoryTab === 'payment'
+                                                        ? 'Search payment history...'
+                                                        : activeHistoryTab === 'gp'
+                                                        ? 'Search G.P history...'
+                                                        : 'Search all history...'
+                                                }
                                                 value={historySearchQuery}
                                                 onChange={(e) => setHistorySearchQuery(e.target.value)}
                                                 className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -1261,15 +1375,27 @@ const Customer = ({
 
                                         {/* Tab Navigation */}
                                         <div className="flex gap-1.5 justify-center">
-                                            <button
-                                                onClick={() => setActiveHistoryTab('gp')}
-                                                className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'gp'
-                                                    ? 'bg-blue-600 text-white shadow-sm'
-                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                    }`}
-                                            >
-                                                G.P List
-                                            </button>
+                                            {viewData?.customerType === 'General Customer' ? (
+                                                <button
+                                                    onClick={() => setActiveHistoryTab('purchase')}
+                                                    className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'purchase'
+                                                        ? 'bg-blue-600 text-white shadow-sm'
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        }`}
+                                                >
+                                                    Purchase History
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => setActiveHistoryTab('gp')}
+                                                    className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'gp'
+                                                        ? 'bg-blue-600 text-white shadow-sm'
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        }`}
+                                                >
+                                                    G.P List
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => setActiveHistoryTab('sales')}
                                                 className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeHistoryTab === 'sales'
@@ -1304,7 +1430,7 @@ const Customer = ({
                                         <button
                                             onClick={() => generateCustomerHistoryPDF(
                                                 viewData,
-                                                activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
+                                                activeHistoryTab === 'purchase' ? filteredPurchaseHistory : activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
                                                 { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
                                                 historyFilters,
                                                 activeHistoryTab
@@ -1704,7 +1830,7 @@ const Customer = ({
                                                 </div>
                                                 <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">{(viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? 'Total Truck Fare' : 'Total Paid'}</p>
-                                                    <p className="text-base md:text-lg font-black text-teal-700">৳{totalSalesPaid.toLocaleString('en-IN')}</p>
+                                                    <p className="text-base md:text-lg font-black text-teal-700">৳{(viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? totalTruck.toLocaleString('en-IN') : totalSalesPaid.toLocaleString('en-IN')}</p>
                                                 </div>
                                                 <div className="bg-indigo-50/50 p-3 md:p-4 rounded-2xl border border-indigo-100 shadow-sm transition-all hover:shadow-md">
                                                     <p className="text-[9px] md:text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-1">Payment Collection</p>
@@ -1826,6 +1952,132 @@ const Customer = ({
                                                         ))
                                                     ) : (
                                                         <div className="py-8 text-left text-xs text-gray-400 font-medium italic">No gate pass records found</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Purchase History Table */}
+                                    {activeHistoryTab === 'purchase' && (
+                                        <>
+                                            <div className="flex items-center gap-4 mb-3 md:mb-4">
+                                                <h4 className="text-base md:text-lg font-bold text-gray-800">Purchase History</h4>
+                                            </div>
+                                            <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                                                {/* Desktop Purchase History Table */}
+                                                <table className="w-full text-left text-sm hidden md:table">
+                                                    <thead className="bg-white border-b border-gray-200">
+                                                        <tr>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-4" />
+                                                                    <span>Date</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="date" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('purchaseNo')}>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>Purchase No</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="purchaseNo" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('product')}>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>Product</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="product" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('brand')}>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>Brand</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="brand" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
+                                                                <div className="flex items-center justify-start gap-1">
+                                                                    <span>Qty</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="quantity" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('rate')}>
+                                                                <div className="flex items-center justify-start gap-1">
+                                                                    <span>Rate</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="rate" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
+                                                                <div className="flex items-center justify-start gap-1">
+                                                                    <span>Amount</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="amount" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('discount')}>
+                                                                <div className="flex items-center justify-start gap-1">
+                                                                    <span>Discount</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="discount" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('warehouse')}>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span>Warehouse</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="warehouse" />
+                                                                </div>
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {filteredPurchaseHistory && filteredPurchaseHistory.length > 0 ? (
+                                                            filteredPurchaseHistory.map((item, idx) => (
+                                                                <tr key={item._id || idx} className="hover:bg-white border-b border-gray-200 transition-colors">
+                                                                    <td className="px-4 py-3 text-gray-600">{formatDate(item.date)}</td>
+                                                                    <td className="px-4 py-3 font-bold text-gray-900">{item.purchaseNo || item.invoiceNo || '-'}</td>
+                                                                    <td className="px-4 py-3 text-gray-800 font-medium">{item.product || '-'}</td>
+                                                                    <td className="px-4 py-3 text-gray-600">{item.brand || '-'}</td>
+                                                                    <td className="px-4 py-3 font-bold text-blue-600">{parseFloat(item.quantity || 0).toLocaleString('en-US')}</td>
+                                                                    <td className="px-4 py-3 text-gray-600">৳{parseFloat(item.rate || 0).toLocaleString('en-IN')}</td>
+                                                                    <td className="px-4 py-3 font-bold text-gray-900">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
+                                                                    <td className="px-4 py-3 text-gray-600">৳{parseFloat(item.discount || 0).toLocaleString('en-IN')}</td>
+                                                                    <td className="px-4 py-3 text-gray-600">{item.warehouse || '-'}</td>
+                                                                </tr>
+                                                            ))
+                                                        ) : (
+                                                            <tr>
+                                                                <td colSpan="9" className="px-4 py-8 text-left text-gray-400 font-medium italic">No purchase history found matching filters</td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+
+                                                {/* Mobile Purchase History Card View */}
+                                                <div className="block md:hidden p-3 space-y-3">
+                                                    {filteredPurchaseHistory && filteredPurchaseHistory.length > 0 ? (
+                                                        filteredPurchaseHistory.map((item, idx) => (
+                                                            <div key={item._id || idx} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div>
+                                                                        <div className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">{formatDate(item.date)}</div>
+                                                                        <div className="text-sm font-bold text-gray-900 mt-0.5">{item.purchaseNo || '-'}</div>
+                                                                    </div>
+                                                                    <div className="text-left">
+                                                                        <div className="text-xs font-bold text-gray-900">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</div>
+                                                                        <div className="text-[10px] text-gray-400">Total Amount</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grid grid-cols-2 gap-4 py-2 border-y border-gray-50">
+                                                                    <div>
+                                                                        <div className="text-[10px] text-gray-400 uppercase">Product / Brand</div>
+                                                                        <div className="text-xs font-medium text-gray-700">{item.product} {item.brand ? `(${item.brand})` : ''}</div>
+                                                                    </div>
+                                                                    <div className="text-left">
+                                                                        <div className="text-[10px] text-gray-400 uppercase">Qty / Rate</div>
+                                                                        <div className="text-xs font-bold text-blue-600">{item.quantity} @ ৳{item.rate}</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="py-8 text-left text-xs text-gray-400 font-medium italic">No purchase history found matching filters</div>
                                                     )}
                                                 </div>
                                             </div>

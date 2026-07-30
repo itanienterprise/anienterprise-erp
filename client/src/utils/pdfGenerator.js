@@ -3429,6 +3429,7 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
 
 export const generateCustomerHistoryPDF = (customer, historyData, summary, filters, activeTab) => {
     try {
+        const isPurchase = activeTab === 'purchase';
         const isSales = activeTab === 'sales';
         const isAll = activeTab === 'all';
         const isPayment = activeTab === 'payment';
@@ -3465,7 +3466,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         let reportTitle = "";
-        if (isSales) reportTitle = "CUSTOMER SALES HISTORY";
+        if (isPurchase) reportTitle = "CUSTOMER PURCHASE HISTORY";
+        else if (isSales) reportTitle = "CUSTOMER SALES HISTORY";
         else if (isPayment) reportTitle = "CUSTOMER PAYMENT HISTORY";
         else if (isAll) reportTitle = "CUSTOMER ALL TRANSACTION HISTORY";
         doc.text(reportTitle, pageWidth / 2, 34, { align: 'center' });
