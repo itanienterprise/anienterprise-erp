@@ -3218,7 +3218,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
             theme: 'grid',
             styles: {
                 fontSize: 9,
-                cellPadding: 2,
+                cellPadding: { top: 0.8, bottom: 0.8, left: 1.5, right: 1.5 },
                 lineColor: [0, 0, 0],
                 lineWidth: 0.1,
                 textColor: [0, 0, 0]
@@ -3226,7 +3226,8 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
             headStyles: {
                 fillColor: [245, 245, 245],
                 fontStyle: 'bold',
-                halign: 'center'
+                halign: 'center',
+                cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 }
             },
             columnStyles: {
                 0: { cellWidth: 10, halign: 'center', overflow: 'hidden' }, // SL
