@@ -57,26 +57,44 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     }, [activeDropdown]);
 
     const uniqueLcNos = useMemo(() => {
-        let records = stockRecords || [];
-        if (formData.productName) {
-            const targetProd = formData.productName.trim().toLowerCase();
-            records = records.filter(s => {
-                const pName = (s.productName || s.product || '').trim().toLowerCase();
-                return pName === targetProd;
-            });
-        }
-        if (formData.brand) {
-            const targetBrand = formData.brand.trim().toLowerCase();
-            records = records.filter(s => {
-                const bName = (s.brand || s.quality || '').trim().toLowerCase();
-                return !targetBrand || bName === targetBrand || (bName === '-' && targetBrand === '') || (bName === '' && targetBrand === '-');
-            });
-        }
-        const hasEmptyLc = records.some(s => !s.lcNo || s.lcNo.trim() === '' || s.lcNo.trim() === '-');
-        const validLcs = [...new Set(records.map(s => s.lcNo).filter(lc => lc && lc.trim() !== '' && lc.trim() !== '-'))].sort();
+        const lcsSet = new Set();
+        let hasEmptyLc = false;
 
+        const targetProd = (formData.productName || '').trim().toLowerCase();
+        const targetBrand = (formData.brand || '').trim().toLowerCase();
+
+        const processEntry = (pName, bName, lc) => {
+            if (targetProd && (pName || '').trim().toLowerCase() !== targetProd) return;
+            if (targetBrand) {
+                const brandNorm = (bName || '').trim().toLowerCase();
+                const matches = brandNorm === targetBrand || (brandNorm === '-' && targetBrand === '') || (brandNorm === '' && targetBrand === '-');
+                if (!matches) return;
+            }
+
+            if (!lc || lc.trim() === '' || lc.trim() === '-') {
+                hasEmptyLc = true;
+            } else {
+                lcsSet.add(lc.trim());
+            }
+        };
+
+        (stockRecords || []).forEach(s => {
+            if (s.brandList && Array.isArray(s.brandList)) {
+                s.brandList.forEach(b => {
+                    processEntry(s.productName || s.product, b.brand || b.quality, b.lcNo || s.lcNo);
+                });
+            } else {
+                processEntry(s.productName || s.product, s.brand || s.quality, s.lcNo);
+            }
+        });
+
+        (warehouseData || []).forEach(w => {
+            processEntry(w.productName || w.product, w.brand || w.quality, w.lcNo);
+        });
+
+        const validLcs = [...lcsSet].sort();
         return hasEmptyLc ? ['-', ...validLcs] : validLcs;
-    }, [stockRecords, formData.productName, formData.brand]);
+    }, [stockRecords, warehouseData, formData.productName, formData.brand]);
 
     const filteredProducts = useMemo(() => {
         let allProdList = Array.isArray(products) ? products : [];
@@ -121,22 +139,54 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         const targetProd = formData.productName.trim().toLowerCase();
         const targetLc = (formData.lcNo || '').trim().toLowerCase();
         const isGeneralLc = !targetLc || targetLc === '-';
-        
-        const matches = stockRecords?.filter(s => {
+
+        const brandsSet = new Set();
+
+        // 1. From stockRecords
+        (stockRecords || []).forEach(s => {
             const prod = (s.productName || s.product || '').trim().toLowerCase();
+            if (prod !== targetProd) return;
             const lc = (s.lcNo || '').trim().toLowerCase();
             const lcMatch = isGeneralLc ? (!lc || lc === '-') : (lc === targetLc);
-            return prod === targetProd && lcMatch;
-        }) || [];
-        
-        const uniqueBrands = [...new Set(matches.map(s => s.brand).filter(Boolean))];
-        if (uniqueBrands.length > 0) {
-            return uniqueBrands.map(brand => ({ brand }));
+            if (!lcMatch) return;
+
+            if (s.brand && typeof s.brand === 'string') brandsSet.add(s.brand.trim());
+            if (s.brandList && Array.isArray(s.brandList)) {
+                s.brandList.forEach(b => {
+                    const bName = typeof b === 'string' ? b : (b.brand || b.quality);
+                    if (bName) brandsSet.add(bName.trim());
+                });
+            }
+        });
+
+        // 2. From warehouseData
+        (warehouseData || []).forEach(w => {
+            const prod = (w.productName || w.product || '').trim().toLowerCase();
+            if (prod !== targetProd) return;
+            const lc = (w.lcNo || '').trim().toLowerCase();
+            const lcMatch = isGeneralLc ? (!lc || lc === '-') : (lc === targetLc);
+            if (!lcMatch) return;
+
+            const bName = w.brand || w.quality;
+            if (bName && typeof bName === 'string') brandsSet.add(bName.trim());
+        });
+
+        // 3. From products catalog
+        const product = products?.find(p => (p.name || p.productName || '').trim().toLowerCase() === targetProd);
+        if (product) {
+            const rawBrands = product.brands || product.brandList || [];
+            if (Array.isArray(rawBrands)) {
+                rawBrands.forEach(b => {
+                    const bName = typeof b === 'string' ? b : (b.brand || b.name || b.quality);
+                    if (bName) brandsSet.add(bName.trim());
+                });
+            } else if (typeof rawBrands === 'string') {
+                brandsSet.add(rawBrands.trim());
+            }
         }
-        
-        const product = products?.find(p => p.name === formData.productName);
-        return product?.brands || [];
-    }, [formData.productName, formData.lcNo, products, stockRecords]);
+
+        return [...brandsSet].filter(Boolean).map(brand => ({ brand }));
+    }, [formData.productName, formData.lcNo, products, stockRecords, warehouseData]);
 
 
     const currentStock = useMemo(() => {
