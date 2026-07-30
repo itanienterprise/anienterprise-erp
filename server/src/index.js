@@ -63,6 +63,7 @@ const Customer = require('./models/Customer');
 const Warehouse = require('./models/Warehouse');
 const Damage = require('./models/Damage');
 const Sale = require('./models/Sale');
+const Purchase = require('./models/Purchase');
 const Return = require('./models/Return');
 const User = require('./models/User');
 const Employee = require('./models/Employee');
@@ -1318,6 +1319,60 @@ apiRouter.get('/api/sales', async (req, res) => {
         try { d = decryptData(d.data); } catch (e) { /* ignore */ }
       }
       return { ...d, _id: r._id, createdAt: r.createdAt, saleType: d.saleType || r.saleType, invoiceNo: d.invoiceNo || r.invoiceNo };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Purchase APIs
+apiRouter.post('/api/purchases', async (req, res) => {
+  try {
+    if (!req.body.purchaseNo) {
+      const count = await Purchase.countDocuments();
+      req.body.purchaseNo = `PUR-${String(count + 1).padStart(4, '0')}`;
+    }
+    const encryptedData = encryptData(req.body);
+    const newPurchase = new Purchase({ data: encryptedData });
+    await newPurchase.save();
+    res.status(201).json({ ...req.body, _id: newPurchase._id, createdAt: newPurchase.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/purchases/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedPurchase = await Purchase.findByIdAndUpdate(req.params.id, {
+      data: encryptedData
+    }, { returnDocument: 'after' });
+    if (!updatedPurchase) return res.status(404).json({ message: 'Purchase record not found' });
+    res.json({ ...req.body, _id: updatedPurchase._id, createdAt: updatedPurchase.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/purchases/:id', async (req, res) => {
+  try {
+    await Purchase.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Purchase deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/purchases', async (req, res) => {
+  try {
+    const records = await Purchase.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      let d = decryptData(r.data);
+      if (d && d.data && typeof d.data === 'string') {
+        try { d = decryptData(d.data); } catch (e) { }
+      }
+      return { ...d, _id: r._id, createdAt: r.createdAt };
     });
     res.json(decrypted);
   } catch (err) {

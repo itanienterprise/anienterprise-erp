@@ -52,6 +52,7 @@ import LCReport from './components/modules/LCReceive/LCReport';
 import ProductHistoryReport from './components/modules/StockManagement/ProductHistoryReport';
 import SalesReport from './components/modules/Sale/SalesReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
+import PurchaseManagement from './components/modules/Purchase/PurchaseManagement';
 import OrderManagement from './components/modules/Order/OrderManagement';
 import ProfitLoss from './components/modules/Sale/ProfitLoss';
 import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
@@ -156,7 +157,7 @@ function App() {
     localStorage.setItem('currentUser', JSON.stringify(user));
     setCurrentView('dashboard');
     localStorage.setItem('currentView', 'dashboard');
-    
+
     // Collapse all sidebar dropdowns on login
     setStockDropdownOpen(false);
     setSaleDropdownOpen(false);
@@ -403,7 +404,7 @@ function App() {
             const fresh = response.data.user;
             // Only update if permissions actually changed to avoid unnecessary re-renders
             if (JSON.stringify(prev?.permissions) !== JSON.stringify(fresh?.permissions) ||
-                prev?.role !== fresh?.role || prev?.status !== fresh?.status) {
+              prev?.role !== fresh?.role || prev?.status !== fresh?.status) {
               localStorage.setItem('currentUser', JSON.stringify(fresh));
               return fresh;
             }
@@ -1033,19 +1034,19 @@ function App() {
             type === 'exporter' ? 'exporters' :
               type === 'supplier' ? 'suppliers' :
                 type === 'port' ? 'ports' :
-                type === 'product' ? 'products' :
-                  type === 'employees' ? 'employees' :
-                    type === 'customer' ? 'customers' :
-                      type === 'bank' ? 'banks' :
-                        type === 'indian-bank' ? 'indian-banks' :
-                          type === 'cnf' ? 'cnfs' :
-                            type === 'pi' ? 'pi' :
-                              type === 'lc-expense' ? 'lc-expenses' :
-                                type === 'packing-list' ? 'packing-lists' :
-                                  type === 'tr-setup' ? 'tr-setups' :
-                                    type === 'cost-of-goods' ? 'cost-of-goods' :
-                                      type === 'insurance' ? 'insurance' :
-                                        'stock';
+                  type === 'product' ? 'products' :
+                    type === 'employees' ? 'employees' :
+                      type === 'customer' ? 'customers' :
+                        type === 'bank' ? 'banks' :
+                          type === 'indian-bank' ? 'indian-banks' :
+                            type === 'cnf' ? 'cnfs' :
+                              type === 'pi' ? 'pi' :
+                                type === 'lc-expense' ? 'lc-expenses' :
+                                  type === 'packing-list' ? 'packing-lists' :
+                                    type === 'tr-setup' ? 'tr-setups' :
+                                      type === 'cost-of-goods' ? 'cost-of-goods' :
+                                        type === 'insurance' ? 'insurance' :
+                                          'stock';
 
 
     try {
@@ -1337,11 +1338,74 @@ function App() {
   const fetchStockRecords = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/stock`);
-      // Stock data is now cleanly decrypted by the server/axios layer.
-      if (Array.isArray(response.data)) {
-        setAllStockRecords(response.data);
-      }
+      const [stockRes, purchaseRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/stock`),
+        axios.get(`${API_BASE_URL}/api/purchases`).catch(() => ({ data: [] }))
+      ]);
+
+      const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
+      const rawPurchases = Array.isArray(purchaseRes.data) ? purchaseRes.data : [];
+
+      const existingLcSet = new Set(
+        rawStock.map(s => (s.lcNo || '').trim()).filter(Boolean)
+      );
+
+      const purchaseStockRecords = [];
+      rawPurchases.forEach(p => {
+        const pStatus = (p.status || '').toLowerCase();
+        if (pStatus.includes('requested') || pStatus.includes('rejected')) return;
+
+        const purchaseNo = (p.purchaseNo || p.invoiceNo || 'PUR-0001').trim();
+        const items = Array.isArray(p.items) && p.items.length > 0 ? p.items : [p];
+
+        items.forEach((item, itemIdx) => {
+          const pName = (item.productName || item.product || '').trim();
+          const bEntries = Array.isArray(item.brandEntries) && item.brandEntries.length > 0
+            ? item.brandEntries
+            : [{ brand: item.brand || '', bag: item.bag || item.packet || 0, qty: item.qty || item.quantity || 0, rate: item.rate || item.purchasedPrice || 0 }];
+
+          bEntries.forEach((be, bIdx) => {
+            const bName = (be.brand || '').trim();
+            const qty = parseFloat(be.qty) || parseFloat(be.quantity) || 0;
+            const pkt = parseFloat(be.bag) || parseFloat(be.packet) || 0;
+            const rate = parseFloat(be.rate) || parseFloat(be.purchasedPrice) || 0;
+
+            if (!pName || !bName) return;
+
+            const hasPhysicalRecord = rawStock.some(s =>
+              (s.lcNo || '').trim() === purchaseNo &&
+              (s.productName || s.product || '').trim().toLowerCase() === pName.toLowerCase() &&
+              (s.brand || '').trim().toLowerCase() === bName.toLowerCase()
+            );
+
+            if (!hasPhysicalRecord) {
+              purchaseStockRecords.push({
+                _id: `purchase_${p._id}_${itemIdx}_${bIdx}`,
+                lcNo: purchaseNo,
+                purchaseNo: purchaseNo,
+                date: p.date || p.createdAt,
+                supplier: p.companyName || p.supplierName || '',
+                companyName: p.companyName || p.supplierName || '',
+                warehouse: p.warehouse || item.warehouse || 'HILI',
+                whName: p.warehouse || item.warehouse || 'HILI',
+                brand: bName,
+                productName: pName,
+                quantity: qty,
+                inHouseQuantity: qty,
+                totalInHouseQuantity: qty,
+                packet: pkt,
+                inHousePacket: pkt,
+                totalInHousePacket: pkt,
+                purchasedPrice: rate,
+                status: p.status || 'Accepted',
+                recordType: 'purchase'
+              });
+            }
+          });
+        });
+      });
+
+      setAllStockRecords([...rawStock, ...purchaseStockRecords]);
     } catch (error) {
       console.error('Error fetching stock:', error);
     } finally {
@@ -1856,6 +1920,15 @@ function App() {
             refreshPendingIndicators={fetchPendingEntries}
           />
         );
+      case 'purchase-sale-section':
+        return (
+          <PurchaseManagement
+            key={refreshKey}
+            currentUser={currentUser}
+            addNotification={addNotification}
+            fetchStockRecords={fetchStockRecords}
+          />
+        );
       case 'order-sale-section':
         return (
           <OrderManagement
@@ -2211,13 +2284,13 @@ function App() {
                     </>
                   )}
                   {hasPermission(currentUser, 'cnfPayment', 'view') && (
-                  <button
-                    onClick={() => { handleViewChange('cnf-payment-section'); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                  >
-                    <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>C&F Payment</span>
-                  </button>
+                    <button
+                      onClick={() => { handleViewChange('cnf-payment-section'); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                    >
+                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>C&F Payment</span>
+                    </button>
                   )}
                 </div>
               </div>
@@ -2365,13 +2438,13 @@ function App() {
                     </button>
                   )}
                   {hasPermission(currentUser, 'lcExpense', 'view') && (
-                  <button
-                    onClick={() => { handleViewChange('lc-expense-section'); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-expense-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>LC Expense</span>
-                  </button>
+                    <button
+                      onClick={() => { handleViewChange('lc-expense-section'); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-expense-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>LC Expense</span>
+                    </button>
                   )}
                   {hasPermission(currentUser, 'marginReturn', 'view') && (
                     <button
@@ -2513,6 +2586,16 @@ function App() {
               </button>
               <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
+                  <button
+                    onClick={() => { handleViewChange('purchase-sale-section'); }}
+                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                  >
+                    <div className="flex items-center">
+                      <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                      <span>Purchase</span>
+                    </div>
+                    {pendingModules?.purchase && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                  </button>
                   {hasPermission(currentUser, 'order', 'view') && (
                     <button
                       onClick={() => { handleViewChange('order-sale-section'); }}

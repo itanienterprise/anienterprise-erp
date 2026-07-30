@@ -14,9 +14,9 @@ export const MODULES_LIST = [
     { key: 'pi', label: 'PI Management' },
     { key: 'packingList', label: 'Packing List' },
     { key: 'trSetup', label: 'TR Setup' },
-    { 
-        key: 'order', 
-        label: 'Order', 
+    {
+        key: 'order',
+        label: 'Order',
         specialLabels: [
             { key: 'special', label: 'Approve Order' },
             { key: 'orderRequest', label: 'Order Request' },
@@ -28,17 +28,17 @@ export const MODULES_LIST = [
     { key: 'customer', label: 'Customer Management' },
     { key: 'lcReceive', label: 'LC Receive', specialLabel: 'Approve LC' },
     { key: 'warehouse', label: 'Warehouse & Damage' },
-    { 
-        key: 'stock', 
-        label: 'Stock & Inventory', 
+    {
+        key: 'stock',
+        label: 'Stock & Inventory',
         specialLabels: [
             { key: 'special', label: 'Transfer from Stock' },
             { key: 'showRate', label: 'Show Rate' }
         ]
     },
-    { 
-        key: 'sales', 
-        label: 'Sales & Reports', 
+    {
+        key: 'sales',
+        label: 'Sales & Reports',
         specialLabels: [
             { key: 'special', label: 'Approve Sale' },
             { key: 'saleRequest', label: 'Sale Request' },
@@ -48,13 +48,22 @@ export const MODULES_LIST = [
     },
     { key: 'profitLoss', label: 'Profit & Loss' },
     { key: 'costOfGoods', label: 'Cost of Goods' },
-    { key: 'paymentCollection', label: 'Payment Collection' },
+    {
+        key: 'paymentCollection',
+        label: 'Payment Collection',
+        specialLabels: [
+            { key: 'special', label: 'Approve Payment' },
+            { key: 'paymentRequest', label: 'Payment Request' },
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' }
+        ]
+    },
     { key: 'bank', label: 'Bank Management' },
     { key: 'insurance', label: 'Insurance Management' },
     { key: 'insurancePayment', label: 'Insurance Payment' },
-    { 
-        key: 'lcManagement', 
-        label: 'LC Management', 
+    {
+        key: 'lcManagement',
+        label: 'LC Management',
         specialLabels: [
             { key: 'special', label: 'Add Bill' },
             { key: 'specialEdit', label: 'Edit Bill' },
@@ -102,12 +111,12 @@ export const getDefaultPermissionsForRole = (role) => {
         // Incharge can do almost everything except delete employees or backup/restore
         MODULES_LIST.forEach(mod => {
             if (mod.key !== 'backupRestore') {
-                const permsObj = { 
-                    view: true, 
-                    add: true, 
-                    edit: true, 
-                    delete: mod.key !== 'employees', 
-                    special: true 
+                const permsObj = {
+                    view: true,
+                    add: true,
+                    edit: true,
+                    delete: mod.key !== 'employees',
+                    special: true
                 };
                 if (mod.specialLabels) {
                     mod.specialLabels.forEach(sItem => {
@@ -199,10 +208,10 @@ export const getDefaultPermissionsForRole = (role) => {
  */
 export const hasPermission = (currentUser, moduleName, action = 'view') => {
     if (!currentUser) return false;
-    
+
     let checkAction = action;
     if (action === 'create') checkAction = 'add';
-    
+
     const username = currentUser.username;
     const roleLower = (currentUser.role || '').toLowerCase();
 

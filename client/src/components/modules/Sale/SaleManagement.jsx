@@ -257,8 +257,8 @@ const SaleManagement = ({
     const canViewEditRequest = hasPermission(currentUser, 'sales', 'editRequest');
 
     // Fine-grained permission flags from System Access
-    const canAdd    = hasPermission(currentUser, 'sales', 'add');
-    const canEdit   = hasPermission(currentUser, 'sales', 'edit');
+    const canAdd = hasPermission(currentUser, 'sales', 'add');
+    const canEdit = hasPermission(currentUser, 'sales', 'edit');
     const canDelete = hasPermission(currentUser, 'sales', 'delete');
 
     const canUserEditSale = (sale) => {
@@ -435,7 +435,7 @@ const SaleManagement = ({
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
             const { _id, createdAt: _createdAt, ...rest } = sale;
 
-            const finalStatus = newStatus === 'accepted' 
+            const finalStatus = newStatus === 'accepted'
                 ? ((parseFloat(sale.paidAmount || 0) >= parseFloat(sale.totalAmount || 0) && parseFloat(sale.totalAmount || 0) > 0) ? 'Complete' : 'Pending')
                 : newStatus;
 
@@ -1488,8 +1488,8 @@ const SaleManagement = ({
                 const origStatus = (originalData?.status || '').toLowerCase();
                 const isAcceptedEdit = origStatus !== 'requested';
                 const isAdminUser = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
-                const payload = { 
-                    ...formData, 
+                const payload = {
+                    ...formData,
                     isEdited: isAdminUser ? false : (isAcceptedEdit ? true : false)
                 };
                 response = await axios.put(url, payload);
@@ -1947,7 +1947,7 @@ const SaleManagement = ({
         return allSalesRecords.filter(item => {
             const sType = (item.saleType || '').toLowerCase();
             const inv = (item.invoiceNo || item.orderNo || '').toUpperCase();
-            
+
             // Exclude Border Sales (BS...) from the Order ID dropdown
             if (sType === 'border' || inv.startsWith('BS')) return false;
 
@@ -2035,7 +2035,7 @@ const SaleManagement = ({
 
             const subtotal = mappedItems.reduce((sum, p) =>
                 sum + (p.brandEntries || []).reduce((eSum, e) => eSum + (parseFloat(e.totalAmount) || 0), 0)
-            , 0);
+                , 0);
 
             const disc = parseFloat(order.discount !== undefined && order.discount !== null ? order.discount : (formData.discount || 0));
             const paid = parseFloat(order.paidAmount !== undefined && order.paidAmount !== null ? order.paidAmount : (formData.paidAmount || 0));
@@ -2130,16 +2130,16 @@ const SaleManagement = ({
 
         // Try exact match first
         const lowerName = name.trim().toLowerCase();
-        let found = products.find(p => 
-            (p.name || '').trim().toLowerCase() === lowerName || 
+        let found = products.find(p =>
+            (p.name || '').trim().toLowerCase() === lowerName ||
             (p.ipName || '').trim().toLowerCase() === lowerName
         );
 
         if (found) return found.name;
 
         // Try normalized match (ignoring plural 's')
-        found = products.find(p => 
-            normalize(p.name) === target || 
+        found = products.find(p =>
+            normalize(p.name) === target ||
             normalize(p.ipName) === target
         );
 
@@ -2163,7 +2163,7 @@ const SaleManagement = ({
             }
         }
         return filtered.filter(lc => {
-            const matchedProduct = products.find(p => 
+            const matchedProduct = products.find(p =>
                 (p.name || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim() ||
                 (p.ipName || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim()
             );
@@ -2390,7 +2390,7 @@ const SaleManagement = ({
                 newBrandEntries[activeEntryIndex] = entry;
                 item.brandEntries = newBrandEntries;
                 newItems[activeItemIndex] = item;
-                
+
                 const newData = {
                     ...prev,
                     items: newItems
@@ -2994,8 +2994,8 @@ const SaleManagement = ({
                                                             onChange={(e) => setSaleFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
                                                             className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
                                                         >
-                                                            {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
-                                                                <option key={i+1} value={i+1}>{m}</option>
+                                                            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => (
+                                                                <option key={i + 1} value={i + 1}>{m}</option>
                                                             ))}
                                                         </select>
                                                         <select
@@ -3378,21 +3378,21 @@ const SaleManagement = ({
                                                         const filtered = brands.filter(b => b.toLowerCase().includes((saleFilterSearch.brandSearch || '').toLowerCase()));
                                                         return filtered.length > 0 ? (
                                                             <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                                                 {filtered.map(b => (
-                                                                     <button key={b} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, brand: b })); setSaleFilterSearch(prev => ({ ...prev, brandSearch: b })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
-                                                                         {b}
-                                                                     </button>
-                                                                 ))}
-                                                             </div>
-                                                         ) : null;
-                                                     })()}
-                                                 </div>
-                                             </div>
-                                         </div>
-                                     </div>
-                                 </>
-                             )}
-                         </div>
+                                                                {filtered.map(b => (
+                                                                    <button key={b} type="button" onMouseDown={(e) => { e.preventDefault(); setSaleFilters(prev => ({ ...prev, brand: b })); setSaleFilterSearch(prev => ({ ...prev, brandSearch: b })); setActiveFilterDropdown(null); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium text-gray-700">
+                                                                        {b}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
 
                         <button
                             onClick={() => {
@@ -3406,7 +3406,7 @@ const SaleManagement = ({
                             <span>Report</span>
                         </button>
 
-                            {canAdd && (
+                        {canAdd && (
                             <button
                                 onClick={() => {
                                     resetForm();
@@ -3417,7 +3417,7 @@ const SaleManagement = ({
                             >
                                 <span className="flex items-center gap-2"><span className="text-xl leading-none">+</span> {saleType === 'Border' ? 'New G.P' : 'Add Sale'}</span>
                             </button>
-                            )}
+                        )}
                     </div>
                 )}
             </div>
@@ -3610,7 +3610,7 @@ const SaleManagement = ({
                                                         <span className="text-[10px] text-gray-500">
                                                             {lc.importerName} | {
                                                                 (() => {
-                                                                    const matched = products.find(p => 
+                                                                    const matched = products.find(p =>
                                                                         (p.name || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim() ||
                                                                         (p.ipName || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim()
                                                                     );
@@ -4107,90 +4107,90 @@ const SaleManagement = ({
 
                         {/* Dummy spacer div to maintain col-span-2 for Border commissions row */}
                         {/* Border Field: Commissions Row */}
-                            {saleType === 'Border' && (
-                                <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50 mb-2">
-                                    {/* Indian C&F Commission */}
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">IND C&F Commission</span>
-                                            <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'Truck' } })}
-                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
-                                                >
-                                                    TRUCK
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'QTY' } })}
-                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
-                                                >
-                                                    QTY
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex-1 relative">
-                                                <input autoComplete="off"
-                                                    type="number"
-                                                    name="indCommissionRate"
-                                                    value={formData.indCommissionRate}
-                                                    onChange={handleInputChange}
-                                                    placeholder="Rate"
-                                                    className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
-                                            </div>
-                                            <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
-                                                <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
-                                                <span className="text-sm font-black text-blue-700">৳{formData.indCommissionTotal}</span>
-                                            </div>
+                        {saleType === 'Border' && (
+                            <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-blue-50/30 rounded-2xl border border-blue-100/50 mb-2">
+                                {/* Indian C&F Commission */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">IND C&F Commission</span>
+                                        <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'Truck' } })}
+                                                className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                            >
+                                                TRUCK
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleInputChange({ target: { name: 'indCommissionUom', value: 'QTY' } })}
+                                                className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.indCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                            >
+                                                QTY
+                                            </button>
                                         </div>
                                     </div>
-
-                                    {/* BD C&F Commission */}
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">BD C&F Commission</span>
-                                            <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'Truck' } })}
-                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
-                                                >
-                                                    TRUCK
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'QTY' } })}
-                                                    className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
-                                                >
-                                                    QTY
-                                                </button>
-                                            </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex-1 relative">
+                                            <input autoComplete="off"
+                                                type="number"
+                                                name="indCommissionRate"
+                                                value={formData.indCommissionRate}
+                                                onChange={handleInputChange}
+                                                placeholder="Rate"
+                                                className="w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex-1 relative">
-                                                <input autoComplete="off"
-                                                    type="number"
-                                                    name="bdCommissionRate"
-                                                    value={formData.bdCommissionRate}
-                                                    readOnly={isFieldReadOnly(originalData?.bdCommissionRate)}
-                                                    onChange={handleInputChange}
-                                                    placeholder="Rate"
-                                                    className={`w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all ${isFieldReadOnly(originalData?.bdCommissionRate) ? 'bg-gray-50' : ''}`}
-                                                />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
-                                            </div>
-                                            <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
-                                                <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
-                                                <span className="text-sm font-black text-blue-700">৳{formData.bdCommissionTotal}</span>
-                                            </div>
+                                        <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
+                                            <span className="text-sm font-black text-blue-700">৳{formData.indCommissionTotal}</span>
                                         </div>
                                     </div>
                                 </div>
-                            )}
+
+                                {/* BD C&F Commission */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest pl-1">BD C&F Commission</span>
+                                        <div className="flex items-center bg-white p-0.5 rounded-lg border border-blue-100 shadow-sm h-7 w-32">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'Truck' } })}
+                                                className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'Truck' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                            >
+                                                TRUCK
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleInputChange({ target: { name: 'bdCommissionUom', value: 'QTY' } })}
+                                                className={`flex-1 h-full flex items-center justify-center rounded-md text-[9px] font-bold transition-all ${formData.bdCommissionUom === 'QTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-blue-500'}`}
+                                            >
+                                                QTY
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex-1 relative">
+                                            <input autoComplete="off"
+                                                type="number"
+                                                name="bdCommissionRate"
+                                                value={formData.bdCommissionRate}
+                                                readOnly={isFieldReadOnly(originalData?.bdCommissionRate)}
+                                                onChange={handleInputChange}
+                                                placeholder="Rate"
+                                                className={`w-full px-4 py-2 bg-white border border-blue-100 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all ${isFieldReadOnly(originalData?.bdCommissionRate) ? 'bg-gray-50' : ''}`}
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">Rate</div>
+                                        </div>
+                                        <div className="flex-1 px-4 py-2 bg-blue-100/50 border border-blue-200 rounded-xl flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-blue-400 uppercase">Total</span>
+                                            <span className="text-sm font-black text-blue-700">৳{formData.bdCommissionTotal}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="col-span-2 space-y-6">
                             <div className="flex items-center justify-between">
@@ -4331,76 +4331,76 @@ const SaleManagement = ({
                                             )}
                                         </div>
 
-                                            {saleType === 'Border' && (
-                                                <div className="flex-[3] space-y-4 pt-1">
-                                                    <div className="hidden md:grid grid-cols-6 gap-4 px-4">
-                                                        <div className="sale-mgmt-item-label text-center">UOM</div>
-                                                        <div className="sale-mgmt-item-label text-center">Qty</div>
-                                                        <div className="sale-mgmt-item-label text-center">Bag</div>
-                                                        <div className="sale-mgmt-item-label text-center">Truck</div>
-                                                        <div className="sale-mgmt-item-label text-center">Price</div>
-                                                        <div className="sale-mgmt-item-label text-center">Total</div>
-                                                    </div>
-                                                    {item.brandEntries.map((entry, entryIndex) => (
-                                                        <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center px-4">
-                                                            {/* UOM Toggle */}
-                                                            <div className="relative">
-                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block">UOM</label>
-                                                                <div className="flex items-center bg-gray-50/50 p-1 rounded-xl border border-gray-100/50 h-10 shadow-inner group/uom">
-                                                                    <button
-                                                                        type="button"
-                                                                        disabled={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom)}
-                                                                        onClick={() => handleItemInputChange(index, entryIndex, { target: { name: 'uom', value: 'QTY' } })}
-                                                                        className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'QTY' ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom) ? 'cursor-not-allowed opacity-50' : ''}`}
-                                                                    >
-                                                                        QTY
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        disabled={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom)}
-                                                                        onClick={() => handleItemInputChange(index, entryIndex, { target: { name: 'uom', value: 'Truck' } })}
-                                                                        className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'Truck' || !entry.uom ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom) ? 'cursor-not-allowed opacity-50' : ''}`}
-                                                                    >
-                                                                        TRUCK
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
-                                                                <input autoComplete="off" type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity) ? 'bg-gray-50' : ''}`} />
-                                                            </div>
-                                                            <div>
-                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
-                                                                <input autoComplete="off" type="number" name="bag" value={entry.bag} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag) ? 'bg-gray-50' : ''}`} />
-                                                            </div>
-                                                            <div>
-                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Truck</label>
-                                                                <input autoComplete="off" type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck) ? 'bg-gray-50' : ''}`} />
-                                                            </div>
-                                                            <div>
-                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
-                                                                <input autoComplete="off" type="number" name="unitPrice" value={entry.unitPrice} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice) ? 'bg-gray-50' : ''}`} />
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="flex-1">
-                                                                    <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Total</label>
-                                                                    <div className="h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
-                                                                        {parseFloat(entry.totalAmount || 0).toLocaleString('en-IN')}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex flex-row gap-1 items-center justify-center">
-                                                                    {entryIndex === item.brandEntries.length - 1 && (isFullAdmin || canEdit || !editingId) && (
-                                                                        <button type="button" onClick={() => addBrandEntry(index)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90" title="Add Brand"><span className="text-xl font-bold">+</span></button>
-                                                                    )}
-                                                                    {item.brandEntries.length > 1 && (isFullAdmin || canEdit || !editingId) && (
-                                                                        <button type="button" onClick={() => removeBrandEntry(index, entryIndex)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Remove Brand"><TrashIcon className="w-3.5 h-3.5" /></button>
-                                                                    )}
-                                                                </div>
+                                        {saleType === 'Border' && (
+                                            <div className="flex-[3] space-y-4 pt-1">
+                                                <div className="hidden md:grid grid-cols-6 gap-4 px-4">
+                                                    <div className="sale-mgmt-item-label text-center">UOM</div>
+                                                    <div className="sale-mgmt-item-label text-center">Qty</div>
+                                                    <div className="sale-mgmt-item-label text-center">Bag</div>
+                                                    <div className="sale-mgmt-item-label text-center">Truck</div>
+                                                    <div className="sale-mgmt-item-label text-center">Price</div>
+                                                    <div className="sale-mgmt-item-label text-center">Total</div>
+                                                </div>
+                                                {item.brandEntries.map((entry, entryIndex) => (
+                                                    <div key={entryIndex} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center px-4">
+                                                        {/* UOM Toggle */}
+                                                        <div className="relative">
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block">UOM</label>
+                                                            <div className="flex items-center bg-gray-50/50 p-1 rounded-xl border border-gray-100/50 h-10 shadow-inner group/uom">
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom)}
+                                                                    onClick={() => handleItemInputChange(index, entryIndex, { target: { name: 'uom', value: 'QTY' } })}
+                                                                    className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'QTY' ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom) ? 'cursor-not-allowed opacity-50' : ''}`}
+                                                                >
+                                                                    QTY
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom)}
+                                                                    onClick={() => handleItemInputChange(index, entryIndex, { target: { name: 'uom', value: 'Truck' } })}
+                                                                    className={`flex-1 h-full flex items-center justify-center rounded-lg text-[10px] font-black transition-all duration-200 ${entry.uom === 'Truck' || !entry.uom ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600'} ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.uom) ? 'cursor-not-allowed opacity-50' : ''}`}
+                                                                >
+                                                                    TRUCK
+                                                                </button>
                                                             </div>
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            )}
+                                                        <div>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Qty</label>
+                                                            <input autoComplete="off" type="number" name="quantity" value={entry.quantity} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-black text-gray-900 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.quantity) ? 'bg-gray-50' : ''}`} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Bag</label>
+                                                            <input autoComplete="off" type="number" name="bag" value={entry.bag} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-blue-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.bag) ? 'bg-gray-50' : ''}`} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Truck</label>
+                                                            <input autoComplete="off" type="number" name="truck" value={entry.truck || ''} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck)} placeholder="0" required className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.truck) ? 'bg-gray-50' : ''}`} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Price</label>
+                                                            <input autoComplete="off" type="number" name="unitPrice" value={entry.unitPrice} onChange={(e) => handleItemInputChange(index, entryIndex, e)} readOnly={isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice)} placeholder="0" className={`sale-mgmt-input !px-2 !text-[13px] font-bold text-gray-600 text-center ${isFieldReadOnly(originalData?.items?.[index]?.brandEntries?.[entryIndex]?.unitPrice) ? 'bg-gray-50' : ''}`} />
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="flex-1">
+                                                                <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Total</label>
+                                                                <div className="h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-black text-blue-600">
+                                                                    {parseFloat(entry.totalAmount || 0).toLocaleString('en-IN')}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-row gap-1 items-center justify-center">
+                                                                {entryIndex === item.brandEntries.length - 1 && (isFullAdmin || canEdit || !editingId) && (
+                                                                    <button type="button" onClick={() => addBrandEntry(index)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90" title="Add Brand"><span className="text-xl font-bold">+</span></button>
+                                                                )}
+                                                                {item.brandEntries.length > 1 && (isFullAdmin || canEdit || !editingId) && (
+                                                                    <button type="button" onClick={() => removeBrandEntry(index, entryIndex)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all active:scale-90" title="Remove Brand"><TrashIcon className="w-3.5 h-3.5" /></button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
 
                                         {saleType !== 'Border' && (
                                             <div className="space-y-1">
@@ -4491,7 +4491,7 @@ const SaleManagement = ({
                                                                                 <span className="text-[9px] text-gray-500">
                                                                                     {lc.importerName} | {
                                                                                         (() => {
-                                                                                            const matched = products.find(p => 
+                                                                                            const matched = products.find(p =>
                                                                                                 (p.name || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim() ||
                                                                                                 (p.ipName || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim()
                                                                                             );
@@ -5212,39 +5212,39 @@ const SaleManagement = ({
                                                 )}
                                             </td>
                                             <td className="px-3 py-4">
-                                                 <div className="text-[13px] font-semibold text-gray-800">
-                                                     {sale.challanNo ? (
-                                                         sale.challanNo.split(/(.{5})/).filter(Boolean).map((chunk, idx) => (
-                                                             <div key={idx}>{chunk}</div>
-                                                         ))
-                                                     ) : (
-                                                         '-'
-                                                     )}
-                                                 </div>
+                                                <div className="text-[13px] font-semibold text-gray-800">
+                                                    {sale.challanNo ? (
+                                                        sale.challanNo.split(/(.{5})/).filter(Boolean).map((chunk, idx) => (
+                                                            <div key={idx}>{chunk}</div>
+                                                        ))
+                                                    ) : (
+                                                        '-'
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-3 py-4">
-                                                 <div className="text-[13px] font-semibold text-gray-800">
-                                                     {sale.truckNo ? (
-                                                         sale.truckNo.split(/(.{14})/).filter(Boolean).map((chunk, idx) => (
-                                                             <div key={idx}>{chunk}</div>
-                                                         ))
-                                                     ) : (
-                                                         '-'
-                                                     )}
-                                                 </div>
-                                             </td>
+                                                <div className="text-[13px] font-semibold text-gray-800">
+                                                    {sale.truckNo ? (
+                                                        sale.truckNo.split(/(.{14})/).filter(Boolean).map((chunk, idx) => (
+                                                            <div key={idx}>{chunk}</div>
+                                                        ))
+                                                    ) : (
+                                                        '-'
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
-                                                 {isMultiple && !isExpanded ? (
-                                                     <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
-                                                 ) : (
-                                                     <div className="flex flex-col gap-2">
-                                                         {items.map((it, idx) => (
-                                                             <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                 {it.warehouseName || sale.warehouseName || '-'}
-                                                             </div>
-                                                         ))}
-                                                     </div>
-                                                 )}
+                                                {isMultiple && !isExpanded ? (
+                                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
+                                                ) : (
+                                                    <div className="flex flex-col gap-2">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                {it.warehouseName || sale.warehouseName || '-'}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-semibold text-gray-800">{getSafeString(sale.companyName) || '-'}</div>
@@ -5352,7 +5352,7 @@ const SaleManagement = ({
                                                         const storedDue = parseFloat(sale.dueAmount) || 0;
                                                         const storedTotal = parseFloat(sale.totalAmount) || 0;
                                                         if (storedDue > 0 || storedTotal > 0) return storedDue.toLocaleString('en-IN');
-                                                        
+
                                                         // Fallback calculation
                                                         const calculatedTotal = items.reduce((sum, it) => {
                                                             const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);

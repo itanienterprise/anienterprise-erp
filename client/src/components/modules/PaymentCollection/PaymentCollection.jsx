@@ -32,6 +32,7 @@ const PaymentCollection = () => {
     const canApprove = hasPermission(currentUser, 'paymentCollection', 'special') || hasPermission(currentUser, 'paymentCollection', 'approve') || isAdmin;
     const canApproveEditRequest = hasPermission(currentUser, 'paymentCollection', 'approveEditRequest') || canApprove;
     const canViewEditRequest = hasPermission(currentUser, 'paymentCollection', 'editRequest') || canApprove;
+    const canViewPaymentRequest = hasPermission(currentUser, 'paymentCollection', 'paymentRequest') || hasPermission(currentUser, 'paymentCollection', 'paymentApprovalRequest') || canApprove;
 
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
@@ -735,20 +736,22 @@ const PaymentCollection = () => {
                         </div>
 
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => {
-                                    setIsRequestedOnly(!isRequestedOnly);
-                                    setIsEditRequestedOnly(false);
-                                }}
-                                className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
-                            >
-                                Requested
-                                {requestedCount > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
-                                        {requestedCount}
-                                    </span>
-                                )}
-                            </button>
+                            {canViewPaymentRequest && (
+                                <button
+                                    onClick={() => {
+                                        setIsRequestedOnly(!isRequestedOnly);
+                                        setIsEditRequestedOnly(false);
+                                    }}
+                                    className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
+                                >
+                                    Requested
+                                    {requestedCount > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                            {requestedCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
 
                             {canViewEditRequest && (
                                 <button

@@ -4030,6 +4030,16 @@ const StockManagement = ({
                                 {historyTab === 'purchase' ? (() => {
                                     const history = activePurchaseHistory;
                                     const unit = history[0]?.unit || 'kg';
+                                    // Helper: only show entries with a real brand (not productName fallback) and actual qty
+                                    const validEntries = (item) => {
+                                        const isPurchase = (item.lcNo || '').startsWith('PUR-') || item.recordType === 'purchase';
+                                        return (item.entries || []).filter(e =>
+                                            e.brand &&
+                                            (isPurchase || e.brand.toLowerCase() !== (item.productName || '').toLowerCase()) &&
+                                            (parseFloat(e.quantity || 0) > 0 || parseFloat(e.inHouseQuantity || 0) > 0 || parseFloat(e.packet || 0) > 0)
+                                        );
+                                    };
+                                    const visibleHistory = history.filter(item => validEntries(item).length > 0);
 
                                     const tPkts = history.reduce((sum, item) => sum + (parseFloat(item.totalPacket) || 0), 0);
                                     const tQty = history.reduce((sum, item) => sum + (parseFloat(item.totalQuantity) || 0), 0);
@@ -4102,12 +4112,12 @@ const StockManagement = ({
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-100">
-                                                            {history.length === 0 ? (
+                                                            {visibleHistory.length === 0 ? (
                                                                 <tr>
                                                                     <td colSpan="14" className="px-6 py-12 text-center text-gray-400 font-medium italic">No history records found</td>
                                                                 </tr>
                                                             ) : (
-                                                                history.map((item, idx) => (
+                                                                visibleHistory.map((item, idx) => (
                                                                     <tr key={item._id || idx} className="hover:bg-gray-50/30 transition-colors group border-b border-gray-50">
                                                                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600">{formatDate(item.date)}</td>
                                                                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-600 font-semibold">{item.lcNo}</td>
@@ -4125,51 +4135,60 @@ const StockManagement = ({
                                                                         </td>
                                                                         <td className="px-3 py-3 align-top whitespace-nowrap">
                                                                             <div className="space-y-1">
-                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                {validEntries(item).map((entry, eIdx) => (
                                                                                     <div key={eIdx} className="text-sm text-gray-600 font-medium">{entry.brand}</div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
                                                                         <td className="px-3 py-3 align-top">
                                                                             <div className="space-y-1">
-                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                {validEntries(item).map((entry, eIdx) => (
                                                                                     <div key={eIdx} className="text-sm text-gray-600">৳{parseFloat(entry.purchasedPrice || 0).toLocaleString('en-IN')}</div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
                                                                         <td className="px-3 py-3 align-top font-bold">
                                                                             <div className="space-y-1">
-                                                                                {item.entries.map((entry, eIdx) => (
-                                                                                    <div key={eIdx} className="text-sm text-gray-900">{entry.packet}</div>
+                                                                                {validEntries(item).map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className="text-sm text-gray-900">
+                                                                                        {parseFloat(entry.packet) > 0 ? entry.packet : '-'}
+                                                                                    </div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
                                                                         <td className="px-3 py-3 align-top font-bold">
                                                                             <div className="space-y-1">
-                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                {validEntries(item).map((entry, eIdx) => (
                                                                                     <div key={eIdx} className="text-sm text-gray-900">{Math.round(parseFloat(entry.quantity || 0)).toLocaleString('en-US')} {entry.unit}</div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
                                                                         <td className="px-3 py-3 align-top">
                                                                             <div className="space-y-1">
-                                                                                {item.entries.map((entry, eIdx) => (
-                                                                                    <div key={eIdx} className="text-sm text-amber-600 font-bold">{entry.inHousePacket}</div>
+                                                                                {validEntries(item).map((entry, eIdx) => (
+                                                                                    <div key={eIdx} className="text-sm text-amber-600 font-bold">
+                                                                                        {parseFloat(entry.inHousePacket) > 0 ? entry.inHousePacket : '-'}
+                                                                                    </div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
                                                                         <td className="px-3 py-3 align-top">
                                                                             <div className="space-y-1">
-                                                                                {item.entries.map((entry, eIdx) => (
+                                                                                {validEntries(item).map((entry, eIdx) => (
                                                                                     <div key={eIdx} className="text-sm text-blue-600 font-bold">{Math.round(parseFloat(entry.inHouseQuantity || 0)).toLocaleString('en-US')} {entry.unit}</div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
                                                                         <td className="px-3 py-3 align-top text-rose-600 font-black">
                                                                             <div className="space-y-1">
-                                                                                {item.entries.map((entry, eIdx) => (
-                                                                                    <div key={eIdx} className="text-sm">{Math.round(parseFloat(entry.sweepedQuantity || 0)).toLocaleString('en-US')} {entry.unit}</div>
-                                                                                ))}
+                                                                                {validEntries(item).map((entry, eIdx) => {
+                                                                                    const shortage = Math.round(parseFloat(entry.sweepedQuantity || 0));
+                                                                                    return (
+                                                                                        <div key={eIdx} className="text-sm">
+                                                                                            {shortage > 0 ? `${shortage.toLocaleString('en-US')} ${entry.unit}` : '-'}
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
                                                                             </div>
                                                                         </td>
 
