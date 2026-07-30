@@ -2349,11 +2349,13 @@ const StockManagement = ({
         unit
     } = stockData;
 
+    const minWidthClass = displayUnit === 'BOTH' ? 'min-w-[1200px]' : 'min-w-[900px]';
+
     const gridClass = showRate
-        ? "grid grid-cols-[2fr_1.5fr_1.5fr_1.5fr_1.5fr_1fr] gap-4"
+        ? "grid grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1fr)] gap-3"
         : displayUnit === 'BOTH'
-            ? "grid grid-cols-[2.2fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_0.8fr] gap-3"
-            : "grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_1.2fr_1.2fr_0.8fr] gap-4";
+            ? "grid grid-cols-[minmax(0,1.8fr)_repeat(10,minmax(0,1fr))_minmax(0,0.9fr)] gap-2"
+            : "grid grid-cols-[minmax(0,2.2fr)_repeat(5,minmax(0,1fr))_minmax(0,0.9fr)] gap-3";
 
     return (
         <div className="stock-management-container space-y-6">
@@ -3433,35 +3435,35 @@ const StockManagement = ({
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
                                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Product Name</th>
                                     <th colSpan="8" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                        <div className={`${gridClass} whitespace-nowrap min-w-[1000px]`}>
-                                            <div className="text-left text-gray-900 pr-2">Brand</div>
+                                        <div className={`${gridClass} ${minWidthClass} whitespace-nowrap`}>
+                                            <div className="text-left text-gray-900 pr-2 truncate min-w-0">Brand</div>
                                             {canShowRate && showRate ? (
                                                 <>
-                                                    <div className="text-center text-purple-800">LC No</div>
-                                                    <div className="text-center text-purple-800">Rate</div>
+                                                    <div className="text-center text-purple-800 truncate min-w-0">LC No</div>
+                                                    <div className="text-center text-purple-800 truncate min-w-0">Rate</div>
                                                 </>
                                             ) : (
                                                 <>
-                                                    {showBag && <div className="text-center text-blue-800">Opening Stock Bag</div>}
-                                                    {showQty && <div className="text-center text-blue-800">Opening Stock QTY (KG)</div>}
-                                                    {showBag && <div className="text-center text-orange-800">Sale BAG</div>}
-                                                    {showQty && <div className="text-center text-orange-800">Sale QTY (KG)</div>}
+                                                    {showBag && <div className="text-center text-blue-800 truncate min-w-0" title="Opening Stock Bag">{displayUnit === 'BOTH' ? 'Opening Bag' : 'Opening Stock Bag'}</div>}
+                                                    {showQty && <div className="text-center text-blue-800 truncate min-w-0" title="Opening Stock QTY (KG)">{displayUnit === 'BOTH' ? 'Opening QTY (KG)' : 'Opening Stock QTY (KG)'}</div>}
+                                                    {showBag && <div className="text-center text-orange-800 truncate min-w-0" title="Sale Bag">Sale BAG</div>}
+                                                    {showQty && <div className="text-center text-orange-800 truncate min-w-0" title="Sale QTY (KG)">Sale QTY (KG)</div>}
                                                 </>
                                             )}
-                                            {showBag && <div className="text-center text-green-800">Closing Stock Bag</div>}
-                                            {showQty && <div className="text-center text-green-800">Closing Stock QTY (KG)</div>}
+                                            {showBag && <div className="text-center text-green-800 truncate min-w-0" title="Closing Stock Bag">{displayUnit === 'BOTH' ? 'Closing Bag' : 'Closing Stock Bag'}</div>}
+                                            {showQty && <div className="text-center text-green-800 truncate min-w-0" title="Closing Stock QTY (KG)">{displayUnit === 'BOTH' ? 'Closing QTY (KG)' : 'Closing Stock QTY (KG)'}</div>}
 
                                             {/* Order & Saleable Headers */}
                                             {(!canShowRate || !showRate) && (
                                                 <>
-                                                    {showBag && <div className="text-center text-purple-800">Order Bag</div>}
-                                                    {showQty && <div className="text-center text-purple-800">Order Qty (KG)</div>}
-                                                    {showBag && <div className="text-center text-teal-800">Saleable Bag</div>}
-                                                    {showQty && <div className="text-center text-teal-800">Saleable Qty (KG)</div>}
+                                                    {showBag && <div className="text-center text-purple-800 truncate min-w-0" title="Order Bag">Order Bag</div>}
+                                                    {showQty && <div className="text-center text-purple-800 truncate min-w-0" title="Order Qty (KG)">Order Qty (KG)</div>}
+                                                    {showBag && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Bag">Saleable Bag</div>}
+                                                    {showQty && <div className="text-center text-teal-800 truncate min-w-0" title="Saleable Qty (KG)">Saleable Qty (KG)</div>}
                                                 </>
                                             )}
 
-                                            <div className="text-center text-gray-500">Status</div>
+                                            <div className="text-center text-gray-500 truncate min-w-0">Status</div>
                                         </div>
                                     </th>
                                     <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -3512,7 +3514,7 @@ const StockManagement = ({
 
                                                                 return (
                                                                     <React.Fragment key={bIdx}>
-                                                                        <div className={`${gridClass} items-center whitespace-nowrap min-w-[1000px] ${bIdx !== group.brandList.length - 1 ? 'border-b border-gray-100 pb-2' : 'pb-1'}`}>
+                                                                        <div className={`${gridClass} ${minWidthClass} items-center whitespace-nowrap ${bIdx !== group.brandList.length - 1 ? 'border-b border-gray-100 pb-2' : 'pb-1'}`}>
                                                                             <div className="text-sm text-gray-600 font-medium whitespace-nowrap truncate pr-2" title={(brand.brand || '').trim()}>
                                                                                 {showBrandName ? (brand.brand || '-').trim() : ""}
                                                                             </div>
@@ -3616,7 +3618,7 @@ const StockManagement = ({
                                                                             </div>
                                                                         </div>
                                                                         {showRate && hasMultipleLcs && isLastOfBrandGroup && (
-                                                                            <div className={`${gridClass} items-center whitespace-nowrap min-w-[1000px] border-t border-dashed border-purple-200 pt-1.5 pb-1 mt-1 bg-purple-50/20 rounded-lg px-2`}>
+                                                                            <div className={`${gridClass} ${minWidthClass} items-center whitespace-nowrap border-t border-dashed border-purple-200 pt-1.5 pb-1 mt-1 bg-purple-50/20 rounded-lg px-2`}>
                                                                                 <div className="text-xs text-purple-950 font-black uppercase tracking-wider">{(brand.brand || '-').trim()} Total</div>
                                                                                 <div></div>
                                                                                 <div></div>
@@ -3641,7 +3643,7 @@ const StockManagement = ({
                                                                     </React.Fragment>
                                                                 );
                                                             })}
-                                                            <div className={`pt-1.5 pb-1.5 mt-2 bg-blue-50/20 border-t border-dashed border-blue-200 rounded-lg px-2 ${gridClass} items-center whitespace-nowrap min-w-[1000px]`}>
+                                                            <div className={`pt-1.5 pb-1.5 mt-2 bg-blue-50/20 border-t border-dashed border-blue-200 rounded-lg px-2 ${gridClass} ${minWidthClass} items-center whitespace-nowrap`}>
                                                                 <div className="flex items-center gap-1">
                                                                     <span className="text-xs font-black text-blue-950 uppercase tracking-wider">Total:</span>
                                                                 </div>
