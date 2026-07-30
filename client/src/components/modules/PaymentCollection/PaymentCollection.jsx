@@ -30,8 +30,8 @@ const PaymentCollection = () => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
     const canApprove = hasPermission(currentUser, 'paymentCollection', 'special') || hasPermission(currentUser, 'paymentCollection', 'approve') || isAdmin;
-    const canApproveEditRequest = hasPermission(currentUser, 'paymentCollection', 'approveEditRequest') || canApprove;
-    const canViewEditRequest = hasPermission(currentUser, 'paymentCollection', 'editRequest') || canApprove;
+    const canApproveEditRequest = hasPermission(currentUser, 'paymentCollection', 'approveEditRequest') || isAdmin;
+    const canViewEditRequest = hasPermission(currentUser, 'paymentCollection', 'editRequest') || hasPermission(currentUser, 'paymentCollection', 'approveEditRequest') || canApprove;
     const canViewPaymentRequest = hasPermission(currentUser, 'paymentCollection', 'paymentRequest') || hasPermission(currentUser, 'paymentCollection', 'paymentApprovalRequest') || canApprove;
 
     // Requested & Edit Request Toggle Filters
@@ -44,7 +44,7 @@ const PaymentCollection = () => {
     }, [payments]);
 
     const editRequestedCount = useMemo(() => {
-        const unique = new Set(payments.filter(p => p.isEdited === true && (p.status || '').toLowerCase() !== 'requested').map(p => p.receiptNo || p.id));
+        const unique = new Set(payments.filter(p => (p.isEdited === true || p.isEdited === 'true') && (p.status || '').toLowerCase() !== 'requested').map(p => p.receiptNo || p.id));
         return unique.size;
     }, [payments]);
 
@@ -530,7 +530,7 @@ const PaymentCollection = () => {
             const existingEntries = (customer.paymentHistory || []).filter(p => p.receiptNo === editingPayment.receiptNo);
             const remainingHistory = (customer.paymentHistory || []).filter(p => p.receiptNo !== editingPayment.receiptNo);
 
-            const isEditReq = (!isAdmin && !canApprove);
+            const isEditReq = (!isAdmin && !canApproveEditRequest) || editingPayment?.isEdited === true;
             // Map all items currently in the form to reconstructed payment history entries
             const updatedPaymentEntries = activeItems.map((item, idx) => {
                 const existingItem = existingEntries.find(p => p.id === item.id) || existingEntries[0];
@@ -718,7 +718,7 @@ const PaymentCollection = () => {
                 (p.companyName || '').toLowerCase().includes(filters.customer.toLowerCase()));
 
         const isReq = (p.status || '').toLowerCase() === 'requested';
-        const isEditReq = p.isEdited === true && !isReq;
+        const isEditReq = (p.isEdited === true || p.isEdited === 'true') && !isReq;
 
         if (isRequestedOnly) {
             if (!isReq) return false;
@@ -1205,6 +1205,7 @@ const PaymentCollection = () => {
                                                 groups.push(group);
                                             }
                                             group.items.push(payment);
+                                            group.isEdited = group.isEdited || payment.isEdited === true || payment.isEdited === 'true';
                                         });
 
                                         return groups.map((group, groupIdx) => {
