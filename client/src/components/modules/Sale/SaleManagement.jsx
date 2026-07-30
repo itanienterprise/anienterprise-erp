@@ -1955,6 +1955,9 @@ const SaleManagement = ({
             const isOrd = sType === 'order' || inv.startsWith('ORD') || item.isOrderEntry || (st === 'requested' && sType !== 'border' && !inv.startsWith('BS'));
             if (!isOrd) return false;
 
+            // Exclude orders that are currently in Edit Request status
+            if (item.isEdited === true) return false;
+
             if (orderSearch) {
                 const q = orderSearch.toLowerCase();
                 const ordNo = (item.orderNo || item.invoiceNo || '').toLowerCase();

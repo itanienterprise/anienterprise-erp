@@ -143,28 +143,28 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     const consumedSales = new Set(); // Track consumed sale entries to prevent double-counting across quality grades
     const consumedDamages = new Set(); // Track consumed damages to prevent double-counting
 
-    // Build Set of active pending order numbers
-    const activeOrdersSet = new Set();
-    salesRecords.forEach(s => {
-        const sType = (s.saleType || '').toLowerCase();
-        const sStatus = (s.status || '').toLowerCase();
-        const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry;
-        if (isOrder && (sStatus === 'accepted' || sStatus === 'pending')) {
-            const invNo = (s.invoiceNo || s.orderNo || '').trim().toUpperCase();
-            if (invNo) activeOrdersSet.add(invNo);
-        }
-    });
-
-    // Build Set of orders fulfilled by General Sales to avoid double-counting in Order Qty
+    // Build Set of orders fulfilled by General Sales or completed to avoid double-counting in Order Qty
     const fulfilledOrdersSet = new Set();
     salesRecords.forEach(s => {
         const sType = (s.saleType || '').toLowerCase();
         const sStatus = (s.status || '').toLowerCase();
-        const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry;
-        if (!isOrder && (sStatus === 'accepted' || sStatus === 'pending' || sStatus === 'complete') && s.orderNo) {
-            const ordNo = s.orderNo.trim().toUpperCase();
-            if (!activeOrdersSet.has(ordNo)) {
-                fulfilledOrdersSet.add(ordNo);
+        const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry === true;
+
+        if (isOrder && (sStatus === 'complete' || sStatus === 'completed' || s.isFulfilled === true)) {
+            const invNo = (s.invoiceNo || s.orderNo || '').trim().toUpperCase();
+            if (invNo) fulfilledOrdersSet.add(invNo);
+            if (s._id) fulfilledOrdersSet.add(s._id.toString().trim().toUpperCase());
+        }
+
+        if (!isOrder && (sStatus === 'accepted' || sStatus === 'pending' || sStatus === 'complete')) {
+            if (s.orderNo) {
+                fulfilledOrdersSet.add(s.orderNo.trim().toUpperCase());
+            }
+            if (s.orderId) {
+                fulfilledOrdersSet.add(s.orderId.toString().trim().toUpperCase());
+            }
+            if (s.orderRef) {
+                fulfilledOrdersSet.add(s.orderRef.toString().trim().toUpperCase());
             }
         }
     });
@@ -417,12 +417,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 consumedSales.add(saleEntryId);
 
                                 const sType = (sale.saleType || '').toLowerCase();
-                                const inv = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
-                                const ordNo = (sale.orderNo || sale.invoiceNo || '').toUpperCase();
-                                const isOrder = sType === 'order' || inv.startsWith('ORD');
+                                const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
+                                const ordNo = (sale.orderNo || sale.invoiceNo || '').trim().toUpperCase();
+                                const ordId = sale._id ? sale._id.toString().trim().toUpperCase() : '';
+                                const isOrder = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
+                                const isFulfilled = (sale.status || '').toLowerCase() === 'complete' || (sale.status || '').toLowerCase() === 'completed' || sale.isFulfilled === true;
 
                                 if (isOrder) {
-                                    if (fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo)) return;
+                                    if (isFulfilled || fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo) || (ordId && fulfilledOrdersSet.has(ordId))) return;
                                     brandObj.orderQuantity += sq;
                                     brandObj.orderPacket += sp;
                                     acc[key].orderQuantity += sq;
@@ -696,12 +698,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     }
 
                     const sType = (sale.saleType || '').toLowerCase();
-                    const inv = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
-                    const ordNo = (sale.orderNo || sale.invoiceNo || '').toUpperCase();
-                    const isOrder = sType === 'order' || inv.startsWith('ORD');
+                    const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
+                    const ordNo = (sale.orderNo || sale.invoiceNo || '').trim().toUpperCase();
+                    const ordId = sale._id ? sale._id.toString().trim().toUpperCase() : '';
+                    const isOrder = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
+                    const isFulfilled = (sale.status || '').toLowerCase() === 'complete' || (sale.status || '').toLowerCase() === 'completed' || sale.isFulfilled === true;
 
                     if (isOrder) {
-                        if (fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo)) return;
+                        if (isFulfilled || fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo) || (ordId && fulfilledOrdersSet.has(ordId))) return;
                         brandObj.orderQuantity += sq;
                         brandObj.orderPacket += sp;
                         group.orderQuantity += sq;
