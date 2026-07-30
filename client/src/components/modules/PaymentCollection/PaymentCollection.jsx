@@ -377,9 +377,17 @@ const PaymentCollection = () => {
 
             if (newStatus === 'Rejected') {
                 if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
-                    // Revert edit request
+                    // Revert edit request back to original data before edit
                     const updatedHistory = (customer.paymentHistory || []).map(p => {
                         if (p.receiptNo === paymentGroup.receiptNo) {
+                            if (p.originalData) {
+                                const { originalData, ...rest } = p;
+                                return {
+                                    ...rest,
+                                    ...originalData,
+                                    isEdited: false
+                                };
+                            }
                             return { ...p, isEdited: false };
                         }
                         return p;
@@ -394,7 +402,8 @@ const PaymentCollection = () => {
                 // Accept
                 const updatedHistory = (customer.paymentHistory || []).map(p => {
                     if (p.receiptNo === paymentGroup.receiptNo) {
-                        return { ...p, status: 'Accepted', isEdited: false };
+                        const { originalData, ...rest } = p;
+                        return { ...rest, status: 'Accepted', isEdited: false };
                     }
                     return p;
                 });
@@ -517,28 +526,54 @@ const PaymentCollection = () => {
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${newPayment.customerId}`);
             const customer = custRes.data;
 
-            // Remove all existing payment history items belonging to this receiptNo
+            // Find existing payment history items for this receipt
+            const existingEntries = (customer.paymentHistory || []).filter(p => p.receiptNo === editingPayment.receiptNo);
             const remainingHistory = (customer.paymentHistory || []).filter(p => p.receiptNo !== editingPayment.receiptNo);
 
             const isEditReq = (!isAdmin && !canApprove);
             // Map all items currently in the form to reconstructed payment history entries
-            const updatedPaymentEntries = activeItems.map((item, idx) => ({
-                receiptNo: editingPayment.receiptNo,
-                date: newPayment.date,
-                method: item.method,
-                bankName: item.bankName,
-                accountNo: item.accountNo,
-                branch: item.branch,
-                amount: parseFloat(item.amount),
-                receiveBy: item.receiveBy,
-                place: item.place,
-                reference: newPayment.reference,
-                status: editingPayment.status || 'Accepted',
-                isEdited: isEditReq ? true : false,
-                // The discount is stored only on the first item to prevent duplicate totals
-                discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
-                id: item.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-            }));
+            const updatedPaymentEntries = activeItems.map((item, idx) => {
+                const existingItem = existingEntries.find(p => p.id === item.id) || existingEntries[0];
+
+                let originalData = null;
+                if (isEditReq) {
+                    if (existingItem && existingItem.originalData) {
+                        originalData = existingItem.originalData;
+                    } else if (existingItem) {
+                        originalData = {
+                            date: existingItem.date,
+                            method: existingItem.method,
+                            bankName: existingItem.bankName || '',
+                            accountNo: existingItem.accountNo || '',
+                            branch: existingItem.branch || '',
+                            amount: parseFloat(existingItem.amount) || 0,
+                            receiveBy: existingItem.receiveBy || '',
+                            place: existingItem.place || '',
+                            reference: existingItem.reference || '',
+                            discount: parseFloat(existingItem.discount) || 0
+                        };
+                    }
+                }
+
+                return {
+                    receiptNo: editingPayment.receiptNo,
+                    date: newPayment.date,
+                    method: item.method,
+                    bankName: item.bankName,
+                    accountNo: item.accountNo,
+                    branch: item.branch,
+                    amount: parseFloat(item.amount),
+                    receiveBy: item.receiveBy,
+                    place: item.place,
+                    reference: newPayment.reference,
+                    status: editingPayment.status || 'Accepted',
+                    isEdited: isEditReq ? true : false,
+                    ...(originalData ? { originalData } : {}),
+                    // The discount is stored only on the first item to prevent duplicate totals
+                    discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
+                    id: item.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+                };
+            });
 
             // Prepend new payment entries to the remaining history list
             const updatedCustomer = {
@@ -682,11 +717,15 @@ const PaymentCollection = () => {
             ((p.customerName || '').toLowerCase().includes(filters.customer.toLowerCase()) ||
                 (p.companyName || '').toLowerCase().includes(filters.customer.toLowerCase()));
 
+        const isReq = (p.status || '').toLowerCase() === 'requested';
+        const isEditReq = p.isEdited === true && !isReq;
+
         if (isRequestedOnly) {
-            return matchSearch && isDateMatch && matchMethod && matchBankName && matchBranch && matchCustomer && (p.status || '').toLowerCase() === 'requested';
-        }
-        if (isEditRequestedOnly) {
-            return matchSearch && isDateMatch && matchMethod && matchBankName && matchBranch && matchCustomer && p.isEdited === true && (p.status || '').toLowerCase() !== 'requested';
+            if (!isReq) return false;
+        } else if (isEditRequestedOnly) {
+            if (!isEditReq) return false;
+        } else {
+            if (isReq || isEditReq) return false;
         }
 
         return matchSearch && isDateMatch && matchMethod && matchBankName && matchBranch && matchCustomer;
