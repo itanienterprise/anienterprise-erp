@@ -9,12 +9,13 @@ import axios from '../../../utils/api';
 import PaymentCollectionReport from './PaymentCollectionReport';
 import './PaymentCollection.css';
 
-const PaymentCollection = () => {
+const PaymentCollection = ({ addNotification, currentUser: propCurrentUser }) => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const [currentUser] = useState(() => {
+        if (propCurrentUser) return propCurrentUser;
         try {
             const saved = localStorage.getItem('currentUser');
             return saved ? JSON.parse(saved) : null;
@@ -253,6 +254,7 @@ const PaymentCollection = () => {
                         customerId: customer._id,
                         customerName: customer.customerName,
                         companyName: customer.companyName,
+                        customerAddress: customer.address || '',
                         readableCustomerId: customer.customerId
                     });
                 });
@@ -361,6 +363,21 @@ const PaymentCollection = () => {
                 setSubmitStatus(null);
                 fetchPayments();
             }, 1000);
+
+            // Notification
+            try {
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('en-GB');
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const deleterName = currentUser?.name || currentUser?.username || 'An employee';
+                const partyName = paymentToDelete?.companyName || paymentToDelete?.customerName || 'Customer';
+                if (addNotification) await addNotification(
+                    'Payment Deleted',
+                    `${dateStr} | ${timeStr} | ${deleterName} deleted payment (${paymentToDelete?.receiptNo}) from ${partyName}`,
+                    ['admin', 'incharge', 'sales manager'],
+                    ['admin']
+                );
+            } catch (notifErr) { console.error('Notification error:', notifErr); }
         } catch (error) {
             console.error('Error deleting payment:', error);
             setSubmitStatus('error');
@@ -410,6 +427,31 @@ const PaymentCollection = () => {
                 await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
             }
             fetchPayments();
+
+            // Notification
+            try {
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('en-GB');
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const actorName = currentUser?.name || currentUser?.username || 'Admin';
+                const partyName = paymentGroup.companyName || paymentGroup.customerName || 'Customer';
+                const receiptNo = paymentGroup.receiptNo || '';
+                const isEditRequest = paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested';
+
+                let title, msg;
+                if (isEditRequest) {
+                    title = newStatus === 'Accepted' ? 'Edit Request Accepted' : 'Edit Request Rejected';
+                    msg = newStatus === 'Accepted'
+                        ? `${dateStr} | ${timeStr} | ${actorName} accepted the edit request for payment (${receiptNo}) from ${partyName}`
+                        : `${dateStr} | ${timeStr} | ${actorName} rejected the edit request for payment (${receiptNo}) from ${partyName} — reverted to original`;
+                } else {
+                    title = newStatus === 'Accepted' ? 'Payment Request Accepted' : 'Payment Request Rejected';
+                    msg = newStatus === 'Accepted'
+                        ? `${dateStr} | ${timeStr} | ${actorName} accepted the payment request (${receiptNo}) of ৳${paymentGroup.items?.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toLocaleString('en-IN')} from ${partyName}`
+                        : `${dateStr} | ${timeStr} | ${actorName} rejected the payment request (${receiptNo}) from ${partyName}`;
+                }
+                if (addNotification) await addNotification(title, msg, ['admin', 'incharge', 'sales manager'], ['admin']);
+            } catch (notifErr) { console.error('Notification error:', notifErr); }
         } catch (error) {
             console.error('Error updating payment status:', error);
             alert('Failed to update payment status');
@@ -497,6 +539,24 @@ const PaymentCollection = () => {
 
             await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
             setSubmitStatus('success');
+
+            // Notification
+            try {
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('en-GB');
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+                const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
+                    rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
+                const totalAmt = newPayment.items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+                if (addNotification) await addNotification(
+                    'New Payment Requested',
+                    `${dateStr} | ${timeStr} | ${employeeName} requested a new payment of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName} (${nextReceiptNo})`,
+                    ['admin', 'incharge', 'sales manager'],
+                    ['admin']
+                );
+            } catch (notifErr) { console.error('Notification error:', notifErr); }
+
             fetchPayments();
             setTimeout(() => {
                 setShowAddModal(false);
@@ -583,6 +643,24 @@ const PaymentCollection = () => {
 
             await axios.put(`${API_BASE_URL}/api/customers/${newPayment.customerId}`, updatedCustomer);
             setSubmitStatus('success');
+
+            // Notification
+            try {
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('en-GB');
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const editorName = currentUser?.name || currentUser?.username || 'An employee';
+                const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
+                    rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
+                const totalAmt = activeItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+                const isEditReq = (!isAdmin && !canApproveEditRequest);
+                const title = isEditReq ? 'Payment Edit Requested' : 'Payment Updated';
+                const msg = isEditReq
+                    ? `${dateStr} | ${timeStr} | ${editorName} requested an edit on payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`
+                    : `${dateStr} | ${timeStr} | ${editorName} updated payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`;
+                if (addNotification) await addNotification(title, msg, ['admin', 'incharge', 'sales manager'], ['admin']);
+            } catch (notifErr) { console.error('Notification error:', notifErr); }
+
             fetchPayments();
             setTimeout(() => {
                 setShowAddModal(false);
@@ -1157,6 +1235,7 @@ const PaymentCollection = () => {
                                     <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('customerName')}>
                                         <div className="flex items-center">Party {renderSortIcon('customerName')}</div>
                                     </th>
+                                    <th className="sale-mgmt-th">Location</th>
                                     <th className="sale-mgmt-th">Payment Method</th>
                                     <th className="sale-mgmt-th">Bank Name</th>
                                     <th className="sale-mgmt-th">Branch</th>
@@ -1198,6 +1277,7 @@ const PaymentCollection = () => {
                                                     companyName: payment.companyName,
                                                     customerName: payment.customerName,
                                                     customerId: payment.customerId,
+                                                    customerAddress: payment.customerAddress || '',
                                                     status: payment.status,
                                                     isEdited: payment.isEdited,
                                                     items: []
@@ -1227,6 +1307,9 @@ const PaymentCollection = () => {
                                                     </td>
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         <div className="text-sm font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
+                                                    </td>
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
+                                                        <div className="text-sm text-gray-500 leading-tight truncate max-w-[150px]">{group.customerAddress || '—'}</div>
                                                     </td>
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         {isMultiple && !isExpanded ? (
@@ -1437,6 +1520,10 @@ const PaymentCollection = () => {
                                                     <div className="space-y-4 mt-4">
                                                         {group.items.map((item, idx) => (
                                                             <div key={idx} className={`space-y-2 ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-4' : ''}`}>
+                                                                <div className="mobile-card-row">
+                                                                    <span className="mobile-card-label">Location:</span>
+                                                                    <span className="mobile-card-value line-clamp-1">{group.customerAddress || '—'}</span>
+                                                                </div>
                                                                 <div className="mobile-card-row">
                                                                     <span className="mobile-card-label">Method:</span>
                                                                     <span className="mobile-card-value font-bold text-gray-900">{item.method || '—'}</span>

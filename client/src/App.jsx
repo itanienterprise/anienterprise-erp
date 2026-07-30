@@ -1895,7 +1895,7 @@ function App() {
         );
       case 'payment-collection-section':
         return (
-          <PaymentCollection />
+          <PaymentCollection addNotification={addNotification} currentUser={currentUser} />
         );
       case 'warehouse-section':
         return (

@@ -3351,9 +3351,10 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
                 idx + 1,
                 formatDate(p.date),
                 p.companyName || p.customerName || '-',
+                p.place || p.customerAddress || '-',
                 p.method || '-',
                 p.method === 'Cash' ? (p.receiveBy || '-') : (p.bankName || '-'),
-                p.method === 'Cash' ? (p.place || '-') : (p.branch || '-'),
+                p.branch || '-',
                 p.accountNo || '-',
                 `${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             ]);
@@ -3361,13 +3362,13 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
 
         // Add Grand Total
         tableRows.push([
-            { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             { content: `${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [0, 0, 0] } }
         ]);
 
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['SL', 'Date', 'Party Name', 'Method', 'Bank/Receiver', 'Branch', 'Account No', 'Amount']],
+            head: [['SL', 'Date', 'Party Name', 'Location', 'Method', 'Bank/Receiver', 'Branch', 'Account No', 'Amount']],
             body: tableRows,
             theme: 'grid',
             styles: {
