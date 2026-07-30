@@ -254,7 +254,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser }) =>
                         customerId: customer._id,
                         customerName: customer.customerName,
                         companyName: customer.companyName,
-                        customerAddress: customer.address || '',
+                        customerAddress: customer.location || '',
                         readableCustomerId: customer.customerId
                     });
                 });

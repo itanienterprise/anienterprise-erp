@@ -3273,7 +3273,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
 
 export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) => {
     try {
-        const doc = new jsPDF();
+        const doc = new jsPDF('l', 'mm', 'a4');
 
         // Use a format similar to other reports
         const formatDate = (dateString) => {
@@ -3354,26 +3354,28 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
                 p.place || p.customerAddress || '-',
                 p.method || '-',
                 p.method === 'Cash' ? (p.receiveBy || '-') : (p.bankName || '-'),
-                p.branch || '-',
+                (p.branch || '').trim() || '-',
                 p.accountNo || '-',
-                `${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                `${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                (p.reference || '').trim() || '-'
             ]);
         });
 
         // Add Grand Total
         tableRows.push([
             { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-            { content: `${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [0, 0, 0] } }
+            { content: `${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+            { content: '', styles: { fillColor: [240, 240, 240] } }
         ]);
 
         autoTable(doc, {
             startY: yPos + 10,
-            head: [['SL', 'Date', 'Party Name', 'Location', 'Method', 'Bank/Receiver', 'Branch', 'Account No', 'Amount']],
+            head: [['SL', 'Date', 'Party Name', 'Location', 'Method', 'Bank/Receiver', 'Branch', 'Account No', 'Amount', 'Remark']],
             body: tableRows,
             theme: 'grid',
             styles: {
                 fontSize: 9,
-                cellPadding: 1.2,
+                cellPadding: 1.4,
                 lineColor: [0, 0, 0],
                 lineWidth: 0.1,
                 textColor: [0, 0, 0],
@@ -3382,17 +3384,20 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
             headStyles: {
                 fillColor: [245, 245, 245],
                 fontStyle: 'bold',
-                halign: 'center'
+                halign: 'center',
+                fontSize: 9
             },
             columnStyles: {
-                0: { cellWidth: 8, halign: 'center' },  // SL
-                1: { cellWidth: 18 },                   // Date
-                2: { cellWidth: 32, overflow: 'hidden' }, // Party
-                3: { cellWidth: 25 },                   // Method
-                4: { cellWidth: 32 },                   // Bank
-                5: { cellWidth: 18 },                   // Branch
-                6: { cellWidth: 27 },                   // Acct
-                7: { cellWidth: 29, halign: 'right' }   // Amount
+                0: { cellWidth: 8, halign: 'center' },   // SL        8
+                1: { cellWidth: 20 },                      // Date      20
+                2: { cellWidth: 48, overflow: 'hidden' },  // Party     48
+                3: { cellWidth: 28, overflow: 'hidden' },  // Location  28
+                4: { cellWidth: 25 },                      // Method    20
+                5: { cellWidth: 35, overflow: 'hidden' },  // Bank/Rec  38
+                6: { cellWidth: 20, halign: 'left' },      // Branch    20
+                7: { cellWidth: 28 },                      // Acct No   28
+                8: { cellWidth: 27, halign: 'right' },     // Amount    27
+                9: { cellWidth: 40, overflow: 'hidden' }   // Remark    40 → Total 277mm
             },
             margin: { left: margin, right: margin }
         });
