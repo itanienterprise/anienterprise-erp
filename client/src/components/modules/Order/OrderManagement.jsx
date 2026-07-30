@@ -808,14 +808,22 @@ const OrderManagement = ({
     const handleStatusUpdate = async (order, newStatus) => {
         try {
             if (newStatus === 'Rejected') {
-                await axios.delete(`${API_BASE_URL}/api/sales/${order._id}`);
-                if (addNotification) {
-                    addNotification(`Order ${order.invoiceNo || order.orderNo} rejected and removed successfully!`, 'success');
+                if (order.isEdited === true && (order.status || '').toLowerCase() !== 'requested') {
+                    await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, { ...order, isEdited: false });
+                    if (addNotification) {
+                        addNotification(`Edit request for ${order.invoiceNo || order.orderNo} rejected!`, 'info');
+                    }
+                } else {
+                    await axios.delete(`${API_BASE_URL}/api/sales/${order._id}`);
+                    if (addNotification) {
+                        addNotification(`Order ${order.invoiceNo || order.orderNo} rejected and removed successfully!`, 'success');
+                    }
                 }
             } else {
                 const payload = {
                     ...order,
-                    status: newStatus
+                    status: newStatus,
+                    isEdited: false
                 };
                 await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, payload);
                 if (addNotification) {
@@ -2026,9 +2034,16 @@ const OrderManagement = ({
                                             </td>
 
                                             <td className="px-3 py-4 text-center whitespace-nowrap">
-                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${isRequested ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
-                                                    {isRequested ? 'Requested' : (order.status || 'Accepted')}
-                                                </span>
+                                                {order.isEdited === true && !isRequested ? (
+                                                    <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                        Edit Requested
+                                                    </span>
+                                                ) : (
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${isRequested ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
+                                                        {isRequested ? 'Requested' : (order.status || 'Accepted')}
+                                                    </span>
+                                                )}
                                             </td>
 
                                             <td className="px-3 py-4 text-center whitespace-nowrap">
@@ -2049,25 +2064,25 @@ const OrderManagement = ({
                                                             <EditIcon className="w-5 h-5" />
                                                         </button>
                                                     )}
-                                                    {isRequested && canApprove && (
+                                                    {(isRequested ? canApprove : (order.isEdited === true && (canApproveEditRequest || canApprove))) && (
                                                         <>
                                                             <button
                                                                 onClick={() => handleStatusUpdate(order, 'Accepted')}
                                                                 className="text-gray-400 hover:text-emerald-600 transition-colors p-1"
-                                                                title="Accept Order"
+                                                                title="Accept Order / Edit"
                                                             >
                                                                 <CheckIcon className="w-5 h-5" />
                                                             </button>
                                                             <button
                                                                 onClick={() => handleStatusUpdate(order, 'Rejected')}
                                                                 className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                                                                title="Reject Order"
+                                                                title="Reject Order / Edit"
                                                             >
                                                                 <XIcon className="w-5 h-5" />
                                                             </button>
                                                         </>
                                                     )}
-                                                    {!isRequested && canDelete && (
+                                                    {!isRequested && !order.isEdited && canDelete && (
                                                         <button
                                                             onClick={() => handleDeleteOrder(order)}
                                                             className="text-gray-400 hover:text-red-600 transition-colors p-1"
