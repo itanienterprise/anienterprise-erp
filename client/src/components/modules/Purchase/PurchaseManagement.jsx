@@ -125,7 +125,7 @@ const PurchaseManagement = ({ currentUser, addNotification }) => {
     const filteredPurchases = useMemo(() => {
         return purchases.filter(p => {
             if (isRequestedOnly && (p.status || '').toLowerCase() !== 'requested') return false;
-            if (!isRequestedOnly && (p.status || '').toLowerCase() === 'requested' && !canApprove) return false;
+            if (!isRequestedOnly && (p.status || '').toLowerCase() === 'requested') return false;
 
             if (searchQuery) {
                 const q = searchQuery.toLowerCase();

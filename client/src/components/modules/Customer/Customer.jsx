@@ -730,7 +730,7 @@ const Customer = ({
     const combinedHistory = useMemo(() => {
         if (!viewData) return [];
 
-        // Combine sales and payments
+        // Combine sales, payments, payouts, and purchases
         const sales = (viewData.salesHistory || []).map(s => ({
             ...s,
             type: 'sale',
@@ -743,8 +743,86 @@ const Customer = ({
             sortDate: new Date(p.date)
         }));
 
+        const payouts = (viewData.payToCustomerHistory || []).map(pc => ({
+            ...pc,
+            type: 'payToCustomer',
+            sortDate: new Date(pc.date)
+        }));
+
+        const directPurchases = (viewData.purchaseHistory || []).map(pu => ({
+            ...pu,
+            type: 'purchase',
+            invoiceNo: pu.purchaseNo || pu.invoiceNo || 'PUR-0000',
+            sortDate: new Date(pu.date)
+        }));
+
+        const matchedPurchases = (purchasesList || []).filter(p => {
+            if ((p.status || '').toLowerCase() === 'requested') return false;
+            return (
+                p.customerId === viewData?._id ||
+                p.customerId === viewData?.customerId ||
+                (p.companyName && p.companyName.toLowerCase() === (viewData?.companyName || '').toLowerCase()) ||
+                (p.customerName && p.customerName.toLowerCase() === (viewData?.customerName || '').toLowerCase()) ||
+                (p.supplierName && (
+                    p.supplierName.toLowerCase() === (viewData?.companyName || '').toLowerCase() ||
+                    p.supplierName.toLowerCase() === (viewData?.customerName || '').toLowerCase()
+                ))
+            );
+        }).flatMap(p => {
+            if (p.items && Array.isArray(p.items)) {
+                return p.items.flatMap(item => {
+                    if (item.brandEntries && Array.isArray(item.brandEntries)) {
+                        return item.brandEntries.map(b => ({
+                            _id: `${p._id}-${item.productName}-${b.brand}`,
+                            invoiceNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
+                            date: p.date,
+                            product: item.productName || item.product,
+                            brand: b.brand,
+                            quantity: b.qty || 0,
+                            rate: b.rate || 0,
+                            amount: b.total || (parseFloat(b.qty || 0) * parseFloat(b.rate || 0)),
+                            discount: p.discount || 0,
+                            paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
+                            type: 'purchase',
+                            sortDate: new Date(p.date)
+                        }));
+                    }
+                    return [{
+                        _id: `${p._id}-${item.productName}`,
+                        invoiceNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
+                        date: p.date,
+                        product: item.productName || item.product,
+                        brand: item.brand || '-',
+                        quantity: item.qty || item.quantity || 0,
+                        rate: item.rate || 0,
+                        amount: item.total || item.amount || 0,
+                        discount: p.discount || 0,
+                        paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
+                        type: 'purchase',
+                        sortDate: new Date(p.date)
+                    }];
+                });
+            }
+            return [{
+                _id: p._id,
+                invoiceNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
+                date: p.date,
+                product: p.product || p.productName || '-',
+                brand: p.brand || '-',
+                quantity: p.quantity || p.qty || 0,
+                rate: p.rate || 0,
+                amount: p.totalAmount || p.amount || 0,
+                discount: p.discount || 0,
+                paid: p.paid || p.paidAmount || 0,
+                type: 'purchase',
+                sortDate: new Date(p.date)
+            }];
+        });
+
+        const purchases = [...directPurchases, ...matchedPurchases];
+
         // Combine and sort chronologically (earliest first for absolute balance calculation)
-        const all = [...sales, ...payments].sort((a, b) => a.sortDate - b.sortDate);
+        const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
 
         // Calculate running balance on ALL history records
         let currentBalance = 0;
@@ -754,10 +832,18 @@ const Customer = ({
                 const pd = parseFloat(item.paid) || 0;
                 const disc = parseFloat(item.discount) || 0;
                 currentBalance += (amt - pd - disc);
-            } else {
+            } else if (item.type === 'payment') {
                 const amt = parseFloat(item.amount) || 0;
                 const disc = parseFloat(item.discount) || 0;
                 currentBalance -= (amt + disc);
+            } else if (item.type === 'payToCustomer') {
+                const amt = parseFloat(item.amount) || 0;
+                currentBalance += amt;
+            } else if (item.type === 'purchase') {
+                const amt = parseFloat(item.amount) || 0;
+                const pd = parseFloat(item.paid) || 0;
+                const disc = parseFloat(item.discount) || 0;
+                currentBalance -= (amt - pd - disc);
             }
             return { ...item, runningBalance: currentBalance };
         });
@@ -765,10 +851,10 @@ const Customer = ({
         // Now filter the records with balance info
         const filteredAll = historyWithBalance.filter(item => {
             const matchesSearch = !historySearchQuery ||
-                ((item.invoiceNo || item.lcNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.invoiceNo || item.lcNo || item.receiptNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
                 ((item.product || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
                 ((item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
-                ((item.reference || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
+                ((item.reference || item.remarks || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
 
             const matchesFilters =
                 (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
@@ -789,14 +875,14 @@ const Customer = ({
                 aVal = new Date(a.date);
                 bVal = new Date(b.date);
             } else if (key === 'lcNo') {
-                aVal = (a.invoiceNo || a.lcNo || '').toLowerCase();
-                bVal = (b.invoiceNo || b.lcNo || '').toLowerCase();
+                aVal = (a.invoiceNo || a.lcNo || a.receiptNo || '').toLowerCase();
+                bVal = (b.invoiceNo || b.lcNo || b.receiptNo || '').toLowerCase();
             } else if (key === 'amount') {
-                aVal = a.type === 'sale' ? (parseFloat(a.amount) || 0) : 0;
-                bVal = b.type === 'sale' ? (parseFloat(b.amount) || 0) : 0;
+                aVal = a.type === 'sale' ? (parseFloat(a.amount) || 0) : (a.type === 'payToCustomer' ? (parseFloat(a.amount) || 0) : 0);
+                bVal = b.type === 'sale' ? (parseFloat(b.amount) || 0) : (b.type === 'payToCustomer' ? (parseFloat(b.amount) || 0) : 0);
             } else if (key === 'paid') {
-                aVal = a.type === 'sale' ? (parseFloat(a.paid) || 0) : (parseFloat(a.amount) || 0);
-                bVal = b.type === 'sale' ? (parseFloat(b.paid) || 0) : (parseFloat(b.amount) || 0);
+                aVal = a.type === 'payment' ? (parseFloat(a.amount) || 0) : (a.type === 'sale' ? (parseFloat(a.paid) || 0) : 0);
+                bVal = b.type === 'payment' ? (parseFloat(b.amount) || 0) : (a.type === 'sale' ? (parseFloat(b.paid) || 0) : 0);
             } else if (key === 'balance') {
                 aVal = a.runningBalance;
                 bVal = b.runningBalance;
@@ -812,7 +898,7 @@ const Customer = ({
             if (aVal > bVal) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [viewData, historySearchQuery, historyFilters, historySortConfig]);
+    }, [viewData, purchasesList, historySearchQuery, historyFilters, historySortConfig]);
 
     const openingBalance = useMemo(() => {
         if (!viewData) return 0;
@@ -2949,11 +3035,14 @@ const Customer = ({
                                         </>
                                     )}
 
-                                    {/* All History Table */}
+                                    {/* All History Table (Customer Account Ledger) */}
                                     {activeHistoryTab === 'all' && (
                                         <>
                                             <div className="flex items-center justify-between mb-3 md:mb-4">
-                                                <h4 className="text-base md:text-lg font-bold text-gray-800">All Transaction History</h4>
+                                                <div>
+                                                    <h4 className="text-base md:text-lg font-bold text-gray-800">Customer Account Ledger</h4>
+                                                    <p className="text-xs text-gray-500 font-medium">Chronological ledger statement of all debits, credits, and running balance</p>
+                                                </div>
                                             </div>
 
                                             <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
@@ -2970,24 +3059,16 @@ const Customer = ({
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('lcNo')}>
                                                                     <div className="flex items-center gap-1">
-                                                                        <span>{viewData?.customerType?.toLowerCase().includes('party') ? 'LC No' : 'Invoice No'}</span>
+                                                                        <span>Ref No</span>
                                                                         <SortIcon config={historySortConfig} columnKey="lcNo" />
                                                                     </div>
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('product')}>
                                                                     <div className="flex items-center gap-1">
-                                                                        <span>Product</span>
+                                                                        <span>Particulars</span>
                                                                         <SortIcon config={historySortConfig} columnKey="product" />
                                                                     </div>
                                                                 </th>
-                                                                {viewData.customerType?.includes('Party') && (
-                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('truck')}>
-                                                                        <div className="flex items-center gap-1">
-                                                                            <span>Truck</span>
-                                                                            <SortIcon config={historySortConfig} columnKey="truck" />
-                                                                        </div>
-                                                                    </th>
-                                                                )}
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('quantity')}>
                                                                     <div className="flex items-center justify-start gap-1">
                                                                         <span>Qty</span>
@@ -3002,17 +3083,17 @@ const Customer = ({
                                                                 </th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
                                                                     <div className="flex items-center justify-start gap-1">
-                                                                        <span>Amount</span>
+                                                                        <span>Debit (Dr)</span>
                                                                         <SortIcon config={historySortConfig} columnKey="amount" />
                                                                     </div>
                                                                 </th>
-                                                                <th className="px-4 py-3 font-semibold text-gray-600">Payment Details</th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('paid')}>
                                                                     <div className="flex items-center justify-start gap-1">
-                                                                        <span>Paid</span>
+                                                                        <span>Credit (Cr)</span>
                                                                         <SortIcon config={historySortConfig} columnKey="paid" />
                                                                     </div>
                                                                 </th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-left">Discount</th>
                                                                 <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('balance')}>
                                                                     <div className="flex items-center justify-start gap-1">
                                                                         <span>Balance</span>
@@ -3024,7 +3105,7 @@ const Customer = ({
                                                         <tbody>
                                                             {isFiltered && combinedHistory && combinedHistory.length > 0 && (
                                                                 <tr className="border-b border-gray-100 bg-gray-50/30 font-medium">
-                                                                    <td colSpan={viewData.customerType?.includes('Party') ? 9 : 8} className="px-4 py-3 text-gray-950 font-bold text-center">
+                                                                    <td colSpan="8" className="px-4 py-3 text-gray-950 font-bold text-center">
                                                                         Opening Balance
                                                                     </td>
                                                                     <td className="px-4 py-3 text-left font-black text-orange-600">৳{openingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -3040,9 +3121,7 @@ const Customer = ({
                                                                     if (existing) {
                                                                         existing.amount = (parseFloat(existing.amount) || 0) + (parseFloat(item.amount) || 0);
                                                                         existing.paid = (parseFloat(existing.paid) || 0) + (parseFloat(item.paid) || 0);
-                                                                        existing.truck = (parseFloat(existing.truck) || 0) + (parseFloat(item.truck) || 0);
 
-                                                                        // Initialize sub-items for merging logic if not present
                                                                         if (!existing.items) {
                                                                             existing.items = [{
                                                                                 product: existing.product_original || existing.product,
@@ -3066,7 +3145,6 @@ const Customer = ({
                                                                             });
                                                                         }
 
-                                                                        // Rebuild display properties
                                                                         existing.product = existing.items.map(si => si.product || '—').join('\n');
                                                                         existing.quantity_display = existing.items.map(si => si.quantity.toLocaleString('en-US')).join('\n');
                                                                         existing.rate_display = existing.items.map(si => si.rate > 0 ? `৳${si.rate.toLocaleString('en-IN')}` : '—').join('\n');
@@ -3084,52 +3162,90 @@ const Customer = ({
                                                                     });
                                                                     return acc;
                                                                 }, []).map((item, index) => (
-                                                                    <tr key={index} className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${item.type === 'payment' ? 'bg-emerald-50/20' : 'bg-white'}`}>
+                                                                    <tr key={index} className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${item.type === 'payment' ? 'bg-emerald-50/10' : (item.type === 'payToCustomer' ? 'bg-indigo-50/10' : (item.type === 'purchase' ? 'bg-amber-50/10' : 'bg-white'))}`}>
                                                                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
-                                                                        <td className="px-4 py-3 font-bold text-gray-900 uppercase">{item.invoiceNo || item.lcNo || '—'}</td>
-                                                                        <td className="px-4 py-3 text-gray-700 whitespace-pre-wrap">{item.product || '—'}</td>
-                                                                        {viewData.customerType?.includes('Party') && (
-                                                                            <td className="px-4 py-3 text-gray-700">{item.truck || '—'}</td>
-                                                                        )}
-                                                                        <td className="px-4 py-3 text-left text-gray-900 whitespace-pre-wrap">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString('en-US') : '—')}</td>
-                                                                        <td className="px-4 py-3 text-left text-gray-500 whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-IN')}` : '—')}</td>
-                                                                        <td className="px-4 py-3 text-left font-black text-violet-700">{item.type === 'sale' ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}` : '—'}</td>
-                                                                        <td className="px-4 py-3 text-gray-600 text-xs">
-                                                                            {item.type === 'payment' ? (
-                                                                                <div className="flex flex-col">
-                                                                                    <span className="font-bold text-gray-900">{item.bankName || item.receiveBy || '—'}</span>
-                                                                                    <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
-                                                                                        {item.method} {item.reference ? `(Ref: ${item.reference})` : ''}
-                                                                                        {parseFloat(item.discount) > 0 && (
-                                                                                            <span className="px-1.5 py-0.5 bg-pink-50 text-pink-600 rounded-md font-bold border border-pink-100 flex items-center gap-0.5 ml-1">
-                                                                                                <span className="text-[8px]">Disc:</span>
-                                                                                                ৳{parseFloat(item.discount).toLocaleString('en-IN')}
-                                                                                            </span>
-                                                                                        )}
+                                                                        <td className="px-4 py-3 font-bold text-gray-900 uppercase text-xs">{item.invoiceNo || item.lcNo || item.receiptNo || '—'}</td>
+                                                                        <td className="px-4 py-3 text-gray-800 text-xs">
+                                                                            <div className="flex flex-col gap-0.5">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
+                                                                                        item.type === 'sale'
+                                                                                            ? 'bg-blue-50 text-blue-600 border border-blue-100'
+                                                                                            : (item.type === 'payment'
+                                                                                                ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                                                                : (item.type === 'payToCustomer'
+                                                                                                    ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                                                                                                    : 'bg-amber-50 text-amber-600 border border-amber-100'))
+                                                                                    }`}>
+                                                                                        {item.type === 'sale' ? 'Sale' : (item.type === 'payment' ? 'Collection' : (item.type === 'payToCustomer' ? 'Payout' : 'Purchase'))}
+                                                                                    </span>
+                                                                                    <span className="whitespace-pre-wrap font-medium">
+                                                                                        {item.type === 'sale'
+                                                                                            ? (item.product
+                                                                                                ? `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}`
+                                                                                                : 'Sales Invoice')
+                                                                                            : (item.type === 'purchase'
+                                                                                                ? (item.product
+                                                                                                    ? `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}`
+                                                                                                    : 'Purchase Invoice')
+                                                                                                : (item.type === 'payment'
+                                                                                                    ? `${item.method}${item.bankName || item.receiveBy ? ` (${item.bankName || item.receiveBy})` : ''}`
+                                                                                                    : `${item.method}${item.bankName || item.paidBy ? ` (${item.bankName || item.paidBy})` : ''}`
+                                                                                                )
+                                                                                            )
+                                                                                        }
                                                                                     </span>
                                                                                 </div>
-                                                                            ) : (
-                                                                                parseFloat(item.paid || 0) > 0 ? <span className="font-bold text-teal-600 text-[11px] uppercase tracking-wider">Truck Fare</span> : '—'
-                                                                            )}
+                                                                                {(item.type === 'sale' || item.type === 'purchase') && parseFloat(item.paid || item.truckFare || 0) > 0 && (
+                                                                                    <div className="text-[10px] text-teal-600 font-medium pl-0.5">
+                                                                                        Truck Fare paid (৳{parseFloat(item.paid || item.truckFare).toLocaleString('en-IN')})
+                                                                                    </div>
+                                                                                )}
+                                                                                {(item.remarks || item.note || item.reference || item.narration) && (
+                                                                                    <div className="text-[10px] text-gray-500 italic pl-0.5">
+                                                                                        Note: {item.remarks || item.note || item.reference || item.narration}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
                                                                         </td>
-                                                                        <td className="px-4 py-3 text-left font-black text-emerald-600">
+                                                                        <td className="px-4 py-3 text-left text-gray-900 whitespace-pre-wrap text-xs">{item.quantity_display || (parseFloat(item.quantity || 0) > 0 ? parseFloat(item.quantity).toLocaleString('en-US') : '—')}</td>
+                                                                        <td className="px-4 py-3 text-left text-gray-500 whitespace-pre-wrap text-xs">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-IN')}` : '—')}</td>
+                                                                        <td className="px-4 py-3 text-left font-black text-violet-700 text-xs">
                                                                             {item.type === 'sale'
-                                                                                ? (parseFloat(item.paid || 0) > 0 ? `৳${parseFloat(item.paid).toLocaleString('en-IN')}` : '—')
-                                                                                : `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
+                                                                                ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
+                                                                                : (item.type === 'payToCustomer'
+                                                                                    ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
+                                                                                    : '—'
+                                                                                )
                                                                             }
                                                                         </td>
-                                                                        <td className="px-4 py-3 text-left font-black text-orange-600">৳{item.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                        <td className="px-4 py-3 text-left font-black text-emerald-600 text-xs">
+                                                                            {item.type === 'payment'
+                                                                                ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
+                                                                                : (item.type === 'purchase'
+                                                                                    ? `৳${parseFloat(item.amount || 0).toLocaleString('en-IN')}`
+                                                                                    : (item.type === 'sale' && parseFloat(item.paid || 0) > 0
+                                                                                        ? `৳${parseFloat(item.paid).toLocaleString('en-IN')}`
+                                                                                        : '—'
+                                                                                    )
+                                                                                )
+                                                                            }
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-left text-xs font-bold text-pink-600">
+                                                                            {parseFloat(item.discount || 0) > 0 ? `৳${parseFloat(item.discount).toLocaleString('en-IN')}` : '—'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-left font-black text-orange-600 text-xs">৳{item.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                                     </tr>
                                                                 ))
                                                             ) : (
                                                                 <tr>
-                                                                    <td colSpan="10" className="px-4 py-12 text-left text-gray-400 font-medium italic">No combined history found</td>
+                                                                    <td colSpan="9" className="px-4 py-12 text-left text-gray-400 font-medium italic">No ledger entries found</td>
                                                                 </tr>
                                                             )}
                                                         </tbody>
                                                     </table>
 
-                                                    {/* Mobile All History Card View */}
+                                                    {/* Mobile Customer Account Ledger Card View */}
                                                     <div className="block md:hidden p-4 space-y-3">
                                                         {combinedHistory && combinedHistory.length > 0 ? (
                                                             combinedHistory.reduce((acc, item) => {

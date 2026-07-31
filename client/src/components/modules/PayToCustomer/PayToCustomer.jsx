@@ -329,11 +329,16 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser }) => {
         const paidAmount = customAmount !== null ? customAmount : (parseFloat(payment.amount) || 0);
         const tableItems = items || [payment];
 
+        const dueBal = customer ? calculateCustomerPurchaseBalance(customer) : 0;
+        const prevBal = dueBal + paidAmount;
+
         const receiptData = {
             ...payment,
             amount: paidAmount,
-            address: customer?.address || '',
+            address: customer?.address || customer?.location || '',
             phone: customer?.phone || '',
+            previousBalance: payment.previousBalance !== undefined ? payment.previousBalance : prevBal,
+            balanceDue: payment.balanceDue !== undefined ? payment.balanceDue : dueBal,
             items: tableItems
         };
 
@@ -1151,17 +1156,17 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser }) => {
                                                                 <>
                                                                     <button
                                                                         onClick={() => handleStatusUpdate(group, 'Accepted')}
-                                                                        className="p-1 text-emerald-600 hover:bg-emerald-50 rounded font-bold text-xs"
+                                                                        className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
                                                                         title="Accept"
                                                                     >
-                                                                        Accept
+                                                                        <CheckIcon className="w-5 h-5" />
                                                                     </button>
                                                                     <button
                                                                         onClick={() => handleStatusUpdate(group, 'Rejected')}
-                                                                        className="p-1 text-red-600 hover:bg-red-50 rounded font-bold text-xs"
+                                                                        className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
                                                                         title="Reject"
                                                                     >
-                                                                        Reject
+                                                                        <XIcon className="w-5 h-5" />
                                                                     </button>
                                                                 </>
                                                             )}

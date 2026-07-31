@@ -3440,8 +3440,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         const isAll = activeTab === 'all';
         const isPayment = activeTab === 'payment';
 
-        // Match the orientation and margin of other reports
-        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        // Match the orientation and margin of other reports (Landscape for maximum column spacing)
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
         const margin = 5; // Standard margin in other reports
@@ -3519,24 +3519,24 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         const isParty = customerType.includes('party');
 
         if (isAll) {
+            reportTitle = "CUSTOMER ACCOUNT LEDGER";
             if (summary.isFiltered) {
                 const openingBalanceRow = [
                     "—",
                     {
                         content: "Opening Balance",
-                        colSpan: isParty ? 8 : 7,
+                        colSpan: 8,
                         styles: { halign: 'center', fontStyle: 'bold' }
                     },
-                    "—",
-                    `${(summary.openingBalance || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                    `${(summary.openingBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 ];
                 tableRows.push(openingBalanceRow);
             }
 
             let grandQty = 0;
-            let grandAmt = 0;
-            let grandPaid = 0;
-            let grandTrucks = 0;
+            let grandDebit = 0;
+            let grandCredit = 0;
+            let grandDiscount = 0;
 
             // Merge same invoice numbers
             const chronoHistory = sortedHistoryData.reduce((acc, item) => {
@@ -3554,6 +3554,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     if (!existing.items) {
                         existing.items = [{
                             product: existing.product_original || existing.product,
+                            brand: existing.brand,
                             quantity: parseFloat(existing.quantity_original || existing.quantity),
                             rate: parseFloat(existing.rate_original || existing.rate)
                         }];
@@ -3562,6 +3563,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     const itemRate = parseFloat(item.rate || 0);
                     const matchingItem = existing.items.find(si =>
                         (si.product?.trim() === item.product?.trim()) &&
+                        ((si.brand || '').trim() === (item.brand || '').trim()) &&
                         (parseFloat(si.rate || 0) === itemRate)
                     );
                     if (matchingItem) {
@@ -3569,13 +3571,18 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     } else {
                         existing.items.push({
                             product: item.product,
+                            brand: item.brand,
                             quantity: parseFloat(item.quantity || 0),
                             rate: itemRate
                         });
                     }
 
-                    // Rebuild display properties (PDF uses clean numbers without Taka symbol)
-                    existing.product = existing.items.map(si => si.product || '—').join('\n');
+                    // Rebuild display properties
+                    existing.product = existing.items.map(si => {
+                        const p = si.product || '—';
+                        const b = (si.brand && si.brand !== '-') ? ` (${si.brand})` : '';
+                        return `${p}${b}`;
+                    }).join('\n');
                     existing.quantity_display = existing.items.map(si => (si.quantity || 0).toLocaleString('en-US')).join('\n');
                     existing.rate_display = existing.items.map(si => (si.rate || 0) > 0 ? si.rate.toLocaleString('en-IN') : '—').join('\n');
 
@@ -3595,95 +3602,120 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             let lastBalance = chronoHistory.length > 0 ? chronoHistory[chronoHistory.length - 1].runningBalance : 0;
 
             chronoHistory.forEach((item, idx) => {
-                const qty = item.type === 'sale' ? parseFloat(item.quantity || 0) : 0;
-                const amt = item.type === 'sale' ? parseFloat(item.amount || 0) : 0;
-                const paid = item.type === 'sale' ? parseFloat(item.paid || 0) : parseFloat(item.amount || 0);
-                const runningBal = parseFloat(item.runningBalance || 0);
-                const trucks = parseFloat(item.truck || 0) || 0;
+                const typeLabel = item.type === 'sale' ? '[SALE]' : (item.type === 'payment' ? '[COLLECTION]' : (item.type === 'payToCustomer' ? '[PAYOUT]' : '[PURCHASE]'));
+                let particularsStr = "";
+                if (item.type === 'sale' || item.type === 'purchase') {
+                    const pName = item.product ? (item.items ? item.product : `${item.product}${item.brand && item.brand !== '-' ? ` (${item.brand})` : ''}`) : (item.type === 'sale' ? 'Sales Invoice' : 'Purchase Invoice');
+                    particularsStr = `${typeLabel} ${pName}`;
+                } else if (item.type === 'payment') {
+                    const mStr = `${item.method}${item.bankName || item.receiveBy ? ` (${item.bankName || item.receiveBy})` : ''}`;
+                    particularsStr = `${typeLabel} ${mStr}`;
+                } else if (item.type === 'payToCustomer') {
+                    const mStr = `${item.method}${item.bankName || item.paidBy ? ` (${item.bankName || item.paidBy})` : ''}`;
+                    particularsStr = `${typeLabel} ${mStr}`;
+                }
 
-                grandQty += qty;
-                grandAmt += amt;
-                grandPaid += paid;
-                grandTrucks += trucks;
+                const tfVal = parseFloat(item.paid || item.truckFare || 0);
+                if ((item.type === 'sale' || item.type === 'purchase') && tfVal > 0) {
+                    particularsStr += `\nTruck Fare paid (Tk. ${tfVal.toLocaleString('en-IN')})`;
+                }
 
-                const details = item.type === 'payment'
-                    ? `${item.method === 'Cash' ? (item.receiveBy || item.method) : (item.bankName || item.mobileType || item.method)}${item.method && (item.bankName || item.receiveBy || item.mobileType) ? ` (${item.method})` : ''}${item.reference ? ` [Ref: ${item.reference}]` : ''}${parseFloat(item.discount) > 0 ? `\n(Disc: ${parseFloat(item.discount).toLocaleString('en-IN')})` : ''}`
-                    : (parseFloat(item.paid || 0) > 0 ? 'Truck Fare' : '-');
+                const noteVal = item.remarks || item.note || item.reference || item.narration;
+                if (noteVal) {
+                    particularsStr += `\nNote: ${noteVal}`;
+                }
+
+                const debitVal = (item.type === 'sale' || item.type === 'payToCustomer') ? (parseFloat(item.amount || 0)) : 0;
+                const creditVal = item.type === 'payment' || item.type === 'purchase'
+                    ? (parseFloat(item.amount || 0))
+                    : (item.type === 'sale' && parseFloat(item.paid || 0) > 0 ? parseFloat(item.paid || 0) : 0);
+                const discVal = parseFloat(item.discount || 0);
+                const qtyVal = item.type === 'sale' ? parseFloat(item.quantity || 0) : 0;
+
+                grandQty += qtyVal;
+                grandDebit += debitVal;
+                grandCredit += creditVal;
+                grandDiscount += discVal;
 
                 const row = [
                     idx + 1,
                     formatDate(item.date),
-                    item.invoiceNo || item.lcNo || '-',
-                    item.product || '-'
-                ];
-
-                if (isParty) {
-                    row.push(item.truck || '-');
-                }
-
-                row.push(
-                    item.type === 'sale' ? (item.quantity_display || (qty > 0 ? qty.toLocaleString('en-US') : '-')) : '-',
+                    item.invoiceNo || item.lcNo || item.receiptNo || '-',
+                    particularsStr,
+                    item.type === 'sale' ? (item.quantity_display || (qtyVal > 0 ? qtyVal.toLocaleString('en-US') : '-')) : '-',
                     item.type === 'sale' ? (item.rate_display || (parseFloat(item.rate || 0) > 0 ? parseFloat(item.rate || 0).toLocaleString('en-IN') : '-')) : '-',
-                    amt > 0 ? `${amt.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-',
-                    details,
-                    paid > 0 ? `${paid.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-',
-                    `${runningBal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
-                );
+                    debitVal > 0 ? debitVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
+                    creditVal > 0 ? creditVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
+                    discVal > 0 ? discVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
+                    parseFloat(item.runningBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                ];
                 tableRows.push(row);
             });
 
-            const head = ['SL', 'Date', isParty ? 'LC No' : 'Invoice No', 'Product'];
-            if (isParty) head.push('Truck');
-            head.push('Qty', 'Rate', 'Amount', 'Payment Details', 'Paid', 'Balance');
+            const head = ['SL', 'Date', 'Ref No', 'Particulars', 'Qty', 'Rate', 'Debit (Dr)', 'Credit (Cr)', 'Discount', 'Balance'];
 
             const foot = [
                 { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: grandQty > 0 ? grandQty.toLocaleString('en-US') : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } },
+                { content: grandDebit > 0 ? grandDebit.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: grandCredit > 0 ? grandCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: grandDiscount > 0 ? grandDiscount.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
             ];
-            if (isParty) {
-                foot.push({ content: grandTrucks.toLocaleString('en-US'), styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 240] } });
-            }
-            foot.push(
-                { content: grandQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                { content: '', styles: { fillColor: [240, 240, 240] } },
-                { content: grandAmt.toLocaleString('en-IN', { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                { content: '', styles: { fillColor: [240, 240, 240] } },
-                { content: grandPaid.toLocaleString('en-IN', { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
-                { content: lastBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
 
-            );
+            // Draw Summary Cards row below Info section
+            const cardY = yPos + 3;
+            const cardWidth = 65;
+            const cardHeight = 12;
+            const cardGap = (pageWidth - (margin * 2) - (cardWidth * 4)) / 3;
+
+            const drawSummaryCard = (x, title, value) => {
+                doc.setFillColor(250, 250, 250);
+                doc.setDrawColor(200, 200, 200);
+                doc.setLineWidth(0.15);
+                doc.rect(x, cardY, cardWidth, cardHeight, 'FD');
+
+                doc.setFontSize(7);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(100, 100, 100);
+                doc.text(title, x + 3, cardY + 4);
+
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(0, 0, 0);
+                doc.text(value, x + 3, cardY + 9.5);
+            };
+
+            let xCur = margin;
+            drawSummaryCard(xCur, "TOTAL DEBIT (DR)", `Tk. ${grandDebit.toLocaleString('en-IN')}`);
+            xCur += cardWidth + cardGap;
+            drawSummaryCard(xCur, "TOTAL CREDIT (CR)", `Tk. ${grandCredit.toLocaleString('en-IN')}`);
+            xCur += cardWidth + cardGap;
+            drawSummaryCard(xCur, "TOTAL DISCOUNT", `Tk. ${grandDiscount.toLocaleString('en-IN')}`);
+            xCur += cardWidth + cardGap;
+            drawSummaryCard(xCur, "CURRENT BALANCE", `Tk. ${lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
             autoTable(doc, {
-                startY: yPos + 10,
+                startY: cardY + cardHeight + 4,
                 head: [head],
                 body: tableRows,
                 foot: [foot],
                 theme: 'grid',
                 showFoot: 'lastPage',
-                styles: { fontSize: 9, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
+                styles: { fontSize: 9, cellPadding: { top: 1, bottom: 1, left: 1.5, right: 1.5 }, minCellHeight: 5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center', noWrap: true },
-                columnStyles: isParty ? {
-                    0: { halign: 'center', cellWidth: 7 },
-                    1: { cellWidth: 20, halign: 'center' }, // Date (increased from 18 to prevent line break)
-                    2: { cellWidth: 20 },
-                    3: { cellWidth: 25 },
-                    4: { cellWidth: 15, halign: 'center' },
-                    5: { halign: 'right', cellWidth: 15 },
-                    6: { halign: 'right', cellWidth: 11 }, // Rate (reduced to make space)
-                    7: { halign: 'right', cellWidth: 20 },
-                    8: { cellWidth: 25 },
-                    9: { halign: 'right', cellWidth: 20 },
-                    10: { halign: 'right', cellWidth: 22 }
-                } : {
-                    0: { halign: 'center', cellWidth: 7 },
-                    1: { cellWidth: 20, halign: 'center' }, // Date (increased from 18 to prevent line break)
-                    2: { cellWidth: 18 },
-                    3: { cellWidth: 25 },
-                    4: { halign: 'right', cellWidth: 18 }, // Qty
-                    5: { halign: 'right', cellWidth: 11 }, // Rate (reduced to make space)
-                    6: { halign: 'right', cellWidth: 22 }, // Amount
-                    7: { cellWidth: 35 }, // Details
-                    8: { halign: 'right', cellWidth: 20 }, // Paid
-                    9: { halign: 'right', cellWidth: 24 }  // Balance
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 10 },
+                    1: { cellWidth: 24, halign: 'center' },
+                    2: { cellWidth: 26, halign: 'center' },
+                    3: { cellWidth: 85, halign: 'left' },
+                    4: { halign: 'right', cellWidth: 22 },
+                    5: { halign: 'right', cellWidth: 20 },
+                    6: { halign: 'right', cellWidth: 25, fontStyle: 'bold' },
+                    7: { halign: 'right', cellWidth: 25, fontStyle: 'bold' },
+                    8: { halign: 'right', cellWidth: 22 },
+                    9: { halign: 'right', cellWidth: 28, fontStyle: 'bold' }
                 },
                 margin: { left: margin, right: margin }
             });
@@ -3775,8 +3807,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
             ]);
 
             const headers = isParty
-                ? [['SL', 'Date', 'LC No', 'Product', 'Truck', 'Qty', 'Rate', 'Amount', 'Disc']]
-                : [['SL', 'Date', 'Invoice No', 'Product', 'Brand', 'Qty', 'Rate', 'Amount', 'Disc']];
+                ? [['SL', 'Date', 'LC No', 'Product', 'Truck', 'Qty(kg)', 'Rate(TK)', 'Amount', 'Disc']]
+                : [['SL', 'Date', 'Invoice No', 'Product', 'Brand', 'Qty(KG)', 'Rate(TK)', 'Amount', 'Disc']];
 
             autoTable(doc, {
                 startY: yPos + 10,
@@ -3842,10 +3874,10 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         }
 
         // --- Signatures ---
-        yPos = doc.lastAutoTable.finalY + 30;
-        if (yPos + 40 > pageHeight) {
+        yPos = doc.lastAutoTable.finalY + 15;
+        if (yPos + 20 > pageHeight) {
             doc.addPage();
-            yPos = 30;
+            yPos = 25;
         }
 
         const sigWidth = 45;
@@ -5457,15 +5489,19 @@ export const generatePayToCustomerVoucherPDF = async (payment) => {
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
         const margin = 10;
+        const contentWidth = pageWidth - (margin * 2);
 
-        // Background Accents
+        // --- Background Patterns (Organic Waves - Adjusted for Portrait) ---
         doc.setFillColor(255, 247, 237);
         doc.circle(0, 0, 35, 'F');
+        doc.setFillColor(254, 215, 170);
+
+        doc.setFillColor(255, 247, 237);
         doc.circle(pageWidth, pageHeight, 45, 'F');
         doc.setFillColor(254, 215, 170);
         doc.circle(0, pageHeight, 30, 'F');
 
-        // Logo
+        // Load and embed company logo
         const logoImg = await new Promise((resolve) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
@@ -5497,6 +5533,7 @@ export const generatePayToCustomerVoucherPDF = async (payment) => {
         doc.setFont('helvetica', 'bold');
         doc.text("ANI ENTERPRISE", margin + 24, margin + 13);
 
+        // Contact Info (Company) - Structured Multi-line
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
@@ -5507,11 +5544,13 @@ export const generatePayToCustomerVoucherPDF = async (payment) => {
             "Email: anienterprise051@gmail.com"
         ], pageWidth - margin, margin + 3, { align: 'right', lineHeightFactor: 1.15 });
 
+        // --- Body Section ---
         let y = margin + 40;
         doc.setFontSize(12);
         doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
 
+        // Helper for dotted lines
         const drawDottedLine = (x1, y1, x2) => {
             doc.setDrawColor(200);
             doc.setLineWidth(0.1);
@@ -5523,39 +5562,30 @@ export const generatePayToCustomerVoucherPDF = async (payment) => {
         const labelWidth = 40;
         const rightColStart = margin + 105;
 
-        // Title Header Banner
-        doc.setFillColor(239, 68, 68);
-        doc.roundedRect(margin, y - 8, pageWidth - (margin * 2), 8, 2, 2, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.text("PAY TO CUSTOMER VOUCHER", pageWidth / 2, y - 2, { align: 'center' });
-
-        y += 8;
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-
-        // Date & Voucher No
-        doc.setFont('helvetica', 'bold');
+        // Line 1: Date (Left) | Receipt No (Right)
         doc.text("Date", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
         doc.text(formatDate(payment.date), margin + labelWidth, y);
         drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
 
         doc.setFont('helvetica', 'bold');
-        doc.text("Voucher No :", rightColStart, y);
+        doc.setTextColor(0, 0, 0);
+        doc.text("Receipt No :", rightColStart, y);
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
         doc.text(payment.receiptNo || '000000', rightColStart + 28, y);
         drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
 
         y += 12;
-
-        // Customer Info
+        // Line 2: Party Name (Left) | Contact (Right)
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
         doc.text("Party Name", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
 
         const partyNameText = payment.companyName || payment.customerName || 'N/A';
         const partyNameWidth = (rightColStart - 5) - (margin + labelWidth);
@@ -5569,23 +5599,26 @@ export const generatePayToCustomerVoucherPDF = async (payment) => {
         drawDottedLine(margin + labelWidth, partyNameLastY + 1, rightColStart - 5);
 
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
         doc.text("Contact :", rightColStart, y);
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
         doc.text(payment.phone || '—', rightColStart + 28, y);
         drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
 
         y += 12 + ((partyNameLines.length - 1) * 5);
-
+        // Line 3: Address (Full Width)
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
         doc.text("Address", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
         doc.text(payment.address || '—', margin + labelWidth, y);
         drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
 
         y += 14;
-
-        // Table
+        // --- Payment Details Table ---
         const tableItems = payment.items || [payment];
         const tableBody = tableItems.map((item, idx) => [
             (idx + 1).toString(),
@@ -5598,7 +5631,7 @@ export const generatePayToCustomerVoucherPDF = async (payment) => {
 
         autoTable(doc, {
             startY: y,
-            head: [['#', 'Payment Method', 'Bank Name / Provider', 'Branch / Place', 'Account No', 'Amount Paid']],
+            head: [['#', 'Payment Method', 'Bank Name', 'Branch', 'Account No', 'Amount']],
             body: tableBody,
             theme: 'grid',
             styles: {
@@ -5609,7 +5642,7 @@ export const generatePayToCustomerVoucherPDF = async (payment) => {
                 lineWidth: 0.2,
             },
             headStyles: {
-                fillColor: [239, 68, 68],
+                fillColor: [249, 115, 22],
                 textColor: [255, 255, 255],
                 fontStyle: 'bold',
                 fontSize: 9,
@@ -5626,36 +5659,93 @@ export const generatePayToCustomerVoucherPDF = async (payment) => {
             margin: { left: margin, right: margin },
         });
 
-        y = doc.lastAutoTable.finalY + 12;
+        y = doc.lastAutoTable.finalY + 10;
 
-        const totalAmount = tableItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+        const totalAmount = tableItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0) || parseFloat(payment.amount) || 0;
 
-        doc.setFillColor(254, 242, 242);
-        doc.roundedRect(margin, y, pageWidth - (margin * 2), 24, 3, 3, 'F');
-        doc.setDrawColor(239, 68, 68);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(margin, y, pageWidth - (margin * 2), 24, 3, 3, 'D');
-
-        doc.setFontSize(11);
+        // Numeric Amount Box (Centered in Portrait)
+        doc.setFillColor(241, 245, 249);
+        doc.roundedRect(margin + 25, y - 4, contentWidth - 50, 15, 5, 5, 'F');
+        doc.setFontSize(16);
+        doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(185, 28, 28);
-        doc.text("Total Paid To Customer :", margin + 8, y + 14);
-        doc.setFontSize(14);
-        doc.text(`TK. ${totalAmount.toLocaleString('en-IN')}`, pageWidth - margin - 8, y + 14, { align: 'right' });
-
-        // Signatures
-        const footerY = pageHeight - 35;
-        doc.setDrawColor(150);
-        doc.setLineWidth(0.4);
-
-        doc.line(margin + 10, footerY, margin + 60, footerY);
+        doc.text("TK.   " + totalAmount.toLocaleString('en-IN'), pageWidth / 2, y + 1.5, { align: 'center' });
+        const amountWords = numberToWords(totalAmount);
         doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text("Amount :  " + amountWords, pageWidth / 2, y + 7.5, { align: 'center' });
+
+        // --- Bottom Section ---
+        y += 25;
+
+        // Financial Summary (Left)
+        doc.setFontSize(10.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+
+        const prevBal = payment.previousBalance || 0;
+        const dueBal = payment.balanceDue || 0;
+
+        doc.text("Amount of Balance", margin, y);
+        doc.text(":", margin + labelWidth, y);
+        doc.text("TK.", margin + labelWidth + 3, y);
+        doc.text(prevBal.toLocaleString('en-IN'), margin + labelWidth + 12, y);
+        drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
+
+        y += 10;
+        doc.text("Payment Amount", margin, y);
+        doc.text(":", margin + labelWidth, y);
+        doc.text("TK.", margin + labelWidth + 3, y);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 0, 0);
-        doc.text("Customer Signature", margin + 35, footerY + 5, { align: 'center' });
+        doc.text(totalAmount.toLocaleString('en-IN'), margin + labelWidth + 12, y);
+        drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
 
-        doc.line(pageWidth - margin - 60, footerY, pageWidth - margin - 10, footerY);
-        doc.text("Authorized Signature", pageWidth - margin - 35, footerY + 5, { align: 'center' });
+        y += 10;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text("Balance Due", margin, y);
+        doc.text(":", margin + labelWidth, y);
+        doc.text("TK.", margin + labelWidth + 3, y);
+        doc.text(dueBal.toLocaleString('en-IN'), margin + labelWidth + 12, y);
+        drawDottedLine(margin + labelWidth + 12, y + 1, margin + 75);
+
+        // Payment Method Checkboxes (Middle-Right) - Compact Layout
+        const allUsedMethods = (payment.items || [payment]).map(item => item.method);
+        const methodYStart = y - 20;
+        const methodX = margin + 90;
+        const col2X = methodX + 45;
+
+        // Row layout: [method, x, y]
+        const methodLayout = [
+            ['Cash', methodX, methodYStart],
+            ['Bank Deposit', methodX, methodYStart + 7],
+            ['Online Banking', col2X, methodYStart + 7],
+            ['Mobile Banking', methodX, methodYStart + 14],
+            ['Cheque', methodX, methodYStart + 21],
+        ];
+
+        methodLayout.forEach(([m, mx, my]) => {
+            doc.setDrawColor(200);
+            doc.setLineWidth(0.2);
+            doc.circle(mx, my - 1, 1.8, 'S');
+            if (allUsedMethods.includes(m)) {
+                doc.setFillColor(249, 115, 22);
+                doc.circle(mx, my - 1, 1.0, 'FD');
+            }
+            doc.setFontSize(10);
+            doc.setTextColor(0, 0, 0);
+            doc.text(m, mx + 6, my);
+        });
+
+        // Signature (Bottom Right)
+        doc.setDrawColor(180);
+        doc.setLineWidth(0.5);
+        doc.line(pageWidth - margin - 60, pageHeight - margin - 20, pageWidth - margin, pageHeight - margin - 20);
+        doc.setFontSize(11);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+        doc.text("Authorized Signature", pageWidth - margin - 30, pageHeight - margin - 14, { align: 'center' });
 
         const pdfOutput = doc.output('blob');
         const blobURL = URL.createObjectURL(pdfOutput);

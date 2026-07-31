@@ -2575,7 +2575,7 @@ function App() {
                       onClick={() => { handleViewChange('pay-to-customer-section'); }}
                       className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pay-to-customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
-                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0 text-rose-500" />
+                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                       <span>Pay To Customer</span>
                     </button>
                   )}
