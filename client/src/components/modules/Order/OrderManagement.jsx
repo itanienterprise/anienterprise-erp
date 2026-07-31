@@ -849,6 +849,41 @@ const OrderManagement = ({
         );
     };
 
+    // Map to track delivered (fulfilled) quantities from sales created using an order number
+    const orderFulfilledMap = useMemo(() => {
+        const map = {};
+        (allSalesRecords || []).forEach(s => {
+            const sType = (s.saleType || '').toLowerCase();
+            const sStatus = (s.status || '').toLowerCase();
+            const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry === true;
+
+            if (!isOrder && (sStatus === 'accepted' || sStatus === 'pending')) {
+                const refs = [];
+                if (s.orderNo && s.orderNo.toString().trim() !== '') refs.push(s.orderNo.toString().trim().toUpperCase());
+                if (s.orderId && s.orderId.toString().trim() !== '') refs.push(s.orderId.toString().trim().toUpperCase());
+                if (s.orderRef && s.orderRef.toString().trim() !== '') refs.push(s.orderRef.toString().trim().toUpperCase());
+
+                refs.forEach(ref => {
+                    (s.items || []).forEach(si => {
+                        const pName = (si.productName || '').trim().toLowerCase();
+                        const brandEntries = (si.brandEntries && si.brandEntries.length > 0)
+                            ? si.brandEntries
+                            : [{ brand: si.brand || si.brandName || '', quantity: si.quantity, bag: si.bag, packet: si.packet }];
+
+                        brandEntries.forEach(be => {
+                            const bName = (be.brand || be.brandName || '').trim().toLowerCase();
+                            const key = `${ref}_${pName}_${bName}`;
+                            if (!map[key]) map[key] = { qty: 0, bag: 0 };
+                            map[key].qty += parseFloat(be.quantity || be.qty || 0) || 0;
+                            map[key].bag += parseFloat(be.bag || be.packet || 0) || 0;
+                        });
+                    });
+                });
+            }
+        });
+        return map;
+    }, [allSalesRecords]);
+
     // Filter Logic matching Order records only
     const getFilteredData = useMemo(() => {
         let result = sales.filter(sale => {
@@ -1841,6 +1876,8 @@ const OrderManagement = ({
                                     <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('totalAmount')}>
                                         <div className="flex items-center justify-center">Total {renderSortIcon('totalAmount')}</div>
                                     </th>
+                                    <th className="sale-mgmt-th text-center font-bold">Delivered</th>
+                                    <th className="sale-mgmt-th text-center font-bold">Remain</th>
                                     <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
                                         <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
                                     </th>
@@ -1848,19 +1885,79 @@ const OrderManagement = ({
                                 </tr>
                             </thead>
 
-                            <tbody className="divide-y divide-gray-50">
+                                <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan="13" className="px-3 py-20 text-center text-gray-400 font-medium">Loading orders...</td></tr>
+                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">Loading orders...</td></tr>
                                 ) : getFilteredData.length === 0 ? (
-                                    <tr><td colSpan="13" className="px-3 py-20 text-center text-gray-400 font-medium">No order records found</td></tr>
+                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">No order records found</td></tr>
                                 ) : getFilteredData.map((order, index) => {
-                                    const { totalQty, totalAmt, totalPkt } = (order.items || []).reduce((acc, item) => {
-                                        const { totalQty: q, totalAmt: a, totalPkt: p } = calculateItemTotals(item.brandEntries);
-                                        return { totalQty: acc.totalQty + q, totalAmt: acc.totalAmt + a, totalPkt: acc.totalPkt + p };
-                                    }, { totalQty: 0, totalAmt: 0, totalPkt: 0 });
+                                    const { totalQty, totalAmt, totalPkt, totalDeliveredQty } = (order.items || []).reduce((acc, item) => {
+                                         const { totalQty: q, totalAmt: a, totalPkt: p } = calculateItemTotals(item.brandEntries);
+                                         const invRef = (order.invoiceNo || '').trim().toUpperCase();
+                                         const ordNoRef = (order.orderNo || '').trim().toUpperCase();
+                                         const ordIdRef = order._id ? order._id.toString().trim().toUpperCase() : '';
+                                         const pName = (item.productName || '').trim().toLowerCase();
 
-                                    const st = (order.status || '').toLowerCase();
-                                    const isRequested = st === 'requested';
+                                         let itemDelivQty = 0;
+                                         (item.brandEntries || []).forEach(b => {
+                                             const bName = (b.brandName || b.brand || '').trim().toLowerCase();
+                                             const pktSize = parseFloat(b.packetSize) || parseFloat(item.packetSize) || 30;
+
+                                             const k1 = `${invRef}_${pName}_${bName}`;
+                                             const k2 = `${ordNoRef}_${pName}_${bName}`;
+                                             const k3 = `${ordIdRef}_${pName}_${bName}`;
+
+                                             const dQty = Math.max(
+                                                 orderFulfilledMap[k1]?.qty || 0,
+                                                 orderFulfilledMap[k2]?.qty || 0,
+                                                 orderFulfilledMap[k3]?.qty || 0
+                                             );
+                                             const dBag = Math.max(
+                                                 orderFulfilledMap[k1]?.bag || 0,
+                                                 orderFulfilledMap[k2]?.bag || 0,
+                                                 orderFulfilledMap[k3]?.bag || 0
+                                             );
+                                             const bDelivered = dQty > 0 ? dQty : (dBag * pktSize);
+                                             itemDelivQty += bDelivered;
+                                         });
+
+                                         return {
+                                             totalQty: acc.totalQty + q,
+                                             totalAmt: acc.totalAmt + a,
+                                             totalPkt: acc.totalPkt + p,
+                                             totalDeliveredQty: acc.totalDeliveredQty + itemDelivQty
+                                         };
+                                     }, { totalQty: 0, totalAmt: 0, totalPkt: 0, totalDeliveredQty: 0 });
+
+                                     const st = (order.status || '').toLowerCase();
+                                     const isRequested = st === 'requested';
+                                     const isEditRequested = order.isEdited === true && !isRequested;
+
+                                     let statusText = 'Accepted';
+                                     let statusBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200/60';
+
+                                     if (isRequested) {
+                                         statusText = 'Requested';
+                                         statusBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200/60';
+                                     } else if (isEditRequested) {
+                                         statusText = 'Edit Requested';
+                                         statusBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200/60';
+                                     } else {
+                                         const diff = totalDeliveredQty - totalQty;
+                                         if (totalDeliveredQty === 0) {
+                                             statusText = 'Accepted';
+                                             statusBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200/60';
+                                         } else if (Math.abs(diff) < 0.1) {
+                                             statusText = 'Completed';
+                                             statusBadgeClass = 'bg-blue-50 text-blue-700 border-blue-200/60';
+                                         } else if (totalDeliveredQty > totalQty + 0.1) {
+                                             statusText = 'Over Delivered';
+                                             statusBadgeClass = 'bg-purple-50 text-purple-700 border-purple-200/60';
+                                         } else {
+                                             statusText = 'Not Completed';
+                                             statusBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200/60';
+                                         }
+                                     }
 
                                     return (
                                         <tr key={order._id} className="hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle">
@@ -1998,17 +2095,165 @@ const OrderManagement = ({
                                                 ৳{Math.round(totalAmt).toLocaleString('en-US')}
                                             </td>
 
+                                            <td className="px-3 py-4 text-center">
+                                                <div className="flex flex-col gap-2">
+                                                    {(order.items || []).map((item, i) => (
+                                                        <div key={i} className="flex flex-col gap-1">
+                                                            {(item.brandEntries || []).length > 0 ? (
+                                                                item.brandEntries.map((b, bIdx) => {
+                                                                    const invRef = (order.invoiceNo || '').trim().toUpperCase();
+                                                                    const ordNoRef = (order.orderNo || '').trim().toUpperCase();
+                                                                    const ordIdRef = order._id ? order._id.toString().trim().toUpperCase() : '';
+
+                                                                    const pName = (item.productName || '').trim().toLowerCase();
+                                                                    const bName = (b.brandName || b.brand || '').trim().toLowerCase();
+
+                                                                    const k1 = `${invRef}_${pName}_${bName}`;
+                                                                    const k2 = `${ordNoRef}_${pName}_${bName}`;
+                                                                    const k3 = `${ordIdRef}_${pName}_${bName}`;
+
+                                                                    const dQty = Math.max(
+                                                                        orderFulfilledMap[k1]?.qty || 0,
+                                                                        orderFulfilledMap[k2]?.qty || 0,
+                                                                        orderFulfilledMap[k3]?.qty || 0
+                                                                    );
+                                                                    const dBag = Math.max(
+                                                                        orderFulfilledMap[k1]?.bag || 0,
+                                                                        orderFulfilledMap[k2]?.bag || 0,
+                                                                        orderFulfilledMap[k3]?.bag || 0
+                                                                    );
+                                                                    const pktSize = parseFloat(b.packetSize) || parseFloat(item.packetSize) || 30;
+                                                                    const finalQty = dQty > 0 ? dQty : (dBag * pktSize);
+                                                                    const labelStr = finalQty > 0 ? `${Math.round(finalQty).toLocaleString('en-US')} kg` : '-';
+
+                                                                    return (
+                                                                        <div key={bIdx} className="text-[13px] font-bold text-blue-700 whitespace-nowrap">
+                                                                            {labelStr}
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <div className="text-[13px] font-bold text-gray-400">-</div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            <td className="px-3 py-4 text-center">
+                                                <div className="flex flex-col gap-2">
+                                                    {(order.items || []).map((item, i) => (
+                                                        <div key={i} className="flex flex-col gap-1">
+                                                            {(item.brandEntries || []).length > 0 ? (
+                                                                item.brandEntries.map((b, bIdx) => {
+                                                                    const invRef = (order.invoiceNo || '').trim().toUpperCase();
+                                                                    const ordNoRef = (order.orderNo || '').trim().toUpperCase();
+                                                                    const ordIdRef = order._id ? order._id.toString().trim().toUpperCase() : '';
+
+                                                                    const pName = (item.productName || '').trim().toLowerCase();
+                                                                    const bName = (b.brandName || b.brand || '').trim().toLowerCase();
+
+                                                                    const k1 = `${invRef}_${pName}_${bName}`;
+                                                                    const k2 = `${ordNoRef}_${pName}_${bName}`;
+                                                                    const k3 = `${ordIdRef}_${pName}_${bName}`;
+
+                                                                    const dQty = Math.max(
+                                                                        orderFulfilledMap[k1]?.qty || 0,
+                                                                        orderFulfilledMap[k2]?.qty || 0,
+                                                                        orderFulfilledMap[k3]?.qty || 0
+                                                                    );
+                                                                    const dBag = Math.max(
+                                                                        orderFulfilledMap[k1]?.bag || 0,
+                                                                        orderFulfilledMap[k2]?.bag || 0,
+                                                                        orderFulfilledMap[k3]?.bag || 0
+                                                                    );
+                                                                    const pktSize = parseFloat(b.packetSize) || parseFloat(item.packetSize) || 30;
+                                                                    const deliveredQty = dQty > 0 ? dQty : (dBag * pktSize);
+
+                                                                    const orderedQty = parseFloat(b.quantity || b.qty || 0) || (parseFloat(b.bag || b.packet || 0) * pktSize);
+                                                                    const remainQty = Math.max(0, orderedQty - deliveredQty);
+                                                                    const labelStr = remainQty > 0 ? `${Math.round(remainQty).toLocaleString('en-US')} kg` : '0 kg';
+
+                                                                    return (
+                                                                        <div key={bIdx} className={`text-[13px] font-bold whitespace-nowrap ${remainQty > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
+                                                                            {labelStr}
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <div className="text-[13px] font-bold text-gray-400">-</div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
                                             <td className="px-3 py-4 text-center whitespace-nowrap">
-                                                {order.isEdited === true && !isRequested ? (
-                                                    <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                                        Edit Requested
-                                                    </span>
-                                                ) : (
-                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${isRequested ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
-                                                        {isRequested ? 'Requested' : (order.status || 'Accepted')}
-                                                    </span>
-                                                )}
+                                                {(() => {
+                                                    const invRef = (order.invoiceNo || '').trim().toUpperCase();
+                                                    const ordNoRef = (order.orderNo || '').trim().toUpperCase();
+                                                    const ordIdRef = order._id ? order._id.toString().trim().toUpperCase() : '';
+                                                    const items = order.items || [];
+                                                    
+                                                    let totalOrdered = 0;
+                                                    let totalDelivered = 0;
+
+                                                    items.forEach(item => {
+                                                        const pName = (item.productName || '').trim().toLowerCase();
+                                                        (item.brandEntries || []).forEach(b => {
+                                                            const bName = (b.brandName || b.brand || '').trim().toLowerCase();
+                                                            const k1 = `${invRef}_${pName}_${bName}`;
+                                                            const k2 = `${ordNoRef}_${pName}_${bName}`;
+                                                            const k3 = `${ordIdRef}_${pName}_${bName}`;
+                                                            
+                                                            const pktSize = parseFloat(b.packetSize) || parseFloat(item.packetSize) || 30;
+                                                            totalOrdered += parseFloat(b.quantity || b.qty || 0) || (parseFloat(b.bag || b.packet || 0) * pktSize);
+                                                            
+                                                            const dQty = Math.max(
+                                                                orderFulfilledMap[k1]?.qty || 0,
+                                                                orderFulfilledMap[k2]?.qty || 0,
+                                                                orderFulfilledMap[k3]?.qty || 0
+                                                            );
+                                                            const dBag = Math.max(
+                                                                orderFulfilledMap[k1]?.bag || 0,
+                                                                orderFulfilledMap[k2]?.bag || 0,
+                                                                orderFulfilledMap[k3]?.bag || 0
+                                                            );
+                                                            totalDelivered += dQty > 0 ? dQty : (dBag * pktSize);
+                                                        });
+                                                    });
+
+                                                    const isEditRequested = order.isEdited === true && !isRequested;
+                                                    let statusText = order.status || 'Accepted';
+                                                    let statusBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200/60';
+
+                                                    if (isEditRequested) {
+                                                        statusText = 'Edit Requested';
+                                                        statusBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200/60';
+                                                    } else if (isRequested) {
+                                                        statusText = 'Requested';
+                                                        statusBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200/60';
+                                                    } else if (totalDelivered > totalOrdered) {
+                                                        statusText = 'Over Delivered';
+                                                        statusBadgeClass = 'bg-purple-50 text-purple-700 border-purple-200/60';
+                                                    } else if (totalDelivered >= totalOrdered && totalOrdered > 0) {
+                                                        statusText = 'Completed';
+                                                        statusBadgeClass = 'bg-blue-50 text-blue-700 border-blue-200/60';
+                                                    } else if (totalDelivered > 0 && totalDelivered < totalOrdered) {
+                                                        statusText = 'Not Completed';
+                                                        statusBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200/60';
+                                                    } else {
+                                                        statusText = 'Accepted';
+                                                        statusBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200/60';
+                                                    }
+
+                                                    return (
+                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${statusBadgeClass}`}>
+                                                            {isEditRequested && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1"></span>}
+                                                            {statusText}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </td>
 
                                             <td className="px-3 py-4 text-center whitespace-nowrap">

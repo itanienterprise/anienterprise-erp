@@ -59,6 +59,7 @@ import EmployeeManagement from './components/modules/Employee/EmployeeManagement
 import SystemAccess from './components/modules/Employee/SystemAccess';
 import RoleCreation from './components/modules/Employee/RoleCreation';
 import PaymentCollection from './components/modules/PaymentCollection/PaymentCollection';
+import PayToCustomer from './components/modules/PayToCustomer/PayToCustomer';
 import Bank from './components/modules/Bank/Bank';
 import Insurance from './components/modules/Insurance/Insurance';
 import InsurancePayment from './components/modules/Insurance/InsurancePayment';
@@ -1897,6 +1898,10 @@ function App() {
         return (
           <PaymentCollection addNotification={addNotification} currentUser={currentUser} />
         );
+      case 'pay-to-customer-section':
+        return (
+          <PayToCustomer addNotification={addNotification} currentUser={currentUser} />
+        );
       case 'warehouse-section':
         return (
           <WarehouseManagement
@@ -2533,11 +2538,11 @@ function App() {
             </div>
           )}
 
-          {(hasPermission(currentUser, 'customer', 'view') || hasPermission(currentUser, 'paymentCollection', 'view')) && (
+          {(hasPermission(currentUser, 'customer', 'view') || hasPermission(currentUser, 'paymentCollection', 'view') || hasPermission(currentUser, 'payToCustomer', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('crm')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'customer-section' || currentView === 'payment-collection-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'customer-section' || currentView === 'payment-collection-section' || currentView === 'pay-to-customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <div className="flex items-center">
                   <UsersIcon className="w-5 h-5 mr-3" />
@@ -2563,6 +2568,15 @@ function App() {
                     >
                       <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
                       <span>Payment Collection</span>
+                    </button>
+                  )}
+                  {hasPermission(currentUser, 'payToCustomer', 'view') && (
+                    <button
+                      onClick={() => { handleViewChange('pay-to-customer-section'); }}
+                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pay-to-customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0 text-rose-500" />
+                      <span>Pay To Customer</span>
                     </button>
                   )}
                 </div>

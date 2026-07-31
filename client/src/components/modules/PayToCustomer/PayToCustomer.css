@@ -1,0 +1,161 @@
+@reference "../../../App.css";
+
+.pay-to-customer-container {
+    padding: 1.5rem;
+    color: #111827;
+}
+
+.payment-form-container {
+    position: relative;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 1rem;
+    padding: 2.5rem;
+    margin-bottom: 2.5rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: slideDown 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.payment-form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+    padding-bottom: 1rem;
+    position: relative;
+    z-index: 10;
+}
+
+.payment-form-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.payment-form-close {
+    color: #9ca3af;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.payment-form-close:hover {
+    color: #ef4444;
+}
+
+.payment-form-input {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(229, 231, 235, 0.6);
+    border-radius: 0.5rem;
+    outline: none;
+    transition: all 0.2s;
+    backdrop-filter: blur(4px);
+}
+
+.payment-form-input:focus {
+    border-color: #f43f5e;
+    box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.1);
+}
+
+.payment-form-submit {
+    padding: 0.5rem 1.5rem;
+    background: linear-gradient(to right, #e11d48, #be123c);
+    color: white;
+    font-weight: 500;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s;
+    transform: scale(1);
+    display: flex;
+    align-items: center;
+    border: none;
+    cursor: pointer;
+}
+
+.payment-form-submit:hover:not(.disabled) {
+    background: linear-gradient(to right, #be123c, #9f1239);
+    transform: scale(1.05);
+}
+
+.payment-form-submit.disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: scale(1);
+}
+
+@media (max-width: 768px) {
+    .pay-to-customer-container .overflow-x-auto {
+        margin: 0 -1rem;
+        padding: 0 1rem;
+    }
+
+    .pay-to-customer-container table {
+        min-width: 800px;
+    }
+
+    .mobile-card {
+        @apply bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-4 mb-3 space-y-3 relative active:border-rose-200 transition-all;
+        cursor: pointer;
+    }
+
+    .mobile-card.expanded {
+        @apply border-rose-200 shadow-lg shadow-rose-500/5;
+    }
+
+    .mobile-card-header {
+        @apply flex justify-between items-start border-b border-gray-50 pb-2;
+    }
+
+    .mobile-card-title {
+        @apply text-[13px] font-bold text-gray-800 truncate;
+    }
+
+    .mobile-card-row {
+        @apply flex justify-between items-center text-[13px];
+    }
+
+    .mobile-card-label {
+        @apply text-gray-500;
+    }
+
+    .mobile-card-value {
+        @apply text-gray-800 font-semibold;
+    }
+
+    .mobile-card-actions {
+        @apply flex gap-2 pt-3 border-t border-gray-50;
+    }
+}
+
+.sale-mgmt-table-container {
+    @apply bg-transparent md:bg-white md:rounded-2xl md:shadow-sm md:border md:border-gray-100 overflow-hidden;
+}
+
+.sale-mgmt-table {
+    @apply w-full text-left;
+}
+
+.sale-mgmt-th {
+    @apply px-3 py-4 whitespace-nowrap bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-wider;
+}

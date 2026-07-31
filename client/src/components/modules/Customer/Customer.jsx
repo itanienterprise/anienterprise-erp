@@ -41,6 +41,7 @@ const Customer = ({
     const [viewData, setViewData] = useState(null);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [activeHistoryTab, setActiveHistoryTab] = useState('sales'); // 'purchase', 'sales', 'payment', or 'gp'
+    const [paymentSubTab, setPaymentSubTab] = useState('collection'); // 'collection' or 'paid'
     const [historySortConfig, setHistorySortConfig] = useState({ key: 'date', direction: 'asc' });
     const [status, setStatus] = useState('Active'); // status state for form
     const [formData, setFormData] = useState({
@@ -569,6 +570,7 @@ const Customer = ({
                             rate: b.rate || 0,
                             amount: b.total || (parseFloat(b.qty || 0) * parseFloat(b.rate || 0)),
                             discount: p.discount || 0,
+                            paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
                             warehouse: p.warehouse || '-',
                             status: p.status || 'Completed'
                         }));
@@ -583,6 +585,7 @@ const Customer = ({
                         rate: item.rate || 0,
                         amount: item.total || item.amount || 0,
                         discount: p.discount || 0,
+                        paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
                         warehouse: p.warehouse || '-',
                         status: p.status || 'Completed'
                     }];
@@ -598,6 +601,7 @@ const Customer = ({
                 rate: p.rate || 0,
                 amount: p.totalAmount || p.amount || 0,
                 discount: p.discount || 0,
+                paid: p.paid || p.paidAmount || 0,
                 warehouse: p.warehouse || '-',
                 status: p.status || 'Completed'
             }];
@@ -658,6 +662,46 @@ const Customer = ({
                 (!historyFilters.method || item.method === historyFilters.method) &&
                 (!historyFilters.bankName || item.bankName === historyFilters.bankName) &&
                 (!historyFilters.mobileType || item.mobileType === historyFilters.mobileType);
+
+            return matchesSearch && matchesFilters;
+        });
+
+        if (!historySortConfig.key) return filtered;
+
+        return [...filtered].sort((a, b) => {
+            const { key, direction } = historySortConfig;
+            let aVal = a[key];
+            let bVal = b[key];
+
+            if (key === 'date') {
+                aVal = new Date(a.date);
+                bVal = new Date(b.date);
+            } else if (key === 'amount') {
+                aVal = parseFloat(a[key]) || 0;
+                bVal = parseFloat(b[key]) || 0;
+            }
+
+            if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [viewData, historySearchQuery, historyFilters, historySortConfig]);
+
+    const filteredPayToCustomerHistory = useMemo(() => {
+        const filtered = (viewData?.payToCustomerHistory || []).filter(item => {
+            const matchesSearch = !historySearchQuery ||
+                ((item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.bankName || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.accountNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.branch || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.reference || item.remarks || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.receiptNo || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
+
+            const matchesFilters =
+                (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
+                (!historyFilters.endDate || new Date(item.date) <= new Date(historyFilters.endDate)) &&
+                (!historyFilters.method || item.method === historyFilters.method) &&
+                (!historyFilters.bankName || item.bankName === historyFilters.bankName);
 
             return matchesSearch && matchesFilters;
         });
@@ -898,6 +942,15 @@ const Customer = ({
     const totalDueCalculated = Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid);
     const totalTruck = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.truck) || 0), 0);
     const totalQuantity = filteredSalesHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+
+    // Purchase Summaries
+    const purchaseTotalAmount = filteredPurchaseHistory.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const purchaseTotalPaid = filteredPurchaseHistory.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
+    const purchaseTotalDiscount = filteredPurchaseHistory.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+    const totalPayToCustomer = (viewData?.payToCustomerHistory || [])
+        .filter(item => (item.status || '').toLowerCase() !== 'requested')
+        .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const purchaseTotalBalance = Math.max(0, purchaseTotalAmount - purchaseTotalDiscount - purchaseTotalPaid - totalPayToCustomer);
 
     // G.P Summaries
     const totalGpQuantity = filteredGatePasses.reduce((sum, item) => sum + (parseFloat(item.gpQuantity) || 0), 0);
@@ -1824,26 +1877,33 @@ const Customer = ({
                                         )}
                                         {activeHistoryTab !== 'gp' && (
                                             <>
-                                                <div className="bg-violet-50/50 p-3 md:p-4 rounded-2xl border border-violet-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-violet-500 font-bold uppercase tracking-wider mb-1">Total Amount</p>
-                                                    <p className="text-base md:text-lg font-black text-violet-700">৳{totalAmount.toLocaleString('en-IN')}</p>
-                                                </div>
-                                                <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">{(viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? 'Total Truck Fare' : 'Total Paid'}</p>
-                                                    <p className="text-base md:text-lg font-black text-teal-700">৳{(viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? totalTruck.toLocaleString('en-IN') : totalSalesPaid.toLocaleString('en-IN')}</p>
-                                                </div>
-                                                <div className="bg-indigo-50/50 p-3 md:p-4 rounded-2xl border border-indigo-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-1">Payment Collection</p>
-                                                    <p className="text-base md:text-lg font-black text-indigo-700">৳{totalHistoryPaid.toLocaleString('en-IN')}</p>
-                                                </div>
-                                                <div className="bg-pink-50/50 p-3 md:p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1">Total Discount</p>
-                                                    <p className="text-base md:text-lg font-black text-pink-700">৳{totalDiscount.toLocaleString('en-IN')}</p>
-                                                </div>
-                                                <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md">
-                                                    <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Balance</p>
-                                                    <p className="text-base md:text-lg font-black text-orange-700">৳{totalDueCalculated.toLocaleString('en-IN')}</p>
-                                                </div>
+                                                {(() => {
+                                                    const isPurchaseMode = activeHistoryTab === 'purchase' || (activeHistoryTab === 'payment' && paymentSubTab === 'paid');
+                                                    return (
+                                                        <>
+                                                            <div className="bg-violet-50/50 p-3 md:p-4 rounded-2xl border border-violet-100 shadow-sm transition-all hover:shadow-md">
+                                                                <p className="text-[9px] md:text-[10px] text-violet-500 font-bold uppercase tracking-wider mb-1">Total Amount</p>
+                                                                <p className="text-base md:text-lg font-black text-violet-700">৳{(isPurchaseMode ? purchaseTotalAmount : totalAmount).toLocaleString('en-IN')}</p>
+                                                            </div>
+                                                            <div className="bg-teal-50/50 p-3 md:p-4 rounded-2xl border border-teal-100 shadow-sm transition-all hover:shadow-md">
+                                                                <p className="text-[9px] md:text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">{(viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? 'Total Truck Fare' : 'Total Paid'}</p>
+                                                                <p className="text-base md:text-lg font-black text-teal-700">৳{(isPurchaseMode ? purchaseTotalPaid : ((viewData?.customerType === 'General Customer' && activeHistoryTab === 'sales') ? totalTruck : totalSalesPaid)).toLocaleString('en-IN')}</p>
+                                                            </div>
+                                                            <div className="bg-indigo-50/50 p-3 md:p-4 rounded-2xl border border-indigo-100 shadow-sm transition-all hover:shadow-md">
+                                                                <p className="text-[9px] md:text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-1">{isPurchaseMode ? 'Paid To Customer' : 'Payment Collection'}</p>
+                                                                <p className="text-base md:text-lg font-black text-indigo-700">৳{(isPurchaseMode ? totalPayToCustomer : totalHistoryPaid).toLocaleString('en-IN')}</p>
+                                                            </div>
+                                                            <div className="bg-pink-50/50 p-3 md:p-4 rounded-2xl border border-pink-100 shadow-sm transition-all hover:shadow-md">
+                                                                <p className="text-[9px] md:text-[10px] text-pink-500 font-bold uppercase tracking-wider mb-1">Total Discount</p>
+                                                                <p className="text-base md:text-lg font-black text-pink-700">৳{(isPurchaseMode ? purchaseTotalDiscount : totalDiscount).toLocaleString('en-IN')}</p>
+                                                            </div>
+                                                            <div className="bg-orange-50/50 p-3 md:p-4 rounded-2xl border border-orange-100 shadow-sm transition-all hover:shadow-md">
+                                                                <p className="text-[9px] md:text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-1">Total Balance</p>
+                                                                <p className="text-base md:text-lg font-black text-orange-700">৳{(isPurchaseMode ? purchaseTotalBalance : totalDueCalculated).toLocaleString('en-IN')}</p>
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()}
                                             </>
                                         )}
                                     </div>
@@ -2018,6 +2078,18 @@ const Customer = ({
                                                                     <SortIcon config={historySortConfig} columnKey="discount" />
                                                                 </div>
                                                             </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('paid')}>
+                                                                <div className="flex items-center justify-start gap-1">
+                                                                    <span>Paid Amount</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="paid" />
+                                                                </div>
+                                                            </th>
+                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('balance')}>
+                                                                <div className="flex items-center justify-start gap-1">
+                                                                    <span>Balance</span>
+                                                                    <SortIcon config={historySortConfig} columnKey="balance" />
+                                                                </div>
+                                                            </th>
                                                             <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('warehouse')}>
                                                                 <div className="flex items-center gap-1">
                                                                     <span>Warehouse</span>
@@ -2038,12 +2110,14 @@ const Customer = ({
                                                                     <td className="px-4 py-3 text-gray-600">৳{parseFloat(item.rate || 0).toLocaleString('en-IN')}</td>
                                                                     <td className="px-4 py-3 font-bold text-gray-900">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
                                                                     <td className="px-4 py-3 text-gray-600">৳{parseFloat(item.discount || 0).toLocaleString('en-IN')}</td>
+                                                                    <td className="px-4 py-3 font-bold text-teal-600">৳{parseFloat(item.paid || 0).toLocaleString('en-IN')}</td>
+                                                                    <td className="px-4 py-3 font-bold text-orange-600">৳{Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0)).toLocaleString('en-IN')}</td>
                                                                     <td className="px-4 py-3 text-gray-600">{item.warehouse || '-'}</td>
                                                                 </tr>
                                                             ))
                                                         ) : (
                                                             <tr>
-                                                                <td colSpan="9" className="px-4 py-8 text-left text-gray-400 font-medium italic">No purchase history found matching filters</td>
+                                                                <td colSpan="11" className="px-4 py-8 text-left text-gray-400 font-medium italic">No purchase history found matching filters</td>
                                                             </tr>
                                                         )}
                                                     </tbody>
@@ -2072,6 +2146,20 @@ const Customer = ({
                                                                     <div className="text-left">
                                                                         <div className="text-[10px] text-gray-400 uppercase">Qty / Rate</div>
                                                                         <div className="text-xs font-bold text-blue-600">{item.quantity} @ ৳{item.rate}</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                                                                    <div>
+                                                                        <div className="text-[10px] text-gray-400 uppercase">Discount</div>
+                                                                        <div className="text-xs font-bold text-pink-600">৳{parseFloat(item.discount || 0).toLocaleString('en-IN')}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-[10px] text-gray-400 uppercase">Paid</div>
+                                                                        <div className="text-xs font-bold text-teal-600">৳{parseFloat(item.paid || 0).toLocaleString('en-IN')}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="text-[10px] text-gray-400 uppercase">Balance</div>
+                                                                        <div className="text-xs font-bold text-orange-600">৳{Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0)).toLocaleString('en-IN')}</div>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -2524,173 +2612,339 @@ const Customer = ({
                                     {/* Payment History Table */}
                                     {activeHistoryTab === 'payment' && (
                                         <>
-                                            <div className="flex items-center justify-between mb-3 md:mb-4">
+                                            <div className="flex flex-row items-center justify-between gap-3 mb-3 md:mb-4">
                                                 <h4 className="text-base md:text-lg font-bold text-gray-800">Payment History</h4>
+                                                <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPaymentSubTab('collection')}
+                                                        className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                                                            paymentSubTab === 'collection'
+                                                                ? 'bg-white text-blue-600 shadow-sm'
+                                                                : 'text-gray-600 hover:text-gray-900'
+                                                        }`}
+                                                    >
+                                                        Collection History
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPaymentSubTab('paid')}
+                                                        className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                                                            paymentSubTab === 'paid'
+                                                                ? 'bg-white text-indigo-600 shadow-sm'
+                                                                : 'text-gray-600 hover:text-gray-900'
+                                                        }`}
+                                                    >
+                                                        Paid History
+                                                    </button>
+                                                </div>
                                             </div>
 
                                             <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
-                                                {/* Desktop Payment History Table */}
-                                                <table className="w-full text-left text-sm hidden md:table">
-                                                    <thead className="bg-white border-b border-gray-200">
-                                                        <tr>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="w-4" />
-                                                                    <span>Date</span>
-                                                                    <SortIcon config={historySortConfig} columnKey="date" />
-                                                                </div>
-                                                            </th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('method')}>
-                                                                <div className="flex items-center gap-1">
-                                                                    <span>Payment<br />Method</span>
-                                                                    <SortIcon config={historySortConfig} columnKey="method" />
-                                                                </div>
-                                                            </th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('bankName')}>
-                                                                <div className="flex items-center gap-1">
-                                                                    <span>Bank Name <br />Mobile Banking</span>
-                                                                    <SortIcon config={historySortConfig} columnKey="bankName" />
-                                                                </div>
-                                                            </th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('branch')}>
-                                                                <div className="flex items-center gap-1">
-                                                                    <span>Branch</span>
-                                                                    <SortIcon config={historySortConfig} columnKey="branch" />
-                                                                </div>
-                                                            </th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('accountNo')}>
-                                                                <div className="flex items-center gap-1">
-                                                                    <span>Account No</span>
-                                                                    <SortIcon config={historySortConfig} columnKey="accountNo" />
-                                                                </div>
-                                                            </th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
-                                                                <div className="flex items-center justify-start gap-1">
-                                                                    <span>Amount</span>
-                                                                    <SortIcon config={historySortConfig} columnKey="amount" />
-                                                                </div>
-                                                            </th>
-                                                            <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {filteredPaymentHistory && filteredPaymentHistory.length > 0 ? (
-                                                            filteredPaymentHistory.map((payment, index) => (
-                                                                <tr key={payment.id || index} className="border-b border-gray-100 bg-white hover:bg-gray-50 transition-colors">
-                                                                    <td className="px-4 py-3 text-gray-600">{formatDate(payment.date)}</td>
-                                                                    <td className="px-4 py-3 font-medium text-gray-900">{payment.method}</td>
-                                                                    <td className="px-4 py-3 text-gray-600">
-                                                                        <span className="font-semibold text-xs">
-                                                                            {payment.method === 'Cash' ? (payment.receiveBy || '—') : (payment.bankName || '—')}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-gray-600 text-xs">
-                                                                        {payment.method === 'Cash' ? (payment.place || '—') :
-                                                                            (payment.method === 'Mobile Banking' ? '—' : (payment.branch || '—'))}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-gray-600 text-xs">
-                                                                        {payment.accountNo || '-'}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-left font-bold text-gray-900">
-                                                                        <div className="flex flex-col items-end">
-                                                                            <span>৳{parseFloat(payment.amount).toLocaleString('en-IN')}</span>
-                                                                            {payment.reference && <span className="text-[9px] text-blue-500 font-normal">Ref: {payment.reference}</span>}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-left">
-                                                                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold">
-                                                                            {payment.status || 'Received'}
-                                                                        </span>
-                                                                    </td>
-                                                                </tr>
-                                                            ))
-                                                        ) : (
-                                                            <tr>
-                                                                <td colSpan="7" className="px-4 py-8 text-left text-gray-400 font-medium italic">No payment history found matching filters</td>
-                                                            </tr>
-                                                        )}
-                                                    </tbody>
-                                                </table>
-
-                                                {/* Mobile Payment History Card View */}
-                                                <div className="block md:hidden p-4 space-y-3">
-                                                    {filteredPaymentHistory && filteredPaymentHistory.length > 0 ? (
-                                                        filteredPaymentHistory.map((payment, index) => {
-                                                            const isExpanded = expandedPaymentHistoryCards === index;
-                                                            return (
-                                                                <div
-                                                                    key={index}
-                                                                    className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
-                                                                    onClick={() => {
-                                                                        setExpandedPaymentHistoryCards(isExpanded ? null : index);
-                                                                    }}
-                                                                >
-                                                                    <div className="mobile-card-header">
-                                                                        <div>
-                                                                            <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{formatDate(payment.date)}</div>
-                                                                            <div className="text-sm font-black text-gray-900">{payment.method}</div>
-                                                                        </div>
+                                                {paymentSubTab === 'paid' ? (
+                                                    <>
+                                                        {/* Desktop Paid History Table */}
+                                                        <table className="w-full text-left text-sm hidden md:table">
+                                                            <thead className="bg-white border-b border-gray-200">
+                                                                <tr>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
                                                                         <div className="flex items-center gap-2">
-                                                                            <span className={`customer-status-badge ${payment.status === 'Completed' || payment.status === 'Received' || !payment.status ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                                                {isExpanded ? (
-                                                                                    <span className="shrink-0">{payment.status || 'Received'}</span>
-                                                                                ) : (
-                                                                                    <span className="font-bold">
-                                                                                        ৳{parseFloat(payment.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                                                                                    </span>
-                                                                                )}
-                                                                            </span>
+                                                                            <div className="w-4" />
+                                                                            <span>Date</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="date" />
                                                                         </div>
-                                                                    </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('method')}>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span>Payment<br />Method</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="method" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('bankName')}>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span>Bank Name <br />Mobile Banking</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="bankName" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('branch')}>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span>Branch</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="branch" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('accountNo')}>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span>Account No</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="accountNo" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
+                                                                        <div className="flex items-center justify-start gap-1">
+                                                                            <span>Amount</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="amount" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {filteredPayToCustomerHistory && filteredPayToCustomerHistory.length > 0 ? (
+                                                                    filteredPayToCustomerHistory.map((payout, index) => (
+                                                                        <tr key={payout.id || index} className="border-b border-gray-100 bg-white hover:bg-gray-50 transition-colors">
+                                                                            <td className="px-4 py-3 text-gray-600">{formatDate(payout.date)}</td>
+                                                                            <td className="px-4 py-3 font-medium text-gray-900">{payout.method}</td>
+                                                                            <td className="px-4 py-3 text-gray-600">
+                                                                                <span className="font-semibold text-xs">
+                                                                                    {payout.method === 'Cash' ? (payout.receiveBy || payout.paidBy || '—') : (payout.bankName || '—')}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="px-4 py-3 text-gray-600 text-xs">
+                                                                                {payout.method === 'Cash' ? (payout.place || '—') : (payout.branch || '—')}
+                                                                            </td>
+                                                                            <td className="px-4 py-3 text-gray-600 text-xs">
+                                                                                {payout.accountNo || '-'}
+                                                                            </td>
+                                                                            <td className="px-4 py-3 text-left font-bold text-gray-900">
+                                                                                <div className="flex flex-col items-start">
+                                                                                    <span>৳{parseFloat(payout.amount || 0).toLocaleString('en-IN')}</span>
+                                                                                    {(payout.reference || payout.remarks) && <span className="text-[9px] text-blue-500 font-normal">Ref: {payout.reference || payout.remarks}</span>}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="px-4 py-3 text-left">
+                                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                                                    (payout.status || '').toLowerCase() === 'requested'
+                                                                                        ? 'bg-amber-50 text-amber-600'
+                                                                                        : 'bg-emerald-50 text-emerald-600'
+                                                                                }`}>
+                                                                                    {payout.status || 'Completed'}
+                                                                                </span>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))
+                                                                ) : (
+                                                                    <tr>
+                                                                        <td colSpan="7" className="px-4 py-8 text-left text-gray-400 font-medium italic">No paid to customer history found matching filters</td>
+                                                                    </tr>
+                                                                )}
+                                                            </tbody>
+                                                        </table>
 
-                                                                    <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[500px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
-                                                                        <div className="space-y-1">
-                                                                            {(payment.bankName || payment.receiveBy) && (
-                                                                                <div className="flex justify-between text-xs">
-                                                                                    <span className="text-gray-500">
-                                                                                        {payment.method === 'Cash' ? 'Received By:' : 'Bank/Provider:'}
+                                                        {/* Mobile Paid History Card View */}
+                                                        <div className="block md:hidden p-4 space-y-3">
+                                                            {filteredPayToCustomerHistory && filteredPayToCustomerHistory.length > 0 ? (
+                                                                filteredPayToCustomerHistory.map((payout, index) => {
+                                                                    const isExpanded = expandedPaymentHistoryCards === index;
+                                                                    return (
+                                                                        <div
+                                                                            key={index}
+                                                                            className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
+                                                                            onClick={() => setExpandedPaymentHistoryCards(isExpanded ? null : index)}
+                                                                        >
+                                                                            <div className="mobile-card-header">
+                                                                                <div>
+                                                                                    <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">{formatDate(payout.date)}</div>
+                                                                                    <div className="text-sm font-black text-gray-900">{payout.method}</div>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="font-bold text-indigo-600">
+                                                                                        ৳{parseFloat(payout.amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                                                                     </span>
-                                                                                    <span className="font-bold text-gray-900">
-                                                                                        {payment.method === 'Cash' ? payment.receiveBy : payment.bankName}
-                                                                                    </span>
                                                                                 </div>
-                                                                            )}
-                                                                            {payment.method === 'Cash' && payment.place && (
-                                                                                <div className="flex justify-between text-xs">
-                                                                                    <span className="text-gray-500">Place:</span>
-                                                                                    <span className="font-bold text-gray-900">{payment.place}</span>
-                                                                                </div>
-                                                                            )}
-                                                                            {payment.method !== 'Cash' && payment.method !== 'Mobile Banking' && payment.branch && (
-                                                                                <div className="flex justify-between text-xs">
-                                                                                    <span className="text-gray-500">Branch:</span>
-                                                                                    <span className="font-bold text-gray-900">{payment.branch}</span>
-                                                                                </div>
-                                                                            )}
-                                                                            {payment.accountNo && (
-                                                                                <div className="flex justify-between text-xs">
-                                                                                    <span className="text-gray-500">Account No:</span>
-                                                                                    <span className="font-mono text-gray-900">{payment.accountNo}</span>
-                                                                                </div>
-                                                                            )}
-                                                                            <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
-                                                                                <span className="text-gray-500">Amount:</span>
-                                                                                <span className="font-black text-emerald-600">৳{parseFloat(payment.amount).toLocaleString('en-IN')}</span>
                                                                             </div>
-                                                                            {payment.reference && (
-                                                                                <div className="text-[10px] text-blue-500 italic mt-1">
-                                                                                    Ref: {payment.reference}
+                                                                            <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[500px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+                                                                                <div className="space-y-1">
+                                                                                    {(payout.bankName || payout.receiveBy || payout.paidBy) && (
+                                                                                        <div className="flex justify-between text-xs">
+                                                                                            <span className="text-gray-500">{payout.method === 'Cash' ? 'Paid By:' : 'Bank:'}</span>
+                                                                                            <span className="font-bold text-gray-900">{payout.method === 'Cash' ? (payout.receiveBy || payout.paidBy) : payout.bankName}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {payout.accountNo && (
+                                                                                        <div className="flex justify-between text-xs">
+                                                                                            <span className="text-gray-500">Account No:</span>
+                                                                                            <span className="font-mono text-gray-900">{payout.accountNo}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
+                                                                                        <span className="text-gray-500">Amount:</span>
+                                                                                        <span className="font-black text-indigo-600">৳{parseFloat(payout.amount || 0).toLocaleString('en-IN')}</span>
+                                                                                    </div>
                                                                                 </div>
-                                                                            )}
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })
-                                                    ) : (
-                                                        <div className="py-8 text-left text-xs text-gray-400 font-medium italic">No payment history found</div>
-                                                    )}
-                                                </div>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <div className="py-8 text-left text-xs text-gray-400 font-medium italic">No paid to customer history found matching filters</div>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {/* Desktop Payment History Table */}
+                                                        <table className="w-full text-left text-sm hidden md:table">
+                                                            <thead className="bg-white border-b border-gray-200">
+                                                                <tr>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('date')}>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="w-4" />
+                                                                            <span>Date</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="date" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('method')}>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span>Payment<br />Method</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="method" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('bankName')}>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span>Bank Name <br />Mobile Banking</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="bankName" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('branch')}>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span>Branch</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="branch" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('accountNo')}>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span>Account No</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="accountNo" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestHistorySort('amount')}>
+                                                                        <div className="flex items-center justify-start gap-1">
+                                                                            <span>Amount</span>
+                                                                            <SortIcon config={historySortConfig} columnKey="amount" />
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {filteredPaymentHistory && filteredPaymentHistory.length > 0 ? (
+                                                                    filteredPaymentHistory.map((payment, index) => (
+                                                                        <tr key={payment.id || index} className="border-b border-gray-100 bg-white hover:bg-gray-50 transition-colors">
+                                                                            <td className="px-4 py-3 text-gray-600">{formatDate(payment.date)}</td>
+                                                                            <td className="px-4 py-3 font-medium text-gray-900">{payment.method}</td>
+                                                                            <td className="px-4 py-3 text-gray-600">
+                                                                                <span className="font-semibold text-xs">
+                                                                                    {payment.method === 'Cash' ? (payment.receiveBy || '—') : (payment.bankName || '—')}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="px-4 py-3 text-gray-600 text-xs">
+                                                                                {payment.method === 'Cash' ? (payment.place || '—') :
+                                                                                    (payment.method === 'Mobile Banking' ? '—' : (payment.branch || '—'))}
+                                                                            </td>
+                                                                            <td className="px-4 py-3 text-gray-600 text-xs">
+                                                                                {payment.accountNo || '-'}
+                                                                            </td>
+                                                                            <td className="px-4 py-3 text-left font-bold text-gray-900">
+                                                                                <div className="flex flex-col items-end">
+                                                                                    <span>৳{parseFloat(payment.amount).toLocaleString('en-IN')}</span>
+                                                                                    {payment.reference && <span className="text-[9px] text-blue-500 font-normal">Ref: {payment.reference}</span>}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="px-4 py-3 text-left">
+                                                                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold">
+                                                                                    {payment.status || 'Received'}
+                                                                                </span>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))
+                                                                ) : (
+                                                                    <tr>
+                                                                        <td colSpan="7" className="px-4 py-8 text-left text-gray-400 font-medium italic">No payment history found matching filters</td>
+                                                                    </tr>
+                                                                )}
+                                                            </tbody>
+                                                        </table>
+
+                                                        {/* Mobile Payment History Card View */}
+                                                        <div className="block md:hidden p-4 space-y-3">
+                                                            {filteredPaymentHistory && filteredPaymentHistory.length > 0 ? (
+                                                                filteredPaymentHistory.map((payment, index) => {
+                                                                    const isExpanded = expandedPaymentHistoryCards === index;
+                                                                    return (
+                                                                        <div
+                                                                            key={index}
+                                                                            className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
+                                                                            onClick={() => {
+                                                                                setExpandedPaymentHistoryCards(isExpanded ? null : index);
+                                                                            }}
+                                                                        >
+                                                                            <div className="mobile-card-header">
+                                                                                <div>
+                                                                                    <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{formatDate(payment.date)}</div>
+                                                                                    <div className="text-sm font-black text-gray-900">{payment.method}</div>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className={`customer-status-badge ${payment.status === 'Completed' || payment.status === 'Received' || !payment.status ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                                        {isExpanded ? (
+                                                                                            <span className="shrink-0">{payment.status || 'Received'}</span>
+                                                                                        ) : (
+                                                                                            <span className="font-bold">
+                                                                                                ৳{parseFloat(payment.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[500px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
+                                                                                <div className="space-y-1">
+                                                                                    {(payment.bankName || payment.receiveBy) && (
+                                                                                        <div className="flex justify-between text-xs">
+                                                                                            <span className="text-gray-500">
+                                                                                                {payment.method === 'Cash' ? 'Received By:' : 'Bank/Provider:'}
+                                                                                            </span>
+                                                                                            <span className="font-bold text-gray-900">
+                                                                                                {payment.method === 'Cash' ? payment.receiveBy : payment.bankName}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {payment.method === 'Cash' && payment.place && (
+                                                                                        <div className="flex justify-between text-xs">
+                                                                                            <span className="text-gray-500">Place:</span>
+                                                                                            <span className="font-bold text-gray-900">{payment.place}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {payment.method !== 'Cash' && payment.method !== 'Mobile Banking' && payment.branch && (
+                                                                                        <div className="flex justify-between text-xs">
+                                                                                            <span className="text-gray-500">Branch:</span>
+                                                                                            <span className="font-bold text-gray-900">{payment.branch}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {payment.accountNo && (
+                                                                                        <div className="flex justify-between text-xs">
+                                                                                            <span className="text-gray-500">Account No:</span>
+                                                                                            <span className="font-mono text-gray-900">{payment.accountNo}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
+                                                                                        <span className="text-gray-500">Amount:</span>
+                                                                                        <span className="font-black text-emerald-600">৳{parseFloat(payment.amount).toLocaleString('en-IN')}</span>
+                                                                                    </div>
+                                                                                    {payment.reference && (
+                                                                                        <div className="text-[10px] text-blue-500 italic mt-1">
+                                                                                            Ref: {payment.reference}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <div className="py-8 text-left text-xs text-gray-400 font-medium italic">No payment history found</div>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         </>
                                     )}

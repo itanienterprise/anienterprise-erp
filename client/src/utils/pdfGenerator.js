@@ -5450,3 +5450,372 @@ export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
         console.error("Error generating Cost of Goods report PDF:", error);
     }
 };
+
+export const generatePayToCustomerVoucherPDF = async (payment) => {
+    try {
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // Background Accents
+        doc.setFillColor(255, 247, 237);
+        doc.circle(0, 0, 35, 'F');
+        doc.circle(pageWidth, pageHeight, 45, 'F');
+        doc.setFillColor(254, 215, 170);
+        doc.circle(0, pageHeight, 30, 'F');
+
+        // Logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 22, 22);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 20, 20, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 10, margin + 13, { align: 'center' });
+        }
+
+        doc.setTextColor(20, 25, 35);
+        doc.setFontSize(28);
+        doc.setFont('helvetica', 'bold');
+        doc.text("ANI ENTERPRISE", margin + 24, margin + 13);
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 3, { align: 'right', lineHeightFactor: 1.15 });
+
+        let y = margin + 40;
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+
+        const drawDottedLine = (x1, y1, x2) => {
+            doc.setDrawColor(200);
+            doc.setLineWidth(0.1);
+            doc.setLineDashPattern([0.5, 1], 0);
+            doc.line(x1, y1, x2, y1);
+            doc.setLineDashPattern([], 0);
+        };
+
+        const labelWidth = 40;
+        const rightColStart = margin + 105;
+
+        // Title Header Banner
+        doc.setFillColor(239, 68, 68);
+        doc.roundedRect(margin, y - 8, pageWidth - (margin * 2), 8, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text("PAY TO CUSTOMER VOUCHER", pageWidth / 2, y - 2, { align: 'center' });
+
+        y += 8;
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+
+        // Date & Voucher No
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date", margin, y);
+        doc.text(":", margin + labelWidth - 5, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(formatDate(payment.date), margin + labelWidth, y);
+        drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Voucher No :", rightColStart, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(payment.receiptNo || '000000', rightColStart + 28, y);
+        drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
+
+        y += 12;
+
+        // Customer Info
+        doc.setFont('helvetica', 'bold');
+        doc.text("Party Name", margin, y);
+        doc.text(":", margin + labelWidth - 5, y);
+        doc.setFont('helvetica', 'normal');
+
+        const partyNameText = payment.companyName || payment.customerName || 'N/A';
+        const partyNameWidth = (rightColStart - 5) - (margin + labelWidth);
+        const partyNameLines = doc.splitTextToSize(partyNameText, partyNameWidth);
+
+        partyNameLines.forEach((line, index) => {
+            doc.text(line, margin + labelWidth, y + (index * 5));
+        });
+
+        const partyNameLastY = y + ((partyNameLines.length - 1) * 5);
+        drawDottedLine(margin + labelWidth, partyNameLastY + 1, rightColStart - 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Contact :", rightColStart, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(payment.phone || '—', rightColStart + 28, y);
+        drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
+
+        y += 12 + ((partyNameLines.length - 1) * 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Address", margin, y);
+        doc.text(":", margin + labelWidth - 5, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(payment.address || '—', margin + labelWidth, y);
+        drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
+
+        y += 14;
+
+        // Table
+        const tableItems = payment.items || [payment];
+        const tableBody = tableItems.map((item, idx) => [
+            (idx + 1).toString(),
+            item.method || '—',
+            item.bankName || '—',
+            item.branch || '—',
+            item.accountNo || '—',
+            'TK. ' + (parseFloat(item.amount) || 0).toLocaleString('en-IN')
+        ]);
+
+        autoTable(doc, {
+            startY: y,
+            head: [['#', 'Payment Method', 'Bank Name / Provider', 'Branch / Place', 'Account No', 'Amount Paid']],
+            body: tableBody,
+            theme: 'grid',
+            styles: {
+                fontSize: 9.5,
+                cellPadding: 3,
+                textColor: [0, 0, 0],
+                lineColor: [226, 232, 240],
+                lineWidth: 0.2,
+            },
+            headStyles: {
+                fillColor: [239, 68, 68],
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                fontSize: 9,
+                halign: 'center',
+            },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 10 },
+                1: { halign: 'center' },
+                2: { halign: 'center' },
+                3: { halign: 'center' },
+                4: { halign: 'center' },
+                5: { halign: 'right', fontStyle: 'bold' },
+            },
+            margin: { left: margin, right: margin },
+        });
+
+        y = doc.lastAutoTable.finalY + 12;
+
+        const totalAmount = tableItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+        doc.setFillColor(254, 242, 242);
+        doc.roundedRect(margin, y, pageWidth - (margin * 2), 24, 3, 3, 'F');
+        doc.setDrawColor(239, 68, 68);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, y, pageWidth - (margin * 2), 24, 3, 3, 'D');
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(185, 28, 28);
+        doc.text("Total Paid To Customer :", margin + 8, y + 14);
+        doc.setFontSize(14);
+        doc.text(`TK. ${totalAmount.toLocaleString('en-IN')}`, pageWidth - margin - 8, y + 14, { align: 'right' });
+
+        // Signatures
+        const footerY = pageHeight - 35;
+        doc.setDrawColor(150);
+        doc.setLineWidth(0.4);
+
+        doc.line(margin + 10, footerY, margin + 60, footerY);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text("Customer Signature", margin + 35, footerY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - 60, footerY, pageWidth - margin - 10, footerY);
+        doc.text("Authorized Signature", pageWidth - margin - 35, footerY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("Pay To Customer Voucher PDF Error:", error);
+        alert(`Failed to generate Pay To Customer Voucher PDF: ${error.message}`);
+    }
+};
+
+export const generatePayToCustomerReportPDF = (payments, filters, dateStr) => {
+    try {
+        const doc = new jsPDF('l', 'mm', 'a4');
+
+        const formatDate = (dateString) => {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 32, pageWidth - margin, 32);
+
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 45, 29, 90, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("PAY TO CUSTOMER REPORT", pageWidth / 2, 34, { align: 'center' });
+
+        let yPos = 47;
+        doc.setFontSize(10);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Total Records:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text((payments.length || 0).toString(), margin + 30, yPos);
+
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, yPos, { align: 'right' });
+
+        if (filters?.startDate) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Start Date:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(formatDate(filters.startDate), margin + 30, yPos);
+        }
+
+        if (filters?.endDate) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("End Date:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(formatDate(filters.endDate), margin + 30, yPos);
+        }
+
+        const tableRows = [];
+        let grandTotal = 0;
+
+        const sortedPayments = [...payments].sort((a, b) => new Date(a.date) - new Date(b.date));
+        sortedPayments.forEach((p, idx) => {
+            const amount = parseFloat(p.amount) || 0;
+            grandTotal += amount;
+
+            tableRows.push([
+                idx + 1,
+                formatDate(p.date),
+                p.companyName || p.customerName || '-',
+                p.place || p.customerAddress || '-',
+                p.method || '-',
+                p.method === 'Cash' ? (p.receiveBy || '-') : (p.bankName || '-'),
+                (p.branch || '').trim() || '-',
+                p.accountNo || '-',
+                `${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                (p.reference || '').trim() || '-'
+            ]);
+        });
+
+        tableRows.push([
+            { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: `${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [0, 0, 0] } },
+            { content: '', styles: { fillColor: [240, 240, 240] } }
+        ]);
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: [['SL', 'Date', 'Party Name', 'Location', 'Method', 'Bank/Paid By', 'Branch', 'Account No', 'Amount', 'Remark']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 9,
+                cellPadding: 1.4,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0],
+                noWrap: true
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 9
+            },
+            columnStyles: {
+                0: { cellWidth: 8, halign: 'center' },
+                1: { cellWidth: 20 },
+                2: { cellWidth: 48, overflow: 'hidden' },
+                3: { cellWidth: 28, overflow: 'hidden' },
+                4: { cellWidth: 25 },
+                5: { cellWidth: 35, overflow: 'hidden' },
+                6: { cellWidth: 20, halign: 'left' },
+                7: { cellWidth: 28 },
+                8: { cellWidth: 27, halign: 'right' },
+                9: { cellWidth: 40, overflow: 'hidden' }
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        let finalY = doc.lastAutoTable.finalY + 30;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 30;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("Pay To Customer Report PDF Error:", error);
+        alert(`Failed to generate Pay To Customer Report PDF: ${error.message}`);
+    }
+};
+

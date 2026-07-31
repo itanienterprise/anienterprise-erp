@@ -162,7 +162,7 @@ const getDefaultPermissionsForRole = (role) => {
 
   const modules = [
     'employees', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup',
-    'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'bank',
+    'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank',
     'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore'
   ];
 
@@ -186,12 +186,12 @@ const getDefaultPermissionsForRole = (role) => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
   } else if (roleLower === 'sales manager') {
-    const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+    const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
     salesModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
   } else if (roleLower === 'accounts manager') {
-    const accModules = ['paymentCollection', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods'];
+    const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods'];
     accModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
