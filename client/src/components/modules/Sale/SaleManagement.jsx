@@ -6,6 +6,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 // import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
+import { calculateStockData } from '../../../utils/stockHelpers';
 import './SaleManagement.css';
 
 const getSafeString = (val) => {
@@ -885,288 +886,98 @@ const SaleManagement = ({
 
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setFormData(prev => {
+            const salesForCalc = editingId
+                ? allSalesRecords.filter(s => s._id !== editingId && s.invoiceNo !== formData.invoiceNo && s.orderNo !== formData.orderNo)
+                : allSalesRecords;
+
             let hasChanges = false;
             const newItems = prev.items.map(item => {
                 if (!item.productId) return item;
 
                 const isBagUom = item.uom === 'BAG';
+                const pName = (item.productName || '').trim();
+                if (!pName) return item;
+
                 let itemChanged = false;
                 const newBrandEntries = item.brandEntries.map(entry => {
                     let updatedEntry = { ...entry };
+                    const bName = (entry.brand || entry.brandName || '').trim();
+                    const lcNo = (entry.lcNo || '').trim();
+                    const whName = (entry.warehouseName || '').trim();
 
-                    // 1. Calculate Total Inhouse Quantity for the selected product and brand
-                    // The user requested: "Inhouse quantity and warehouse quantity will show seleted product seledted brand"
-                    let totalInhouseQty = 0;
+                    // 1. Calculate overall Saleable Stock for selected product, brand, and LC
+                    let inhouseSaleable = 0;
+                    const stockFilters = {
+                        productName: pName,
+                        brand: bName || undefined,
+                        lcNo: lcNo || undefined
+                    };
 
-                    if (item.productName && entry.brand) {
-                        // Add stock from main store matching product and brand
-                        stockRecords.forEach(record => {
-                            const recName = (record.productName || record.product || '').toLowerCase().trim();
-                            const targetName = (item.productName || '').toLowerCase().trim();
-                            const recBrand = (record.brand || '').toLowerCase().trim();
-                            const targetBrand = (entry.brand || '').toLowerCase().trim();
-                            const recLc = (record.lcNo || '').toLowerCase().trim();
-                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
+                    const stockRes = calculateStockData(
+                        stockRecords,
+                        stockFilters,
+                        '',
+                        warehouses,
+                        salesForCalc,
+                        products,
+                        damagesRecords
+                    );
+                    const calculatedStock = stockRes?.displayRecords || [];
 
-                            if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
-
-                            if (recName === targetName && recBrand === targetBrand && (!targetLc || recLc === targetLc)) {
-                                totalInhouseQty += parseFloat(record.inHouseQuantity) || 0;
-                            }
-                        });
-
-                        // Add stock from all warehouses for this product and brand
-                        warehouses.forEach(w => {
-                            const wProd = (w.productName || w.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-                            const wBrand = (w.brand || '').toLowerCase().trim();
-                            const targetBrand = (entry.brand || '').toLowerCase().trim();
-                            const wLc = (w.lcNo || '').toLowerCase().trim();
-                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
-
-                            if (wProd === targetProd && wBrand === targetBrand && (!targetLc || wLc === targetLc)) {
-                                totalInhouseQty += parseFloat(w.whQty) || 0;
-                            }
-                        });
-
-                        // Subtract ALL matching sales to get REMAINING stock
-                        allSalesRecords.forEach(s => {
-                            const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
-                            if (s.items) {
-                                s.items.forEach(si => {
-                                    const sProdName = (si.productName || '').toLowerCase().trim();
-                                    const tProdName = (item.productName || '').toLowerCase().trim();
-                                    if (sProdName === tProdName && si.brandEntries) {
-                                        si.brandEntries.forEach(be => {
-                                            const sBrandName = (be.brand || '').toLowerCase().trim();
-                                            const tBrandName = (entry.brand || '').toLowerCase().trim();
-                                            const tProdNameMatched = (item.productName || '').toLowerCase().trim();
-                                            const sLc = (be.lcNo || si.lcNo || s.lcNo || '').toLowerCase().trim();
-                                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
-
-                                            // Regular brand match OR (Sale brand is empty/hyphen AND stock brand matches product name)
-                                            if ((sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdNameMatched)) && (!targetLc || sLc === targetLc)) {
-                                                totalInhouseQty -= parseFloat(be.quantity) || 0;
-                                            }
-                                        });
-                                    }
-                                });
-                            }
-                        });
-                        totalInhouseQty = Math.max(0, totalInhouseQty);
-                    } else if (item.productName && !entry.brand) {
-                        // Fallback: just product if no brand is selected yet
-                        stockRecords.forEach(record => {
-                            if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
-                            const recName = (record.productName || record.product || '').toLowerCase().trim();
-                            const targetName = (item.productName || '').toLowerCase().trim();
-                            const recLc = (record.lcNo || '').toLowerCase().trim();
-                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
-                            if (recName === targetName && (!targetLc || recLc === targetLc)) {
-                                totalInhouseQty += parseFloat(record.inHouseQuantity) || 0;
-                            }
-                        });
-
-                        warehouses.forEach(w => {
-                            const wProd = (w.productName || w.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-                            const wLc = (w.lcNo || '').toLowerCase().trim();
-                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
-                            if (wProd === targetProd && (!targetLc || wLc === targetLc)) {
-                                totalInhouseQty += parseFloat(w.whQty) || 0;
-                            }
-                        });
-
-                        // Subtract ALL sales for this product
-                        allSalesRecords.forEach(s => {
-                            const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
-                            if (s.items) {
-                                s.items.forEach(si => {
-                                    const sProdName = (si.productName || '').toLowerCase().trim();
-                                    const tProdName = (item.productName || '').toLowerCase().trim();
-                                    if (sProdName === tProdName && si.brandEntries) {
-                                        si.brandEntries.forEach(be => {
-                                            const sLc = (be.lcNo || si.lcNo || s.lcNo || '').toLowerCase().trim();
-                                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
-                                            if (!targetLc || sLc === targetLc) {
-                                                totalInhouseQty -= parseFloat(be.quantity) || 0;
-                                            }
-                                        });
-                                    }
-                                });
-                            }
-                        });
-                        totalInhouseQty = Math.max(0, totalInhouseQty);
+                    const matchedGroup = calculatedStock.find(g => (g.productName || '').trim().toLowerCase() === pName.toLowerCase());
+                    if (matchedGroup && matchedGroup.brandList) {
+                        const targetBrandLower = bName.toLowerCase();
+                        let targetBrands = matchedGroup.brandList;
+                        if (targetBrandLower) {
+                            targetBrands = targetBrands.filter(b => (b.brand || '').trim().toLowerCase() === targetBrandLower);
+                        }
+                        inhouseSaleable = targetBrands.reduce((sum, b) => {
+                            return sum + (isBagUom ? (b.saleablePacket || 0) : (b.saleableQuantity || 0));
+                        }, 0);
                     }
 
-                    if (updatedEntry.inhouseQty !== totalInhouseQty.toString()) {
-                        updatedEntry.inhouseQty = totalInhouseQty.toString();
+                    const formattedInhouse = Number(Math.max(0, inhouseSaleable).toFixed(2)).toString();
+                    if (updatedEntry.inhouseQty !== formattedInhouse) {
+                        updatedEntry.inhouseQty = formattedInhouse;
                         itemChanged = true;
                     }
 
-                    // 2. Calculate Warehouse Stock for the selected product + brand + warehouse
-                    // The user requested: "warehouse stock will show the selected product's selected warehouse quantity"
-                    if (entry.warehouseName) {
-                        let totalWhQty = 0;
-                        warehouses.forEach(w => {
-                            const wName = (w.whName || w.warehouse || '').toLowerCase().trim();
-                            const targetWh = (entry.warehouseName || '').toLowerCase().trim();
-                            const wProd = (w.productName || w.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-                            const targetBrand = (entry.brand || entry.brandName || '').toLowerCase().trim();
-                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
+                    // 2. Calculate Warehouse Saleable Stock for selected warehouse
+                    if (whName) {
+                        const whStockFilters = {
+                            productName: pName,
+                            brand: bName || undefined,
+                            lcNo: lcNo || undefined,
+                            warehouse: whName
+                        };
 
-                            if (w.brandEntries && Array.isArray(w.brandEntries) && w.brandEntries.length > 0) {
-                                w.brandEntries.forEach(be => {
-                                    const beBrand = (be.brand || be.brandName || '').toLowerCase().trim();
-                                    const brandMatches = !targetBrand || beBrand === targetBrand;
-                                    const beWh = (be.warehouseName || be.warehouse || w.whName || w.warehouse || '').toLowerCase().trim();
-                                    const beProd = (be.productName || w.productName || w.product || '').toLowerCase().trim();
-                                    const beLc = (be.lcNo || w.lcNo || '').toLowerCase().trim();
-                                    if (beWh === targetWh && beProd === targetProd && brandMatches && (!targetLc || beLc === targetLc)) {
-                                        if (isBagUom) {
-                                            totalWhQty += parseFloat(be.whPkt || be.inHousePacket || be.inhousePkt || 0) || 0;
-                                        } else {
-                                            totalWhQty += parseFloat(be.whQty || be.inHouseQuantity || be.inhouseQty || 0) || 0;
-                                        }
-                                    }
-                                });
-                            } else {
-                                const wBrand = (w.brand || '').toLowerCase().trim();
-                                const wLc = (w.lcNo || '').toLowerCase().trim();
-                                const brandMatches = !targetBrand || wBrand === targetBrand;
-                                if (wName === targetWh && wProd === targetProd && brandMatches && (!targetLc || wLc === targetLc)) {
-                                    if (isBagUom) {
-                                        totalWhQty += parseFloat(w.whPkt || w.inHousePacket || w.inhousePkt || 0) || 0;
-                                    } else {
-                                        totalWhQty += parseFloat(w.whQty || w.inHouseQuantity || w.inhouseQty || 0) || 0;
-                                    }
-                                }
+                        const whStockRes = calculateStockData(
+                            stockRecords,
+                            whStockFilters,
+                            '',
+                            warehouses,
+                            salesForCalc,
+                            products,
+                            damagesRecords
+                        );
+                        const calculatedWhStock = whStockRes?.displayRecords || [];
+
+                        let whSaleable = 0;
+                        const matchedWhGroup = calculatedWhStock.find(g => (g.productName || '').trim().toLowerCase() === pName.toLowerCase());
+                        if (matchedWhGroup && matchedWhGroup.brandList) {
+                            const targetBrandLower = bName.toLowerCase();
+                            let targetBrands = matchedWhGroup.brandList;
+                            if (targetBrandLower) {
+                                targetBrands = targetBrands.filter(b => (b.brand || '').trim().toLowerCase() === targetBrandLower);
                             }
-                        });
+                            whSaleable = targetBrands.reduce((sum, b) => {
+                                return sum + (isBagUom ? (b.saleablePacket || 0) : (b.saleableQuantity || 0));
+                            }, 0);
+                        }
 
-                        // Also check stockRecords if warehouse name matches exactly
-                        stockRecords.forEach(record => {
-                            const rName = (record.warehouse || record.whName || '').toLowerCase().trim();
-                            const targetWh = (entry.warehouseName || '').toLowerCase().trim();
-                            const rProd = (record.productName || record.product || '').toLowerCase().trim();
-                            const targetProd = (item.productName || '').toLowerCase().trim();
-                            const targetBrand = (entry.brand || entry.brandName || '').toLowerCase().trim();
-                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
-
-                            if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
-
-                            if (record.brandEntries && Array.isArray(record.brandEntries) && record.brandEntries.length > 0) {
-                                record.brandEntries.forEach(be => {
-                                    const beBrand = (be.brand || be.brandName || '').toLowerCase().trim();
-                                    const brandMatches = !targetBrand || beBrand === targetBrand;
-                                    const beWh = (be.warehouse || be.whName || record.warehouse || record.whName || '').toLowerCase().trim();
-                                    const beProd = (be.productName || record.productName || record.product || '').toLowerCase().trim();
-                                    const beLc = (be.lcNo || record.lcNo || '').toLowerCase().trim();
-                                    if (beWh === targetWh && beProd === targetProd && brandMatches && (!targetLc || beLc === targetLc)) {
-                                        if (isBagUom) {
-                                            totalWhQty += parseFloat(be.inHousePacket || be.inhousePkt || be.whPkt || 0) || 0;
-                                        } else {
-                                            totalWhQty += parseFloat(be.inHouseQuantity || be.inhouseQty || be.whQty || 0) || 0;
-                                        }
-                                    }
-                                });
-                            } else {
-                                const rBrand = (record.brand || '').toLowerCase().trim();
-                                const rLc = (record.lcNo || '').toLowerCase().trim();
-                                const brandMatches = !targetBrand || rBrand === targetBrand;
-                                if (rName === targetWh && rProd === targetProd && brandMatches && (!targetLc || rLc === targetLc)) {
-                                    if (isBagUom) {
-                                        totalWhQty += parseFloat(record.inHousePacket || record.inhousePkt || record.whPkt || 0) || 0;
-                                    } else {
-                                        totalWhQty += parseFloat(record.inHouseQuantity || record.inhouseQty || record.whQty || 0) || 0;
-                                    }
-                                }
-                            }
-                        });
-
-                        // Subtract ALL matching sales for this specific warehouse
-                        allSalesRecords.forEach(s => {
-                            if (editingId && (s._id === editingId || s.invoiceNo === formData.invoiceNo || s.orderNo === formData.orderNo)) return;
-                            const sStatus = (s.status || '').toLowerCase();
-                            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
-                            if (s.items && Array.isArray(s.items)) {
-                                s.items.forEach(si => {
-                                    const sProdName = (si.productName || '').toLowerCase().trim();
-                                    const tProdName = (item.productName || '').toLowerCase().trim();
-                                    const tBrandName = (entry.brand || entry.brandName || '').toLowerCase().trim();
-                                    const tWhName = (entry.warehouseName || '').toLowerCase().trim();
-                                    const targetLc = (entry.lcNo || '').toLowerCase().trim();
-
-                                    if (sProdName === tProdName) {
-                                        if (si.brandEntries && Array.isArray(si.brandEntries) && si.brandEntries.length > 0) {
-                                            si.brandEntries.forEach(be => {
-                                                const sBrandName = (be.brand || be.brandName || '').toLowerCase().trim();
-                                                const sWhName = (be.warehouseName || be.whName || si.warehouseName || si.whName || '').toLowerCase().trim();
-                                                const sLc = (be.lcNo || si.lcNo || s.lcNo || '').toLowerCase().trim();
-
-                                                const brandMatches = !tBrandName ? true : (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdName));
-                                                if (brandMatches && sWhName === tWhName && (!targetLc || sLc === targetLc)) {
-                                                    if (isBagUom) {
-                                                        totalWhQty -= parseFloat(be.bag || be.packet || 0) || 0;
-                                                    } else {
-                                                        totalWhQty -= parseFloat(be.quantity || 0) || 0;
-                                                    }
-                                                }
-                                            });
-                                        } else {
-                                            const sBrandName = (si.brand || si.brandName || '').toLowerCase().trim();
-                                            const sWhName = (si.warehouseName || si.whName || '').toLowerCase().trim();
-                                            const sLc = (si.lcNo || s.lcNo || '').toLowerCase().trim();
-                                            const brandMatches = !tBrandName ? true : (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdName));
-                                            if (brandMatches && sWhName === tWhName && (!targetLc || sLc === targetLc)) {
-                                                if (isBagUom) {
-                                                    totalWhQty -= parseFloat(si.bag || si.packet || 0) || 0;
-                                                } else {
-                                                    totalWhQty -= parseFloat(si.quantity || 0) || 0;
-                                                }
-                                            }
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                        damagesRecords.forEach(d => {
-                            const dStatus = (d.status || '').toLowerCase();
-                            if (['rejected', 'requested'].includes(dStatus)) return;
-                            const dProd = (d.productName || d.product || '').toLowerCase().trim();
-                            const tProdName = (item.productName || '').toLowerCase().trim();
-                            const dBrand = (d.brand || '').toLowerCase().trim();
-                            const tBrandName = (entry.brand || entry.brandName || '').toLowerCase().trim();
-                            const dWh = (d.warehouse || d.whName || '').toLowerCase().trim();
-                            const tWhName = (entry.warehouseName || '').toLowerCase().trim();
-                            const dLc = (d.lcNo || '').toLowerCase().trim();
-                            const targetLc = (entry.lcNo || '').toLowerCase().trim();
-
-                            const brandMatches = !tBrandName ? true : (dBrand === tBrandName || ((dBrand === '' || dBrand === '-') && tBrandName === tProdName));
-
-                            if (dProd === tProdName && brandMatches && dWh === tWhName && (!targetLc || dLc === targetLc)) {
-                                if (isBagUom) {
-                                    let dp = parseFloat(d.packet || d.pkt || d.bag || 0) || 0;
-                                    if (dp <= 0) {
-                                        const dq = parseFloat(d.quantity || d.qty || 0) || 0;
-                                        const pktSize = parseFloat(entry.packetSize) || 30;
-                                        dp = dq / pktSize;
-                                    }
-                                    totalWhQty -= dp;
-                                } else {
-                                    totalWhQty -= parseFloat(d.quantity || d.qty || 0) || 0;
-                                }
-                            }
-                        });
-
-                        totalWhQty = Math.max(0, totalWhQty);
-                        const formattedStock = Number(totalWhQty.toFixed(2)).toString();
-
-                        if (updatedEntry.warehouseQty !== formattedStock) {
-                            updatedEntry.warehouseQty = formattedStock;
+                        const formattedWh = Number(Math.max(0, whSaleable).toFixed(2)).toString();
+                        if (updatedEntry.warehouseQty !== formattedWh) {
+                            updatedEntry.warehouseQty = formattedWh;
                             itemChanged = true;
                         }
                     } else {
@@ -4410,7 +4221,7 @@ const SaleManagement = ({
                                                     <div className="col-span-2 sale-mgmt-item-label text-center">Brand</div>
                                                     <div className="sale-mgmt-item-label text-center">Inhouse</div>
                                                     <div className="sale-mgmt-item-label text-center">Warehouse</div>
-                                                    <div className="sale-mgmt-item-label text-center">Wh Stock</div>
+                                                    <div className="sale-mgmt-item-label text-center leading-tight">Saleable Wh Stock ({item.uom === 'BAG' ? 'BAG' : 'KG'})</div>
                                                     <div className="sale-mgmt-item-label text-center">Bag</div>
                                                     <div className="sale-mgmt-item-label text-center">Qty</div>
                                                     <div className="sale-mgmt-item-label text-center">Price</div>
@@ -4664,7 +4475,7 @@ const SaleManagement = ({
 
                                                         {/* Wh Stock */}
                                                         <div>
-                                                            <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block text-center">Wh Stock</label>
+                                                            <label className="md:hidden text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block text-center leading-tight">Saleable Wh Stock ({item.uom === 'BAG' ? 'BAG' : 'KG'})</label>
                                                             <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg backdrop-blur-sm text-[13px] font-bold text-gray-900">
                                                                 {entry.warehouseQty || '0'}
                                                             </div>

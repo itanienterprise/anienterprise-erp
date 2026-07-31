@@ -143,29 +143,35 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     const consumedSales = new Set(); // Track consumed sale entries to prevent double-counting across quality grades
     const consumedDamages = new Set(); // Track consumed damages to prevent double-counting
 
-    // Build Set of orders fulfilled by General Sales or completed to avoid double-counting in Order Qty
-    const fulfilledOrdersSet = new Set();
+    // Build Map of order reference + product + brand -> sold quantity from General Sales
+    // Key: `${ref}_${normProductName}_${normBrand}`
+    const orderFulfilledQtyMap = {};
     salesRecords.forEach(s => {
         const sType = (s.saleType || '').toLowerCase();
         const sStatus = (s.status || '').toLowerCase();
         const isOrder = sType === 'order' || (s.invoiceNo || '').toUpperCase().startsWith('ORD') || s.isOrderEntry === true;
 
-        if (isOrder && (sStatus === 'complete' || sStatus === 'completed' || s.isFulfilled === true)) {
-            const invNo = (s.invoiceNo || s.orderNo || '').trim().toUpperCase();
-            if (invNo) fulfilledOrdersSet.add(invNo);
-            if (s._id) fulfilledOrdersSet.add(s._id.toString().trim().toUpperCase());
-        }
+        if (!isOrder && sStatus !== 'rejected' && sStatus !== 'cancelled' && sStatus !== 'requested') {
+            const refs = [];
+            if (s.orderNo && s.orderNo.toString().trim() !== '') refs.push(s.orderNo.toString().trim().toUpperCase());
+            if (s.orderId && s.orderId.toString().trim() !== '') refs.push(s.orderId.toString().trim().toUpperCase());
+            if (s.orderRef && s.orderRef.toString().trim() !== '') refs.push(s.orderRef.toString().trim().toUpperCase());
 
-        if (!isOrder && (sStatus === 'accepted' || sStatus === 'pending' || sStatus === 'complete')) {
-            if (s.orderNo) {
-                fulfilledOrdersSet.add(s.orderNo.trim().toUpperCase());
-            }
-            if (s.orderId) {
-                fulfilledOrdersSet.add(s.orderId.toString().trim().toUpperCase());
-            }
-            if (s.orderRef) {
-                fulfilledOrdersSet.add(s.orderRef.toString().trim().toUpperCase());
-            }
+            refs.forEach(ref => {
+                (s.items || []).forEach(item => {
+                    const pName = (item.productName || '').trim().toLowerCase();
+                    const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
+                        ? item.brandEntries
+                        : [{ brand: item.brand || '', quantity: item.quantity }];
+
+                    brandEntries.forEach(be => {
+                        const bName = (be.brand || '').trim().toLowerCase();
+                        const key = `${ref}_${pName}_${bName}`;
+                        const qty = parseFloat(be.quantity) || 0;
+                        orderFulfilledQtyMap[key] = (orderFulfilledQtyMap[key] || 0) + qty;
+                    });
+                });
+            });
         }
     });
 
@@ -369,7 +375,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const isOrderSale = (sale.saleType || '').toLowerCase() === 'order' ||
                     (sale.invoiceNo || sale.orderNo || '').toUpperCase().startsWith('ORD') ||
                     sale.isOrderEntry === true;
-                if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete') return;
+                if (sStatus === 'rejected' || sStatus === 'cancelled') return;
+                if (!isOrderSale && sStatus === 'requested') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
                 if (endDate && sDate > endDate) return;
@@ -378,7 +385,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 (sale.items || []).forEach((si, siIdx) => {
                     const siName = (si.productName || si.product || '').trim().toLowerCase();
                     if (siName === keyLower) {
-                        (si.brandEntries || []).forEach((be, beIdx) => {
+                        const itemBrandEntries = (si.brandEntries && si.brandEntries.length > 0)
+                            ? si.brandEntries
+                            : [{ brand: si.brand || '', quantity: si.quantity, packet: si.packet, packetSize: si.packetSize, warehouseName: si.warehouseName || si.whName || '', lcNo: si.lcNo || '' }];
+
+                        itemBrandEntries.forEach((be, beIdx) => {
                             const beBrand = (be.brand || 'No Brand').trim().toLowerCase();
                             const rq = resolveQuality(siName, be.brand);
                             let beQualityRaw = rq !== '-' ? rq : (be.quality || '-');
@@ -423,12 +434,26 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 const isOrder = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
                                 const isFulfilled = (sale.status || '').toLowerCase() === 'complete' || (sale.status || '').toLowerCase() === 'completed' || sale.isFulfilled === true;
 
+                                const pKeyName = (si.productName || item.productName || item.product || '').trim().toLowerCase();
+                                const bKeyName = (be.brand || '').trim().toLowerCase();
                                 if (isOrder) {
-                                    if (isFulfilled || fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo) || (ordId && fulfilledOrdersSet.has(ordId))) return;
-                                    brandObj.orderQuantity += sq;
-                                    brandObj.orderPacket += sp;
-                                    acc[key].orderQuantity += sq;
-                                    acc[key].orderPacket += sp;
+                                    if (isFulfilled || (sale.status || '').toLowerCase() === 'rejected') return;
+
+                                    const soldQty1 = inv && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${inv}_${pKeyName}_${bKeyName}`] || 0) : 0;
+                                    const soldQty2 = ordNo && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${ordNo}_${pKeyName}_${bKeyName}`] || 0) : 0;
+                                    const soldQty3 = ordId && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${ordId}_${pKeyName}_${bKeyName}`] || 0) : 0;
+                                    const totalSoldQty = Math.max(soldQty1, soldQty2, soldQty3);
+
+                                    const netOrderSq = Math.max(0, sq - totalSoldQty);
+                                    if (netOrderSq <= 0) return;
+
+                                    const pktRatio = sq > 0 ? (sp / sq) : 0;
+                                    const netOrderSp = netOrderSq * pktRatio;
+
+                                    brandObj.orderQuantity += netOrderSq;
+                                    brandObj.orderPacket += netOrderSp;
+                                    acc[key].orderQuantity += netOrderSq;
+                                    acc[key].orderPacket += netOrderSp;
                                 } else {
                                     if (isBeforeSale) {
                                         brandObj.openingQuantity -= sq;
@@ -539,18 +564,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     // 5. Second Pass: General Products (from sales)
     salesRecords.forEach(sale => {
         const sStatus = (sale.status || '').toLowerCase();
-        if (sStatus !== 'accepted' && sStatus !== 'pending' && sStatus !== 'complete') return;
+        const sType = (sale.saleType || '').toLowerCase();
+        const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
+        const isOrderSale = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
+        if (sStatus === 'rejected' || sStatus === 'cancelled') return;
+        if (!isOrderSale && sStatus === 'requested') return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
         (sale.items || []).forEach((si, siIdx) => {
             const sProdName = (si.productName || '').trim();
             if (!sProdName) return;
 
-            // If this product already has stock records in first pass, do not process in second pass!
-            if (groupedStock[sProdName]) return;
-
             const product = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === sProdName.toLowerCase());
-            if (product?.category?.toLowerCase() !== 'general') return;
 
             if (stockFilters.productName) {
                 const searchName = sProdName.toLowerCase();
@@ -575,7 +600,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 };
             }
             const group = groupedStock[sProdName];
-            (si.brandEntries || []).forEach((be, beIdx) => {
+            const itemBrandEntries = (si.brandEntries && si.brandEntries.length > 0)
+                ? si.brandEntries
+                : [{ brand: si.brand || '', quantity: si.quantity, packet: si.packet, packetSize: si.packetSize, warehouseName: si.warehouseName || si.whName || '', lcNo: si.lcNo || '' }];
+
+            itemBrandEntries.forEach((be, beIdx) => {
                 const saleWH = (be.warehouseName || si.whName || si.warehouse || sale.warehouse || sale.whName || '').trim().toLowerCase();
                 if (isWhFilter && saleWH !== stockFilters.warehouse.toLowerCase()) return;
                 
@@ -623,7 +652,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                         brand: (be.brand || 'No Brand').trim(),
                         quality: resolvedQ || '-',
                         openingPacket: 0, openingQuantity: 0, periodArrivalPacket: 0, periodArrivalQuantity: 0,
-                        salePacket: 0, saleQuantity: 0, sweepedPacket: 0, sweepedQuantity: 0,
+                        salePacket: 0, saleQuantity: 0, orderPacket: 0, orderQuantity: 0, sweepedPacket: 0, sweepedQuantity: 0,
                         damagePacket: 0, damageQuantity: 0,
                         inHousePacket: 0, inHouseQuantity: 0, packetSize: resolvedPktSize,
                         _salesResolved: false,
@@ -704,12 +733,26 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     const isOrder = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
                     const isFulfilled = (sale.status || '').toLowerCase() === 'complete' || (sale.status || '').toLowerCase() === 'completed' || sale.isFulfilled === true;
 
+                    const pKeyName = (si.productName || '').trim().toLowerCase();
+                    const bKeyName = (be.brand || '').trim().toLowerCase();
                     if (isOrder) {
-                        if (isFulfilled || fulfilledOrdersSet.has(inv) || fulfilledOrdersSet.has(ordNo) || (ordId && fulfilledOrdersSet.has(ordId))) return;
-                        brandObj.orderQuantity += sq;
-                        brandObj.orderPacket += sp;
-                        group.orderQuantity += sq;
-                        group.orderPacket += sp;
+                        if (isFulfilled || (sale.status || '').toLowerCase() === 'rejected') return;
+
+                        const soldQty1 = inv && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${inv}_${pKeyName}_${bKeyName}`] || 0) : 0;
+                        const soldQty2 = ordNo && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${ordNo}_${pKeyName}_${bKeyName}`] || 0) : 0;
+                        const soldQty3 = ordId && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${ordId}_${pKeyName}_${bKeyName}`] || 0) : 0;
+                        const totalSoldQty = Math.max(soldQty1, soldQty2, soldQty3);
+
+                        const netOrderSq = Math.max(0, sq - totalSoldQty);
+                        if (netOrderSq <= 0) return;
+
+                        const pktRatio = sq > 0 ? (sp / sq) : 0;
+                        const netOrderSp = netOrderSq * pktRatio;
+
+                        brandObj.orderQuantity += netOrderSq;
+                        brandObj.orderPacket += netOrderSp;
+                        group.orderQuantity += netOrderSq;
+                        group.orderPacket += netOrderSp;
                     } else {
                         if (isBefore) {
                             brandObj.openingQuantity -= sq;
@@ -783,8 +826,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             if (qCmp !== 0) return qCmp;
             return a.brand.localeCompare(b.brand);
         }).filter(b => {
-            // Only include brands with positive closing/in-house stock (> 0.001)
-            return (b.inHouseQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001;
+            // Include brands with non-zero opening, closing, pre-sold, sale, or order quantity
+            return Math.abs(b.inHouseQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001 || Math.abs(b.openingQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
         });
 
         if (brandList.length === 0) return null;

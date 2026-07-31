@@ -3649,6 +3649,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 { content: '', styles: { fillColor: [240, 240, 240] } },
                 { content: grandPaid.toLocaleString('en-IN', { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
                 { content: lastBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
+
             );
 
             autoTable(doc, {

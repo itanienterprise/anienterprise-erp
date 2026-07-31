@@ -7,7 +7,7 @@ import {
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import { calculatePktRemainder } from '../../../utils/stockHelpers';
+import { calculatePktRemainder, calculateStockData } from '../../../utils/stockHelpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 
 const OrderManagement = ({
@@ -417,165 +417,67 @@ const OrderManagement = ({
         setHighlightedIndex(-1);
     };
 
-    // Calculate Warehouse Stock (Warehouse Qty) automatically
+    // Calculate Warehouse Stock (Warehouse Saleable Qty) automatically
     useEffect(() => {
         if (!formData.items || formData.items.length === 0) return;
+
+        const salesForCalc = editingId
+            ? allSalesRecords.filter(s => s._id !== editingId && s.orderNo !== formData.orderNo && s.invoiceNo !== formData.invoiceNo)
+            : allSalesRecords;
+
         let hasChanges = false;
         const newItems = formData.items.map(item => {
             let itemChanged = false;
+            const pName = (item.productName || '').trim();
+            if (!pName) return item;
+
+            const isBagUom = (item.uom || formData.uom || 'QTY') === 'BAG';
+
             const newBrandEntries = item.brandEntries.map(entry => {
                 let updatedEntry = { ...entry };
-                if (entry.warehouseName) {
-                    const isBagUom = (item.uom || formData.uom || 'QTY') === 'BAG';
-                    let totalWhQty = 0;
+                const whName = (entry.warehouseName || '').trim();
+                const bName = (entry.brandName || entry.brand || '').trim();
+                const lcNo = (entry.lcNo || '').trim();
 
-                    warehouses.forEach(w => {
-                        const wName = (w.whName || w.warehouse || '').toLowerCase().trim();
-                        const targetWh = (entry.warehouseName || '').toLowerCase().trim();
-                        const wProd = (w.productName || w.product || '').toLowerCase().trim();
-                        const targetProd = (item.productName || '').toLowerCase().trim();
-                        const targetBrand = (entry.brandName || entry.brand || '').toLowerCase().trim();
+                if (whName) {
+                    const whStockFilters = {
+                        productName: pName,
+                        brand: bName || undefined,
+                        lcNo: lcNo || undefined,
+                        warehouse: whName
+                    };
 
-                        if (w.brandEntries && Array.isArray(w.brandEntries) && w.brandEntries.length > 0) {
-                            w.brandEntries.forEach(be => {
-                                const beBrand = (be.brand || be.brandName || '').toLowerCase().trim();
-                                const brandMatches = !targetBrand || beBrand === targetBrand;
-                                const beWh = (be.warehouseName || be.warehouse || w.whName || w.warehouse || '').toLowerCase().trim();
-                                const beProd = (be.productName || w.productName || w.product || '').toLowerCase().trim();
-                                if (beWh === targetWh && beProd === targetProd && brandMatches) {
-                                    if (isBagUom) {
-                                        totalWhQty += parseFloat(be.whPkt || be.inHousePacket || be.inhousePkt || 0) || 0;
-                                    } else {
-                                        totalWhQty += parseFloat(be.whQty || be.inHouseQuantity || be.inhouseQty || 0) || 0;
-                                    }
-                                }
-                            });
-                        } else {
-                            const wBrand = (w.brand || '').toLowerCase().trim();
-                            const brandMatches = !targetBrand || wBrand === targetBrand;
-                            if (wName === targetWh && wProd === targetProd && brandMatches) {
-                                if (isBagUom) {
-                                    totalWhQty += parseFloat(w.whPkt || w.inHousePacket || w.inhousePkt || 0) || 0;
-                                } else {
-                                    totalWhQty += parseFloat(w.whQty || w.inHouseQuantity || w.inhouseQty || 0) || 0;
-                                }
-                            }
+                    const whStockRes = calculateStockData(
+                        stockRecords,
+                        whStockFilters,
+                        '',
+                        warehouses,
+                        salesForCalc,
+                        products,
+                        damagesRecords
+                    );
+                    const calculatedWhStock = whStockRes?.displayRecords || [];
+
+                    let whSaleable = 0;
+                    const matchedWhGroup = calculatedWhStock.find(g => (g.productName || '').trim().toLowerCase() === pName.toLowerCase());
+                    if (matchedWhGroup && matchedWhGroup.brandList) {
+                        const targetBrandLower = bName.toLowerCase();
+                        let targetBrands = matchedWhGroup.brandList;
+                        if (targetBrandLower) {
+                            targetBrands = targetBrands.filter(b => (b.brand || '').trim().toLowerCase() === targetBrandLower);
                         }
-                    });
+                        whSaleable = targetBrands.reduce((sum, b) => {
+                            return sum + (isBagUom ? (b.saleablePacket || 0) : (b.saleableQuantity || 0));
+                        }, 0);
+                    }
 
-                    stockRecords.forEach(record => {
-                        const rName = (record.warehouse || record.whName || '').toLowerCase().trim();
-                        const targetWh = (entry.warehouseName || '').toLowerCase().trim();
-                        const rProd = (record.productName || record.product || '').toLowerCase().trim();
-                        const targetProd = (item.productName || '').toLowerCase().trim();
-                        const targetBrand = (entry.brandName || entry.brand || '').toLowerCase().trim();
-
-                        if (['requested', 'rejected'].includes((record.status || '').toLowerCase())) return;
-
-                        if (record.brandEntries && Array.isArray(record.brandEntries) && record.brandEntries.length > 0) {
-                            record.brandEntries.forEach(be => {
-                                const beBrand = (be.brand || be.brandName || '').toLowerCase().trim();
-                                const brandMatches = !targetBrand || beBrand === targetBrand;
-                                const beWh = (be.warehouse || be.whName || record.warehouse || record.whName || '').toLowerCase().trim();
-                                const beProd = (be.productName || record.productName || record.product || '').toLowerCase().trim();
-                                if (beWh === targetWh && beProd === targetProd && brandMatches) {
-                                    if (isBagUom) {
-                                        totalWhQty += parseFloat(be.inHousePacket || be.inhousePkt || be.whPkt || 0) || 0;
-                                    } else {
-                                        totalWhQty += parseFloat(be.inHouseQuantity || be.inhouseQty || be.whQty || 0) || 0;
-                                    }
-                                }
-                            });
-                        } else {
-                            const rBrand = (record.brand || '').toLowerCase().trim();
-                            const brandMatches = !targetBrand || rBrand === targetBrand;
-                            if (rName === targetWh && rProd === targetProd && brandMatches) {
-                                if (isBagUom) {
-                                    totalWhQty += parseFloat(record.inHousePacket || record.inhousePkt || record.whPkt || 0) || 0;
-                                } else {
-                                    totalWhQty += parseFloat(record.inHouseQuantity || record.inhouseQty || record.whQty || 0) || 0;
-                                }
-                            }
-                        }
-                    });
-
-                    allSalesRecords.forEach(s => {
-                        if (editingId && (s._id === editingId || s.orderNo === formData.orderNo || s.invoiceNo === formData.invoiceNo)) return;
-                        const sStatus = (s.status || '').toLowerCase();
-                        if (sStatus !== 'accepted' && sStatus !== 'pending') return;
-                        if (s.items && Array.isArray(s.items)) {
-                            s.items.forEach(si => {
-                                const sProdName = (si.productName || '').toLowerCase().trim();
-                                const tProdName = (item.productName || '').toLowerCase().trim();
-                                const tBrandName = (entry.brandName || entry.brand || '').toLowerCase().trim();
-                                const tWhName = (entry.warehouseName || '').toLowerCase().trim();
-
-                                if (sProdName === tProdName) {
-                                    if (si.brandEntries && Array.isArray(si.brandEntries) && si.brandEntries.length > 0) {
-                                        si.brandEntries.forEach(be => {
-                                            const sBrandName = (be.brand || be.brandName || '').toLowerCase().trim();
-                                            const sWhName = (be.warehouseName || be.whName || si.warehouseName || si.whName || '').toLowerCase().trim();
-
-                                            const brandMatches = !tBrandName ? true : (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdName));
-                                            if (brandMatches && sWhName === tWhName) {
-                                                if (isBagUom) {
-                                                    totalWhQty -= parseFloat(be.bag || be.packet || 0) || 0;
-                                                } else {
-                                                    totalWhQty -= parseFloat(be.quantity || 0) || 0;
-                                                }
-                                            }
-                                        });
-                                    } else {
-                                        const sBrandName = (si.brand || si.brandName || '').toLowerCase().trim();
-                                        const sWhName = (si.warehouseName || si.whName || '').toLowerCase().trim();
-                                        const brandMatches = !tBrandName ? true : (sBrandName === tBrandName || ((sBrandName === '' || sBrandName === '-') && tBrandName === tProdName));
-                                        if (brandMatches && sWhName === tWhName) {
-                                            if (isBagUom) {
-                                                totalWhQty -= parseFloat(si.bag || si.packet || 0) || 0;
-                                            } else {
-                                                totalWhQty -= parseFloat(si.quantity || 0) || 0;
-                                            }
-                                        }
-                                    }
-                                }
-                            });
-                        }
-                    });
-                    damagesRecords.forEach(d => {
-                        const dStatus = (d.status || '').toLowerCase();
-                        if (['rejected', 'requested'].includes(dStatus)) return;
-                        const dProd = (d.productName || d.product || '').toLowerCase().trim();
-                        const tProdName = (item.productName || '').toLowerCase().trim();
-                        const dBrand = (d.brand || '').toLowerCase().trim();
-                        const tBrandName = (entry.brandName || entry.brand || '').toLowerCase().trim();
-                        const dWh = (d.warehouse || d.whName || '').toLowerCase().trim();
-                        const tWhName = (entry.warehouseName || '').toLowerCase().trim();
-
-                        const brandMatches = !tBrandName ? true : (dBrand === tBrandName || ((dBrand === '' || dBrand === '-') && tBrandName === tProdName));
-
-                        if (dProd === tProdName && brandMatches && dWh === tWhName) {
-                            if (isBagUom) {
-                                let dp = parseFloat(d.packet || d.pkt || d.bag || 0) || 0;
-                                if (dp <= 0) {
-                                    const dq = parseFloat(d.quantity || d.qty || 0) || 0;
-                                    const pktSize = parseFloat(entry.packetSize) || 30;
-                                    dp = dq / pktSize;
-                                }
-                                totalWhQty -= dp;
-                            } else {
-                                totalWhQty -= parseFloat(d.quantity || d.qty || 0) || 0;
-                            }
-                        }
-                    });
-
-                    totalWhQty = Math.max(0, totalWhQty);
-                    const formattedStock = Number(totalWhQty.toFixed(2)).toString();
+                    const formattedStock = Number(Math.max(0, whSaleable).toFixed(2)).toString();
                     if (updatedEntry.warehouseQty !== formattedStock) {
                         updatedEntry.warehouseQty = formattedStock;
                         itemChanged = true;
                     }
                 } else {
-                    if (updatedEntry.warehouseQty !== '0') {
+                    if (updatedEntry.warehouseQty !== '0' && updatedEntry.warehouseQty !== '') {
                         updatedEntry.warehouseQty = '0';
                         itemChanged = true;
                     }
@@ -585,16 +487,18 @@ const OrderManagement = ({
             if (itemChanged) hasChanges = true;
             return { ...item, brandEntries: newBrandEntries };
         });
+
         if (hasChanges) {
             setFormData(prev => ({ ...prev, items: newItems }));
         }
     }, [
         formData.items.map(i => i.productName).join(','),
         formData.items.map(i => i.uom).join(','),
-        formData.items.map(i => i.brandEntries.map(e => `${e.brandName}-${e.brand}-${e.warehouseName}`).join(',')).join('|'),
+        formData.items.map(i => i.brandEntries.map(e => `${e.brandName}-${e.brand}-${e.warehouseName}-${e.lcNo}`).join(',')).join('|'),
         stockRecords,
         warehouses,
         allSalesRecords,
+        products,
         damagesRecords,
         editingId
     ]);
@@ -1734,7 +1638,7 @@ const OrderManagement = ({
                                         <div className="hidden md:grid grid-cols-12 gap-3 px-6 py-1">
                                             <div className="col-span-2 sale-mgmt-item-label text-center">Brand</div>
                                             <div className="col-span-2 sale-mgmt-item-label text-center">Warehouse</div>
-                                            <div className="sale-mgmt-item-label text-center">Wh Stock</div>
+                                            <div className="sale-mgmt-item-label text-center leading-tight">Saleable Wh Stock ({item.uom === 'BAG' ? 'BAG' : 'KG'})</div>
                                             <div className="sale-mgmt-item-label text-center">Pkt Size</div>
                                             <div className="sale-mgmt-item-label text-center">Bag / Pkt</div>
                                             <div className="sale-mgmt-item-label text-center">Qty (kg)</div>
@@ -1814,7 +1718,7 @@ const OrderManagement = ({
 
                                                 {/* Wh Stock (Warehouse Qty) */}
                                                 <div>
-                                                    <label className="md:hidden sale-mgmt-item-label mb-1 block text-center">Wh Stock</label>
+                                                    <label className="md:hidden sale-mgmt-item-label mb-1 block text-center leading-tight">Saleable Wh Stock ({item.uom === 'BAG' ? 'BAG' : 'KG'})</label>
                                                     <div className="w-full h-10 flex items-center justify-center bg-white/50 border border-gray-200/60 rounded-lg text-[13px] font-bold text-gray-900">
                                                         {be.warehouseQty || '0'}
                                                     </div>
@@ -1976,54 +1880,115 @@ const OrderManagement = ({
                                             </td>
 
                                             <td className="px-3 py-4">
-                                                <div className="flex flex-col gap-1">
+                                                <div className="flex flex-col gap-2">
                                                     {(order.items || []).map((item, i) => (
-                                                        <div key={i} className="text-[13px] font-semibold text-gray-800">{item.productName || '-'}</div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            <td className="px-3 py-4">
-                                                <div className="flex flex-col gap-1">
-                                                    {(order.items || []).map((item, i) => (
-                                                        <div key={i} className="text-[13px] font-medium text-gray-600">
-                                                            {(item.brandEntries || []).map(b => b.brandName || b.brand).filter(Boolean).join(', ') || '-'}
+                                                        <div key={i} className="flex flex-col gap-1">
+                                                            <div className="text-[13px] font-semibold text-gray-800 whitespace-nowrap">{item.productName || '-'}</div>
+                                                            {(item.brandEntries || []).slice(1).map((_, bIdx) => (
+                                                                <div key={bIdx} className="text-[13px] opacity-0 pointer-events-none select-none">&nbsp;</div>
+                                                            ))}
                                                         </div>
                                                     ))}
                                                 </div>
                                             </td>
 
                                             <td className="px-3 py-4">
-                                                <div className="flex flex-col gap-1">
+                                                <div className="flex flex-col gap-2">
                                                     {(order.items || []).map((item, i) => (
-                                                        <div key={i} className="text-[13px] font-medium text-gray-600">
-                                                            {(item.brandEntries || []).map(b => b.warehouseName || b.warehouse).filter(Boolean).join(', ') || '-'}
+                                                        <div key={i} className="flex flex-col gap-1">
+                                                            {(item.brandEntries || []).length > 0 ? (
+                                                                item.brandEntries.map((b, bIdx) => (
+                                                                    <div key={bIdx} className="text-[13px] font-medium text-gray-700 whitespace-nowrap">
+                                                                        {b.brandName || b.brand || '-'}
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <div className="text-[13px] font-medium text-gray-600">-</div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            <td className="px-3 py-4">
+                                                <div className="flex flex-col gap-2">
+                                                    {(order.items || []).map((item, i) => (
+                                                        <div key={i} className="flex flex-col gap-1">
+                                                            {(item.brandEntries || []).length > 0 ? (
+                                                                item.brandEntries.map((b, bIdx) => (
+                                                                    <div key={bIdx} className="text-[13px] font-medium text-gray-600 whitespace-nowrap">
+                                                                        {b.warehouseName || b.warehouse || '-'}
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <div className="text-[13px] font-medium text-gray-600">-</div>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
                                             </td>
 
                                             {showBag && (
-                                                <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    <div className="text-[13px] font-bold text-purple-700">
-                                                        {Math.round(totalPkt).toLocaleString('en-US')} Bag
+                                                <td className="px-3 py-4 text-center">
+                                                    <div className="flex flex-col gap-2">
+                                                        {(order.items || []).map((item, i) => (
+                                                            <div key={i} className="flex flex-col gap-1">
+                                                                {(item.brandEntries || []).length > 0 ? (
+                                                                    item.brandEntries.map((b, bIdx) => {
+                                                                        const pktSize = parseFloat(b.packetSize) || parseFloat(item.packetSize) || 30;
+                                                                        const p = parseFloat(b.bag || b.packet || 0) || (parseFloat(b.quantity || b.qty || 0) / pktSize);
+                                                                        return (
+                                                                            <div key={bIdx} className="text-[13px] font-bold text-purple-700 whitespace-nowrap">
+                                                                                {Math.round(p).toLocaleString('en-US')} Bag
+                                                                            </div>
+                                                                        );
+                                                                    })
+                                                                ) : (
+                                                                    <div className="text-[13px] font-bold text-purple-700">-</div>
+                                                                )}
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </td>
                                             )}
 
                                             {showQty && (
-                                                <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    <div className="text-[13px] font-bold text-orange-800">
-                                                        {Math.round(totalQty).toLocaleString('en-US')} kg
+                                                <td className="px-3 py-4 text-center">
+                                                    <div className="flex flex-col gap-2">
+                                                        {(order.items || []).map((item, i) => (
+                                                            <div key={i} className="flex flex-col gap-1">
+                                                                {(item.brandEntries || []).length > 0 ? (
+                                                                    item.brandEntries.map((b, bIdx) => {
+                                                                        const pktSize = parseFloat(b.packetSize) || parseFloat(item.packetSize) || 30;
+                                                                        const q = parseFloat(b.quantity || b.qty || 0) || (parseFloat(b.bag || b.packet || 0) * pktSize);
+                                                                        return (
+                                                                            <div key={bIdx} className="text-[13px] font-bold text-orange-800 whitespace-nowrap">
+                                                                                {Math.round(q).toLocaleString('en-US')} kg
+                                                                            </div>
+                                                                        );
+                                                                    })
+                                                                ) : (
+                                                                    <div className="text-[13px] font-bold text-orange-800">-</div>
+                                                                )}
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </td>
                                             )}
 
-                                            <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                <div className="flex flex-col gap-1">
+                                            <td className="px-3 py-4 text-center">
+                                                <div className="flex flex-col gap-2">
                                                     {(order.items || []).map((item, i) => (
-                                                        <div key={i} className="text-[13px] font-bold text-gray-700">
-                                                            {(item.brandEntries || []).map(b => b.rate ? `৳${parseFloat(b.rate).toLocaleString('en-US')}` : '-').join(', ') || '-'}
+                                                        <div key={i} className="flex flex-col gap-1">
+                                                            {(item.brandEntries || []).length > 0 ? (
+                                                                item.brandEntries.map((b, bIdx) => (
+                                                                    <div key={bIdx} className="text-[13px] font-bold text-gray-700 whitespace-nowrap">
+                                                                        {b.rate ? `৳${parseFloat(b.rate).toLocaleString('en-US')}` : '-'}
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <div className="text-[13px] font-bold text-gray-700">-</div>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
