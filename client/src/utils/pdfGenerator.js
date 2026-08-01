@@ -3499,11 +3499,12 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         const isAll = activeTab === 'all';
         const isPayment = activeTab === 'payment';
 
-        // Match the orientation and margin of other reports (Landscape for maximum column spacing)
-        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+        // Purchase, Sales, Payment history reports use Portrait ('p'); All history uses Landscape ('l')
+        const isPortrait = isPurchase || isSales || isPayment;
+        const doc = new jsPDF({ orientation: isPortrait ? 'p' : 'l', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
-        const margin = 5; // Standard margin in other reports
+        const margin = 5;
 
         // Ensure history data is sorted ascending by date for reports
         const sortedHistoryData = [...historyData].sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -3770,8 +3771,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 foot: [foot],
                 theme: 'grid',
                 showFoot: 'lastPage',
-                styles: { fontSize: 9, cellPadding: { top: 1, bottom: 1, left: 1.5, right: 1.5 }, minCellHeight: 5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'middle' },
-                headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center', noWrap: true },
+                styles: { fontSize: 9, cellPadding: { top: 1, bottom: 1, left: 1.5, right: 1.5 }, minCellHeight: 5, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0], valign: 'top' },
+                headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center', noWrap: true, valign: 'middle' },
                 columnStyles: {
                     0: { halign: 'center', cellWidth: 10 },
                     1: { cellWidth: 24, halign: 'center' },
@@ -3796,8 +3797,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                         const lines = cell.savedLines;
                         const fontSize = cell.styles.fontSize || 9;
                         const lineHeight = (fontSize * 1.15) / 2.8346;
-                        const totalHeight = lines.length * lineHeight;
-                        let startY = cell.y + (cell.height - totalHeight) / 2 + (fontSize * 0.8 / 2.8346);
+                        let startY = cell.y + cell.padding('top') + (fontSize * 0.8 / 2.8346);
                         const startX = cell.x + cell.padding('left');
 
                         lines.forEach((line) => {
@@ -3925,18 +3925,18 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 head: headers,
                 body: tableRows,
                 theme: 'grid',
-                styles: { fontSize: 9, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                styles: { fontSize: 9, cellPadding: 1.2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 8 },    // SL
-                    1: { cellWidth: 20, halign: 'center' },   // Date
+                    0: { halign: 'center', cellWidth: 10 },   // SL
+                    1: { cellWidth: 22, halign: 'center' },   // Date
                     2: { cellWidth: 25 },                     // LC No / Invoice No
                     3: { cellWidth: 25 },                     // Product
-                    4: { halign: 'left', cellWidth: 40 },     // Brand / Truck (Left Aligned)
+                    4: { halign: 'left', cellWidth: 38 },     // Brand / Truck
                     5: { halign: 'right', cellWidth: 20 },    // Qty
-                    6: { halign: 'right', cellWidth: 20 },    // Rate
-                    7: { halign: 'right', cellWidth: 27 },    // Amount
-                    8: { halign: 'right', cellWidth: 15 }     // Disc
+                    6: { halign: 'right', cellWidth: 18 },    // Rate
+                    7: { halign: 'right', cellWidth: 25 },    // Amount
+                    8: { halign: 'right', cellWidth: 18 }     // Disc -> Total 200mm
                 },
                 margin: { left: margin, right: margin }
             });
@@ -3972,12 +3972,12 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
                     0: { halign: 'center', cellWidth: 10 },
-                    1: { cellWidth: 25 },
+                    1: { cellWidth: 22, halign: 'center' },
                     2: { cellWidth: 20 },
-                    3: { cellWidth: 45 },
-                    4: { cellWidth: 35 },
-                    5: { cellWidth: 30 },
-                    6: { halign: 'right', cellWidth: 35 }
+                    3: { cellWidth: 48 },
+                    4: { cellWidth: 38 },
+                    5: { cellWidth: 34 },
+                    6: { halign: 'right', cellWidth: 28 } // Total 200mm
                 },
                 margin: { left: margin, right: margin }
             });
