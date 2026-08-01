@@ -467,12 +467,115 @@ const Customer = ({
         setHistorySortConfig({ key, direction });
     };
 
+    const getCustomerFinalBalance = (c) => {
+        if (!c) return 0;
+
+        const sales = (c.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested').map(s => ({
+            ...s,
+            type: 'sale',
+            sortDate: new Date(s.date || 0)
+        }));
+
+        const payments = (c.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested').map(p => ({
+            ...p,
+            type: 'payment',
+            sortDate: new Date(p.date || 0)
+        }));
+
+        const payouts = (c.payToCustomerHistory || []).filter(pc => (pc.status || '').toLowerCase() !== 'requested').map(pc => ({
+            ...pc,
+            type: 'payToCustomer',
+            sortDate: new Date(pc.date || 0)
+        }));
+
+        const directPurchases = (c.purchaseHistory || []).filter(pu => (pu.status || '').toLowerCase() !== 'requested').map(pu => ({
+            ...pu,
+            type: 'purchase',
+            sortDate: new Date(pu.date || 0)
+        }));
+
+        const matchedPurchases = (purchasesList || []).filter(p => {
+            if ((p.status || '').toLowerCase() === 'requested') return false;
+            return (
+                p.customerId === c?._id ||
+                p.customerId === c?.customerId ||
+                (p.companyName && p.companyName.toLowerCase() === (c?.companyName || '').toLowerCase()) ||
+                (p.customerName && p.customerName.toLowerCase() === (c?.customerName || '').toLowerCase()) ||
+                (p.supplierName && (
+                    p.supplierName.toLowerCase() === (c?.companyName || '').toLowerCase() ||
+                    p.supplierName.toLowerCase() === (c?.customerName || '').toLowerCase()
+                ))
+            );
+        }).flatMap(p => {
+            if (p.items && Array.isArray(p.items)) {
+                return p.items.flatMap(item => {
+                    if (item.brandEntries && Array.isArray(item.brandEntries)) {
+                        return item.brandEntries.map(b => ({
+                            amount: b.total || (parseFloat(b.qty || 0) * parseFloat(b.rate || 0)),
+                            discount: p.discount || 0,
+                            paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
+                            type: 'purchase',
+                            sortDate: new Date(p.date || 0)
+                        }));
+                    }
+                    return [{
+                        amount: item.total || item.amount || 0,
+                        discount: p.discount || 0,
+                        paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
+                        type: 'purchase',
+                        sortDate: new Date(p.date || 0)
+                    }];
+                });
+            }
+            return [{
+                amount: p.totalAmount || p.amount || 0,
+                discount: p.discount || 0,
+                paid: p.paid || p.paidAmount || 0,
+                type: 'purchase',
+                sortDate: new Date(p.date || 0)
+            }];
+        });
+
+        const purchases = [...directPurchases, ...matchedPurchases];
+        const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
+
+        let currentBalance = 0;
+        all.forEach(item => {
+            if (item.type === 'sale') {
+                const amt = parseFloat(item.amount) || 0;
+                const pd = parseFloat(item.paid) || 0;
+                const disc = parseFloat(item.discount) || 0;
+                currentBalance += (amt - pd - disc);
+            } else if (item.type === 'payment') {
+                const amt = parseFloat(item.amount) || 0;
+                const disc = parseFloat(item.discount) || 0;
+                currentBalance -= (amt + disc);
+            } else if (item.type === 'payToCustomer') {
+                const amt = parseFloat(item.amount) || 0;
+                currentBalance += amt;
+            } else if (item.type === 'purchase') {
+                const amt = parseFloat(item.amount) || 0;
+                const pd = parseFloat(item.paid) || 0;
+                const disc = parseFloat(item.discount) || 0;
+                currentBalance -= (amt - pd - disc);
+            }
+        });
+
+        return currentBalance;
+    };
+
     const sortData = (data) => {
         if (!sortConfig.customer) return data;
         const { key, direction } = sortConfig.customer;
         return [...data].sort((a, b) => {
-            if (a[key] < b[key]) return direction === 'asc' ? -1 : 1;
-            if (a[key] > b[key]) return direction === 'asc' ? 1 : -1;
+            let aVal = a[key];
+            let bVal = b[key];
+            if (key === 'balance') {
+                aVal = getCustomerFinalBalance(a);
+                bVal = getCustomerFinalBalance(b);
+            }
+            if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return direction === 'asc' ? 1 : -1;
             return 0;
         });
     };
@@ -1317,16 +1420,8 @@ const Customer = ({
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
                                             {getFilteredAndSortedData().map(c => {
-                                                // Calculate this customer's total due
-                                                const custSales = (c.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested');
-                                                const custPayments = (c.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested');
-
-                                                const totalSalesAmount = custSales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-                                                const totalSalesPaid = custSales.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
-                                                const totalSalesDiscount = custSales.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
-                                                const totalHistoryPaid = custPayments.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-
-                                                const custTotalDue = totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid;
+                                                // Calculate this customer's last running balance from all history
+                                                const custTotalDue = getCustomerFinalBalance(c);
 
                                                 return (
                                                     <tr
@@ -1371,15 +1466,7 @@ const Customer = ({
                                     {/* Mobile Card View */}
                                     <div className="block md:hidden px-1 py-4 space-y-3">
                                         {getFilteredAndSortedData().map(c => {
-                                            const custSales = (c.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested');
-                                            const custPayments = (c.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested');
-
-                                            const totalSalesAmount = custSales.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-                                            const totalSalesPaid = custSales.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
-                                            const totalSalesDiscount = custSales.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
-                                            const totalHistoryPaid = custPayments.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-
-                                            const custTotalDue = totalSalesAmount - totalSalesPaid - totalSalesDiscount - totalHistoryPaid;
+                                            const custTotalDue = getCustomerFinalBalance(c);
                                             const isExpanded = expandedMobileCards === c._id;
 
                                             return (
@@ -3379,6 +3466,7 @@ const Customer = ({
                 isOpen={showReport}
                 onClose={() => setShowReport(false)}
                 customers={customers}
+                purchasesList={purchasesList}
             />
         </>
     );

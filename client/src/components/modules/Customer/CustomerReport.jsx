@@ -3,23 +3,82 @@ import { XIcon, BarChartIcon, PrinterIcon, SearchIcon } from '../../Icons';
 import { formatDate } from '../../../utils/helpers';
 import { generateCustomerReportPDF } from '../../../utils/pdfGenerator';
 
-const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
+const CustomerReport = ({ isOpen, onClose, customers = [], purchasesList = [] }) => {
     if (!isOpen) return null;
 
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState('General Customer');
 
-    // --- Calculate due per customer from salesHistory & paymentHistory ---
+    // --- Calculate running balance per customer from all history (sales, payments, payouts, purchases) ---
     const computeDue = (customer) => {
-        const salesHistory = customer.salesHistory || [];
-        const paymentHistory = customer.paymentHistory || [];
+        if (!customer) return 0;
 
-        const totalAmount = salesHistory.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-        const totalPaid = salesHistory.reduce((s, i) => s + (parseFloat(i.paid) || 0), 0);
-        const totalDiscount = salesHistory.reduce((s, i) => s + (parseFloat(i.discount) || 0), 0);
-        const totalHistoryPaid = paymentHistory.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+        const sales = (customer.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested').map(s => ({
+            amount: parseFloat(s.amount) || 0,
+            paid: parseFloat(s.paid) || 0,
+            discount: parseFloat(s.discount) || 0,
+            type: 'sale',
+            sortDate: new Date(s.date || 0)
+        }));
 
-        return totalAmount - totalPaid - totalDiscount - totalHistoryPaid;
+        const payments = (customer.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested').map(p => ({
+            amount: parseFloat(p.amount) || 0,
+            discount: parseFloat(p.discount) || 0,
+            type: 'payment',
+            sortDate: new Date(p.date || 0)
+        }));
+
+        const payouts = (customer.payToCustomerHistory || []).filter(pc => (pc.status || '').toLowerCase() !== 'requested').map(pc => ({
+            amount: parseFloat(pc.amount) || 0,
+            type: 'payToCustomer',
+            sortDate: new Date(pc.date || 0)
+        }));
+
+        const directPurchases = (customer.purchaseHistory || []).filter(pu => (pu.status || '').toLowerCase() !== 'requested').map(pu => ({
+            amount: parseFloat(pu.amount || pu.totalAmount || 0),
+            paid: parseFloat(pu.paid || pu.paidAmount || 0),
+            discount: parseFloat(pu.discount || 0),
+            type: 'purchase',
+            sortDate: new Date(pu.date || 0)
+        }));
+
+        const matchedPurchases = (purchasesList || []).filter(p => {
+            if ((p.status || '').toLowerCase() === 'requested') return false;
+            return (
+                p.customerId === customer?._id ||
+                p.customerId === customer?.customerId ||
+                (p.companyName && p.companyName.toLowerCase() === (customer?.companyName || '').toLowerCase()) ||
+                (p.customerName && p.customerName.toLowerCase() === (customer?.customerName || '').toLowerCase()) ||
+                (p.supplierName && (
+                    p.supplierName.toLowerCase() === (customer?.companyName || '').toLowerCase() ||
+                    p.supplierName.toLowerCase() === (customer?.customerName || '').toLowerCase()
+                ))
+            );
+        }).map(p => ({
+            amount: parseFloat(p.totalAmount || p.amount || 0),
+            paid: parseFloat(p.paid || p.paidAmount || 0),
+            discount: parseFloat(p.discount || 0),
+            type: 'purchase',
+            sortDate: new Date(p.date || 0)
+        }));
+
+        const purchases = [...directPurchases, ...matchedPurchases];
+        const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
+
+        let currentBalance = 0;
+        all.forEach(item => {
+            if (item.type === 'sale') {
+                currentBalance += (item.amount - item.paid - item.discount);
+            } else if (item.type === 'payment') {
+                currentBalance -= (item.amount + item.discount);
+            } else if (item.type === 'payToCustomer') {
+                currentBalance += item.amount;
+            } else if (item.type === 'purchase') {
+                currentBalance -= (item.amount - item.paid - item.discount);
+            }
+        });
+
+        return currentBalance;
     };
 
     const getLastTransDay = (customer) => {
@@ -70,7 +129,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [] }) => {
     const displayCustomers = [...positiveCustomers, ...negativeCustomers];
 
     const handlePrint = () => {
-        generateCustomerReportPDF(filtered, typeFilter, grandTotalDue, formatDate(new Date().toISOString().split('T')[0]));
+        generateCustomerReportPDF(filtered, typeFilter, grandTotalDue, formatDate(new Date().toISOString().split('T')[0]), purchasesList);
     };
 
     return (

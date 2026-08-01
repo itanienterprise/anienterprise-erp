@@ -3084,20 +3084,79 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 };
 
 
-export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, dateStr) => {
+export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, dateStr, purchasesList = []) => {
     try {
         const doc = new jsPDF();
 
         const computeDue = (customer) => {
-            const salesHistory = customer.salesHistory || [];
-            const paymentHistory = customer.paymentHistory || [];
+            if (!customer) return 0;
 
-            const totalAmount = salesHistory.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-            const totalPaid = salesHistory.reduce((s, i) => s + (parseFloat(i.paid) || 0), 0);
-            const totalDiscount = salesHistory.reduce((s, i) => s + (parseFloat(i.discount) || 0), 0);
-            const totalHistoryPaid = paymentHistory.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+            const sales = (customer.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested').map(s => ({
+                amount: parseFloat(s.amount) || 0,
+                paid: parseFloat(s.paid) || 0,
+                discount: parseFloat(s.discount) || 0,
+                type: 'sale',
+                sortDate: new Date(s.date || 0)
+            }));
 
-            return totalAmount - totalPaid - totalDiscount - totalHistoryPaid;
+            const payments = (customer.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested').map(p => ({
+                amount: parseFloat(p.amount) || 0,
+                discount: parseFloat(p.discount) || 0,
+                type: 'payment',
+                sortDate: new Date(p.date || 0)
+            }));
+
+            const payouts = (customer.payToCustomerHistory || []).filter(pc => (pc.status || '').toLowerCase() !== 'requested').map(pc => ({
+                amount: parseFloat(pc.amount) || 0,
+                type: 'payToCustomer',
+                sortDate: new Date(pc.date || 0)
+            }));
+
+            const directPurchases = (customer.purchaseHistory || []).filter(pu => (pu.status || '').toLowerCase() !== 'requested').map(pu => ({
+                amount: parseFloat(pu.amount || pu.totalAmount || 0),
+                paid: parseFloat(pu.paid || pu.paidAmount || 0),
+                discount: parseFloat(pu.discount || 0),
+                type: 'purchase',
+                sortDate: new Date(pu.date || 0)
+            }));
+
+            const matchedPurchases = (purchasesList || []).filter(p => {
+                if ((p.status || '').toLowerCase() === 'requested') return false;
+                return (
+                    p.customerId === customer?._id ||
+                    p.customerId === customer?.customerId ||
+                    (p.companyName && p.companyName.toLowerCase() === (customer?.companyName || '').toLowerCase()) ||
+                    (p.customerName && p.customerName.toLowerCase() === (customer?.customerName || '').toLowerCase()) ||
+                    (p.supplierName && (
+                        p.supplierName.toLowerCase() === (customer?.companyName || '').toLowerCase() ||
+                        p.supplierName.toLowerCase() === (customer?.customerName || '').toLowerCase()
+                    ))
+                );
+            }).map(p => ({
+                amount: parseFloat(p.totalAmount || p.amount || 0),
+                paid: parseFloat(p.paid || p.paidAmount || 0),
+                discount: parseFloat(p.discount || 0),
+                type: 'purchase',
+                sortDate: new Date(p.date || 0)
+            }));
+
+            const purchases = [...directPurchases, ...matchedPurchases];
+            const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
+
+            let currentBalance = 0;
+            all.forEach(item => {
+                if (item.type === 'sale') {
+                    currentBalance += (item.amount - item.paid - item.discount);
+                } else if (item.type === 'payment') {
+                    currentBalance -= (item.amount + item.discount);
+                } else if (item.type === 'payToCustomer') {
+                    currentBalance += item.amount;
+                } else if (item.type === 'purchase') {
+                    currentBalance -= (item.amount - item.paid - item.discount);
+                }
+            });
+
+            return currentBalance;
         };
 
         const pageWidth = doc.internal.pageSize.width;
@@ -3540,9 +3599,9 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
 
             // Merge same invoice numbers
             const chronoHistory = sortedHistoryData.reduce((acc, item) => {
-                const invoice = item.invoiceNo || item.lcNo;
-                const existing = item.type === 'sale' && invoice
-                    ? acc.find(x => x.type === 'sale' && (x.invoiceNo === invoice || x.lcNo === invoice))
+                const invoice = item.invoiceNo || item.lcNo || item.purchaseNo;
+                const existing = (item.type === 'sale' || item.type === 'purchase') && invoice
+                    ? acc.find(x => x.type === item.type && (x.invoiceNo === invoice || x.lcNo === invoice || x.purchaseNo === invoice))
                     : null;
 
                 if (existing) {
@@ -3555,8 +3614,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                         existing.items = [{
                             product: existing.product_original || existing.product,
                             brand: existing.brand,
-                            quantity: parseFloat(existing.quantity_original || existing.quantity),
-                            rate: parseFloat(existing.rate_original || existing.rate)
+                            quantity: parseFloat(existing.quantity_original || existing.quantity || existing.qty || 0),
+                            rate: parseFloat(existing.rate_original || existing.rate || 0)
                         }];
                     }
 
@@ -3567,12 +3626,12 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                         (parseFloat(si.rate || 0) === itemRate)
                     );
                     if (matchingItem) {
-                        matchingItem.quantity += parseFloat(item.quantity || 0);
+                        matchingItem.quantity += parseFloat(item.quantity || item.qty || 0);
                     } else {
                         existing.items.push({
                             product: item.product,
                             brand: item.brand,
-                            quantity: parseFloat(item.quantity || 0),
+                            quantity: parseFloat(item.quantity || item.qty || 0),
                             rate: itemRate
                         });
                     }
@@ -3586,14 +3645,14 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     existing.quantity_display = existing.items.map(si => (si.quantity || 0).toLocaleString('en-US')).join('\n');
                     existing.rate_display = existing.items.map(si => (si.rate || 0) > 0 ? si.rate.toLocaleString('en-IN') : '—').join('\n');
 
-                    existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || 0));
+                    existing.quantity = (parseFloat(existing.quantity || 0)) + (parseFloat(item.quantity || item.qty || 0));
                     existing.runningBalance = item.runningBalance;
                     return acc;
                 }
                 acc.push({
                     ...item,
                     product_original: item.product,
-                    quantity_original: item.quantity,
+                    quantity_original: item.quantity || item.qty,
                     rate_original: item.rate
                 });
                 return acc;
@@ -3630,7 +3689,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     ? (parseFloat(item.amount || 0))
                     : (item.type === 'sale' && parseFloat(item.paid || 0) > 0 ? parseFloat(item.paid || 0) : 0);
                 const discVal = parseFloat(item.discount || 0);
-                const qtyVal = item.type === 'sale' ? parseFloat(item.quantity || 0) : 0;
+                const qtyVal = (item.type === 'sale' || item.type === 'purchase') ? parseFloat(item.quantity || item.qty || 0) : 0;
 
                 grandQty += qtyVal;
                 grandDebit += debitVal;
@@ -3640,10 +3699,10 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 const row = [
                     idx + 1,
                     formatDate(item.date),
-                    item.invoiceNo || item.lcNo || item.receiptNo || '-',
+                    item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '-',
                     particularsStr,
-                    item.type === 'sale' ? (item.quantity_display || (qtyVal > 0 ? qtyVal.toLocaleString('en-US') : '-')) : '-',
-                    item.type === 'sale' ? (item.rate_display || (parseFloat(item.rate || 0) > 0 ? parseFloat(item.rate || 0).toLocaleString('en-IN') : '-')) : '-',
+                    (item.type === 'sale' || item.type === 'purchase') ? (item.quantity_display || (qtyVal > 0 ? qtyVal.toLocaleString('en-US') : '-')) : '-',
+                    (item.type === 'sale' || item.type === 'purchase') ? (item.rate_display || (parseFloat(item.rate || 0) > 0 ? parseFloat(item.rate || 0).toLocaleString('en-IN') : '-')) : '-',
                     debitVal > 0 ? debitVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
                     creditVal > 0 ? creditVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
                     discVal > 0 ? discVal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '-',
@@ -3664,40 +3723,48 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 { content: lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } }
             ];
 
-            // Draw Summary Cards row below Info section
-            const cardY = yPos + 3;
-            const cardWidth = 65;
-            const cardHeight = 12;
-            const cardGap = (pageWidth - (margin * 2) - (cardWidth * 4)) / 3;
+            // Draw Single Summary Card (matching C&F History style)
+            const cardY = 43;
+            const cardWidth = 78;
+            const cardHeight = 23;
+            const cardX = (pageWidth - cardWidth) / 2;
 
-            const drawSummaryCard = (x, title, value) => {
-                doc.setFillColor(250, 250, 250);
-                doc.setDrawColor(200, 200, 200);
-                doc.setLineWidth(0.15);
-                doc.rect(x, cardY, cardWidth, cardHeight, 'FD');
+            doc.setFillColor(255, 255, 255);
+            doc.setDrawColor(0);
+            doc.setLineWidth(0.2);
+            doc.rect(cardX, cardY, cardWidth, cardHeight, 'S');
 
-                doc.setFontSize(7);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(100, 100, 100);
-                doc.text(title, x + 3, cardY + 4);
+            doc.setFontSize(9);
+            doc.setTextColor(0);
+            doc.setFont('helvetica', 'bold');
 
-                doc.setFontSize(9);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(0, 0, 0);
-                doc.text(value, x + 3, cardY + 9.5);
-            };
+            const cardLineHeight = 5;
+            let currentCardY = cardY + 1;
 
-            let xCur = margin;
-            drawSummaryCard(xCur, "TOTAL DEBIT (DR)", `Tk. ${grandDebit.toLocaleString('en-IN')}`);
-            xCur += cardWidth + cardGap;
-            drawSummaryCard(xCur, "TOTAL CREDIT (CR)", `Tk. ${grandCredit.toLocaleString('en-IN')}`);
-            xCur += cardWidth + cardGap;
-            drawSummaryCard(xCur, "TOTAL DISCOUNT", `Tk. ${grandDiscount.toLocaleString('en-IN')}`);
-            xCur += cardWidth + cardGap;
-            drawSummaryCard(xCur, "CURRENT BALANCE", `Tk. ${lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+            currentCardY += cardLineHeight;
+            doc.text("TOTAL DEBIT (DR)", cardX + 4, currentCardY);
+            doc.text(":", cardX + 40, currentCardY);
+            doc.text(grandDebit.toLocaleString('en-IN', { maximumFractionDigits: 0 }), cardX + 44, currentCardY);
+
+            currentCardY += cardLineHeight;
+            doc.text("TOTAL CREDIT (CR)", cardX + 4, currentCardY);
+            doc.text(":", cardX + 40, currentCardY);
+            doc.text(grandCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 }), cardX + 44, currentCardY);
+
+            currentCardY += cardLineHeight;
+            doc.text("TOTAL DISCOUNT", cardX + 4, currentCardY);
+            doc.text(":", cardX + 40, currentCardY);
+            doc.text(grandDiscount.toLocaleString('en-IN', { maximumFractionDigits: 0 }), cardX + 44, currentCardY);
+
+            currentCardY += cardLineHeight;
+            doc.text("TOTAL BALANCE", cardX + 4, currentCardY);
+            doc.text(":", cardX + 40, currentCardY);
+            doc.text(lastBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), cardX + 44, currentCardY);
+
+            const tableStartY = Math.max(yPos + 8, cardY + cardHeight + 4);
 
             autoTable(doc, {
-                startY: cardY + cardHeight + 4,
+                startY: tableStartY,
                 head: [head],
                 body: tableRows,
                 foot: [foot],
@@ -3709,13 +3776,56 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     0: { halign: 'center', cellWidth: 10 },
                     1: { cellWidth: 24, halign: 'center' },
                     2: { cellWidth: 26, halign: 'center' },
-                    3: { cellWidth: 85, halign: 'left' },
+                    3: { cellWidth: 85, halign: 'left', fontStyle: 'normal' },
                     4: { halign: 'right', cellWidth: 22 },
                     5: { halign: 'right', cellWidth: 20 },
                     6: { halign: 'right', cellWidth: 25, fontStyle: 'bold' },
                     7: { halign: 'right', cellWidth: 25, fontStyle: 'bold' },
                     8: { halign: 'right', cellWidth: 22 },
                     9: { halign: 'right', cellWidth: 28, fontStyle: 'bold' }
+                },
+                willDrawCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 3 && data.cell.text && data.cell.text.length > 0) {
+                        data.cell.savedLines = [...data.cell.text];
+                        data.cell.text = [];
+                    }
+                },
+                didDrawCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 3 && data.cell.savedLines && data.cell.savedLines.length > 0) {
+                        const cell = data.cell;
+                        const lines = cell.savedLines;
+                        const fontSize = cell.styles.fontSize || 9;
+                        const lineHeight = (fontSize * 1.15) / 2.8346;
+                        const totalHeight = lines.length * lineHeight;
+                        let startY = cell.y + (cell.height - totalHeight) / 2 + (fontSize * 0.8 / 2.8346);
+                        const startX = cell.x + cell.padding('left');
+
+                        lines.forEach((line) => {
+                            const tagMatch = line.match(/^(\[(?:SALE|PURCHASE|COLLECTION|PAYOUT)\])(.*)/i);
+                            if (tagMatch) {
+                                const tag = tagMatch[1];
+                                const rest = tagMatch[2];
+
+                                doc.setFont('helvetica', 'bold');
+                                doc.setFontSize(fontSize);
+                                doc.setTextColor(0, 0, 0);
+                                doc.text(tag, startX, startY);
+
+                                const tagWidth = doc.getTextWidth(tag);
+
+                                doc.setFont('helvetica', 'normal');
+                                doc.setFontSize(fontSize);
+                                doc.setTextColor(0, 0, 0);
+                                doc.text(rest, startX + tagWidth, startY);
+                            } else {
+                                doc.setFont('helvetica', 'normal');
+                                doc.setFontSize(fontSize);
+                                doc.setTextColor(0, 0, 0);
+                                doc.text(line, startX, startY);
+                            }
+                            startY += lineHeight;
+                        });
+                    }
                 },
                 margin: { left: margin, right: margin }
             });
@@ -3874,8 +3984,8 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
         }
 
         // --- Signatures ---
-        yPos = doc.lastAutoTable.finalY + 15;
-        if (yPos + 20 > pageHeight) {
+        yPos = doc.lastAutoTable.finalY + 13;
+        if (yPos + 15 > pageHeight) {
             doc.addPage();
             yPos = 25;
         }
