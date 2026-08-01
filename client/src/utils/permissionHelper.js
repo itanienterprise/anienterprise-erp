@@ -24,6 +24,16 @@ export const MODULES_LIST = [
             { key: 'approveEditRequest', label: 'Approve Edit Request' }
         ]
     },
+    {
+        key: 'purchase',
+        label: 'Purchase Management',
+        specialLabels: [
+            { key: 'special', label: 'Approve Purchase' },
+            { key: 'purchaseRequest', label: 'Purchase Request' },
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' }
+        ]
+    },
     { key: 'product', label: 'Product Management' },
     { key: 'customer', label: 'Customer Management' },
     { key: 'lcReceive', label: 'LC Receive', specialLabel: 'Approve LC' },
@@ -137,8 +147,8 @@ export const getDefaultPermissionsForRole = (role) => {
             }
         });
     } else if (roleLower === 'lc manager') {
-        // LC Manager can access port, cnf, ip, pi, packing list, tr, lc, warehouse, lcManagement
-        const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods'];
+        // LC Manager can access port, cnf, ip, pi, packing list, tr, lc, warehouse, lcManagement, purchase
+        const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods', 'purchase'];
         lcModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -150,8 +160,8 @@ export const getDefaultPermissionsForRole = (role) => {
             defaults[key] = permsObj;
         });
     } else if (roleLower === 'sales manager') {
-        // Sales Manager can access products, customers, sales, order, payment, bank, insurance, insurancePayment, returnProduct
-        const salesModules = ['product', 'customer', 'sales', 'order', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+        // Sales Manager can access products, customers, sales, order, purchase, payment, bank, insurance, insurancePayment, returnProduct
+        const salesModules = ['product', 'customer', 'sales', 'order', 'purchase', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
         salesModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -163,8 +173,8 @@ export const getDefaultPermissionsForRole = (role) => {
             defaults[key] = permsObj;
         });
     } else if (roleLower === 'accounts manager') {
-        // Accounts Manager can access paymentCollection, payToCustomer, bank, insurance, insurancePayment, returnProduct
-        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods'];
+        // Accounts Manager can access paymentCollection, payToCustomer, bank, insurance, insurancePayment, returnProduct, purchase
+        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods', 'purchase'];
         accModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -177,8 +187,8 @@ export const getDefaultPermissionsForRole = (role) => {
         });
         defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false };
     } else if (roleLower === 'border manager') {
-        // Border Manager can access port, cnf, ip, lcReceive, warehouse, lcManagement
-        const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
+        // Border Manager can access port, cnf, ip, lcReceive, warehouse, lcManagement, purchase
+        const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'purchase'];
         borderModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -204,7 +214,7 @@ export const getDefaultPermissionsForRole = (role) => {
         });
     } else {
         // General staff gets read-only access to standard work modules
-        const staffModules = ['product', 'customer', 'stock', 'sales', 'order'];
+        const staffModules = ['product', 'customer', 'stock', 'sales', 'order', 'purchase'];
         staffModules.forEach(key => {
             defaults[key] = { view: true, add: false, edit: false, delete: false, special: false };
         });

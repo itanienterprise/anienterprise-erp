@@ -57,6 +57,9 @@ const PurchaseManagement = ({ currentUser, addNotification }) => {
     const canEdit = hasPermission(currentUser, 'purchase', 'edit') || currentUser?.role === 'admin';
     const canDelete = hasPermission(currentUser, 'purchase', 'delete') || currentUser?.role === 'admin';
     const canApprove = hasPermission(currentUser, 'purchase', 'special') || currentUser?.role === 'admin';
+    const canViewPurchaseRequest = hasPermission(currentUser, 'purchase', 'purchaseRequest') || canApprove || currentUser?.role === 'admin';
+    const canViewEditRequest = hasPermission(currentUser, 'purchase', 'editRequest') || canApprove || currentUser?.role === 'admin';
+    const canApproveEditRequest = hasPermission(currentUser, 'purchase', 'approveEditRequest') || canApprove || currentUser?.role === 'admin';
 
     const syncPurchaseStock = async (purchasesList) => {
         try {
@@ -124,8 +127,9 @@ const PurchaseManagement = ({ currentUser, addNotification }) => {
 
     const filteredPurchases = useMemo(() => {
         return purchases.filter(p => {
-            if (isRequestedOnly && (p.status || '').toLowerCase() !== 'requested') return false;
-            if (!isRequestedOnly && (p.status || '').toLowerCase() === 'requested') return false;
+            const statusLower = (p.status || 'Accepted').toLowerCase();
+            if (isRequestedOnly && statusLower !== 'requested') return false;
+            if (!isRequestedOnly && statusLower === 'requested') return false;
 
             if (searchQuery) {
                 const q = searchQuery.toLowerCase();
@@ -136,7 +140,7 @@ const PurchaseManagement = ({ currentUser, addNotification }) => {
             }
             return true;
         });
-    }, [purchases, isRequestedOnly, searchQuery, canApprove]);
+    }, [purchases, isRequestedOnly, searchQuery]);
 
     const stats = useMemo(() => {
         const valid = purchases.filter(p => (p.status || '').toLowerCase() !== 'requested');
@@ -521,7 +525,8 @@ const PurchaseManagement = ({ currentUser, addNotification }) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            const initialStatus = 'Requested';
+            const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+            const initialStatus = (canApprove || isAdmin) ? 'Accepted' : 'Requested';
             const generatedNo = formData.purchaseNo || `PUR-${String(purchases.length + 1).padStart(4, '0')}`;
             const payload = {
                 ...formData,
@@ -532,12 +537,23 @@ const PurchaseManagement = ({ currentUser, addNotification }) => {
 
             if (editingId) {
                 await axios.put(`${API_BASE_URL}/api/purchases/${editingId}`, payload);
-                await updateWarehouseStockForPurchase(payload);
+                if (payload.status === 'Accepted' || payload.status === 'Approved') {
+                    await updateWarehouseStockForPurchase(payload);
+                }
                 if (addNotification) addNotification('Purchase updated successfully!', 'success');
             } else {
                 await axios.post(`${API_BASE_URL}/api/purchases`, payload);
-                await updateWarehouseStockForPurchase(payload);
-                if (addNotification) addNotification('Purchase entry saved and stock updated successfully!', 'success');
+                if (payload.status === 'Accepted' || payload.status === 'Approved') {
+                    await updateWarehouseStockForPurchase(payload);
+                }
+                if (addNotification) {
+                    addNotification(
+                        payload.status === 'Accepted'
+                            ? 'Purchase entry saved and stock updated successfully!'
+                            : 'Purchase request submitted for approval.',
+                        'success'
+                    );
+                }
             }
 
             setShowModal(false);
