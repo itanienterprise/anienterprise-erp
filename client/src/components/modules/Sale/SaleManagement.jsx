@@ -2542,7 +2542,7 @@ const SaleManagement = ({
         const statusLower = (sale.status || '').toLowerCase();
         if (statusLower === 'rejected') return false;
 
-        const isReq = statusLower === 'requested' || statusLower === 'pending';
+        const isReq = statusLower === 'requested';
         const isEditReq = sale.isEdited === true && !isReq;
 
         if (isRequestedOnly) {
