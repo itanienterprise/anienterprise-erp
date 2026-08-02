@@ -976,7 +976,21 @@ apiRouter.get('/api/customers', async (req, res) => {
 
 apiRouter.get('/api/customers/:id', async (req, res) => {
   try {
-    const record = await Customer.findById(req.params.id);
+    let record = null;
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      record = await Customer.findById(req.params.id);
+    }
+    if (!record) {
+      const records = await Customer.find();
+      record = records.find(r => {
+        try {
+          const d = decryptData(r.data);
+          return d.customerId === req.params.id || d._id === req.params.id;
+        } catch(e) {
+          return false;
+        }
+      });
+    }
     if (!record) return res.status(404).json({ message: 'Customer not found' });
 
     const decrypted = decryptData(record.data);

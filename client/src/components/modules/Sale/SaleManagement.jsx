@@ -328,13 +328,21 @@ const SaleManagement = ({
 
 
     const processSaleEffects = async (saleData, isEditing = false) => {
-        // Resolve Customer ID if missing but name is present
+        // Resolve Customer ID if missing or match directly by Customer ID
         let targetCustomerId = saleData.customerId;
-        if (!targetCustomerId && (saleData.companyName || saleData.customerName)) {
+        let matchedCustomer = null;
+
+        if (targetCustomerId) {
+            matchedCustomer = customers.find(c =>
+                c._id === targetCustomerId || c.customerId === targetCustomerId
+            );
+        }
+
+        if (!matchedCustomer && (saleData.companyName || saleData.customerName)) {
             const cleanComp = (saleData.companyName || '').trim().toLowerCase();
             const cleanCust = (saleData.customerName || '').trim().toLowerCase();
 
-            const matched = customers.find(c => {
+            matchedCustomer = customers.find(c => {
                 const compMatch = cleanComp && (c.companyName || '').trim().toLowerCase() === cleanComp;
                 const custMatch = cleanCust && (c.customerName || '').trim().toLowerCase() === cleanCust;
                 return compMatch && custMatch;
@@ -343,7 +351,10 @@ const SaleManagement = ({
             ) || customers.find(c =>
                 cleanCust && (c.customerName || '').trim().toLowerCase() === cleanCust
             );
-            if (matched) targetCustomerId = matched._id;
+        }
+
+        if (matchedCustomer) {
+            targetCustomerId = matchedCustomer._id;
         }
 
         // Update Customer History
@@ -2096,7 +2107,7 @@ const SaleManagement = ({
 
         setFormData(prev => ({
             ...prev,
-            customerId: customer._id,
+            customerId: customer.customerId || customer._id,
             companyName: customer.companyName || '',
             customerName: customer.customerName || '',
             address: customer.address || '',
