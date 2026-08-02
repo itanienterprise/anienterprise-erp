@@ -125,6 +125,11 @@ export default function ProfitLoss({ salesRecords, products }) {
     return selectedLcCostOfGoods.reduce((sum, rec) => sum + (parseFloat(rec.netBill) || 0), 0);
   }, [selectedLcCostOfGoods]);
 
+  // Sum of quantity for these Cost of Goods records
+  const totalLcCostOfGoodsQty = useMemo(() => {
+    return selectedLcCostOfGoods.reduce((sum, rec) => sum + (parseFloat(rec.quantity) || 0), 0);
+  }, [selectedLcCostOfGoods]);
+
   // Helper to check if a sale date matches the selected range
   const isDateInRange = (saleDateStr) => {
     if (!saleDateStr) return false;
@@ -1249,11 +1254,20 @@ export default function ProfitLoss({ salesRecords, products }) {
                         })
                       )}
                     </tbody>
+                    {selectedLcCostOfGoods.length > 0 && (
+                      <tfoot className="bg-slate-50 border-t-2 border-gray-200">
+                        <tr className="text-xs">
+                          <td colSpan="4" className="py-3.5 px-6 font-black text-gray-500 uppercase tracking-wider text-[11px]">Total COG</td>
+                          <td className="py-3.5 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                            {Math.round(totalLcCostOfGoodsQty).toLocaleString('en-US')} KG
+                          </td>
+                          <td className="py-3.5 px-6 text-right font-black text-blue-600 whitespace-nowrap">
+                            ৳ {Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
-                </div>
-                <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between">
-                  <span className="text-xs font-black text-gray-500 uppercase tracking-wider">Total COG</span>
-                  <span className="text-sm font-black text-blue-600">৳ {Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}</span>
                 </div>
               </div>
             ) : (

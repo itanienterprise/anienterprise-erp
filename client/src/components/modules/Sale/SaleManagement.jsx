@@ -331,9 +331,17 @@ const SaleManagement = ({
         // Resolve Customer ID if missing but name is present
         let targetCustomerId = saleData.customerId;
         if (!targetCustomerId && (saleData.companyName || saleData.customerName)) {
-            const matched = customers.find(c =>
-                (c.companyName && saleData.companyName && c.companyName.trim().toLowerCase() === saleData.companyName.trim().toLowerCase()) ||
-                (c.customerName && saleData.customerName && c.customerName.trim().toLowerCase() === saleData.customerName.trim().toLowerCase())
+            const cleanComp = (saleData.companyName || '').trim().toLowerCase();
+            const cleanCust = (saleData.customerName || '').trim().toLowerCase();
+
+            const matched = customers.find(c => {
+                const compMatch = cleanComp && (c.companyName || '').trim().toLowerCase() === cleanComp;
+                const custMatch = cleanCust && (c.customerName || '').trim().toLowerCase() === cleanCust;
+                return compMatch && custMatch;
+            }) || customers.find(c =>
+                cleanComp && (c.companyName || '').trim().toLowerCase() === cleanComp
+            ) || customers.find(c =>
+                cleanCust && (c.customerName || '').trim().toLowerCase() === cleanCust
             );
             if (matched) targetCustomerId = matched._id;
         }
