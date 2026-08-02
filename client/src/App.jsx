@@ -1132,20 +1132,37 @@ function App() {
           await axios.delete(`${API_BASE_URL}/api/${endpoint}/${id}`);
 
           if (type === 'sales') {
-            if (extraData?.customerId && (extraData?.invoiceNo || extraData?.lcNo)) {
+            const targetInv = (extraData?.invoiceNo || '').trim().toLowerCase();
+            const targetOrd = (extraData?.orderNo || '').trim().toLowerCase();
+            if (targetInv || targetOrd) {
               try {
-                const res = await axios.get(`${API_BASE_URL}/api/customers/${extraData.customerId}`);
-                const customer = res.data;
-                if (customer && customer.salesHistory) {
-                  const updatedSalesHistory = customer.salesHistory.filter(s => {
-                    const matchInv = extraData.invoiceNo && String(s.invoiceNo) === String(extraData.invoiceNo);
-                    const matchLc = extraData.lcNo && String(s.lcNo) === String(extraData.lcNo);
-                    return !matchInv && !matchLc;
-                  });
-                  await axios.put(`${API_BASE_URL}/api/customers/${extraData.customerId}`, {
-                    ...customer,
-                    salesHistory: updatedSalesHistory
-                  });
+                const custRes = await axios.get(`${API_BASE_URL}/api/customers`);
+                const allCusts = Array.isArray(custRes.data) ? custRes.data : [];
+                for (const c of allCusts) {
+                  if (c && c.salesHistory && Array.isArray(c.salesHistory)) {
+                    const hasMatch = c.salesHistory.some(s => {
+                      const sInv = (s.invoiceNo || '').trim().toLowerCase();
+                      const sOrd = (s.orderNo || '').trim().toLowerCase();
+                      if (targetInv && sInv === targetInv) return true;
+                      if (targetOrd && sOrd && sOrd === targetOrd) return true;
+                      if (targetOrd && sInv && sInv === targetOrd) return true;
+                      return false;
+                    });
+                    if (hasMatch) {
+                      const updatedSalesHistory = c.salesHistory.filter(s => {
+                        const sInv = (s.invoiceNo || '').trim().toLowerCase();
+                        const sOrd = (s.orderNo || '').trim().toLowerCase();
+                        if (targetInv && sInv === targetInv) return false;
+                        if (targetOrd && sOrd && sOrd === targetOrd) return false;
+                        if (targetOrd && sInv && sInv === targetOrd) return false;
+                        return true;
+                      });
+                      await axios.put(`${API_BASE_URL}/api/customers/${c._id}`, {
+                        ...c,
+                        salesHistory: updatedSalesHistory
+                      });
+                    }
+                  }
                 }
               } catch (err) {
                 console.error('Error removing sale from customer history:', err);

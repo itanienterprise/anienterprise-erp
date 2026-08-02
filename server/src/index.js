@@ -1236,6 +1236,38 @@ apiRouter.delete('/api/sales/:id', async (req, res) => {
       }
     }
 
+    // Clean up sales history entries across all customers for this invoice/order
+    const invNo = (existingData?.invoiceNo || '').trim().toLowerCase();
+    const ordNo = (existingData?.orderNo || '').trim().toLowerCase();
+
+    if (invNo || ordNo) {
+      try {
+        const customers = await Customer.find({});
+        for (const cDoc of customers) {
+          let cData = decryptData(cDoc.data);
+          if (cData && cData.salesHistory && Array.isArray(cData.salesHistory)) {
+            const initialLen = cData.salesHistory.length;
+            const updatedHistory = cData.salesHistory.filter(h => {
+              const hInv = (h.invoiceNo || '').trim().toLowerCase();
+              const hOrd = (h.orderNo || '').trim().toLowerCase();
+              if (invNo && hInv === invNo) return false;
+              if (ordNo && hOrd && hOrd === ordNo) return false;
+              if (ordNo && hInv && hInv === ordNo) return false;
+              return true;
+            });
+
+            if (updatedHistory.length !== initialLen) {
+              cData.salesHistory = updatedHistory;
+              const encData = encryptData(cData);
+              await Customer.updateOne({ _id: cDoc._id }, { $set: { data: encData } });
+            }
+          }
+        }
+      } catch (custErr) {
+        console.error('Error cleaning up customer salesHistory on sale delete:', custErr);
+      }
+    }
+
     await Sale.findByIdAndDelete(req.params.id);
     res.json({ message: 'Sale deleted' });
   } catch (err) {
