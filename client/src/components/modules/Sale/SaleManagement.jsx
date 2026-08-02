@@ -328,6 +328,10 @@ const SaleManagement = ({
 
 
     const processSaleEffects = async (saleData, isEditing = false) => {
+        // Exclude Order bookings (saleType === 'Order' or ORD...) from customer sales history
+        if (saleData.saleType === 'Order' || (saleData.invoiceNo || '').startsWith('ORD')) {
+            return;
+        }
         // Resolve Customer ID if missing or match directly by Customer ID
         let targetCustomerId = saleData.customerId;
         let matchedCustomer = null;
@@ -391,9 +395,18 @@ const SaleManagement = ({
                 });
 
                 let baseHistory = customer.salesHistory || [];
-                if (isEditing) {
-                    baseHistory = baseHistory.filter(item => item.invoiceNo !== saleData.invoiceNo);
-                }
+                // Always filter out any existing entries with matching invoiceNo or orderNo to prevent duplicates on edit/acceptance
+                const targetInv = (saleData.invoiceNo || '').trim().toLowerCase();
+                const targetOrd = (saleData.orderNo || '').trim().toLowerCase();
+
+                baseHistory = baseHistory.filter(item => {
+                    const itemInv = (item.invoiceNo || '').trim().toLowerCase();
+                    const itemOrd = (item.orderNo || '').trim().toLowerCase();
+                    if (targetInv && itemInv === targetInv) return false;
+                    if (targetOrd && itemOrd && itemOrd === targetOrd) return false;
+                    if (targetOrd && itemInv && itemInv === targetOrd) return false;
+                    return true;
+                });
 
                 const updatedCustomer = {
                     ...customer,
@@ -401,6 +414,24 @@ const SaleManagement = ({
                 };
 
                 await axios.put(`${API_BASE_URL}/api/customers/${targetCustomerId}`, updatedCustomer);
+
+                // Clean up old entries from other customers if customer was changed during edit
+                if (targetInv) {
+                    customers.forEach(async (c) => {
+                        if (c._id !== targetCustomerId && c.salesHistory && Array.isArray(c.salesHistory)) {
+                            const hasInv = c.salesHistory.some(h => (h.invoiceNo || '').trim().toLowerCase() === targetInv);
+                            if (hasInv) {
+                                const cleanedHistory = c.salesHistory.filter(h => (h.invoiceNo || '').trim().toLowerCase() !== targetInv);
+                                try {
+                                    await axios.put(`${API_BASE_URL}/api/customers/${c._id}`, {
+                                        ...c,
+                                        salesHistory: cleanedHistory
+                                    });
+                                } catch (e) { }
+                            }
+                        }
+                    });
+                }
             } catch (err) {
                 console.error('Error updating customer history:', err);
             }

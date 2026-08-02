@@ -604,6 +604,7 @@ const Customer = ({
     // Calculate Filtered History Data
     const filteredSalesHistory = useMemo(() => {
         const filtered = (viewData?.salesHistory || []).filter(item => {
+            if (item.saleType === 'Order' || (item.invoiceNo || '').startsWith('ORD')) return false;
             const matchesSearch = !historySearchQuery ||
                 ((item.invoiceNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
                 ((item.lcNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
