@@ -300,21 +300,32 @@ function App() {
     lcReceive: false,
     stockManagement: false,
     generalSale: false,
-    borderSale: false
+    borderSale: false,
+    purchase: false,
+    order: false
   });
 
   const fetchPendingEntries = async () => {
     if (!isAuthenticated) return;
     try {
-      const [stockRes, salesRes] = await Promise.all([
+      const [stockRes, salesRes, purchasesRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/stock`),
-        axios.get(`${API_BASE_URL}/api/sales`)
+        axios.get(`${API_BASE_URL}/api/sales`),
+        axios.get(`${API_BASE_URL}/api/purchases`)
       ]);
       const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
       const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
+      const purchasesData = Array.isArray(purchasesRes.data) ? purchasesRes.data : [];
 
       const hasRequestedLC = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !!item.lcNo);
       const hasRequestedStockMgmt = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !item.lcNo);
+
+      const hasRequestedPurchase = purchasesData.some(item => {
+        const status = (item.status || '').toLowerCase();
+        const isReq = status === 'requested' || status === 'pending';
+        const isEditReq = item.isEdited === true && !isReq;
+        return isReq || isEditReq;
+      });
 
       const hasRequestedOrder = salesData.some(item => {
         const status = (item.status || '').toLowerCase();
@@ -346,12 +357,13 @@ function App() {
       setPendingModules({
         lc: hasRequestedLC,
         stock: hasRequestedStockMgmt,
-        sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder,
+        sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder || hasRequestedPurchase,
         lcReceive: hasRequestedLC,
         stockManagement: hasRequestedStockMgmt,
         order: hasRequestedOrder,
         generalSale: hasRequestedGeneralSale,
-        borderSale: hasRequestedBorderSale
+        borderSale: hasRequestedBorderSale,
+        purchase: hasRequestedPurchase
       });
     } catch (err) {
       console.error('Error checking pending entries:', err);
@@ -1949,6 +1961,7 @@ function App() {
             currentUser={currentUser}
             addNotification={addNotification}
             fetchStockRecords={fetchStockRecords}
+            refreshPendingIndicators={fetchPendingEntries}
           />
         );
       case 'order-sale-section':

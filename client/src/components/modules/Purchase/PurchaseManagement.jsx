@@ -8,7 +8,7 @@ import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
-const PurchaseManagement = ({ currentUser, addNotification }) => {
+const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, refreshPendingIndicators }) => {
     const [purchases, setPurchases] = useState([]);
     const [warehousesList, setWarehousesList] = useState(['HILI', 'DINAJPUR', 'CHATTOGRAM', 'DHAKA']);
     const [customersList, setCustomersList] = useState([]);
@@ -535,23 +535,40 @@ const PurchaseManagement = ({ currentUser, addNotification }) => {
                 createdBy: currentUser?.username || 'User'
             };
 
+            const now = new Date();
+            const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+            const targetRoles = ['admin', 'incharge', 'purchase manager'];
+            const targetUsers = [payload.createdBy].filter(Boolean);
+            if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
             if (editingId) {
                 await axios.put(`${API_BASE_URL}/api/purchases/${editingId}`, payload);
                 if (payload.status === 'Accepted' || payload.status === 'Approved') {
                     await updateWarehouseStockForPurchase(payload);
                 }
-                if (addNotification) addNotification('Purchase updated successfully!', 'success');
+                if (addNotification) {
+                    await addNotification(
+                        'Purchase Request Updated',
+                        `${dateStr} | ${timeStr} | ${employeeName} has updated purchase entry (${generatedNo})`,
+                        targetRoles,
+                        targetUsers
+                    );
+                }
             } else {
                 await axios.post(`${API_BASE_URL}/api/purchases`, payload);
                 if (payload.status === 'Accepted' || payload.status === 'Approved') {
                     await updateWarehouseStockForPurchase(payload);
                 }
                 if (addNotification) {
-                    addNotification(
+                    await addNotification(
                         payload.status === 'Accepted'
-                            ? 'Purchase entry saved and stock updated successfully!'
-                            : 'Purchase request submitted for approval.',
-                        'success'
+                            ? 'New Purchase Entry Saved'
+                            : 'New Purchase Requested',
+                        `${dateStr} | ${timeStr} | ${employeeName} has ${payload.status === 'Accepted' ? 'added' : 'requested'} purchase entry (${generatedNo})`,
+                        targetRoles,
+                        targetUsers
                     );
                 }
             }
@@ -559,9 +576,10 @@ const PurchaseManagement = ({ currentUser, addNotification }) => {
             setShowModal(false);
             fetchPurchases();
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
+            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
         } catch (error) {
             console.error('Error saving purchase:', error);
-            if (addNotification) addNotification('Failed to save purchase entry.', 'error');
+            if (addNotification) addNotification('Error', 'Failed to save purchase entry.', ['admin'], [currentUser?.username]);
         } finally {
             setIsSubmitting(false);
         }
@@ -577,9 +595,21 @@ const PurchaseManagement = ({ currentUser, addNotification }) => {
             } else if (statusLower === 'rejected' || statusLower === 'deleted') {
                 await reverseWarehouseStockForPurchase(purchase);
             }
-            if (addNotification) addNotification(`Purchase ${newStatus.toLowerCase()} successfully!`, 'success');
+            if (addNotification) {
+                const now = new Date();
+                const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const employeeName = currentUser?.name || currentUser?.username || 'An employee';
+                await addNotification(
+                    `Purchase Request ${newStatus}`,
+                    `${dateStr} | ${timeStr} | Purchase entry (${purchase.purchaseNo}) was ${newStatus.toLowerCase()} by ${employeeName}`,
+                    ['admin', 'incharge', 'purchase manager'],
+                    [purchase.createdBy, 'admin'].filter(Boolean)
+                );
+            }
             fetchPurchases();
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
+            if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
         } catch (error) {
             console.error('Error updating purchase status:', error);
         }
