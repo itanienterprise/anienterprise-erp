@@ -1464,7 +1464,7 @@ const SaleManagement = ({
                     }
                 }
 
-                if (formData.status === 'accepted') {
+                if (!isRequested) {
                     await processSaleEffects(formData, !!editingId);
                 }
 
