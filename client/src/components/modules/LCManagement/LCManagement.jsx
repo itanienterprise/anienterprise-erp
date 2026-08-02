@@ -858,24 +858,23 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                     const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
                     const key = `${dateStr}_${groupVal}`;
 
-                    let itemQty = 0;
                     if (s.entries && s.entries.length > 0) {
                         const matchingEntries = s.entries.filter(item => {
                             const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
                             return !cleanPName || itemPName === cleanPName;
                         });
-                        itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                        const itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                        receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
                     } else {
-                        const itemPName = (s.productName || s.product || '').trim().toLowerCase();
-                        if (!cleanPName || itemPName === cleanPName) {
-                            itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                        const rootPName = (s.productName || s.product || '').trim().toLowerCase();
+                        if (!cleanPName || !rootPName || rootPName === cleanPName) {
+                            const itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                            if (!receiptsMap[key]) {
+                                receiptsMap[key] = itemQty;
+                            } else if (!s.totalLcQuantity) {
+                                receiptsMap[key] += itemQty;
+                            }
                         }
-                    }
-
-                    if (!receiptsMap[key]) {
-                        receiptsMap[key] = itemQty;
-                    } else if (!s.totalLcQuantity) {
-                        receiptsMap[key] += itemQty;
                     }
                 });
             const rQty = Object.values(receiptsMap).reduce((sum, qty) => sum + qty, 0);
@@ -6519,21 +6518,24 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
                     const key = `${dateStr}_${groupVal}`;
 
-                    let itemQty = 0;
                     if (s.entries && s.entries.length > 0) {
                         const matchingEntries = s.entries.filter(item => {
                             const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
                             return !cleanPName || itemPName === cleanPName;
                         });
-                        itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                        const itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                        receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
                     } else {
                         const rootPName = (s.productName || s.product || '').trim().toLowerCase();
                         if (!cleanPName || !rootPName || rootPName === cleanPName) {
-                            itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                            const itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                            if (!receiptsMap[key]) {
+                                receiptsMap[key] = itemQty;
+                            } else if (!s.totalLcQuantity) {
+                                receiptsMap[key] += itemQty;
+                            }
                         }
                     }
-                    
-                    receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
                 });
             const rQty = Object.values(receiptsMap).reduce((sum, qty) => sum + qty, 0);
 
