@@ -361,6 +361,41 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         }
     });
 
+    // Build Map of LC / Product / Brand -> Rate from primary stock records (LC Receive)
+    const lcRateMap = {};
+    (stockRecords || []).forEach(item => {
+        const itemLc = (item.lcNo || '').trim().toLowerCase();
+        const pKey = (item.productName || item.product || '').trim().toLowerCase();
+        if (item.brandEntries && item.brandEntries.length > 0) {
+            item.brandEntries.forEach(be => {
+                const bKey = (be.brand || item.brand || '').trim().toLowerCase();
+                const price = safeParse(be.purchasedPrice ?? item.purchasedPrice ?? be.rate ?? item.rate);
+                if (price > 0) {
+                    if (itemLc && itemLc !== '-') lcRateMap[`${itemLc}_${pKey}_${bKey}`] = price;
+                    if (pKey && bKey) lcRateMap[`${pKey}_${bKey}`] = price;
+                    if (itemLc && itemLc !== '-') lcRateMap[itemLc] = price;
+                }
+            });
+        } else {
+            const bKey = (item.brand || '').trim().toLowerCase();
+            const price = safeParse(item.purchasedPrice ?? item.rate);
+            if (price > 0) {
+                if (itemLc && itemLc !== '-') lcRateMap[`${itemLc}_${pKey}_${bKey}`] = price;
+                if (pKey && bKey) lcRateMap[`${pKey}_${bKey}`] = price;
+                if (itemLc && itemLc !== '-') lcRateMap[itemLc] = price;
+            }
+        }
+    });
+
+    const resolveWhItemPrice = (whItem) => {
+        const directPrice = safeParse(whItem.purchasedPrice ?? whItem.rate);
+        if (directPrice > 0) return directPrice;
+        const itemLc = (whItem.lcNo || '').trim().toLowerCase();
+        const pKey = (whItem.productName || whItem.product || '').trim().toLowerCase();
+        const bKey = (whItem.brand || '').trim().toLowerCase();
+        return lcRateMap[`${itemLc}_${pKey}_${bKey}`] || lcRateMap[`${pKey}_${bKey}`] || lcRateMap[itemLc] || 0;
+    };
+
     // 2. Process Warehouse Records (Transfers)
     warehouseData.forEach(whItem => {
         if (!whItem) return;
@@ -393,6 +428,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             return rq !== '-' ? rq : (whItem.quality || '-');
         })();
 
+        const whPrice = resolveWhItemPrice(whItem);
+
         if (whItem.isTransferLog) {
             // Destination Entry (+ stock at destination warehouse)
             if (destWhName) {
@@ -404,7 +441,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     warehouse: destWhName,
                     whName: destWhName,
                     quality: qualityVal,
-                    purchasedPrice: safeParse(whItem.purchasedPrice ?? whItem.rate),
+                    purchasedPrice: whPrice,
                     quantity: itemQty,
                     packet: itemPkt,
                     inHouseQuantity: itemQty,
@@ -425,7 +462,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     warehouse: srcWhName,
                     whName: srcWhName,
                     quality: qualityVal,
-                    purchasedPrice: safeParse(whItem.purchasedPrice ?? whItem.rate),
+                    purchasedPrice: whPrice,
                     quantity: -itemQty,
                     packet: -itemPkt,
                     inHouseQuantity: -itemQty,
@@ -443,7 +480,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 warehouse: destWhName,
                 whName: destWhName,
                 quality: qualityVal,
-                purchasedPrice: safeParse(whItem.purchasedPrice ?? whItem.rate),
+                purchasedPrice: whPrice,
                 quantity: itemQty,
                 packet: itemPkt,
                 inHouseQuantity: itemQty,
