@@ -321,6 +321,22 @@ function PackingList({
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    const resolvePiPackingType = (p, selectedRev, rawPi) => {
+        if (p && p.packingType && p.packingType.trim() !== '') return p.packingType.trim();
+        if (selectedRev && selectedRev.packingType && selectedRev.packingType.trim() !== '') return selectedRev.packingType.trim();
+        if (rawPi && rawPi.packingType && rawPi.packingType.trim() !== '') return rawPi.packingType.trim();
+        if (rawPi && rawPi.noKindPackage && rawPi.noKindPackage.trim() !== '') {
+            const noKind = rawPi.noKindPackage.trim();
+            const cleaned = noKind.replace(/^[0-9\s,.]+/, '').trim();
+            return cleaned || noKind;
+        }
+        if (rawPi && rawPi.termsDeliveryPayment) {
+            const match = rawPi.termsDeliveryPayment.match(/Packing:\s*([^\n\r.]+)/i);
+            if (match && match[1] && match[1].trim()) return match[1].trim();
+        }
+        return '';
+    };
+
     const loadPiRevision = (rawPi, revisionNo) => {
         const isRevised = revisionNo && revisionNo !== 'Original PI';
         const displayPiNumber = isRevised ? `${rawPi.piNumber} (REVISED)` : (rawPi.piNumber || '');
@@ -368,7 +384,7 @@ function PackingList({
                         hsCode: p.hsCode || '',
                         quantity: String(displayQty),
                         bagCount: '',
-                        packingType: rawPi.packingType || '',
+                        packingType: resolvePiPackingType(p, selectedRev, rawPi),
                         netWeight: String(displayQty),
                         grossWeight: '',
                         rate: p.rate || '',
@@ -389,7 +405,7 @@ function PackingList({
                         hsCode: p.hsCode || '',
                         quantity: p.quantity || '',
                         bagCount: '',
-                        packingType: rawPi.packingType || '',
+                        packingType: resolvePiPackingType(p, selectedRev, rawPi),
                         netWeight: p.quantity || '',
                         grossWeight: '',
                         rate: p.rate || '',
@@ -407,7 +423,7 @@ function PackingList({
                 hsCode: p.hsCode || '',
                 quantity: p.quantity || '',
                 bagCount: '',
-                packingType: rawPi.packingType || '',
+                packingType: resolvePiPackingType(p, selectedRev, rawPi),
                 netWeight: p.quantity || '',
                 grossWeight: '',
                 rate: p.rate || '',
@@ -418,7 +434,7 @@ function PackingList({
         }
 
         if (mappedProducts.length === 0) {
-            mappedProducts = [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }];
+            mappedProducts = [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: resolvePiPackingType(null, selectedRev, rawPi), netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }];
         }
 
         setFormData(prev => ({
@@ -526,9 +542,10 @@ function PackingList({
     };
 
     const addProductRow = () => {
+        const defaultPackingType = formData.productsList?.[0]?.packingType || resolvePiPackingType(null, null, selectedPiRaw) || '';
         setFormData(prev => ({
             ...prev,
-            productsList: [...prev.productsList, { productName: '', hsCode: '', quantity: '', bagCount: '', packingType: '', netWeight: '', grossWeight: '' }]
+            productsList: [...prev.productsList, { productName: '', hsCode: '', quantity: '', bagCount: '', packingType: defaultPackingType, netWeight: '', grossWeight: '' }]
         }));
     };
 
