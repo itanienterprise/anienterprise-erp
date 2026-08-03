@@ -87,7 +87,7 @@ export const getGroupedBrandList = (brandList) => {
         g.saleableQuantity = Math.max(0, g.inHouseQuantity - g.orderQuantity);
         g.saleablePacket = Math.max(0, g.inHousePacket - g.orderPacket);
     });
-    return Object.values(groups);
+    return Object.values(groups).sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
 };
 
 
@@ -123,7 +123,141 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
 };
 
 export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = []) => {
-    const isWhFilter = stockFilters.warehouse && stockFilters.warehouse.trim().toLowerCase() !== 'all warehouses';
+    const isWhFilter = stockFilters.warehouse &&
+        typeof stockFilters.warehouse === 'string' &&
+        stockFilters.warehouse.trim() !== '' &&
+        stockFilters.warehouse.trim().toLowerCase() !== 'all' &&
+        stockFilters.warehouse.trim().toLowerCase() !== 'all warehouses' &&
+        stockFilters.warehouse.trim().toLowerCase() !== 'all warehouse';
+
+    if (!isWhFilter && (!stockFilters || !stockFilters._isSubCall)) {
+        const whSet = new Set();
+        (warehouseData || []).forEach(w => {
+            const name = (w.name || w.whName || w.warehouse || w.fromWh || w.toWh || '').trim();
+            if (name && name !== 'Inventory Adjustment') whSet.add(name);
+        });
+        (stockRecords || []).forEach(s => {
+            const name = (s.name || s.whName || s.warehouse || '').trim();
+            if (name && name !== 'Inventory Adjustment') whSet.add(name);
+        });
+        const whList = Array.from(whSet);
+
+        if (whList.length > 0) {
+            const combinedProductsMap = {};
+            whList.forEach(whName => {
+                const subFilters = { ...(stockFilters || {}), warehouse: whName, _isSubCall: true };
+                const whRes = calculateStockData(stockRecords, subFilters, stockSearchQuery, warehouseData, salesRecords, products, damages);
+                (whRes.displayRecords || []).forEach(rec => {
+                    const pName = rec.productName;
+                    if (!combinedProductsMap[pName]) {
+                        combinedProductsMap[pName] = {
+                            ...rec,
+                            brandList: []
+                        };
+                    }
+                    (rec.brandList || []).forEach(b => {
+                        const safeInHouseQty = Math.max(0, b.inHouseQuantity || 0);
+                        const safeInHousePkt = Math.max(0, b.inHousePacket || 0);
+                        const safeClosingQty = Math.max(0, b.closingQuantity || 0);
+                        const safeClosingPkt = Math.max(0, b.closingPacket || 0);
+                        const safeOpeningQty = Math.max(0, b.openingQuantity || 0);
+                        const safeOpeningPkt = Math.max(0, b.openingPacket || 0);
+
+                        combinedProductsMap[pName].brandList.push({
+                            ...b,
+                            inHouseQuantity: safeInHouseQty,
+                            inHousePacket: safeInHousePkt,
+                            closingQuantity: safeClosingQty,
+                            closingPacket: safeClosingPkt,
+                            openingQuantity: safeOpeningQty,
+                            openingPacket: safeOpeningPkt,
+                            totalInHouseQuantity: safeOpeningQty,
+                            totalInHousePacket: safeOpeningPkt
+                        });
+                    });
+                });
+            });
+
+            const displayRecords = Object.values(combinedProductsMap).map(prod => {
+                const groupedBrands = getGroupedBrandList(prod.brandList);
+                const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
+                const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
+                const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
+                const openingPkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
+                const saleQty = groupedBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
+                const salePkt = groupedBrands.reduce((sum, b) => sum + (b.salePacket || 0), 0);
+                const orderQty = groupedBrands.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
+                const orderPkt = groupedBrands.reduce((sum, b) => sum + (b.orderPacket || 0), 0);
+                const saleableQty = Math.max(0, inHouseQty - orderQty);
+                const saleablePkt = Math.max(0, inHousePkt - orderPkt);
+
+                return {
+                    ...prod,
+                    brandList: groupedBrands,
+                    openingQuantity: openingQty,
+                    openingPacket: openingPkt,
+                    inHouseQuantity: inHouseQty,
+                    inHousePacket: inHousePkt,
+                    saleQuantity: saleQty,
+                    salePacket: salePkt,
+                    orderQuantity: orderQty,
+                    orderPacket: orderPkt,
+                };
+            }).sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
+
+            let tOpeningQty = 0; let tSaleQty = 0; let tInHouseQty = 0; let tShortageQty = 0; let tDamageQty = 0;
+            const tOpeningPkt = { whole: 0, remainder: 0 };
+            const tSalePkt = { whole: 0, remainder: 0 };
+            const tInHousePkt = { whole: 0, remainder: 0 };
+
+            displayRecords.forEach(group => {
+                group.brandList.forEach(b => {
+                    tOpeningQty += Math.max(0, b.openingQuantity);
+                    tSaleQty += b.saleQuantity || 0;
+                    tInHouseQty += Math.max(0, b.inHouseQuantity);
+                    tShortageQty += b.sweepedQuantity || 0;
+                    tDamageQty += (b.damageQuantity || 0);
+
+                    const op = calculatePktRemainder(Math.max(0, b.openingQuantity), b.packetSize);
+                    tOpeningPkt.whole += op.whole; tOpeningPkt.remainder += op.remainder;
+
+                    const sl = calculatePktRemainder(b.saleQuantity || 0, b.packetSize);
+                    tSalePkt.whole += sl.whole; tSalePkt.remainder += sl.remainder;
+
+                    const ih = calculatePktRemainder(Math.max(0, b.inHouseQuantity), b.packetSize);
+                    tInHousePkt.whole += ih.whole; tInHousePkt.remainder += ih.remainder;
+                });
+            });
+
+            let cumulativeDamageQty = 0;
+            if (Array.isArray(damages)) {
+                damages.forEach(damage => {
+                    const dDate = (damage.date || damage.createdAt || '').split('T')[0];
+                    const endDate = stockFilters?.endDate || '';
+                    if (endDate && dDate > endDate) return;
+                    cumulativeDamageQty += safeParse(damage.quantity);
+                });
+            }
+
+            return {
+                displayRecords,
+                totalQuantity: tOpeningQty,
+                totalSaleQty: tSaleQty,
+                totalInHouseQty: tInHouseQty,
+                totalShortage: tShortageQty,
+                totalDamageQty: cumulativeDamageQty,
+                totalOpeningPktWhole: tOpeningPkt.whole,
+                totalOpeningPktRemainder: tOpeningPkt.remainder,
+                totalArrivalPktWhole: 0,
+                totalArrivalPktRemainder: 0,
+                totalSalePktWhole: tSalePkt.whole,
+                totalSalePktDecimalKg: tSalePkt.remainder,
+                totalInHousePktWhole: tInHousePkt.whole,
+                totalInHousePktDecimalKg: tInHousePkt.remainder,
+                unit: displayRecords[0]?.unit || 'kg'
+            };
+        }
+    }
     const isPriceReport = stockFilters && stockFilters.reportType === 'price';
 
     const resolveQuality = (pName, bName) => {
