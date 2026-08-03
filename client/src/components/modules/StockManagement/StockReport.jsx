@@ -612,9 +612,15 @@ const StockReport = ({
                                                 {showBag && (
                                                     <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-gray-900 align-top whitespace-nowrap">
                                                         {(() => {
-                                                            const totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0);
-                                                            const totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0);
-                                                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+                                                            let totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0);
+                                                            let totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0);
+                                                            const pktSize = item.packetSize || brands?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                            if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                                const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                                totalWhole += totalRem >= 0 ? extra : -extra;
+                                                                totalRem = totalRem % pktSize;
+                                                            }
+                                                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem))} kg` : ''}`;
                                                         })()}
                                                     </td>
                                                 )}
@@ -628,9 +634,15 @@ const StockReport = ({
                                                         {showBag && (
                                                             <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-purple-900 align-top whitespace-nowrap">
                                                                 {(() => {
-                                                                    const totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).whole, 0);
-                                                                    const totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).remainder, 0);
-                                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+                                                                    let totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).whole, 0);
+                                                                    let totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).remainder, 0);
+                                                                    const pktSize = item.packetSize || brands?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                                    if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                                        const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                                        totalWhole += totalRem >= 0 ? extra : -extra;
+                                                                        totalRem = totalRem % pktSize;
+                                                                    }
+                                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem))} kg` : ''}`;
                                                                 })()}
                                                             </td>
                                                         )}
@@ -642,9 +654,15 @@ const StockReport = ({
                                                         {showBag && (
                                                             <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-teal-900 align-top whitespace-nowrap">
                                                                 {(() => {
-                                                                    const totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).whole, 0);
-                                                                    const totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).remainder, 0);
-                                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
+                                                                    let totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).whole, 0);
+                                                                    let totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).remainder, 0);
+                                                                    const pktSize = item.packetSize || brands?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                                    if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                                        const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                                        totalWhole += totalRem >= 0 ? extra : -extra;
+                                                                        totalRem = totalRem % pktSize;
+                                                                    }
+                                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem))} kg` : ''}`;
                                                                 })()}
                                                             </td>
                                                         )}
@@ -702,9 +720,15 @@ const StockReport = ({
                                     {showBag && (
                                         <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                             {(() => {
-                                                const totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                const totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
-                                                return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-IN')} kg` : ''}`;
+                                                let totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                let totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                const pktSize = records[0]?.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                    const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                    totalWhole += totalRem >= 0 ? extra : -extra;
+                                                    totalRem = totalRem % pktSize;
+                                                }
+                                                return `${totalWhole.toLocaleString('en-IN')}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem)).toLocaleString('en-IN')} kg` : ''}`;
                                             })()}
                                         </td>
                                     )}
@@ -718,9 +742,15 @@ const StockReport = ({
                                             {showBag && (
                                                 <td className="px-2 py-1.5 text-[14px] text-right font-black text-purple-900 border-r border-gray-900">
                                                     {(() => {
-                                                        const totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                        const totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).remainder, 0), 0);
-                                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-IN')} kg` : ''}`;
+                                                        let totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                        let totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                        const pktSize = records[0]?.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                        if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                            const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                            totalWhole += totalRem >= 0 ? extra : -extra;
+                                                            totalRem = totalRem % pktSize;
+                                                        }
+                                                        return `${totalWhole.toLocaleString('en-IN')}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem)).toLocaleString('en-IN')} kg` : ''}`;
                                                     })()}
                                                 </td>
                                             )}
@@ -732,9 +762,15 @@ const StockReport = ({
                                             {showBag && (
                                                 <td className="px-2 py-1.5 text-[14px] text-right font-black text-teal-900 border-r border-gray-900">
                                                     {(() => {
-                                                        const totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                        const totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).remainder, 0), 0);
-                                                        return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-IN')} kg` : ''}`;
+                                                        let totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).whole, 0), 0);
+                                                        let totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                        const pktSize = records[0]?.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                                                        if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
+                                                            const extra = Math.floor(Math.abs(totalRem) / pktSize);
+                                                            totalWhole += totalRem >= 0 ? extra : -extra;
+                                                            totalRem = totalRem % pktSize;
+                                                        }
+                                                        return `${totalWhole.toLocaleString('en-IN')}${totalRem !== 0 ? ` - ${Math.abs(Math.round(totalRem)).toLocaleString('en-IN')} kg` : ''}`;
                                                     })()}
                                                 </td>
                                             )}

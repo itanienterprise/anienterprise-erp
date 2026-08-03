@@ -9,7 +9,7 @@ import axios from '../../../utils/api';
 import PaymentCollectionReport from './PaymentCollectionReport';
 import './PaymentCollection.css';
 
-const PaymentCollection = ({ addNotification, currentUser: propCurrentUser }) => {
+const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators }) => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -262,6 +262,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser }) =>
 
             setPayments(allPayments);
             setRawCustomers(customersList);
+            refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error fetching payments:', error);
         } finally {

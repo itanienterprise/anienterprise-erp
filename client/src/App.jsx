@@ -297,6 +297,9 @@ function App() {
     lc: false,
     stock: false,
     sale: false,
+    crm: false,
+    paymentCollection: false,
+    payToCustomer: false,
     lcReceive: false,
     stockManagement: false,
     generalSale: false,
@@ -308,14 +311,16 @@ function App() {
   const fetchPendingEntries = async () => {
     if (!isAuthenticated) return;
     try {
-      const [stockRes, salesRes, purchasesRes] = await Promise.all([
+      const [stockRes, salesRes, purchasesRes, customersRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/stock`),
         axios.get(`${API_BASE_URL}/api/sales`),
-        axios.get(`${API_BASE_URL}/api/purchases`)
+        axios.get(`${API_BASE_URL}/api/purchases`),
+        axios.get(`${API_BASE_URL}/api/customers`)
       ]);
       const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
       const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
       const purchasesData = Array.isArray(purchasesRes.data) ? purchasesRes.data : [];
+      const customersData = Array.isArray(customersRes.data) ? customersRes.data : [];
 
       const hasRequestedLC = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !!item.lcNo);
       const hasRequestedStockMgmt = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !item.lcNo);
@@ -354,10 +359,33 @@ function App() {
         return isBorder && (isReq || isEditReq);
       });
 
+      const hasRequestedPaymentCollection = customersData.some(item => {
+        const history = Array.isArray(item.paymentHistory) ? item.paymentHistory : [];
+        return history.some(p => {
+          const status = (p.status || '').toLowerCase();
+          const isReq = status === 'requested';
+          const isEditReq = (p.isEdited === true || p.isEdited === 'true') && !isReq;
+          return isReq || isEditReq;
+        });
+      });
+
+      const hasRequestedPayToCustomer = customersData.some(item => {
+        const history = Array.isArray(item.payToCustomerHistory) ? item.payToCustomerHistory : [];
+        return history.some(p => {
+          const status = (p.status || '').toLowerCase();
+          const isReq = status === 'requested';
+          const isEditReq = (p.isEdited === true || p.isEdited === 'true') && !isReq;
+          return isReq || isEditReq;
+        });
+      });
+
       setPendingModules({
         lc: hasRequestedLC,
         stock: hasRequestedStockMgmt,
         sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder || hasRequestedPurchase,
+        crm: hasRequestedPaymentCollection || hasRequestedPayToCustomer,
+        paymentCollection: hasRequestedPaymentCollection,
+        payToCustomer: hasRequestedPayToCustomer,
         lcReceive: hasRequestedLC,
         stockManagement: hasRequestedStockMgmt,
         order: hasRequestedOrder,
@@ -1925,11 +1953,11 @@ function App() {
         );
       case 'payment-collection-section':
         return (
-          <PaymentCollection addNotification={addNotification} currentUser={currentUser} />
+          <PaymentCollection addNotification={addNotification} currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />
         );
       case 'pay-to-customer-section':
         return (
-          <PayToCustomer addNotification={addNotification} currentUser={currentUser} />
+          <PayToCustomer addNotification={addNotification} currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />
         );
       case 'warehouse-section':
         return (
@@ -2578,7 +2606,10 @@ function App() {
                   <UsersIcon className="w-5 h-5 mr-3" />
                   <span className="font-medium text-sm">CRM</span>
                 </div>
-                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${crmDropdownOpen ? 'transform rotate-180' : ''}`} />
+                <div className="flex items-center gap-1.5">
+                  {pendingModules?.crm && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
+                  <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${crmDropdownOpen ? 'transform rotate-180' : ''}`} />
+                </div>
               </button>
               {crmDropdownOpen && (
                 <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
@@ -2594,19 +2625,25 @@ function App() {
                   {hasPermission(currentUser, 'paymentCollection', 'view') && (
                     <button
                       onClick={() => { handleViewChange('payment-collection-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
-                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Payment Collection</span>
+                      <div className="flex items-center">
+                        <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Payment Collection</span>
+                      </div>
+                      {pendingModules?.paymentCollection && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                     </button>
                   )}
                   {hasPermission(currentUser, 'payToCustomer', 'view') && (
                     <button
                       onClick={() => { handleViewChange('pay-to-customer-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pay-to-customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pay-to-customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
-                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Pay To Customer</span>
+                      <div className="flex items-center">
+                        <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Pay To Customer</span>
+                      </div>
+                      {pendingModules?.payToCustomer && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                     </button>
                   )}
                 </div>

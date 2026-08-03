@@ -1033,30 +1033,37 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 });
 
                 if (reportType === 'detailed') {
-                    const tW = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0), ent.packetSize).whole, 0);
-                    const tR = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0), ent.packetSize).remainder, 0));
+                    let tW = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0), ent.packetSize).whole, 0);
+                    let tR = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0), ent.packetSize).remainder, 0));
+                    const pktSizeT = item.packetSize || item.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                    if (pktSizeT > 0 && Math.abs(tR) >= pktSizeT) { const ex = Math.floor(Math.abs(tR) / pktSizeT); tW += tR >= 0 ? ex : -ex; tR = tR % pktSizeT; }
                     if (showBag) subRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     if (showQty) subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
-                    const sW = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(parseFloat(ent.saleQuantity) || 0, ent.packetSize).whole, 0);
-                    const sR = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(parseFloat(ent.saleQuantity) || 0, ent.packetSize).remainder, 0));
+                    let sW = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(parseFloat(ent.saleQuantity) || 0, ent.packetSize).whole, 0);
+                    let sR = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(parseFloat(ent.saleQuantity) || 0, ent.packetSize).remainder, 0));
+                    if (pktSizeT > 0 && Math.abs(sR) >= pktSizeT) { const ex = Math.floor(Math.abs(sR) / pktSizeT); sW += sR >= 0 ? ex : -ex; sR = sR % pktSizeT; }
                     if (showBag) subRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     if (showQty) subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }
 
-                const rW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).whole, 0);
-                const rR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).remainder, 0));
+                let rW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).whole, 0);
+                let rR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).remainder, 0));
+                const pktSizeR = item.packetSize || item.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
+                if (pktSizeR > 0 && Math.abs(rR2) >= pktSizeR) { const ex = Math.floor(Math.abs(rR2) / pktSizeR); rW2 += rR2 >= 0 ? ex : -ex; rR2 = rR2 % pktSizeR; }
                 if (showBag) subRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 if (showQty) subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
                 if (reportType === 'short') {
-                    const ordW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.orderQuantity) || 0), ent.packetSize).whole, 0);
-                    const ordR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.orderQuantity) || 0), ent.packetSize).remainder, 0));
+                    let ordW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.orderQuantity) || 0), ent.packetSize).whole, 0);
+                    let ordR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.orderQuantity) || 0), ent.packetSize).remainder, 0));
+                    if (pktSizeR > 0 && Math.abs(ordR2) >= pktSizeR) { const ex = Math.floor(Math.abs(ordR2) / pktSizeR); ordW2 += ordR2 >= 0 ? ex : -ex; ordR2 = ordR2 % pktSizeR; }
                     if (showBag) subRow.push({ content: `${ordW2}${ordR2 !== 0 ? ` - ${Math.abs(ordR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     if (showQty) subRow.push({ content: Math.round(item.orderQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
-                    const salW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.saleableQuantity) || 0), ent.packetSize).whole, 0);
-                    const salR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.saleableQuantity) || 0), ent.packetSize).remainder, 0));
+                    let salW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.saleableQuantity) || 0), ent.packetSize).whole, 0);
+                    let salR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.saleableQuantity) || 0), ent.packetSize).remainder, 0));
+                    if (pktSizeR > 0 && Math.abs(salR2) >= pktSizeR) { const ex = Math.floor(Math.abs(salR2) / pktSizeR); salW2 += salR2 >= 0 ? ex : -ex; salR2 = salR2 % pktSizeR; }
                     if (showBag) subRow.push({ content: `${salW2}${salR2 !== 0 ? ` - ${Math.abs(salR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     if (showQty) subRow.push({ content: Math.round(item.saleableQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }

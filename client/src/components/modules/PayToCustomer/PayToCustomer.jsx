@@ -9,7 +9,7 @@ import axios, { api } from '../../../utils/api';
 import PayToCustomerReport from './PayToCustomerReport';
 import './PayToCustomer.css';
 
-const PayToCustomer = ({ addNotification, currentUser: propCurrentUser }) => {
+const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators }) => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -256,6 +256,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser }) => {
             setPayments(allPayments);
             setRawCustomers(customersList);
             setPurchasesList(purData);
+            refreshPendingIndicators?.();
         } catch (error) {
             console.error('Error fetching pay to customer records:', error);
         } finally {
