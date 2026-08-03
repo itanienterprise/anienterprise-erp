@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon, TruckIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -46,6 +46,7 @@ import LCReceive from './components/modules/LCReceive/LCReceive';
 import CnFPayment from './components/modules/CnF/CnFPayment';
 import WarehouseManagement from './components/modules/Warehouse/WarehouseManagement';
 import DamageManagement from './components/modules/Warehouse/DamageManagement';
+import TransferManagement from './components/modules/Transfer/TransferManagement';
 import StockManagement from "./components/modules/StockManagement/StockManagement";
 import StockReport from './components/modules/StockManagement/StockReport';
 import LCReport from './components/modules/LCReceive/LCReport';
@@ -296,6 +297,7 @@ function App() {
   const [pendingModules, setPendingModules] = useState({
     lc: false,
     stock: false,
+    transfer: false,
     sale: false,
     crm: false,
     paymentCollection: false,
@@ -311,19 +313,26 @@ function App() {
   const fetchPendingEntries = async () => {
     if (!isAuthenticated) return;
     try {
-      const [stockRes, salesRes, purchasesRes, customersRes] = await Promise.all([
+      const [stockRes, salesRes, purchasesRes, customersRes, whRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/stock`),
         axios.get(`${API_BASE_URL}/api/sales`),
         axios.get(`${API_BASE_URL}/api/purchases`),
-        axios.get(`${API_BASE_URL}/api/customers`)
+        axios.get(`${API_BASE_URL}/api/customers`),
+        axios.get(`${API_BASE_URL}/api/warehouses`)
       ]);
       const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
       const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
       const purchasesData = Array.isArray(purchasesRes.data) ? purchasesRes.data : [];
       const customersData = Array.isArray(customersRes.data) ? customersRes.data : [];
+      const whData = Array.isArray(whRes.data) ? whRes.data : [];
 
       const hasRequestedLC = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !!item.lcNo);
       const hasRequestedStockMgmt = stockData.some(item => (item.status || '').toLowerCase() === 'requested' && !item.lcNo);
+      const hasRequestedTransfer = whData.some(item => {
+        let dec = item.data ? decryptData(item.data) : item;
+        if (typeof dec === 'string') { try { dec = decryptData(dec); } catch (e) { } }
+        return (dec?.status || '').toLowerCase() === 'requested';
+      });
 
       const hasRequestedPurchase = purchasesData.some(item => {
         const status = (item.status || '').toLowerCase();
@@ -381,7 +390,8 @@ function App() {
 
       setPendingModules({
         lc: hasRequestedLC,
-        stock: hasRequestedStockMgmt,
+        stock: hasRequestedStockMgmt || hasRequestedTransfer,
+        transfer: hasRequestedTransfer,
         sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder || hasRequestedPurchase,
         crm: hasRequestedPaymentCollection || hasRequestedPayToCustomer,
         paymentCollection: hasRequestedPaymentCollection,
@@ -1982,6 +1992,13 @@ function App() {
             refreshPendingIndicators={fetchPendingEntries}
           />
         );
+      case 'transfer-section':
+        return (
+          <TransferManagement
+            currentUser={currentUser}
+            addNotification={addNotification}
+          />
+        );
       case 'purchase-sale-section':
         return (
           <PurchaseManagement
@@ -2535,11 +2552,11 @@ function App() {
             </div>
           )}
 
-          {(hasPermission(currentUser, 'stock', 'view') || hasPermission(currentUser, 'product', 'view') || hasPermission(currentUser, 'warehouse', 'view')) && (
+          {(hasPermission(currentUser, 'stock', 'view') || hasPermission(currentUser, 'product', 'view') || hasPermission(currentUser, 'warehouse', 'view') || hasPermission(currentUser, 'transfer', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('stock')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('stock') || currentView === 'products-section' || currentView === 'warehouse-section' || currentView === 'damage-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('stock') || currentView === 'products-section' || currentView === 'warehouse-section' || currentView === 'damage-section' || currentView === 'transfer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <div className="flex items-center">
                   <ShoppingCartIcon className="w-5 h-5 mr-3" />
@@ -2550,7 +2567,7 @@ function App() {
                   <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${stockDropdownOpen ? 'transform rotate-180' : ''}`} />
                 </div>
               </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${stockDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${stockDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 <div className="pl-7 pr-2 space-y-1">
                   {hasPermission(currentUser, 'product', 'view') && (
                     <button
@@ -2590,6 +2607,18 @@ function App() {
                         <span>Damage</span>
                       </button>
                     </>
+                  )}
+                  {(hasPermission(currentUser, 'transfer', 'view') || hasPermission(currentUser, 'stock', 'view') || hasPermission(currentUser, 'warehouse', 'view')) && (
+                    <button
+                      onClick={() => { handleViewChange('transfer-section'); }}
+                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'transfer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <div className="flex items-center">
+                        <TransferIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Transfer</span>
+                      </div>
+                      {pendingModules.transfer && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                    </button>
                   )}
                 </div>
               </div>

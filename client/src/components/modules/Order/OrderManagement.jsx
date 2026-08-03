@@ -330,7 +330,7 @@ const OrderManagement = ({
         const uniqueWhs = [];
         const seen = new Set();
         warehouses.forEach(w => {
-            const name = (w.whName || w.warehouse || '').trim();
+            const name = (w.name || w.whName || w.warehouse || '').trim();
             if (name && !seen.has(name.toLowerCase())) {
                 seen.add(name.toLowerCase());
                 uniqueWhs.push({ _id: w._id, whName: name });

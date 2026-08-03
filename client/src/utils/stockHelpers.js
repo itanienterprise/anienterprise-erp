@@ -229,8 +229,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     // 2. Process Warehouse Records (Transfers)
     warehouseData.forEach(whItem => {
-        if (!whItem || whItem.isTransferLog) return;
-        if (whItem.recordType !== 'warehouse' && !whItem.productName && !whItem.product) return;
+        if (!whItem) return;
+        const wStatus = (whItem.status || '').toLowerCase();
+        if (wStatus === 'requested' || wStatus === 'pending' || wStatus === 'rejected') return;
+        if (whItem.recordType !== 'warehouse' && !whItem.productName && !whItem.product && !whItem.isTransferLog) return;
         if (seenRecords.has(whItem._id)) return;
         seenRecords.add(whItem._id);
 
@@ -244,24 +246,79 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             if (productMatch) resolvedPktSize = safeParse(productMatch.packetSize || productMatch.size);
         }
 
-        rawExpanded.push({
-            ...whItem,
-            date: whItem.date || whItem.createdAt || new Date().toISOString(),
-            productName: whItem.productName || whItem.product || '',
-            warehouse: whItem.whName || whItem.warehouse || '',
-            quality: (() => {
-                const rq = resolveQuality(whItem.productName || whItem.product, whItem.brand);
-                return rq !== '-' ? rq : (whItem.quality || '-');
-            })(),
-            purchasedPrice: safeParse(whItem.purchasedPrice ?? whItem.rate),
-            quantity: safeParse(whItem.whQty ?? whItem.quantity),
-            packet: safeParse(whItem.whPkt ?? whItem.packet),
-            inHouseQuantity: safeParse(whItem.whQty ?? whItem.inHouseQuantity),
-            inHousePacket: safeParse(whItem.whPkt ?? whItem.inHousePacket),
-            packetSize: resolvedPktSize || 30,
-            unit: whItem.unit || 'kg',
-            recordType: 'warehouse'
-        });
+        const destWhName = (whItem.toWh || whItem.whName || whItem.warehouse || '').trim();
+        const srcWhName = (whItem.fromWh || '').trim();
+        const pName = (whItem.productName || whItem.product || '').trim();
+        const itemQty = safeParse(whItem.transferQty ?? whItem.whQty ?? whItem.inHouseQuantity ?? whItem.quantity);
+        const itemPkt = safeParse(whItem.transferPkt ?? whItem.whPkt ?? whItem.inHousePacket ?? whItem.packet);
+
+        if (!pName || (itemQty <= 0 && itemPkt <= 0)) return;
+
+        const qualityVal = (() => {
+            const rq = resolveQuality(pName, whItem.brand);
+            return rq !== '-' ? rq : (whItem.quality || '-');
+        })();
+
+        if (whItem.isTransferLog) {
+            // Destination Entry (+ stock at destination warehouse)
+            if (destWhName) {
+                rawExpanded.push({
+                    ...whItem,
+                    _id: `${whItem._id}_dest`,
+                    date: whItem.date || whItem.createdAt || new Date().toISOString(),
+                    productName: pName,
+                    warehouse: destWhName,
+                    whName: destWhName,
+                    quality: qualityVal,
+                    purchasedPrice: safeParse(whItem.purchasedPrice ?? whItem.rate),
+                    quantity: itemQty,
+                    packet: itemPkt,
+                    inHouseQuantity: itemQty,
+                    inHousePacket: itemPkt,
+                    packetSize: resolvedPktSize || 30,
+                    unit: whItem.unit || 'kg',
+                    recordType: 'warehouse_dest'
+                });
+            }
+
+            // Source Entry (- stock at source warehouse)
+            if (srcWhName) {
+                rawExpanded.push({
+                    ...whItem,
+                    _id: `${whItem._id}_src`,
+                    date: whItem.date || whItem.createdAt || new Date().toISOString(),
+                    productName: pName,
+                    warehouse: srcWhName,
+                    whName: srcWhName,
+                    quality: qualityVal,
+                    purchasedPrice: safeParse(whItem.purchasedPrice ?? whItem.rate),
+                    quantity: -itemQty,
+                    packet: -itemPkt,
+                    inHouseQuantity: -itemQty,
+                    inHousePacket: -itemPkt,
+                    packetSize: resolvedPktSize || 30,
+                    unit: whItem.unit || 'kg',
+                    recordType: 'warehouse_src'
+                });
+            }
+        } else {
+            rawExpanded.push({
+                ...whItem,
+                date: whItem.date || whItem.createdAt || new Date().toISOString(),
+                productName: pName,
+                warehouse: destWhName,
+                whName: destWhName,
+                quality: qualityVal,
+                purchasedPrice: safeParse(whItem.purchasedPrice ?? whItem.rate),
+                quantity: itemQty,
+                packet: itemPkt,
+                inHouseQuantity: itemQty,
+                inHousePacket: itemPkt,
+                packetSize: resolvedPktSize || 30,
+                unit: whItem.unit || 'kg',
+                recordType: 'warehouse'
+            });
+        }
     });
 
     const startDate = stockFilters.startDate || '';

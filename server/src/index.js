@@ -1085,15 +1085,23 @@ apiRouter.get('/api/warehouses', async (req, res) => {
     const decrypted = records.map(r => {
       let d = decryptData(r.data);
       let attempts = 0;
-      while (d && typeof d === 'object' && d.data && typeof d.data === 'string' && attempts < 5) {
-        try {
-          const sub = decryptData(d.data);
-          if (sub) d = sub;
-          else break;
-        } catch (e) { break; }
+      while (attempts < 5) {
+        if (typeof d === 'string') {
+          try {
+            const sub = decryptData(d);
+            if (sub) d = sub; else break;
+          } catch (e) { break; }
+        } else if (d && typeof d === 'object' && d.data && typeof d.data === 'string') {
+          try {
+            const sub = decryptData(d.data);
+            if (sub) d = sub; else break;
+          } catch (e) { break; }
+        } else {
+          break;
+        }
         attempts++;
       }
-      return { ...d, _id: r._id, createdAt: r.createdAt };
+      return { ...(typeof d === 'object' ? d : {}), _id: r._id, createdAt: r.createdAt };
     });
     res.json(decrypted);
   } catch (err) {

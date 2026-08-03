@@ -2104,7 +2104,7 @@ const SaleManagement = ({
 
         // 1. Add all warehouses from the master list
         warehouses.forEach(w => {
-            const name = (w.whName || w.warehouse || '').trim();
+            const name = (w.name || w.whName || w.warehouse || '').trim();
             if (name && !seen.has(name.toLowerCase())) {
                 seen.add(name.toLowerCase());
                 uniqueWhs.push({ _id: w._id, whName: name });
@@ -2113,7 +2113,7 @@ const SaleManagement = ({
 
         // 2. Add any additional warehouses found in stockRecords (e.g. initial LC receives)
         stockRecords.forEach(record => {
-            const name = (record.whName || record.warehouse || '').trim();
+            const name = (record.name || record.whName || record.warehouse || '').trim();
             if (name && !seen.has(name.toLowerCase())) {
                 seen.add(name.toLowerCase());
                 uniqueWhs.push({ _id: `stock-${name}`, whName: name });
@@ -4994,7 +4994,7 @@ const SaleManagement = ({
                                                 <td className="px-3 py-4 whitespace-nowrap text-center font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString('en-IN')}</td>
                                                 <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-center gap-1.5">
-                                                        {(sale.status === 'Requested' || sale.status === 'Pending') ? (
+                                                        {(sale.status === 'Requested' || sale.status === 'Edit_Requested') ? (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                                 {canEditRequestedSale(sale) && (
@@ -5271,7 +5271,7 @@ const SaleManagement = ({
                                             </td>
                                             <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center justify-center gap-1.5">
-                                                    {(sale.status === 'Requested' || sale.isEdited === true) ? (
+                                                    {(sale.status === 'Requested' || sale.status === 'Edit_Requested') ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                             {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (
@@ -5407,7 +5407,7 @@ const SaleManagement = ({
                                             )}
                                             {isExpanded ? (
                                                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                    {(sale.status === 'Requested' || sale.isEdited === true) ? (
+                                                    {(sale.status === 'Requested' || sale.status === 'Edit_Requested') ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
                                                             {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (
