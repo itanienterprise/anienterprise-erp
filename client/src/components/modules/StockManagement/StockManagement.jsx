@@ -23,7 +23,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import StockReport from './StockReport';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { API_BASE_URL } from '../../../utils/helpers';
-import { calculateStockData, calculatePktRemainder } from '../../../utils/stockHelpers';
+import { calculateStockData, calculatePktRemainder, getGroupedBrandList } from '../../../utils/stockHelpers';
 import { generateStockReportPDF, generateProductHistoryPDF } from '../../../utils/pdfGenerator';
 import axios from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -3661,9 +3661,9 @@ const StockManagement = ({
                                                                         {showBag && (
                                                                             <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
                                                                                 {(() => {
-                                                                                    const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                                    const { whole, remainder } = calculatePktRemainder(group.openingQuantity, pktSize);
-                                                                                    return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                    const totalWhole = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.openingQuantity || 0), ent.packetSize).whole, 0);
+                                                                                    const totalRem = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.openingQuantity || 0), ent.packetSize).remainder, 0);
+                                                                                    return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-US')} kg` : ''}`;
                                                                                 })()}
                                                                             </div>
                                                                         )}
@@ -3676,9 +3676,9 @@ const StockManagement = ({
                                                                         {showBag && (
                                                                             <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
                                                                                 {(() => {
-                                                                                    const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                                    const { whole, remainder } = calculatePktRemainder(group.saleQuantity, pktSize);
-                                                                                    return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                    const totalWhole = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(ent.saleQuantity || 0, ent.packetSize).whole, 0);
+                                                                                    const totalRem = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(ent.saleQuantity || 0, ent.packetSize).remainder, 0);
+                                                                                    return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-US')} kg` : ''}`;
                                                                                 })()}
                                                                             </div>
                                                                         )}
@@ -3693,9 +3693,9 @@ const StockManagement = ({
                                                                 {showBag && (
                                                                     <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
                                                                         {(() => {
-                                                                            const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                            const { whole, remainder = 0 } = calculatePktRemainder(group.inHouseQuantity, pktSize);
-                                                                            return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                            const totalWhole = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0);
+                                                                            const totalRem = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0);
+                                                                            return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-US')} kg` : ''}`;
                                                                         })()}
                                                                     </div>
                                                                 )}
@@ -3711,9 +3711,9 @@ const StockManagement = ({
                                                                         {showBag && (
                                                                             <div className="text-sm text-purple-900 font-extrabold text-center bg-purple-100/50 px-2 py-0.5 rounded-md">
                                                                                 {(() => {
-                                                                                    const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                                    const { whole, remainder = 0 } = calculatePktRemainder(group.orderQuantity, pktSize);
-                                                                                    return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                    const totalWhole = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).whole, 0);
+                                                                                    const totalRem = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).remainder, 0);
+                                                                                    return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-US')} kg` : ''}`;
                                                                                 })()}
                                                                             </div>
                                                                         )}
@@ -3725,9 +3725,9 @@ const StockManagement = ({
                                                                         {showBag && (
                                                                             <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
                                                                                 {(() => {
-                                                                                    const pktSize = group.brandList?.[0]?.packetSize || 0;
-                                                                                    const { whole, remainder = 0 } = calculatePktRemainder(group.saleableQuantity, pktSize);
-                                                                                    return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
+                                                                                    const totalWhole = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).whole, 0);
+                                                                                    const totalRem = getGroupedBrandList(group.brandList || []).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).remainder, 0);
+                                                                                    return `${totalWhole.toLocaleString('en-US')}${totalRem !== 0 ? ` - ${Math.abs(totalRem).toLocaleString('en-US')} kg` : ''}`;
                                                                                 })()}
                                                                             </div>
                                                                         )}

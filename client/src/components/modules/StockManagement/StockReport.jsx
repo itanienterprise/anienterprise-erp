@@ -586,9 +586,9 @@ const StockReport = ({
                                                         {showBag && (
                                                             <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-gray-900 align-top whitespace-nowrap">
                                                                 {(() => {
-                                                                    const pktSize = item.packetSize || brands[0]?.packetSize || 30;
-                                                                    const { whole, remainder } = calculatePktRemainder(item.totalInHouseQuantity, pktSize);
-                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                    const totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).whole, 0);
+                                                                    const totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.totalInHouseQuantity || 0), ent.packetSize).remainder, 0);
+                                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                                                                 })()}
                                                             </td>
                                                         )}
@@ -612,9 +612,9 @@ const StockReport = ({
                                                 {showBag && (
                                                     <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-gray-900 align-top whitespace-nowrap">
                                                         {(() => {
-                                                            const pktSize = item.packetSize || brands[0]?.packetSize || 30;
-                                                            const { whole, remainder } = calculatePktRemainder(item.inHouseQuantity, pktSize);
-                                                            return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                            const totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0);
+                                                            const totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0);
+                                                            return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                                                         })()}
                                                     </td>
                                                 )}
@@ -628,9 +628,9 @@ const StockReport = ({
                                                         {showBag && (
                                                             <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-purple-900 align-top whitespace-nowrap">
                                                                 {(() => {
-                                                                    const pktSize = item.packetSize || brands[0]?.packetSize || 30;
-                                                                    const { whole, remainder } = calculatePktRemainder(item.orderQuantity, pktSize);
-                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                    const totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).whole, 0);
+                                                                    const totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.orderQuantity || 0), ent.packetSize).remainder, 0);
+                                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                                                                 })()}
                                                             </td>
                                                         )}
@@ -642,9 +642,9 @@ const StockReport = ({
                                                         {showBag && (
                                                             <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-teal-900 align-top whitespace-nowrap">
                                                                 {(() => {
-                                                                    const pktSize = item.packetSize || brands[0]?.packetSize || 30;
-                                                                    const { whole, remainder } = calculatePktRemainder(item.saleableQuantity, pktSize);
-                                                                    return `${whole}${remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}`;
+                                                                    const totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).whole, 0);
+                                                                    const totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.saleableQuantity || 0), ent.packetSize).remainder, 0);
+                                                                    return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
                                                                 })()}
                                                             </td>
                                                         )}

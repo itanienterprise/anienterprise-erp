@@ -1033,27 +1033,30 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 });
 
                 if (reportType === 'detailed') {
-                    const tSize = item.brandList[0]?.packetSize || 0;
-                    const { whole: tW, remainder: tR } = calculatePktRemainderLocal(item.totalInHouseQuantity, tSize);
+                    const tW = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0), ent.packetSize).whole, 0);
+                    const tR = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.totalInHouseQuantity) || 0), ent.packetSize).remainder, 0));
                     if (showBag) subRow.push({ content: `${tW}${tR !== 0 ? ` - ${Math.abs(tR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     if (showQty) subRow.push({ content: Math.round(item.totalInHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
-                    const { whole: sW, remainder: sR } = calculatePktRemainderLocal(item.saleQuantity, tSize);
+                    const sW = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(parseFloat(ent.saleQuantity) || 0, ent.packetSize).whole, 0);
+                    const sR = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(parseFloat(ent.saleQuantity) || 0, ent.packetSize).remainder, 0));
                     if (showBag) subRow.push({ content: `${sW}${sR !== 0 ? ` - ${Math.abs(sR)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     if (showQty) subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }
 
-                const tSize2 = item.brandList[0]?.packetSize || 0;
-                const { whole: rW2, remainder: rR2 } = calculatePktRemainderLocal(item.inHouseQuantity, tSize2);
+                const rW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).whole, 0);
+                const rR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).remainder, 0));
                 if (showBag) subRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 if (showQty) subRow.push({ content: Math.round(item.inHouseQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
                 if (reportType === 'short') {
-                    const { whole: ordW2, remainder: ordR2 } = calculatePktRemainderLocal(item.orderQuantity, tSize2);
+                    const ordW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.orderQuantity) || 0), ent.packetSize).whole, 0);
+                    const ordR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.orderQuantity) || 0), ent.packetSize).remainder, 0));
                     if (showBag) subRow.push({ content: `${ordW2}${ordR2 !== 0 ? ` - ${Math.abs(ordR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     if (showQty) subRow.push({ content: Math.round(item.orderQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
 
-                    const { whole: salW2, remainder: salR2 } = calculatePktRemainderLocal(item.saleableQuantity, tSize2);
+                    const salW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.saleableQuantity) || 0), ent.packetSize).whole, 0);
+                    const salR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.saleableQuantity) || 0), ent.packetSize).remainder, 0));
                     if (showBag) subRow.push({ content: `${salW2}${salR2 !== 0 ? ` - ${Math.abs(salR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                     if (showQty) subRow.push({ content: Math.round(item.saleableQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }
