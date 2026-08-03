@@ -167,7 +167,6 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
 
                     if (decrypted.isTransferLog) {
                         logs.push(decrypted);
-                        return null;
                     }
                     const prodName = (decrypted.product || decrypted.productName || '').trim();
                     const brand = (decrypted.brand || '').trim();
@@ -336,7 +335,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
     }, [filteredData, allWarehousesMaster]);
 
     const warehouseTransferRecords = useMemo(() => (
-        warehouseData.filter(item => item.recordType === 'warehouse' && !item.isTransferLog)
+        warehouseData
     ), [warehouseData]);
 
     const stockCalcFilters = useMemo(() => ({
