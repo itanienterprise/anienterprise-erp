@@ -626,7 +626,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             if (beBrand === normBrand && (beQuality === '-' || normQuality === '-' || beQuality === normQuality)) {
                                 const saleLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim();
                                 const stockLc = (item.lcNo || '').trim();
-                                if (saleLc && stockLc && !isLcMatch(saleLc, stockLc) && !isLcMatch(stockLc, saleLc)) return;
+                                if (!isOrderSale && saleLc && stockLc && !isLcMatch(saleLc, stockLc) && !isLcMatch(stockLc, saleLc)) return;
                                 if (stockFilters.lcNo && !isLcMatch(saleLc, stockFilters.lcNo)) return;
                                 if (stockSearchQuery) {
                                     const q = stockSearchQuery.toLowerCase();
@@ -643,7 +643,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 if (consumedSales.has(saleEntryId)) return;
 
                                 const saleWH = (be.warehouseName || si.whName || si.warehouse || sale.warehouse || sale.whName || '').trim().toLowerCase();
-                                if (isWhFilter && saleWH !== stockFilters.warehouse.toLowerCase()) return;
+                                if (isWhFilter && saleWH && !saleWH.startsWith(stockFilters.warehouse.toLowerCase()) && saleWH !== stockFilters.warehouse.toLowerCase()) return;
 
                                 const sq = safeParse(be.quantity);
                                 let sp = safeParse(be.packet);
@@ -834,7 +834,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             itemBrandEntries.forEach((be, beIdx) => {
                 const saleWH = (be.warehouseName || si.whName || si.warehouse || sale.warehouse || sale.whName || '').trim().toLowerCase();
-                if (isWhFilter && saleWH !== stockFilters.warehouse.toLowerCase()) return;
+                if (isWhFilter && saleWH && !saleWH.startsWith(stockFilters.warehouse.toLowerCase()) && saleWH !== stockFilters.warehouse.toLowerCase()) return;
                 
                 // ADDED: Brand filter for General products
                 if (stockFilters.brand) {
