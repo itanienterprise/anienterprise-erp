@@ -1861,9 +1861,7 @@ const OrderManagement = ({
                                     <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                         <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                     </th>
-                                    <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
-                                        <div className="flex items-center justify-center">Order No {renderSortIcon('invoiceNo')}</div>
-                                    </th>
+
                                     <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('companyName')}>
                                         <div className="flex items-center">Customer {renderSortIcon('companyName')}</div>
                                     </th>
@@ -1967,11 +1965,7 @@ const OrderManagement = ({
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-medium text-gray-600">{formatDate(order.date)}</div>
                                             </td>
-                                            <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                <div className="text-[13px] font-semibold text-blue-600">
-                                                    {(order.orderNo && order.orderNo.toUpperCase().startsWith('ORD')) ? order.orderNo : (order.invoiceNo && order.invoiceNo.toUpperCase().startsWith('ORD')) ? order.invoiceNo : (order.orderNo || order.invoiceNo || '-')}
-                                                </div>
-                                            </td>
+
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-semibold text-gray-800">{order.companyName || order.customerName || '-'}</div>
                                             </td>

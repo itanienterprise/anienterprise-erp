@@ -172,6 +172,12 @@ const SalesReport = ({
         if (saleFilters.companyName && (sale.companyName || sale.customerName) !== saleFilters.companyName) return false;
         if (saleFilters.invoiceNo && sale.invoiceNo !== saleFilters.invoiceNo) return false;
 
+        // Exclude order records from non-Order sale type reports
+        const sTypeLow = (sale.saleType || '').toLowerCase().trim();
+        const invUpper = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
+        const isOrderRecord = sTypeLow === 'order' || invUpper.startsWith('ORD') || sale.isOrderEntry === true;
+        if (isOrderRecord && saleType !== 'Order') return false;
+
         // Border Specific Filters
         if (saleType === 'Border') {
             if (saleFilters.port && sale.port !== saleFilters.port) return false;
@@ -180,6 +186,7 @@ const SalesReport = ({
         }
 
         return true;
+
     }).sort((a, b) => {
         const d1 = new Date(a.date || 0).getTime();
         const d2 = new Date(b.date || 0).getTime();

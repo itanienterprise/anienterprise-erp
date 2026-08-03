@@ -873,6 +873,19 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             sortedDisplayRecords.forEach((item, index) => {
                 const brands = item.brandList || [];
 
+                // Pre-calculate quality spans for quality badge placement in PDF Column 1
+                const qualitySpans = [];
+                let lastQ = null;
+                brands.forEach((b, i) => {
+                    const q = (b.quality && b.quality !== '-' && b.quality !== 'NO QUALITY') ? b.quality.trim().toUpperCase() : '';
+                    if (q !== lastQ) {
+                        lastQ = q;
+                        qualitySpans[i] = { name: q, isStart: true };
+                    } else {
+                        qualitySpans[i] = { name: q, isStart: false };
+                    }
+                });
+
                 // Pre-calculate brand spans within consecutive matching brand names
                 const brandSpans = [];
                 let lastB = null;
@@ -905,26 +918,30 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                         });
                     }
 
-                    // Column 1: PRODUCT NAME (only on first row of product)
+                    // Column 1: PRODUCT NAME & QUALITY BADGES
+                    const qInfo = qualitySpans[bIdx];
                     if (bIdx === 0) {
+                        const prodNameStr = (item.productName || '-').toUpperCase();
+                        const hasStartQuality = qInfo && qInfo.isStart && qInfo.name;
+                        const cellContent = hasStartQuality ? `${prodNameStr}\n\n${qInfo.name}` : prodNameStr;
                         row.push({
-                            content: (item.productName || '-').toUpperCase(),
-                            styles: { valign: 'middle', fontStyle: 'bold', halign: 'center', lineWidth: 0 }
+                            content: cellContent,
+                            styles: { valign: 'top', fontStyle: 'bold', halign: 'left', textColor: hasStartQuality ? [29, 78, 216] : [0, 0, 0], lineWidth: 0 }
+                        });
+                    } else if (qInfo && qInfo.isStart && qInfo.name) {
+                        row.push({
+                            content: qInfo.name,
+                            styles: { valign: 'top', fontStyle: 'bold', halign: 'left', textColor: [29, 78, 216], lineWidth: 0 }
                         });
                     } else {
                         row.push({
                             content: '',
-                            styles: { valign: 'middle', halign: 'center', lineWidth: 0 }
+                            styles: { valign: 'top', halign: 'left', lineWidth: 0 }
                         });
                     }
 
-                    // Column 2: Brand (with Quality if applicable and not redundant)
-                    const rawBrand = (ent.brand || 'No Brand').trim();
-                    const rawQuality = (ent.quality && ent.quality !== '-' && ent.quality !== 'NO QUALITY') ? ent.quality.trim() : '';
-                    let displayBrand = rawBrand;
-                    if (rawQuality && !rawBrand.toUpperCase().includes(rawQuality.toUpperCase())) {
-                        displayBrand = `${rawBrand} (${rawQuality})`;
-                    }
+                    // Column 2: Brand (Clean brand name matching web view)
+                    const displayBrand = (ent.brand || 'No Brand').trim();
 
                     const spanInfo = brandSpans[bIdx];
                     if (spanInfo && spanInfo.span > 0) {
