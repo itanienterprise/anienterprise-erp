@@ -2720,7 +2720,7 @@ const SaleManagement = ({
                                 className="sale-mgmt-search-input"
                             />
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 overflow-visible">
                             {canViewSaleRequest && (
                                 <button
                                     onClick={() => {
@@ -4994,7 +4994,7 @@ const SaleManagement = ({
                                                 <td className="px-3 py-4 whitespace-nowrap text-center font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString('en-IN')}</td>
                                                 <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-center gap-1.5">
-                                                        {(sale.status === 'Requested' || sale.status === 'Edit_Requested') ? (
+                                                        {(sale.status === 'Requested' || sale.status === 'Edit_Requested' || sale.isEdited === true) ? (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                                 {canEditRequestedSale(sale) && (
@@ -5271,7 +5271,7 @@ const SaleManagement = ({
                                             </td>
                                             <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center justify-center gap-1.5">
-                                                    {(sale.status === 'Requested' || sale.status === 'Edit_Requested') ? (
+                                                    {(sale.status === 'Requested' || sale.status === 'Edit_Requested' || sale.isEdited === true) ? (
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                             {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (

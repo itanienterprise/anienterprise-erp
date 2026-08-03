@@ -657,6 +657,11 @@ const StockManagement = ({
             const status = (sale.status || '').toLowerCase();
             if (status && (status.includes('rejected') || status.includes('deleted'))) return false;
 
+            // Exclude order entries from the Sale history tab
+            const sTypeLow = (sale.saleType || '').toLowerCase().trim();
+            const invUpper = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
+            if (sTypeLow === 'order' || invUpper.startsWith('ORD') || sale.isOrderEntry === true) return false;
+
             const matchingItems = (sale.items || []).filter(item =>
                 (item.productName || '').trim().toLowerCase() === productName
             );
