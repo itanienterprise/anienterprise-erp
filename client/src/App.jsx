@@ -1947,6 +1947,7 @@ function App() {
           <Customer
             key={refreshKey}
             currentUser={currentUser}
+            salesRecords={salesRecords}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}

@@ -1354,6 +1354,184 @@ apiRouter.put('/api/sales/:id', async (req, res) => {
       saleType: req.body.saleType,
       data: encryptedData
     }, { returnDocument: 'after' });
+
+    // Auto-update linked sales if item prices in an Order were modified
+    try {
+      const sType = (req.body.saleType || '').toLowerCase();
+      const isOrderEntry = sType === 'order' || (req.body.invoiceNo || req.body.orderNo || '').toUpperCase().startsWith('ORD') || req.body.isOrderEntry === true;
+
+      if (isOrderEntry) {
+        const orderNo = (req.body.orderNo || req.body.invoiceNo || '').trim().toUpperCase();
+        const orderId = (req.params.id || '').toString().trim().toUpperCase();
+
+        const orderPriceMap = {};
+        (req.body.items || []).forEach(item => {
+          const pName = (item.productName || item.product || '').trim().toLowerCase();
+          if (item.brandEntries && item.brandEntries.length > 0) {
+            item.brandEntries.forEach(be => {
+              const bName = (be.brand || be.brandName || '').trim().toLowerCase();
+              const rate = parseFloat(be.rate !== undefined && be.rate !== null && be.rate !== '' ? be.rate : (be.unitPrice !== undefined && be.unitPrice !== null ? be.unitPrice : 0)) || 0;
+              if (pName && rate > 0) {
+                orderPriceMap[`${pName}_${bName}`] = rate;
+                if (bName) orderPriceMap[pName] = orderPriceMap[pName] || rate;
+              }
+            });
+          } else {
+            const bName = (item.brand || item.brandName || '').trim().toLowerCase();
+            const rate = parseFloat(item.rate !== undefined && item.rate !== null && item.rate !== '' ? item.rate : (item.unitPrice !== undefined && item.unitPrice !== null ? item.unitPrice : 0)) || 0;
+            if (pName && rate > 0) {
+              orderPriceMap[`${pName}_${bName}`] = rate;
+              orderPriceMap[pName] = orderPriceMap[pName] || rate;
+            }
+          }
+        });
+
+        if (Object.keys(orderPriceMap).length > 0) {
+          const matchingInvoices = new Set();
+          if (orderNo) matchingInvoices.add(orderNo);
+          if (orderId) matchingInvoices.add(orderId);
+
+          const allSales = await Sale.find({ _id: { $ne: req.params.id } });
+          for (const sDoc of allSales) {
+            let sData = decryptData(sDoc.data);
+            if (sData && sData.data && typeof sData.data === 'string' && !sData.invoiceNo) {
+              try { sData = decryptData(sData.data); } catch (e) {}
+            }
+            if (!sData) continue;
+
+            const sTypeLow = (sData.saleType || '').toLowerCase();
+            const isSaleOrder = sTypeLow === 'order' || (sData.invoiceNo || sData.orderNo || '').toUpperCase().startsWith('ORD') || sData.isOrderEntry === true;
+            if (isSaleOrder) continue;
+
+            const sOrdNo = (sData.orderNo || sData.orderRef || sData.orderId || '').trim().toUpperCase();
+            if (sOrdNo && (sOrdNo === orderNo || sOrdNo === orderId)) {
+              if (sData.invoiceNo) matchingInvoices.add(sData.invoiceNo.trim().toUpperCase());
+              if (sData.orderNo) matchingInvoices.add(sData.orderNo.trim().toUpperCase());
+
+              let saleModified = false;
+              (sData.items || []).forEach(sItem => {
+                const pName = (sItem.productName || sItem.product || '').trim().toLowerCase();
+                if (sItem.brandEntries && sItem.brandEntries.length > 0) {
+                  sItem.brandEntries.forEach(be => {
+                    const bName = (be.brand || be.brandName || '').trim().toLowerCase();
+                    const newRate = orderPriceMap[`${pName}_${bName}`] || orderPriceMap[pName];
+                    if (newRate !== undefined && newRate > 0) {
+                      const currentRate = parseFloat(be.rate !== undefined && be.rate !== null && be.rate !== '' ? be.rate : (be.unitPrice !== undefined && be.unitPrice !== null ? be.unitPrice : 0)) || 0;
+                      if (Math.abs(currentRate - newRate) > 0.001) {
+                        be.rate = newRate;
+                        be.unitPrice = newRate;
+                        const qty = parseFloat(be.quantity) || 0;
+                        const bag = parseFloat(be.bag || be.packet) || 0;
+                        const isBagUom = (sData.uom || '').toLowerCase() === 'bag' || (sItem.uom || '').toLowerCase() === 'bag';
+                        const entryAmt = isBagUom && bag > 0 ? (bag * newRate) : (qty * newRate);
+                        be.amount = Number(entryAmt.toFixed(2));
+                        be.totalAmount = Number(entryAmt.toFixed(2));
+                        saleModified = true;
+                      }
+                    }
+                  });
+                } else {
+                  const bName = (sItem.brand || sItem.brandName || '').trim().toLowerCase();
+                  const newRate = orderPriceMap[`${pName}_${bName}`] || orderPriceMap[pName];
+                  if (newRate !== undefined && newRate > 0) {
+                    const currentRate = parseFloat(sItem.rate !== undefined && sItem.rate !== null && sItem.rate !== '' ? sItem.rate : (sItem.unitPrice !== undefined && sItem.unitPrice !== null ? sItem.unitPrice : 0)) || 0;
+                    if (Math.abs(currentRate - newRate) > 0.001) {
+                      sItem.rate = newRate;
+                      sItem.unitPrice = newRate;
+                      const qty = parseFloat(sItem.quantity) || 0;
+                      const bag = parseFloat(sItem.bag || sItem.packet) || 0;
+                      const isBagUom = (sData.uom || '').toLowerCase() === 'bag' || (sItem.uom || '').toLowerCase() === 'bag';
+                      const itemAmt = isBagUom && bag > 0 ? (bag * newRate) : (qty * newRate);
+                      sItem.amount = Number(itemAmt.toFixed(2));
+                      sItem.totalAmount = Number(itemAmt.toFixed(2));
+                      saleModified = true;
+                    }
+                  }
+                }
+              });
+
+              if (saleModified) {
+                const newSubtotal = (sData.items || []).reduce((sum, sItem) => {
+                  if (sItem.brandEntries && sItem.brandEntries.length > 0) {
+                    return sum + sItem.brandEntries.reduce((bSum, be) => bSum + (parseFloat(be.totalAmount || be.amount) || 0), 0);
+                  }
+                  return sum + (parseFloat(sItem.totalAmount || sItem.amount) || 0);
+                }, 0);
+
+                const disc = parseFloat(sData.discount) || 0;
+                const paid = parseFloat(sData.paidAmount) || 0;
+                const newTotal = Math.max(0, newSubtotal - disc);
+                const newDue = Math.max(0, newTotal - paid);
+
+                sData.subtotal = Number(newSubtotal.toFixed(2));
+                sData.totalAmount = Number(newTotal.toFixed(2));
+                sData.dueAmount = Number(newDue.toFixed(2));
+
+                await Sale.findByIdAndUpdate(sDoc._id, {
+                  data: encryptData(sData)
+                });
+              }
+            }
+          }
+
+          // Also update matching salesHistory entries in all Customer records
+          const allCustomers = await Customer.find({});
+          for (const cDoc of allCustomers) {
+            let cData = decryptData(cDoc.data);
+            if (cData && cData.data && typeof cData.data === 'string' && !cData.invoiceNo) {
+              try { cData = decryptData(cData.data); } catch (e) {}
+            }
+            if (!cData || !Array.isArray(cData.salesHistory)) continue;
+
+            let custModified = false;
+            cData.salesHistory = cData.salesHistory.map(entry => {
+              const entryOrdNo = (entry.orderNo || '').trim().toUpperCase();
+              const entryInvNo = (entry.invoiceNo || '').trim().toUpperCase();
+              const isMatch = (entryOrdNo && matchingInvoices.has(entryOrdNo)) ||
+                              (entryInvNo && matchingInvoices.has(entryInvNo));
+
+              if (isMatch) {
+                const pName = (entry.product || entry.productName || '').trim().toLowerCase();
+                const bName = (entry.brand || entry.brandName || '').trim().toLowerCase();
+                const newRate = orderPriceMap[`${pName}_${bName}`] || orderPriceMap[pName];
+
+                if (newRate !== undefined && newRate > 0) {
+                  const currentRate = parseFloat(entry.rate !== undefined && entry.rate !== null && entry.rate !== '' ? entry.rate : (entry.unitPrice || 0)) || 0;
+                  if (Math.abs(currentRate - newRate) > 0.001) {
+                    const qty = parseFloat(entry.quantity || entry.qty) || 0;
+                    const bag = parseFloat(entry.bag || entry.packet) || 0;
+                    const isBagUom = (cData.uom || '').toLowerCase() === 'bag' || (entry.uom || '').toLowerCase() === 'bag';
+                    const newAmt = isBagUom && bag > 0 ? (bag * newRate) : (qty * newRate);
+                    const disc = parseFloat(entry.discount) || 0;
+                    const paid = parseFloat(entry.paid || entry.paidAmount) || 0;
+
+                    custModified = true;
+                    return {
+                      ...entry,
+                      rate: newRate,
+                      unitPrice: newRate,
+                      amount: Number(newAmt.toFixed(2)),
+                      totalAmount: Number(newAmt.toFixed(2)),
+                      balance: Number(Math.max(0, newAmt - disc - paid).toFixed(2))
+                    };
+                  }
+                }
+              }
+              return entry;
+            });
+
+            if (custModified) {
+              await Customer.findByIdAndUpdate(cDoc._id, {
+                data: encryptData(cData)
+              });
+            }
+          }
+        }
+      }
+    } catch (cascadeErr) {
+      console.error('Error auto-updating linked sales on order price change:', cascadeErr);
+    }
+
     res.json({ ...req.body, _id: updatedSale._id, createdAt: updatedSale.createdAt });
   } catch (err) {
     if (err.code === 11000) {

@@ -698,6 +698,7 @@ const OrderManagement = ({
 
             setShowForm(false);
             fetchOrders();
+            if (typeof fetchCustomers === 'function') fetchCustomers();
             if (fetchSalesGlobal) fetchSalesGlobal();
             if (refreshPendingIndicators) refreshPendingIndicators();
         } catch (err) {
@@ -735,6 +736,7 @@ const OrderManagement = ({
                 }
             }
             fetchOrders();
+            if (typeof fetchCustomers === 'function') fetchCustomers();
             if (fetchSalesGlobal) fetchSalesGlobal();
             if (refreshPendingIndicators) refreshPendingIndicators();
         } catch (err) {

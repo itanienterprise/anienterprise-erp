@@ -11,6 +11,7 @@ import './Customer.css';
 
 const Customer = ({
     currentUser,
+    salesRecords = [],
     isSelectionMode,
     setIsSelectionMode,
     selectedItems,
@@ -224,6 +225,13 @@ const Customer = ({
     useEffect(() => {
         fetchCustomers();
     }, []);
+
+    useEffect(() => {
+        if (viewData && customers && customers.length > 0) {
+            const updated = customers.find(c => c._id === viewData._id);
+            if (updated) setViewData(updated);
+        }
+    }, [customers]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -470,11 +478,60 @@ const Customer = ({
     const getCustomerFinalBalance = (c) => {
         if (!c) return 0;
 
-        const sales = (c.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested').map(s => ({
-            ...s,
-            type: 'sale',
-            sortDate: new Date(s.date || 0)
-        }));
+        const sales = (c.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested').map(s => {
+            let updatedS = { ...s };
+            if (salesRecords && salesRecords.length > 0) {
+                const itemInv = (s.invoiceNo || '').trim().toUpperCase();
+                const itemOrd = (s.orderNo || '').trim().toUpperCase();
+                const matchingSale = salesRecords.find(sale => {
+                    const sInv = (sale.invoiceNo || '').trim().toUpperCase();
+                    const sOrd = (sale.orderNo || '').trim().toUpperCase();
+                    return (itemInv && (sInv === itemInv || sOrd === itemInv)) ||
+                           (itemOrd && (sInv === itemOrd || sOrd === itemOrd));
+                });
+
+                if (matchingSale) {
+                    const pName = (s.product || s.productName || '').trim().toLowerCase();
+                    const bName = (s.brand || s.brandName || '').trim().toLowerCase();
+                    let latestRate = null;
+
+                    (matchingSale.items || []).forEach(si => {
+                        const siProd = (si.productName || si.product || '').trim().toLowerCase();
+                        if (!pName || siProd === pName) {
+                            if (si.brandEntries && si.brandEntries.length > 0) {
+                                si.brandEntries.forEach(be => {
+                                    const beBrand = (be.brand || be.brandName || '').trim().toLowerCase();
+                                    if (!bName || beBrand === bName) {
+                                        const r = parseFloat(be.rate !== undefined && be.rate !== null && be.rate !== '' ? be.rate : be.unitPrice) || 0;
+                                        if (r > 0) latestRate = r;
+                                    }
+                                });
+                            } else {
+                                const r = parseFloat(si.rate !== undefined && si.rate !== null && si.rate !== '' ? si.rate : si.unitPrice) || 0;
+                                if (r > 0) latestRate = r;
+                            }
+                        }
+                    });
+
+                    if (latestRate && Math.abs((parseFloat(s.rate) || 0) - latestRate) > 0.001) {
+                        const qty = parseFloat(s.quantity || s.qty) || 0;
+                        const bag = parseFloat(s.bag || s.packet) || 0;
+                        const isBagUom = (s.uom || c?.uom || '').toLowerCase() === 'bag';
+                        const newAmt = isBagUom && bag > 0 ? (bag * latestRate) : (qty * latestRate);
+                        const disc = parseFloat(s.discount) || 0;
+                        const paid = parseFloat(s.paid) || 0;
+                        updatedS.rate = latestRate;
+                        updatedS.amount = Number(newAmt.toFixed(2));
+                        updatedS.due = Number(Math.max(0, newAmt - disc - paid).toFixed(2));
+                    }
+                }
+            }
+            return {
+                ...updatedS,
+                type: 'sale',
+                sortDate: new Date(s.date || 0)
+            };
+        });
 
         const payments = (c.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested').map(p => ({
             ...p,
@@ -601,9 +658,67 @@ const Customer = ({
         return sortData(filtered);
     };
 
+    // Map raw sales history with updated prices from live salesRecords
+    const rawSalesWithUpdatedPrices = useMemo(() => {
+        return (viewData?.salesHistory || []).map(item => {
+            if (salesRecords && salesRecords.length > 0) {
+                const itemInv = (item.invoiceNo || '').trim().toUpperCase();
+                const itemOrd = (item.orderNo || '').trim().toUpperCase();
+                const matchingSale = salesRecords.find(s => {
+                    const sInv = (s.invoiceNo || '').trim().toUpperCase();
+                    const sOrd = (s.orderNo || '').trim().toUpperCase();
+                    return (itemInv && (sInv === itemInv || sOrd === itemInv)) ||
+                           (itemOrd && (sInv === itemOrd || sOrd === itemOrd));
+                });
+
+                if (matchingSale) {
+                    const pName = (item.product || item.productName || '').trim().toLowerCase();
+                    const bName = (item.brand || item.brandName || '').trim().toLowerCase();
+                    let latestRate = null;
+
+                    (matchingSale.items || []).forEach(si => {
+                        const siProd = (si.productName || si.product || '').trim().toLowerCase();
+                        if (!pName || siProd === pName) {
+                            if (si.brandEntries && si.brandEntries.length > 0) {
+                                si.brandEntries.forEach(be => {
+                                    const beBrand = (be.brand || be.brandName || '').trim().toLowerCase();
+                                    if (!bName || beBrand === bName) {
+                                        const r = parseFloat(be.rate !== undefined && be.rate !== null && be.rate !== '' ? be.rate : be.unitPrice) || 0;
+                                        if (r > 0) latestRate = r;
+                                    }
+                                });
+                            } else {
+                                const r = parseFloat(si.rate !== undefined && si.rate !== null && si.rate !== '' ? si.rate : si.unitPrice) || 0;
+                                if (r > 0) latestRate = r;
+                            }
+                        }
+                    });
+
+                    if (latestRate && Math.abs((parseFloat(item.rate) || 0) - latestRate) > 0.001) {
+                        const qty = parseFloat(item.quantity || item.qty) || 0;
+                        const bag = parseFloat(item.bag || item.packet) || 0;
+                        const isBagUom = (item.uom || viewData?.uom || '').toLowerCase() === 'bag';
+                        const newAmt = isBagUom && bag > 0 ? (bag * latestRate) : (qty * latestRate);
+                        const disc = parseFloat(item.discount) || 0;
+                        const paid = parseFloat(item.paid) || 0;
+                        return {
+                            ...item,
+                            rate: latestRate,
+                            amount: Number(newAmt.toFixed(2)),
+                            due: Number(Math.max(0, newAmt - disc - paid).toFixed(2))
+                        };
+                    }
+                }
+            }
+            return item;
+        });
+    }, [viewData, salesRecords]);
+
     // Calculate Filtered History Data
     const filteredSalesHistory = useMemo(() => {
-        const filtered = (viewData?.salesHistory || []).filter(item => {
+        const rawHistory = rawSalesWithUpdatedPrices;
+
+        const filtered = rawHistory.filter(item => {
             if (item.saleType === 'Order' || (item.invoiceNo || '').startsWith('ORD')) return false;
             const matchesSearch = !historySearchQuery ||
                 ((item.invoiceNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
@@ -643,7 +758,7 @@ const Customer = ({
             if (aVal > bVal) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [viewData, historySearchQuery, historyFilters, historySortConfig]);
+    }, [viewData, salesRecords, historySearchQuery, historyFilters, historySortConfig]);
 
     // Calculate Filtered Purchase History Data
     const filteredPurchaseHistory = useMemo(() => {
@@ -835,7 +950,7 @@ const Customer = ({
         if (!viewData) return [];
 
         // Combine sales, payments, payouts, and purchases
-        const sales = (viewData.salesHistory || []).map(s => ({
+        const sales = rawSalesWithUpdatedPrices.map(s => ({
             ...s,
             type: 'sale',
             sortDate: new Date(s.date)
@@ -1007,7 +1122,7 @@ const Customer = ({
     const openingBalance = useMemo(() => {
         if (!viewData) return 0;
 
-        const sales = (viewData.salesHistory || []).map(s => ({
+        const sales = rawSalesWithUpdatedPrices.map(s => ({
             ...s,
             type: 'sale',
             sortDate: new Date(s.date)

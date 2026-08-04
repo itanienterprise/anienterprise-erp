@@ -402,8 +402,6 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                 inHousePacket: updatedPkt,
                 totalInHouseQuantity: updatedQty,
                 totalInHousePacket: updatedPkt,
-                quantity: updatedQty,
-                packet: updatedPkt,
                 lastUpdated: new Date().toISOString()
             };
             delete updatedRecord._sourceType;
@@ -460,8 +458,6 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                 inHousePacket: updatedPkt,
                 totalInHouseQuantity: updatedQty,
                 totalInHousePacket: updatedPkt,
-                quantity: updatedQty,
-                packet: updatedPkt,
                 lastUpdated: new Date().toISOString()
             };
 
@@ -632,8 +628,6 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                     inHousePacket: newWhPkt,
                     totalInHouseQuantity: newWhQty,
                     totalInHousePacket: newWhPkt,
-                    quantity: newWhQty,
-                    packet: newWhPkt,
                     lastUpdated: new Date().toISOString()
                 };
                 delete updatedRecord._sourceType;

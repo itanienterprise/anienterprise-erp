@@ -69,8 +69,6 @@ export const getGroupedBrandList = (brandList) => {
         groups[key].salePacket += b.salePacket || 0;
         groups[key].orderQuantity += b.orderQuantity || 0;
         groups[key].orderPacket += b.orderPacket || 0;
-        groups[key].saleableQuantity = Math.max(0, groups[key].inHouseQuantity - groups[key].orderQuantity);
-        groups[key].saleablePacket = Math.max(0, groups[key].inHousePacket - groups[key].orderPacket);
         groups[key].sweepedQuantity += b.sweepedQuantity || 0;
         groups[key].sweepedPacket += b.sweepedPacket || 0;
         groups[key].damageQuantity += b.damageQuantity || 0;
@@ -81,6 +79,8 @@ export const getGroupedBrandList = (brandList) => {
         groups[key].totalInHousePacket += b.totalInHousePacket || 0;
         groups[key].closingQuantity += b.closingQuantity || 0;
         groups[key].closingPacket += b.closingPacket || 0;
+        groups[key].saleableQuantity = Math.max(0, groups[key].inHouseQuantity - groups[key].orderQuantity);
+        groups[key].saleablePacket = Math.max(0, groups[key].inHousePacket - groups[key].orderPacket);
     });
     // Ensure final saleable quantities match aggregated inHouse minus order quantities
     Object.values(groups).forEach(g => {
@@ -451,27 +451,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     recordType: 'warehouse_dest'
                 });
             }
-
-            // Source Entry (- stock at source warehouse)
-            if (srcWhName) {
-                rawExpanded.push({
-                    ...whItem,
-                    _id: `${whItem._id}_src`,
-                    date: whItem.date || whItem.createdAt || new Date().toISOString(),
-                    productName: pName,
-                    warehouse: srcWhName,
-                    whName: srcWhName,
-                    quality: qualityVal,
-                    purchasedPrice: whPrice,
-                    quantity: -itemQty,
-                    packet: -itemPkt,
-                    inHouseQuantity: -itemQty,
-                    inHousePacket: -itemPkt,
-                    packetSize: resolvedPktSize || 30,
-                    unit: whItem.unit || 'kg',
-                    recordType: 'warehouse_src'
-                });
-            }
         } else {
             rawExpanded.push({
                 ...whItem,
@@ -604,6 +583,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     (sale.invoiceNo || sale.orderNo || '').toUpperCase().startsWith('ORD') ||
                     sale.isOrderEntry === true;
                 if (sStatus === 'rejected' || sStatus === 'cancelled') return;
+                if (isOrderSale && (sStatus === 'requested' || sStatus === 'pending')) return;
                 if (!isOrderSale && sStatus === 'requested') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
@@ -796,6 +776,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
         const isOrderSale = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
         if (sStatus === 'rejected' || sStatus === 'cancelled') return;
+        if (isOrderSale && (sStatus === 'requested' || sStatus === 'pending')) return;
         if (!isOrderSale && sStatus === 'requested') return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
@@ -1061,20 +1042,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (brandList.length === 0) return null;
 
         const groupedBrands = getGroupedBrandList(brandList);
-        const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
-        // In price report mode, sum inHouseQty directly from individual brandList entries (already filtered
-        // to positive-closing-stock only), to avoid negative-LC values being merged and reducing the total.
-        const inHouseQty = brandList.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
-        const saleQty = brandList.reduce((sum, b) => sum + b.saleQuantity, 0);
-        const damageQty = brandList.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
-        const openingPkt = brandList.reduce((sum, b) => sum + Math.max(0, b.openingPacket), 0);
-        const inHousePkt = brandList.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
-        const salePkt = brandList.reduce((sum, b) => sum + b.salePacket, 0);
-        const damagePkt = brandList.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
-        const orderQty = brandList.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
-        const orderPkt = brandList.reduce((sum, b) => sum + (b.orderPacket || 0), 0);
-        const saleableQty = Math.max(0, inHouseQty - orderQty);
-        const saleablePkt = Math.max(0, inHousePkt - orderPkt);
+        const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity || 0), 0);
+        const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+        const saleQty = groupedBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
+        const damageQty = groupedBrands.reduce((sum, b) => sum + (b.damageQuantity || 0), 0);
+        const openingPkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingPacket || 0), 0);
+        const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket || 0), 0);
+        const salePkt = groupedBrands.reduce((sum, b) => sum + (b.salePacket || 0), 0);
+        const damagePkt = groupedBrands.reduce((sum, b) => sum + (b.damagePacket || 0), 0);
+        const orderQty = groupedBrands.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
+        const orderPkt = groupedBrands.reduce((sum, b) => sum + (b.orderPacket || 0), 0);
+        const saleableQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0);
+        const saleablePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.saleablePacket || 0), 0);
 
         const groupPktSize = brandList.find(b => (b.packetSize || 0) > 0)?.packetSize || products.find(p => (p.name || p.productName || '').trim().toLowerCase() === group.productName.toLowerCase())?.packetSize || 30;
 

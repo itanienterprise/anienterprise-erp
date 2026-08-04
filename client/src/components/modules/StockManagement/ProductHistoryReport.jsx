@@ -300,8 +300,8 @@ const ProductHistoryReport = ({
             } else if (item.type === 'transfer') {
                 const fromWhLower = (item.fromWh || '').trim().toLowerCase();
                 const toWhLower = (item.toWh || '').trim().toLowerCase();
-                const fromMatch = fromWhLower && (fromWhLower === currentWh || fromWhLower.includes(currentWh) || currentWh.includes(fromWhLower));
-                const toMatch = toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
+                const fromMatch = !!currentWh && !!fromWhLower && (fromWhLower === currentWh || fromWhLower.includes(currentWh) || currentWh.includes(fromWhLower));
+                const toMatch = !!currentWh && !!toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
 
                 if (currentWh) {
                     if (fromMatch && !toMatch) {
@@ -668,10 +668,10 @@ const ProductHistoryReport = ({
                                                 const currentWh = (modalFilters.warehouse || '').trim().toLowerCase();
                                                 const fromWhLower = (item.fromWh || '').trim().toLowerCase();
                                                 const toWhLower = (item.toWh || '').trim().toLowerCase();
-                                                const fromMatch = fromWhLower && (fromWhLower === currentWh || fromWhLower.includes(currentWh) || currentWh.includes(fromWhLower));
-                                                const toMatch = toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
-                                                const isTransferOut = item.type === 'transfer' && (fromMatch || (!toMatch && fromMatch));
-                                                const isTransferIn = item.type === 'transfer' && (toMatch || (!fromMatch && toMatch));
+                                                const fromMatch = !!currentWh && !!fromWhLower && (fromWhLower === currentWh || fromWhLower.includes(currentWh) || currentWh.includes(fromWhLower));
+                                                const toMatch = !!currentWh && !!toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
+                                                const isTransferOut = item.type === 'transfer' && fromMatch && !toMatch;
+                                                const isTransferIn = item.type === 'transfer' && toMatch && !fromMatch;
 
                                                 let partyText = item.type === 'purchase' ? '-' : (item.companyName || '-');
                                                 if (item.type === 'transfer') {

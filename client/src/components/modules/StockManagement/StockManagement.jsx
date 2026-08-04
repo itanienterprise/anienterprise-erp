@@ -445,7 +445,7 @@ const StockManagement = ({
                     const sTruck = normalizeStr(s.truckNo);
                     const sProd = normalizeStr(s.productName || s.product);
                     const sBrand = normalizeStr(s.brand);
-                    return sLC === wLC && sProd === wProd && sBrand === wBrand && (sTruck === wTruck || (!sTruck && !wTruck));
+                    return sLC === wLC && sProd === wProd && sBrand === wBrand && (!wTruck || sTruck === wTruck);
                 });
 
                 // Find the latest arrival that happened before or on the transfer date
@@ -470,25 +470,47 @@ const StockManagement = ({
                 return true;
             });
 
-            const whOnlyQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whQty) || 0), 0);
-            const whOnlyPkt = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whPkt) || 0), 0);
+            const whOnlyQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whQty ?? r.transferQty ?? r.inHouseQuantity ?? r.quantity) || 0), 0);
+            const whOnlyPkt = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.whPkt ?? r.transferPacket ?? r.inHousePacket ?? r.packet) || 0), 0);
 
             const itemInHouseQty = parseFloat(item.inHouseQuantity) || 0;
             const itemInHousePkt = parseFloat(item.inHousePacket) || 0;
 
-            const physicalWhQty = itemInHouseQty + whOnlyQty;
-            const physicalWhPkt = itemInHousePkt + whOnlyPkt;
+            const matchingTransfers = (warehouseData || []).filter(w => {
+                if (!w.isTransferLog) return false;
+                const wLC = normalizeStr(w.lcNo);
+                const wProd = normalizeStr(w.productName || w.product);
+                const wBrand = normalizeStr(w.brand);
+                return wLC === targetLC && wProd === targetProd && (!targetBrand || wBrand === targetBrand);
+            });
+
+            const transferredOutQty = matchingTransfers.reduce((sum, t) => sum + (parseFloat(t.transferQty ?? t.whQty) || 0), 0);
+            const transferredOutPkt = matchingTransfers.reduce((sum, t) => sum + (parseFloat(t.transferPacket ?? t.transferPkt ?? t.whPkt) || 0), 0);
+
+            const selectedWhFilter = normalizeStr(historyFilters.warehouse);
+
+            let physicalWhQty = itemInHouseQty + whOnlyQty;
+            let physicalWhPkt = itemInHousePkt + whOnlyPkt;
+
+            if (!selectedWhFilter) {
+                // When All Warehouses is selected (no warehouse filter), include transferred stock in total in-house calculation
+                physicalWhQty += transferredOutQty;
+                physicalWhPkt += transferredOutPkt;
+            }
             const saleQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.saleQuantity) || 0), 0);
             const salePkt = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.salePacket) || 0), 0);
             const shortageQty = parseFloat(item.sweepedQuantity) || 0;
+
+            const origLcQty = Math.max(parseFloat(item.quantity) || 0, physicalWhQty);
+            const origLcPkt = Math.max(parseFloat(item.packet) || 0, physicalWhPkt);
 
             if (!acc[key]) {
                 acc[key] = {
                     ...item,
                     allIds: [item._id],
                     brandsProcessed: new Set([targetBrand]),
-                    totalQuantity: parseFloat(item.quantity) || 0,
-                    totalPacket: parseFloat(item.packet) || 0,
+                    totalQuantity: origLcQty,
+                    totalPacket: origLcPkt,
                     totalInHousePacket: physicalWhPkt,
                     totalInHouseQuantity: physicalWhQty,
                     totalShortage: shortageQty,
@@ -497,9 +519,9 @@ const StockManagement = ({
                     entries: [{
                         brand: item.brand || item.productName,
                         purchasedPrice: item.purchasedPrice,
-                        packet: item.packet,
+                        packet: origLcPkt,
                         packetSize: item.packetSize,
-                        quantity: item.quantity,
+                        quantity: origLcQty,
                         inHousePacket: physicalWhPkt,
                         inHouseQuantity: physicalWhQty,
                         sweepedPacket: item.sweepedPacket,
@@ -511,8 +533,8 @@ const StockManagement = ({
                 };
             } else {
                 acc[key].allIds.push(item._id);
-                acc[key].totalQuantity += parseFloat(item.quantity) || 0;
-                acc[key].totalPacket += parseFloat(item.packet) || 0;
+                acc[key].totalQuantity += origLcQty;
+                acc[key].totalPacket += origLcPkt;
 
                 if (!acc[key].brandsProcessed.has(targetBrand)) {
                     acc[key].totalInHousePacket += physicalWhPkt;
@@ -531,9 +553,9 @@ const StockManagement = ({
                 acc[key].entries.push({
                     brand: item.brand || item.productName,
                     purchasedPrice: item.purchasedPrice,
-                    packet: item.packet,
+                    packet: origLcPkt,
                     packetSize: item.packetSize,
-                    quantity: item.quantity,
+                    quantity: origLcQty,
                     inHousePacket: physicalWhPkt,
                     inHouseQuantity: physicalWhQty,
                     sweepedPacket: item.sweepedPacket,
@@ -781,19 +803,22 @@ const StockManagement = ({
         // 1. Flatten Purchase History from activePurchaseHistory
         const purchaseFlattened = [];
         activePurchaseHistory.forEach(record => {
-            // Support both old `entries` format and LC Receive `brandEntries` format
-            const entries = record.brandEntries || record.entries || [];
+            // Use aggregated record.entries first (which includes full in-house quantity across warehouses)
+            const entries = (record.entries && record.entries.length > 0) ? record.entries : (record.brandEntries || []);
             entries.forEach(entry => {
                 // Apply brand filter if present
                 const brandMatch = !historyFilters.brand || (entry.brand || '').trim().toLowerCase() === historyFilters.brand.toLowerCase();
                 if (brandMatch) {
+                    const purchaseQty = parseFloat(entry.quantity ?? record.totalQuantity ?? entry.inHouseQuantity ?? record.totalInHouseQuantity) || 0;
+                    const purchasePkt = parseFloat(entry.packet ?? record.totalPacket ?? entry.inHousePacket ?? record.totalInHousePacket) || 0;
+                    const inhouseQty = parseFloat(entry.inHouseQuantity ?? record.totalInHouseQuantity ?? purchaseQty) || 0;
                     purchaseFlattened.push({
                         ...record,
                         itemBrand: entry.brand,
                         itemPurchasedPrice: entry.purchasedPrice,
-                        itemPacket: entry.packet,
-                        itemQty: entry.quantity,
-                        itemInHouseQty: entry.inHouseQuantity,
+                        itemPacket: purchasePkt,
+                        itemQty: purchaseQty,
+                        itemInHouseQty: inhouseQty,
                         itemShortageQty: entry.sweepedQuantity,
                         itemExporter: record.exporter,
                         unit: entry.unit
@@ -1521,8 +1546,6 @@ const StockManagement = ({
                                         const newBePkt = Math.max(0, bePkt - deductPkt);
                                         return {
                                             ...be,
-                                            quantity: newBeQty,
-                                            packet: newBePkt,
                                             whQty: newBeQty,
                                             whPkt: newBePkt,
                                             inHouseQuantity: newBeQty,
@@ -1539,15 +1562,11 @@ const StockManagement = ({
                                 ...sourceRecord,
                                 whQty: newWhQty,
                                 whPkt: newWhPkt,
-                                quantity: newWhQty,
-                                packet: newWhPkt,
                                 ...(sourceRecord.recordType === 'stock' && {
                                     inHouseQuantity: newWhQty,
                                     inhouseQty: newWhQty,
                                     inHousePacket: newWhPkt,
-                                    inhousePkt: newWhPkt,
-                                    totalInHouseQuantity: newWhQty,
-                                    totalInHousePacket: newWhPkt
+                                    inhousePkt: newWhPkt
                                 }),
                                 ...(updatedBrandEntries ? { brandEntries: updatedBrandEntries } : {})
                             };
@@ -3773,7 +3792,11 @@ const StockManagement = ({
                                                                         )}
                                                                         {showQty && (
                                                                             <div className="text-sm text-teal-900 font-extrabold text-center bg-teal-100/50 px-2 py-0.5 rounded-md">
-                                                                                {Math.round(group.saleableQuantity || 0).toLocaleString('en-US')}
+                                                                                {(() => {
+                                                                                    const grouped = getGroupedBrandList(group.brandList || []);
+                                                                                    const totalQty = grouped.reduce((sum, ent) => sum + Math.max(0, ent.saleableQuantity || 0), 0);
+                                                                                    return Math.round(totalQty).toLocaleString('en-US');
+                                                                                })()}
                                                                             </div>
                                                                         )}
                                                                     </>
@@ -4138,6 +4161,9 @@ const StockManagement = ({
                                                                 </th>
                                                                 <th onClick={() => requestSort('history', 'importer')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                                     <div className="flex items-center">Importer <SortIcon config={sortConfig.history} columnKey="importer" /></div>
+                                                                </th>
+                                                                <th onClick={() => requestSort('history', 'exporter')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                    <div className="flex items-center">Exporter <SortIcon config={sortConfig.history} columnKey="exporter" /></div>
                                                                 </th>
                                                                 <th onClick={() => requestSort('history', 'truckNo')} className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-50 transition-colors">
                                                                     <div className="flex items-center">Truck <SortIcon config={sortConfig.history} columnKey="truckNo" /></div>
