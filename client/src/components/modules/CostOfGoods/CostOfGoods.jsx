@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { EditIcon, TrashIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, FunnelIcon, ChevronDownIcon, PrinterIcon } from '../../Icons';
+import { EditIcon, TrashIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, FunnelIcon, ChevronDownIcon, PrinterIcon, CheckIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './CostOfGoods.css';
@@ -67,13 +67,17 @@ const CostOfGoods = ({
     const [brandSearchQuery, setBrandSearchQuery] = useState('');
     const [highlightedBrandIndex, setHighlightedBrandIndex] = useState(-1);
 
+    const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
+
     // Refs for click outside detection
     const lcDropdownRef = useRef(null);
     const supplierDropdownRef = useRef(null);
     const productDropdownRef = useRef(null);
     const brandDropdownRef = useRef(null);
+    const countryDropdownRef = useRef(null);
 
     const [formData, setFormData] = useState({
+        country: 'INDIA',
         lcNo: '',
         importer: '',
         exporter: '',
@@ -107,6 +111,9 @@ const CostOfGoods = ({
                 !filterPanelRef.current.contains(event.target) &&
                 !filterButtonRef.current?.contains(event.target)) {
                 setShowFilterPanel(false);
+            }
+            if (countryDropdownRef.current && !countryDropdownRef.current.contains(event.target)) {
+                setCountryDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -439,24 +446,79 @@ const CostOfGoods = ({
         }
     };
 
+    const calculateFormValues = (data) => {
+        const isChina = data.country === 'CHINA';
+        const amount = parseFloat(data.amount) || 0;
+        const qty = parseFloat(data.quantity) || 0;
+        const dollarRate = parseFloat(data.rsToDollar) || 0;
+        const bdtRate = parseFloat(data.dollarRateBdt) || 0;
+        const expense = parseFloat(data.cfOtherExpense) || 0;
+
+        if (isChina) {
+            const totalBill = amount;
+            const rebateAmount = 0;
+            const netBill = amount;
+            const rateKg = qty ? (amount / qty) : 0;
+            const rateKgUsd = qty ? (amount / qty) : 0;
+            const rateKgBdt = rateKgUsd * bdtRate;
+            const costingKg = rateKgBdt + expense;
+            return {
+                isChina: true,
+                totalBill,
+                rebateAmount,
+                netBill,
+                rateKg,
+                rateKgUsd,
+                rateKgBdt,
+                costingKg
+            };
+        } else {
+            const indTruckFare = parseFloat(data.indTruckFare) || 0;
+            const truckChangeFare = parseFloat(data.truckChangeFare) || 0;
+            const slofCf = parseFloat(data.slofCf) || 0;
+            const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
+            const rebatePct = parseFloat(data.rebate) || 0;
+            const rebateAmount = (totalBill * rebatePct) / 100;
+            const netBill = totalBill - rebateAmount;
+            const rateKg = qty ? (netBill / qty) : 0;
+            const rateKgUsd = dollarRate ? (rateKg / dollarRate) : 0;
+            const rateKgBdt = rateKgUsd * bdtRate;
+            const costingKg = rateKgBdt + expense;
+            return {
+                isChina: false,
+                totalBill,
+                rebateAmount,
+                netBill,
+                rateKg,
+                rateKgUsd,
+                rateKgBdt,
+                costingKg
+            };
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
-            const calculatedTotalBill = (parseFloat(formData.amount) || 0) + (parseFloat(formData.indTruckFare) || 0) + (parseFloat(formData.truckChangeFare) || 0) + (parseFloat(formData.slofCf) || 0);
-            const calculatedRebateAmount = (calculatedTotalBill * (parseFloat(formData.rebate) || 0)) / 100;
-            const calculatedNetBill = calculatedTotalBill - calculatedRebateAmount;
-            const qty = parseFloat(formData.quantity) || 0;
-            const calculatedRateKg = qty ? (calculatedNetBill / qty) : 0;
-            const dollarRate = parseFloat(formData.rsToDollar) || 0;
-            const calculatedRateKgUsd = dollarRate ? (calculatedRateKg / dollarRate) : 0;
-            const bdtRate = parseFloat(formData.dollarRateBdt) || 0;
-            const calculatedRateKgBdt = calculatedRateKgUsd * bdtRate;
-            const expense = parseFloat(formData.cfOtherExpense) || 0;
-            const calculatedCostingKg = calculatedRateKgBdt + expense;
+            const {
+                isChina,
+                totalBill: calculatedTotalBill,
+                rebateAmount: calculatedRebateAmount,
+                netBill: calculatedNetBill,
+                rateKg: calculatedRateKg,
+                rateKgUsd: calculatedRateKgUsd,
+                rateKgBdt: calculatedRateKgBdt,
+                costingKg: calculatedCostingKg
+            } = calculateFormValues(formData);
+
             const payload = {
                 ...formData,
+                indTruckFare: isChina ? 0 : (formData.indTruckFare || 0),
+                truckChangeFare: isChina ? 0 : (formData.truckChangeFare || 0),
+                slofCf: isChina ? 0 : (formData.slofCf || 0),
+                rebate: isChina ? 0 : (formData.rebate || 0),
                 totalBill: calculatedTotalBill,
                 rebateAmount: calculatedRebateAmount,
                 netBill: calculatedNetBill,
@@ -483,6 +545,7 @@ const CostOfGoods = ({
 
     const resetForm = () => {
         setFormData({
+            country: 'INDIA',
             lcNo: '',
             importer: '',
             exporter: '',
@@ -514,10 +577,12 @@ const CostOfGoods = ({
         setLcSearchQuery('');
         setSupplierSearchQuery('');
         setBrandSearchQuery('');
+        setCountryDropdownOpen(false);
     };
 
     const handleEdit = (record) => {
         setFormData({
+            country: record.country || 'INDIA',
             lcNo: record.lcNo || '',
             importer: record.importer || '',
             exporter: record.exporter || '',
@@ -921,33 +986,37 @@ const CostOfGoods = ({
                                                             <div className="flex items-center gap-2">
                                                                 <ChevronDownIcon className={`w-4.5 h-4.5 text-blue-600 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
                                                                 <span>LC No: {group.lcNo}</span>
-                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-lg ml-2">
+                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-lg ml-2">
                                                                     {group.records.length} {group.records.length === 1 ? 'record' : 'records'}
                                                                 </span>
                                                             </div>
                                                             <div className="flex gap-6 text-xs text-gray-500 pr-4">
                                                                 <div>Total Qty: <span className="font-extrabold text-gray-800">{group.records.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString()} kg</span></div>
                                                                 <div>Total Net Bill: <span className="font-extrabold text-gray-800">{group.records.reduce((sum, r) => {
-                                                                    const billSum = r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.slofCf) || 0));
-                                                                    const rebatePct = r.rebate !== undefined ? r.rebate : (r.redate !== undefined ? r.redate : '2.9');
-                                                                    const rebateVal = r.rebateAmount !== undefined ? r.rebateAmount : (r.redateAmount !== undefined ? r.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
-                                                                    const netBillVal = r.netBill !== undefined ? r.netBill : (billSum - rebateVal);
+                                                                    const isChina = r.country === 'CHINA';
+                                                                    const amountVal = parseFloat(r.amount) || 0;
+                                                                    const billSum = isChina ? amountVal : (r.totalBill !== undefined ? r.totalBill : ((parseFloat(r.amount) || 0) + (parseFloat(r.indTruckFare) || 0) + (parseFloat(r.slofCf) || 0)));
+                                                                    const rebatePct = isChina ? 0 : (r.rebate !== undefined ? r.rebate : (r.redate !== undefined ? r.redate : '2.9'));
+                                                                    const rebateVal = isChina ? 0 : (r.rebateAmount !== undefined ? r.rebateAmount : (r.redateAmount !== undefined ? r.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100)));
+                                                                    const netBillVal = isChina ? amountVal : (r.netBill !== undefined ? r.netBill : (billSum - rebateVal));
                                                                     return sum + netBillVal;
-                                                                }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS</span></div>
+                                                                }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {group.records.some(r => r.country === 'CHINA') ? 'USD' : 'RS'}</span></div>
                                                             </div>
                                                         </div>
                                                     </td>
                                                 </tr>
                                                 {!isCollapsed && group.records.map(record => {
                                                     const isSelected = selectedItems.has(record._id);
-                                                    const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
-                                                    const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
-                                                    const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
-                                                    const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
+                                                    const isChina = record.country === 'CHINA';
+                                                    const amountVal = parseFloat(record.amount) || 0;
+                                                    const billSum = isChina ? amountVal : (record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0)));
+                                                    const rebatePct = isChina ? 0 : (record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9'));
+                                                    const rebateVal = isChina ? 0 : (record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100)));
+                                                    const netBillVal = isChina ? amountVal : (record.netBill !== undefined ? record.netBill : (billSum - rebateVal));
                                                     const qtyVal = parseFloat(record.quantity) || 0;
                                                     const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
                                                     const dollarRateVal = parseFloat(record.rsToDollar) || 0;
-                                                    const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                                    const rateKgUsdVal = isChina ? (qtyVal ? (amountVal / qtyVal) : 0) : (dollarRateVal ? (rateKgVal / dollarRateVal) : 0);
                                                     const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
                                                     const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
                                                     const cfExpVal = record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9';
@@ -981,8 +1050,8 @@ const CostOfGoods = ({
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{record.product || '—'}</td>
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{record.brand || '—'}</td>
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{record.quantity || '—'}</td>
-                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{record.amount ? `${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</td>
-                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{record.amount ? `${Number(record.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${isChina ? 'USD' : 'RS'}` : '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] text-gray-800">{netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${isChina ? 'USD' : 'RS'}` : '—'}</td>
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{rateKgBdtVal !== undefined && rateKgBdtVal !== null && rateKgBdtVal !== '' ? `${Number(rateKgBdtVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{cfExpVal !== undefined && cfExpVal !== null && cfExpVal !== '' ? `${Number(cfExpVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{costingKgVal !== undefined && costingKgVal !== null && costingKgVal !== '' ? `${Number(costingKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
@@ -1029,9 +1098,47 @@ const CostOfGoods = ({
                             <h3 className="text-lg font-black text-gray-900 tracking-tight">{editingId ? 'Edit Record' : 'New Cost of Goods Entry'}</h3>
                             <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Cost of Goods Record</p>
                         </div>
-                        <button onClick={() => { setShowForm(false); resetForm(); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-                            <XIcon className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center space-x-3">
+                            {/* Country Dropdown (INDIA / CHINA) */}
+                            <div className="relative" ref={countryDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setCountryDropdownOpen(!countryDropdownOpen)}
+                                    className="flex items-center justify-between space-x-2.5 px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm hover:border-blue-300 hover:bg-gray-50 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/10 min-w-[100px]"
+                                >
+                                    <span>{formData.country || 'INDIA'}</span>
+                                    <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${countryDropdownOpen ? 'rotate-180 text-blue-600' : ''}`} />
+                                </button>
+                                {countryDropdownOpen && (
+                                    <div className="absolute right-0 top-full mt-1.5 w-32 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-fade-in">
+                                        {['INDIA', 'CHINA'].map((country) => (
+                                            <button
+                                                key={country}
+                                                type="button"
+                                                onClick={() => {
+                                                    setFormData(prev => ({ ...prev, country }));
+                                                    setCountryDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3.5 py-2 text-xs font-bold transition-colors flex items-center justify-between ${
+                                                    (formData.country || 'INDIA') === country
+                                                        ? 'bg-blue-50 text-blue-600'
+                                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                                }`}
+                                            >
+                                                <span>{country}</span>
+                                                {(formData.country || 'INDIA') === country && (
+                                                    <CheckIcon className="w-3.5 h-3.5 text-blue-600" />
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <button onClick={() => { setShowForm(false); resetForm(); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
 
                     <form
@@ -1361,164 +1468,143 @@ const CostOfGoods = ({
                                 <input type="number" name="amount" value={formData.amount} onChange={handleInputChange} required placeholder="0.00" min="0" step="0.01" className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none" />
                             </div>
 
-                            {/* IND Truck Fare & Truck Change Fare (Split into half) */}
-                            <div className="grid grid-cols-2 gap-2">
+                            {/* IND Truck Fare & Truck Change Fare (Hidden for CHINA) */}
+                            {formData.country !== 'CHINA' && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="IND TRUCK FARE">IND TRUCK FARE</label>
+                                        <input
+                                            type="number"
+                                            name="indTruckFare"
+                                            value={formData.indTruckFare}
+                                            onChange={handleInputChange}
+                                            placeholder="0.00"
+                                            min="0"
+                                            step="0.01"
+                                            className="w-full px-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="TRUCK CHANGE FARE">TRK CHG FARE</label>
+                                        <input
+                                            type="number"
+                                            name="truckChangeFare"
+                                            value={formData.truckChangeFare}
+                                            onChange={handleInputChange}
+                                            placeholder="0.00"
+                                            min="0"
+                                            step="0.01"
+                                            className="w-full px-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* SLOF / CF (Hidden for CHINA) */}
+                            {formData.country !== 'CHINA' && (
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="IND TRUCK FARE">IND TRUCK FARE</label>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">SLOF / CF</label>
                                     <input
                                         type="number"
-                                        name="indTruckFare"
-                                        value={formData.indTruckFare}
+                                        name="slofCf"
+                                        value={formData.slofCf}
                                         onChange={handleInputChange}
                                         placeholder="0.00"
                                         min="0"
                                         step="0.01"
-                                        className="w-full px-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
                                     />
                                 </div>
+                            )}
+
+                            {/* Total BILL (Hidden for CHINA) */}
+                            {formData.country !== 'CHINA' && (
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1 truncate block" title="TRUCK CHANGE FARE">TRK CHG FARE</label>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Total BILL</label>
+                                    <input
+                                        type="text"
+                                        name="totalBill"
+                                        value={calculateFormValues(formData).totalBill.toLocaleString() + ' RS'}
+                                        disabled
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Rebate (%) (Hidden for CHINA) */}
+                            {formData.country !== 'CHINA' && (
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rebate (%)</label>
                                     <input
                                         type="number"
-                                        name="truckChangeFare"
-                                        value={formData.truckChangeFare}
+                                        name="rebate"
+                                        value={formData.rebate}
+                                        onChange={handleInputChange}
+                                        placeholder="2.9"
+                                        step="0.01"
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Rebate Amount (Hidden for CHINA) */}
+                            {formData.country !== 'CHINA' && (
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rebate</label>
+                                    <input
+                                        type="text"
+                                        name="rebateAmount"
+                                        value={calculateFormValues(formData).rebateAmount.toLocaleString() + ' RS'}
+                                        disabled
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Net Bill (Hidden for CHINA) */}
+                            {formData.country !== 'CHINA' && (
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Net Bill</label>
+                                    <input
+                                        type="text"
+                                        name="netBill"
+                                        value={calculateFormValues(formData).netBill.toLocaleString() + ' RS'}
+                                        disabled
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Rate/KG (Hidden for CHINA) */}
+                            {formData.country !== 'CHINA' && (
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rate/KG</label>
+                                    <input
+                                        type="text"
+                                        name="rateKg"
+                                        value={calculateFormValues(formData).rateKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RS'}
+                                        disabled
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Rs to Dollar Rate (Hidden for CHINA) */}
+                            {formData.country !== 'CHINA' && (
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rs to Dollar Rate</label>
+                                    <input
+                                        type="number"
+                                        name="rsToDollar"
+                                        value={formData.rsToDollar}
                                         onChange={handleInputChange}
                                         placeholder="0.00"
                                         min="0"
-                                        step="0.01"
-                                        className="w-full px-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                        step="0.0001"
+                                        className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
                                     />
                                 </div>
-                            </div>
-
-                            {/* SLOF / CF */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">SLOF / CF</label>
-                                <input
-                                    type="number"
-                                    name="slofCf"
-                                    value={formData.slofCf}
-                                    onChange={handleInputChange}
-                                    placeholder="0.00"
-                                    min="0"
-                                    step="0.01"
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                />
-                            </div>
-
-                            {/* Total BILL */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Total BILL</label>
-                                <input
-                                    type="text"
-                                    name="totalBill"
-                                    value={(() => {
-                                        const amount = parseFloat(formData.amount) || 0;
-                                        const indTruckFare = parseFloat(formData.indTruckFare) || 0;
-                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
-                                        const slofCf = parseFloat(formData.slofCf) || 0;
-                                        return (amount + indTruckFare + truckChangeFare + slofCf).toLocaleString() + ' RS';
-                                    })()}
-                                    disabled
-                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
-                                />
-                            </div>
-
-                            {/* Rebate */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rebate (%)</label>
-                                <input
-                                    type="number"
-                                    name="rebate"
-                                    value={formData.rebate}
-                                    onChange={handleInputChange}
-                                    placeholder="2.9"
-                                    step="0.01"
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                />
-                            </div>
-
-                            {/* Rebate Amount */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rebate</label>
-                                <input
-                                    type="text"
-                                    name="rebateAmount"
-                                    value={(() => {
-                                        const amount = parseFloat(formData.amount) || 0;
-                                        const indTruckFare = parseFloat(formData.indTruckFare) || 0;
-                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
-                                        const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
-                                        const rebatePct = parseFloat(formData.rebate) || 0;
-                                        const calculatedRebateVal = (totalBill * rebatePct) / 100;
-                                        return calculatedRebateVal.toLocaleString() + ' RS';
-                                    })()}
-                                    disabled
-                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
-                                />
-                            </div>
-
-                            {/* Net Bill */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Net Bill</label>
-                                <input
-                                    type="text"
-                                    name="netBill"
-                                    value={(() => {
-                                        const amount = parseFloat(formData.amount) || 0;
-                                        const indTruckFare = parseFloat(formData.indTruckFare) || 0;
-                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
-                                        const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
-                                        const rebatePct = parseFloat(formData.rebate) || 0;
-                                        const calculatedRebateVal = (totalBill * rebatePct) / 100;
-                                        const calculatedNetBill = totalBill - calculatedRebateVal;
-                                        return calculatedNetBill.toLocaleString() + ' RS';
-                                    })()}
-                                    disabled
-                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
-                                />
-                            </div>
-
-                            {/* Rate/KG */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rate/KG</label>
-                                <input
-                                    type="text"
-                                    name="rateKg"
-                                    value={(() => {
-                                        const amount = parseFloat(formData.amount) || 0;
-                                        const indTruckFare = parseFloat(formData.indTruckFare) || 0;
-                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
-                                        const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
-                                        const rebatePct = parseFloat(formData.rebate) || 0;
-                                        const calculatedRebateVal = (totalBill * rebatePct) / 100;
-                                        const calculatedNetBill = totalBill - calculatedRebateVal;
-                                        const qty = parseFloat(formData.quantity) || 0;
-                                        const calculatedRateKg = qty ? (calculatedNetBill / qty) : 0;
-                                        return calculatedRateKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RS';
-                                    })()}
-                                    disabled
-                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
-                                />
-                            </div>
-
-                            {/* Rs to Dollar Rate */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rs to Dollar Rate</label>
-                                <input
-                                    type="number"
-                                    name="rsToDollar"
-                                    value={formData.rsToDollar}
-                                    onChange={handleInputChange}
-                                    placeholder="0.00"
-                                    min="0"
-                                    step="0.0001"
-                                    className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
-                                />
-                            </div>
+                            )}
 
                             {/* Rate/Kg USD */}
                             <div className="space-y-1.5">
@@ -1526,21 +1612,7 @@ const CostOfGoods = ({
                                 <input
                                     type="text"
                                     name="rateKgUsd"
-                                    value={(() => {
-                                        const amount = parseFloat(formData.amount) || 0;
-                                        const indTruckFare = parseFloat(formData.indTruckFare) || 0;
-                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
-                                        const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
-                                        const rebatePct = parseFloat(formData.rebate) || 0;
-                                        const calculatedRebateVal = (totalBill * rebatePct) / 100;
-                                        const calculatedNetBill = totalBill - calculatedRebateVal;
-                                        const qty = parseFloat(formData.quantity) || 0;
-                                        const calculatedRateKg = qty ? (calculatedNetBill / qty) : 0;
-                                        const dollarRate = parseFloat(formData.rsToDollar) || 0;
-                                        const calculatedRateKgUsd = dollarRate ? (calculatedRateKg / dollarRate) : 0;
-                                        return calculatedRateKgUsd.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' USD';
-                                    })()}
+                                    value={calculateFormValues(formData).rateKgUsd.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' USD'}
                                     disabled
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
                                 />
@@ -1567,23 +1639,7 @@ const CostOfGoods = ({
                                 <input
                                     type="text"
                                     name="rateKgBdt"
-                                    value={(() => {
-                                        const amount = parseFloat(formData.amount) || 0;
-                                        const indTruckFare = parseFloat(formData.indTruckFare) || 0;
-                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
-                                        const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
-                                        const rebatePct = parseFloat(formData.rebate) || 0;
-                                        const calculatedRebateVal = (totalBill * rebatePct) / 100;
-                                        const calculatedNetBill = totalBill - calculatedRebateVal;
-                                        const qty = parseFloat(formData.quantity) || 0;
-                                        const calculatedRateKg = qty ? (calculatedNetBill / qty) : 0;
-                                        const dollarRate = parseFloat(formData.rsToDollar) || 0;
-                                        const calculatedRateKgUsd = dollarRate ? (calculatedRateKg / dollarRate) : 0;
-                                        const bdtRate = parseFloat(formData.dollarRateBdt) || 0;
-                                        const calculatedRateKgBdt = calculatedRateKgUsd * bdtRate;
-                                        return calculatedRateKgBdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' BDT';
-                                    })()}
+                                    value={calculateFormValues(formData).rateKgBdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' BDT'}
                                     disabled
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
                                 />
@@ -1610,25 +1666,7 @@ const CostOfGoods = ({
                                 <input
                                     type="text"
                                     name="costingKg"
-                                    value={(() => {
-                                        const amount = parseFloat(formData.amount) || 0;
-                                        const indTruckFare = parseFloat(formData.indTruckFare) || 0;
-                                        const truckChangeFare = parseFloat(formData.truckChangeFare) || 0;
-                                        const slofCf = parseFloat(formData.slofCf) || 0;
-                                        const totalBill = amount + indTruckFare + truckChangeFare + slofCf;
-                                        const rebatePct = parseFloat(formData.rebate) || 0;
-                                        const calculatedRebateVal = (totalBill * rebatePct) / 100;
-                                        const calculatedNetBill = totalBill - calculatedRebateVal;
-                                        const qty = parseFloat(formData.quantity) || 0;
-                                        const calculatedRateKg = qty ? (calculatedNetBill / qty) : 0;
-                                        const dollarRate = parseFloat(formData.rsToDollar) || 0;
-                                        const calculatedRateKgUsd = dollarRate ? (calculatedRateKg / dollarRate) : 0;
-                                        const bdtRate = parseFloat(formData.dollarRateBdt) || 0;
-                                        const calculatedRateKgBdt = calculatedRateKgUsd * bdtRate;
-                                        const expense = parseFloat(formData.cfOtherExpense) || 0;
-                                        const calculatedCostingKg = calculatedRateKgBdt + expense;
-                                        return calculatedCostingKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' BDT';
-                                    })()}
+                                    value={calculateFormValues(formData).costingKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' BDT'}
                                     disabled
                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 font-semibold cursor-not-allowed outline-none"
                                 />
@@ -1662,102 +1700,125 @@ const CostOfGoods = ({
                             </button>
                         </div>
                         <div className="p-8 grid grid-cols-2 gap-5">
-                            {[
-                                ['Date', viewData.date ? formatDate(viewData.date) : '—'],
-                                ['LC No', viewData.lcNo],
-                                ['Importer', viewData.importer],
-                                ['Exporter', viewData.exporter],
-                                ['Supplier', viewData.supplier],
-                                ['Invoice No', viewData.invoiceNo],
-                                ['Truck No', viewData.truckNo || '—'],
-                                ['Product', viewData.product],
-                                ['Brand', viewData.brand],
-                                ['Quantity', viewData.quantity],
-                                ['Invoice Value', viewData.amount ? `${Number(viewData.amount).toLocaleString()} RS` : '—'],
-                                ['IND Truck Fare', viewData.indTruckFare ? `${Number(viewData.indTruckFare).toLocaleString()} RS` : '—'],
-                                ['Truck Change Fare', viewData.truckChangeFare ? `${Number(viewData.truckChangeFare).toLocaleString()} RS` : '—'],
-                                ['SLOF / CF', viewData.slofCf ? `${Number(viewData.slofCf).toLocaleString()} RS` : '—'],
-                                ['Total BILL', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
-                                    return sumVal ? `${Number(sumVal).toLocaleString()} RS` : '—';
-                                })()],
-                                ['Rebate %', (() => {
-                                    const pct = viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9');
-                                    return pct !== undefined && pct !== null && pct !== '' ? `${pct}%` : '—';
-                                })()],
-                                ['Rebate', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
-                                    const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
-                                    const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
-                                    return rebateVal !== undefined && rebateVal !== null && rebateVal !== '' ? `${Number(rebateVal).toLocaleString()} RS` : '—';
-                                })()],
-                                ['Net Bill', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
-                                    const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
-                                    const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
-                                    const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
-                                    return netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString()} RS` : '—';
-                                })()],
-                                ['Rate/KG', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
-                                    const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
-                                    const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
-                                    const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
-                                    const qtyVal = parseFloat(viewData.quantity) || 0;
-                                    const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
-                                    return rateKgVal !== undefined && rateKgVal !== null && rateKgVal !== '' ? `${Number(rateKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—';
-                                })()],
-                                ['Rs to Dollar Rate', viewData.rsToDollar ? `${Number(viewData.rsToDollar).toLocaleString()} RS` : '—'],
-                                ['Rate/Kg USD', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
-                                    const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
-                                    const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
-                                    const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
-                                    const qtyVal = parseFloat(viewData.quantity) || 0;
-                                    const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
-                                    const dollarRateVal = parseFloat(viewData.rsToDollar) || 0;
-                                    const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
-                                    return rateKgUsdVal !== undefined && rateKgUsdVal !== null && rateKgUsdVal !== '' ? `${Number(rateKgUsdVal).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} USD` : '—';
-                                })()],
-                                ['Dollar rate BDT', viewData.dollarRateBdt ? `${Number(viewData.dollarRateBdt).toLocaleString()} BDT` : '—'],
-                                ['Rate/KG BDT', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
-                                    const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
-                                    const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
-                                    const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
-                                    const qtyVal = parseFloat(viewData.quantity) || 0;
-                                    const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
-                                    const dollarRateVal = parseFloat(viewData.rsToDollar) || 0;
-                                    const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
-                                    const bdtRateVal = parseFloat(viewData.dollarRateBdt) || 0;
-                                    const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
-                                    return rateKgBdtVal !== undefined && rateKgBdtVal !== null && rateKgBdtVal !== '' ? `${Number(rateKgBdtVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—';
-                                })()],
-                                ['C&F & Other Expance', (() => {
-                                    const val = viewData.cfOtherExpense !== undefined ? viewData.cfOtherExpense : '9';
-                                    return val ? `${Number(val).toLocaleString()} BDT` : '—';
-                                })()],
-                                ['Costing/kg', (() => {
-                                    const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
-                                    const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
-                                    const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
-                                    const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
-                                    const qtyVal = parseFloat(viewData.quantity) || 0;
-                                    const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
-                                    const dollarRateVal = parseFloat(viewData.rsToDollar) || 0;
-                                    const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
-                                    const bdtRateVal = parseFloat(viewData.dollarRateBdt) || 0;
-                                    const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
-                                    const cfExpVal = parseFloat(viewData.cfOtherExpense !== undefined ? viewData.cfOtherExpense : '9') || 0;
-                                    const costingKgVal = rateKgBdtVal + cfExpVal;
-                                    return costingKgVal !== undefined && costingKgVal !== null && costingKgVal !== '' ? `${Number(costingKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—';
-                                })()],
-                            ].map(([label, value]) => (
-                                <div key={label} className="space-y-1">
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
-                                    <p className="text-sm font-medium text-gray-800">{value || '—'}</p>
-                                </div>
-                            ))}
+                            {(() => {
+                                const isChinaView = viewData.country === 'CHINA';
+                                return [
+                                    ['Date', viewData.date ? formatDate(viewData.date) : '—'],
+                                    ['LC No', viewData.lcNo],
+                                    ['Importer', viewData.importer],
+                                    ['Exporter', viewData.exporter],
+                                    ['Supplier', viewData.supplier],
+                                    ['Invoice No', viewData.invoiceNo],
+                                    ['Truck No', viewData.truckNo || '—'],
+                                    ['Product', viewData.product],
+                                    ['Brand', viewData.brand],
+                                    ['Quantity', viewData.quantity],
+                                    ['Invoice Value', viewData.amount ? `${Number(viewData.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${isChinaView ? 'USD' : 'RS'}` : '—'],
+                                    !isChinaView && ['IND Truck Fare', viewData.indTruckFare ? `${Number(viewData.indTruckFare).toLocaleString()} RS` : '—'],
+                                    !isChinaView && ['Truck Change Fare', viewData.truckChangeFare ? `${Number(viewData.truckChangeFare).toLocaleString()} RS` : '—'],
+                                    !isChinaView && ['SLOF / CF', viewData.slofCf ? `${Number(viewData.slofCf).toLocaleString()} RS` : '—'],
+                                    !isChinaView && ['Total BILL', (() => {
+                                        const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                        return sumVal ? `${Number(sumVal).toLocaleString()} RS` : '—';
+                                    })()],
+                                    !isChinaView && ['Rebate %', (() => {
+                                        const pct = viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9');
+                                        return pct !== undefined && pct !== null && pct !== '' ? `${pct}%` : '—';
+                                    })()],
+                                    !isChinaView && ['Rebate', (() => {
+                                        const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                        const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
+                                        const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
+                                        return rebateVal !== undefined && rebateVal !== null && rebateVal !== '' ? `${Number(rebateVal).toLocaleString()} RS` : '—';
+                                    })()],
+                                    !isChinaView && ['Net Bill', (() => {
+                                        const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                        const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
+                                        const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
+                                        const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
+                                        return netBillVal !== undefined && netBillVal !== null && netBillVal !== '' ? `${Number(netBillVal).toLocaleString()} RS` : '—';
+                                    })()],
+                                    !isChinaView && ['Rate/KG', (() => {
+                                        const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                        const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
+                                        const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
+                                        const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
+                                        const qtyVal = parseFloat(viewData.quantity) || 0;
+                                        const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                        return rateKgVal !== undefined && rateKgVal !== null && rateKgVal !== '' ? `${Number(rateKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS` : '—';
+                                    })()],
+                                    !isChinaView && ['Rs to Dollar Rate', viewData.rsToDollar ? `${Number(viewData.rsToDollar).toLocaleString()} RS` : '—'],
+                                    ['Rate/Kg USD', (() => {
+                                        if (isChinaView) {
+                                            const amountVal = parseFloat(viewData.amount) || 0;
+                                            const qtyVal = parseFloat(viewData.quantity) || 0;
+                                            const rateKgUsdVal = qtyVal ? (amountVal / qtyVal) : 0;
+                                            return `${Number(rateKgUsdVal).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} USD`;
+                                        }
+                                        const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                        const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
+                                        const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
+                                        const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
+                                        const qtyVal = parseFloat(viewData.quantity) || 0;
+                                        const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                        const dollarRateVal = parseFloat(viewData.rsToDollar) || 0;
+                                        const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                        return rateKgUsdVal !== undefined && rateKgUsdVal !== null && rateKgUsdVal !== '' ? `${Number(rateKgUsdVal).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} USD` : '—';
+                                    })()],
+                                    ['Dollar rate BDT', viewData.dollarRateBdt ? `${Number(viewData.dollarRateBdt).toLocaleString()} BDT` : '—'],
+                                    ['Rate/KG BDT', (() => {
+                                        let rateKgUsdVal = 0;
+                                        if (isChinaView) {
+                                            const amountVal = parseFloat(viewData.amount) || 0;
+                                            const qtyVal = parseFloat(viewData.quantity) || 0;
+                                            rateKgUsdVal = qtyVal ? (amountVal / qtyVal) : 0;
+                                        } else {
+                                            const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                            const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
+                                            const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
+                                            const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
+                                            const qtyVal = parseFloat(viewData.quantity) || 0;
+                                            const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                            const dollarRateVal = parseFloat(viewData.rsToDollar) || 0;
+                                            rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                        }
+                                        const bdtRateVal = parseFloat(viewData.dollarRateBdt) || 0;
+                                        const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                        return rateKgBdtVal !== undefined && rateKgBdtVal !== null && rateKgBdtVal !== '' ? `${Number(rateKgBdtVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—';
+                                    })()],
+                                    ['C&F & Other Expance', (() => {
+                                        const val = viewData.cfOtherExpense !== undefined ? viewData.cfOtherExpense : '9';
+                                        return val ? `${Number(val).toLocaleString()} BDT` : '—';
+                                    })()],
+                                    ['Costing/kg', (() => {
+                                        let rateKgUsdVal = 0;
+                                        if (isChinaView) {
+                                            const amountVal = parseFloat(viewData.amount) || 0;
+                                            const qtyVal = parseFloat(viewData.quantity) || 0;
+                                            rateKgUsdVal = qtyVal ? (amountVal / qtyVal) : 0;
+                                        } else {
+                                            const sumVal = viewData.totalBill !== undefined ? viewData.totalBill : ((parseFloat(viewData.amount) || 0) + (parseFloat(viewData.indTruckFare) || 0) + (parseFloat(viewData.truckChangeFare) || 0) + (parseFloat(viewData.slofCf) || 0));
+                                            const rebatePct = parseFloat(viewData.rebate !== undefined ? viewData.rebate : (viewData.redate !== undefined ? viewData.redate : '2.9')) || 0;
+                                            const rebateVal = viewData.rebateAmount !== undefined ? viewData.rebateAmount : (viewData.redateAmount !== undefined ? viewData.redateAmount : ((sumVal * rebatePct) / 100));
+                                            const netBillVal = viewData.netBill !== undefined ? viewData.netBill : (sumVal - rebateVal);
+                                            const qtyVal = parseFloat(viewData.quantity) || 0;
+                                            const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+                                            const dollarRateVal = parseFloat(viewData.rsToDollar) || 0;
+                                            rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+                                        }
+                                        const bdtRateVal = parseFloat(viewData.dollarRateBdt) || 0;
+                                        const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+                                        const cfExpVal = viewData.cfOtherExpense !== undefined ? viewData.cfOtherExpense : '9';
+                                        const costingKgVal = rateKgBdtVal + (parseFloat(cfExpVal) || 0);
+                                        return `${Number(costingKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT`;
+                                    })()]
+                                ].filter(Boolean).map(([label, val], idx) => (
+                                    <div key={idx} className="bg-gray-50/70 p-3.5 rounded-xl border border-gray-100/80">
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+                                        <p className="text-sm font-bold text-gray-800 mt-0.5">{val || '—'}</p>
+                                    </div>
+                                ));
+                            })()}
                         </div>
                     </div>
                 </div>

@@ -167,6 +167,7 @@ function App() {
     setImporterDropdownOpen(false);
     setCnfDropdownOpen(false);
     setCrmDropdownOpen(false);
+    setCollectionPaymentDropdownOpen(false);
     setLcDropdownOpen(false);
     setInsuranceDropdownOpen(false);
     setIpDropdownOpen(false);
@@ -193,6 +194,7 @@ function App() {
       setImporterDropdownOpen(false);
       setCnfDropdownOpen(false);
       setCrmDropdownOpen(false);
+      setCollectionPaymentDropdownOpen(false);
       setLcDropdownOpen(false);
       setInsuranceDropdownOpen(false);
       setIpDropdownOpen(false);
@@ -663,6 +665,7 @@ function App() {
   const [importerDropdownOpen, setImporterDropdownOpen] = useState(false);
   const [cnfDropdownOpen, setCnfDropdownOpen] = useState(false);
   const [crmDropdownOpen, setCrmDropdownOpen] = useState(false);
+  const [collectionPaymentDropdownOpen, setCollectionPaymentDropdownOpen] = useState(true);
   const [lcDropdownOpen, setLcDropdownOpen] = useState(false);
   const [insuranceDropdownOpen, setInsuranceDropdownOpen] = useState(false);
   const [ipDropdownOpen, setIpDropdownOpen] = useState(false);
@@ -675,6 +678,7 @@ function App() {
     setImporterDropdownOpen(dropdownName === 'importer' ? !importerDropdownOpen : false);
     setCnfDropdownOpen(dropdownName === 'cnf' ? !cnfDropdownOpen : false);
     setCrmDropdownOpen(dropdownName === 'crm' ? !crmDropdownOpen : false);
+    setCollectionPaymentDropdownOpen(dropdownName === 'collectionPayment' ? !collectionPaymentDropdownOpen : false);
     setLcDropdownOpen(dropdownName === 'lc' ? !lcDropdownOpen : false);
     setInsuranceDropdownOpen(dropdownName === 'insurance' ? !insuranceDropdownOpen : false);
     setIpDropdownOpen(dropdownName === 'ip' ? !ipDropdownOpen : false);
@@ -2626,11 +2630,11 @@ function App() {
             </div>
           )}
 
-          {(hasPermission(currentUser, 'customer', 'view') || hasPermission(currentUser, 'paymentCollection', 'view') || hasPermission(currentUser, 'payToCustomer', 'view')) && (
+          {hasPermission(currentUser, 'customer', 'view') && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('crm')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'customer-section' || currentView === 'payment-collection-section' || currentView === 'pay-to-customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <div className="flex items-center">
                   <UsersIcon className="w-5 h-5 mr-3" />
@@ -2643,15 +2647,37 @@ function App() {
               </button>
               {crmDropdownOpen && (
                 <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
-                  {hasPermission(currentUser, 'customer', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('customer-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Customer</span>
-                    </button>
+                  <button
+                    onClick={() => { handleViewChange('customer-section'); }}
+                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                  >
+                    <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                    <span>Customer</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(hasPermission(currentUser, 'paymentCollection', 'view') || hasPermission(currentUser, 'payToCustomer', 'view')) && (
+            <div>
+              <button
+                onClick={() => toggleSidebarDropdown('collectionPayment')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all ${currentView === 'payment-collection-section' || currentView === 'pay-to-customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <div className="flex items-center min-w-0 mr-1">
+                  <DollarSignIcon className="w-5 h-5 mr-2.5 flex-shrink-0" />
+                  <span className="font-medium text-sm whitespace-nowrap">Collection & Pay</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {(pendingModules?.paymentCollection || pendingModules?.payToCustomer) && (
+                    <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />
                   )}
+                  <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${collectionPaymentDropdownOpen ? 'transform rotate-180' : ''}`} />
+                </div>
+              </button>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${collectionPaymentDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                <div className="pl-7 pr-2 space-y-1">
                   {hasPermission(currentUser, 'paymentCollection', 'view') && (
                     <button
                       onClick={() => { handleViewChange('payment-collection-section'); }}
@@ -2677,7 +2703,7 @@ function App() {
                     </button>
                   )}
                 </div>
-              )}
+              </div>
             </div>
           )}
           {(hasPermission(currentUser, 'sales', 'view') || hasPermission(currentUser, 'order', 'view')) && (

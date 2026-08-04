@@ -10,8 +10,34 @@ import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './LCReceive.css';
 
-const ViewDetailsModal = ({ data, costOfGoods = [], onClose }) => {
+const formatRequestedBy = (requestedBy, requestedByUsername, employeesMap = {}) => {
+    const rawReq = (requestedBy || '').trim();
+    const username = (requestedByUsername || '').trim();
+    const empName = employeesMap[username] || employeesMap[rawReq] || '';
+
+    let name = rawReq;
+    if (empName) {
+        name = empName;
+    }
+
+    if (!name && !username) return '-';
+    if (name && username && name !== username && !name.toLowerCase().includes(username.toLowerCase())) {
+        return `${name} (${username})`;
+    }
+    return name || username || '-';
+};
+
+const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }) => {
     if (!data) return null;
+
+    const statusText = (data.status || data.entries?.[0]?.status || '').toLowerCase();
+    const isAcceptedOrInStock = statusText.includes('stock') || statusText.includes('accept');
+
+    const requestedUser = data.requestedBy || data.entries?.[0]?.requestedBy;
+    const requestedUsername = data.requestedByUsername || data.entries?.[0]?.requestedByUsername;
+
+    const approvedUser = data.approvedBy || data.acceptedBy || data.entries?.[0]?.approvedBy || data.entries?.[0]?.acceptedBy || (isAcceptedOrInStock ? 'Administrator' : '');
+    const approvedUsername = data.approvedByUsername || data.acceptedByUsername || data.entries?.[0]?.approvedByUsername || data.entries?.[0]?.acceptedByUsername || (isAcceptedOrInStock ? 'admin' : '');
 
     const uniqueEntriesMap = data.entries.reduce((acc, item) => {
         const key = `${item.productName}-${item.brand}-${item.truckNo}-${item.unit}-${item.invoiceNo || ''}`;
@@ -40,25 +66,16 @@ const ViewDetailsModal = ({ data, costOfGoods = [], onClose }) => {
     });
     const totalInvoiceQty = Object.values(uniqueInvoicesMap).reduce((s, q) => s + q, 0);
 
-    const matchingCogs = (costOfGoods || []).filter(cog => {
-        const lcMatch = String(cog.lcNo || '').trim().toLowerCase() === String(data.lcNo || '').trim().toLowerCase();
-        const invoiceMatch = data.entries.some(entry => 
-            String(cog.invoiceNo || '').trim().toLowerCase() === String(entry.invoiceNo || '').trim().toLowerCase()
-        );
-        return lcMatch && invoiceMatch;
-    });
-
     const truckNumbers = Array.from(new Set(
-        matchingCogs
-            .map(cog => (cog.truckNo || '').trim())
-            .filter(t => t !== '')
+        data.entries
+            .map(e => e.truckNo)
+            .filter(t => t && t !== '0' && t !== 0)
     )).join(', ');
 
     return createPortal(
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
-            <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between px-4 md:px-6 py-3.5 md:py-4 border-b border-gray-50 bg-gray-50/50 flex-shrink-0">
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+            <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-300 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex-shrink-0">
                     <div>
                         <h3 className="text-lg font-bold text-gray-900">LC Receive Details</h3>
                         <p className="text-xs text-gray-500 font-medium">Grouped Record • {formatDate(data.date)}</p>
@@ -68,79 +85,79 @@ const ViewDetailsModal = ({ data, costOfGoods = [], onClose }) => {
                     </button>
                 </div>
 
-                <div className="overflow-y-auto flex-1 p-4 md:p-6 space-y-4 md:space-y-6">
-                    {/* ── MOBILE: original label : value list ── */}
-                    <div className="grid grid-cols-[125px_8px_1fr] gap-y-3.5 text-xs text-left items-baseline pb-5 border-b border-gray-100 md:hidden">
+                <div className="overflow-y-auto flex-1 p-6 space-y-6">
+                    {/* ── MOBILE: key details list (vertical key:value) ── */}
+                    <div className="grid grid-cols-[100px_8px_1fr] gap-y-2.5 p-4 bg-gray-50/80 rounded-xl border border-gray-100 text-xs items-baseline md:hidden">
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-bold text-gray-800 text-[13px]">{data.lcNo || 'N/A'}</span>
+                        <span className="font-bold text-gray-900">{data.lcNo || 'N/A'}</span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-bold text-blue-600 text-[13px]">{data.port || 'N/A'}</span>
+                        <span className="font-bold text-blue-600">{data.port || 'N/A'}</span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Importer</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-semibold text-gray-700 text-[13px]">{data.importer || 'N/A'}</span>
+                        <span className="font-semibold text-gray-700">{data.importer || 'N/A'}</span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exporter</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-semibold text-gray-700 text-[13px]">{data.exporter || 'N/A'}</span>
+                        <span className="font-semibold text-gray-700">{data.exporter || 'N/A'}</span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IND C&F</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-semibold text-gray-700 text-[13px]">{data.indianCnF || '-'}</span>
+                        <span className="font-semibold text-gray-700">{data.indianCnF || '-'}</span>
 
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Value</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IND C&F Value</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-bold text-gray-800 text-[13px]">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString('en-IN')}` : '-'}</span>
+                        <span className="font-bold text-gray-900">{!isNaN(parseFloat(data.indCnFCost)) ? `৳${parseFloat(data.indCnFCost).toLocaleString('en-IN')}` : '-'}</span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BD C&F</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-semibold text-gray-700 text-[13px]">{data.bdCnF || '-'}</span>
+                        <span className="font-semibold text-gray-700">{data.bdCnF || '-'}</span>
 
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Value</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">BD C&F Value</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-bold text-gray-800 text-[13px]">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-IN')}` : '-'}</span>
+                        <span className="font-bold text-gray-900">{!isNaN(parseFloat(data.bdCnFCost)) ? `৳${parseFloat(data.bdCnFCost).toLocaleString('en-IN')}` : '-'}</span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bill Of Entry</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-bold text-gray-700 text-[13px]">{data.billOfEntry || '-'}</span>
+                        <span className="font-semibold text-gray-700">{data.billOfEntry || '-'}</span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Trucks</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-black text-amber-600 text-[13px]">{data.totalLcTruck}</span>
+                        <span className="font-bold text-amber-600">{data.totalLcTruck}</span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck Number</span>
                         <span className="text-gray-400 font-bold">:</span>
-                        <span className="font-bold text-blue-600 text-[13px]">{truckNumbers || '—'}</span>
+                        <span className="font-bold text-blue-600">{truckNumbers || '—'}</span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
                         <span className="text-gray-400 font-bold">:</span>
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 text-[11px] font-bold uppercase tracking-wider w-fit">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            {data.entries[0]?.status || 'In Stock'}
+                            {data.entries[0]?.status || data.status || 'In Stock'}
                         </span>
 
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Warehouse</span>
                         <span className="text-gray-400 font-bold">:</span>
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-[11px] font-bold uppercase tracking-wider w-fit">
                             <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-                            {data.entries[0]?.warehouse || 'N/A'}
+                            {data.entries[0]?.warehouse || data.warehouse || 'N/A'}
                         </span>
 
-                        {data.entries[0]?.requestedBy && (
+                        {(requestedUser || requestedUsername) && (
                             <>
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Requested By</span>
                                 <span className="text-gray-400 font-bold">:</span>
-                                <span className="font-semibold text-gray-700 text-[13px]">{data.entries[0].requestedBy}</span>
+                                <span className="font-semibold text-gray-700 text-[13px]">{formatRequestedBy(requestedUser, requestedUsername, employeesMap)}</span>
                             </>
                         )}
-                        {data.entries[0]?.acceptedBy && (
+                        {(approvedUser || approvedUsername) && (
                             <>
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Accepted By</span>
                                 <span className="text-gray-400 font-bold">:</span>
-                                <span className="font-semibold text-emerald-600 text-[13px]">{data.entries[0].acceptedBy}</span>
+                                <span className="font-semibold text-emerald-600 text-[13px]">{formatRequestedBy(approvedUser, approvedUsername, employeesMap)}</span>
                             </>
                         )}
                         {data.entries[0]?.rejectedBy && (
@@ -152,8 +169,8 @@ const ViewDetailsModal = ({ data, costOfGoods = [], onClose }) => {
                         )}
                     </div>
 
-                    {/* ── DESKTOP: card grid (3 columns) ── */}
-                    <div className="hidden md:grid md:grid-cols-3 gap-2 pb-5 border-b border-gray-100">
+                    {/* ── DESKTOP: card grid ── */}
+                    <div className="hidden md:grid md:grid-cols-3 gap-3">
                         {[
                             { label: 'LC No', value: data.lcNo || 'N/A', bold: true, color: 'text-gray-900' },
                             { label: 'Port', value: data.port || 'N/A', bold: true, color: 'text-blue-600' },
@@ -166,29 +183,24 @@ const ViewDetailsModal = ({ data, costOfGoods = [], onClose }) => {
                             { label: 'Bill Of Entry', value: data.billOfEntry || '-', color: 'text-gray-700' },
                             { label: 'Total Trucks', value: data.totalLcTruck, bold: true, color: 'text-amber-600' },
                             { label: 'Truck Number', value: truckNumbers || '—', bold: true, color: 'text-blue-600' },
-                            ...(data.entries[0]?.requestedBy ? [{ label: 'Requested By', value: data.entries[0].requestedBy, color: 'text-gray-700' }] : []),
-                            ...(data.entries[0]?.acceptedBy ? [{ label: 'Accepted By', value: data.entries[0].acceptedBy, color: 'text-emerald-600' }] : []),
+                            { label: 'Status', value: data.entries[0]?.status || data.status || 'In Stock', isBadge: true, badgeBg: 'bg-blue-50 text-blue-700 border-blue-100', dotBg: 'bg-blue-500' },
+                            { label: 'Warehouse', value: data.entries[0]?.warehouse || data.warehouse || 'N/A', isBadge: true, badgeBg: 'bg-gray-100 text-gray-700 border-gray-200', dotBg: 'bg-gray-400' },
+                            ...((requestedUser || requestedUsername) ? [{ label: 'Requested By', value: formatRequestedBy(requestedUser, requestedUsername, employeesMap), color: 'text-gray-700' }] : []),
+                            ...((approvedUser || approvedUsername) ? [{ label: 'Accepted By', value: formatRequestedBy(approvedUser, approvedUsername, employeesMap), color: 'text-emerald-600' }] : []),
                             ...(data.entries[0]?.rejectedBy ? [{ label: 'Rejected By', value: data.entries[0].rejectedBy, color: 'text-red-500' }] : []),
-                        ].map(({ label, value, bold, color }, i) => (
-                            <div key={i} className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
-                                <p className={`text-[13px] ${bold ? 'font-bold' : 'font-semibold'} ${color || 'text-gray-800'} truncate`}>{value}</p>
+                        ].map(({ label, value, bold, color, isBadge, badgeBg, dotBg }, i) => (
+                            <div key={i} className="bg-gray-50/80 rounded-xl px-4 py-3 border border-gray-100 flex flex-col justify-center">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">{label}</p>
+                                {isBadge ? (
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-bold uppercase tracking-wider w-fit ${badgeBg}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                                        {value}
+                                    </span>
+                                ) : (
+                                    <p className={`text-[13px] ${bold ? 'font-bold' : 'font-semibold'} ${color || 'text-gray-800'} break-words`} title={value}>{value}</p>
+                                )}
                             </div>
                         ))}
-                        <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Status</p>
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 text-[11px] font-bold uppercase tracking-wider">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                {data.entries[0]?.status || 'In Stock'}
-                            </span>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Warehouse</p>
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md border border-gray-200 text-[11px] font-bold uppercase tracking-wider">
-                                <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-                                {data.entries[0]?.warehouse || 'N/A'}
-                            </span>
-                        </div>
                     </div>
 
                     {/* Product Table */}
@@ -531,6 +543,27 @@ function LCReceive({
     const [viewData, setViewData] = useState(null);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [employeesMap, setEmployeesMap] = useState({});
+
+    useEffect(() => {
+        const fetchEmployeesMap = async () => {
+            try {
+                const res = await axios.get(`${API_BASE_URL}/api/employees`);
+                if (Array.isArray(res.data)) {
+                    const map = {};
+                    res.data.forEach(emp => {
+                        const id = emp.employeeId || emp.username;
+                        if (id && emp.name) {
+                            map[id] = emp.name;
+                            if (emp.username) map[emp.username] = emp.name;
+                        }
+                    });
+                    setEmployeesMap(map);
+                }
+            } catch (err) { }
+        };
+        fetchEmployeesMap();
+    }, []);
 
     const handleSort = (key) => {
         let direction = 'desc';
@@ -1726,7 +1759,7 @@ function LCReceive({
                 const updatedData = {
                     ...rest,
                     status: newStatus,
-                    ...(newStatus === 'In Stock' ? { acceptedBy: actionBy } : {}),
+                    ...(newStatus === 'In Stock' ? { acceptedBy: actionBy, approvedBy: actionBy, approvedByUsername: currentUser?.username || '' } : {}),
                     ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {}),
                 };
                 return axios.put(`${API_BASE_URL}/api/stock/${id}`, { data: encryptData(updatedData) });
@@ -3702,7 +3735,7 @@ function LCReceive({
                                                 {renderSortIcon('totalLcTruck')}
                                             </div>
                                         </th>
-                                        <th
+                                                                        <th
                                             className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
                                             onClick={() => handleSort('totalLcQuantity')}
                                         >
@@ -3711,13 +3744,24 @@ function LCReceive({
                                                 {renderSortIcon('totalLcQuantity')}
                                             </div>
                                         </th>
+                                        {isRequestedOnly && (
+                                            <th
+                                                className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                onClick={() => handleSort('requestedBy')}
+                                            >
+                                                <div className="flex items-center">
+                                                    Requested By
+                                                    {renderSortIcon('requestedBy')}
+                                                </div>
+                                            </th>
+                                        )}
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredRecords.length === 0 ? (
                                         <tr>
-                                            <td colSpan={isSelectionMode ? 13 : 12} className="px-6 py-12 text-center text-gray-400 bg-white/50">
+                                            <td colSpan={isSelectionMode ? (isRequestedOnly ? 14 : 13) : (isRequestedOnly ? 13 : 12)} className="px-6 py-12 text-center text-gray-400 bg-white/50">
                                                 <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                                 <p>No LC receive records found</p>
                                             </td>
@@ -3741,6 +3785,7 @@ function LCReceive({
                                                     importer: item.importer,
                                                     exporter: item.exporter,
                                                     billOfEntry: item.billOfEntry,
+                                                    requestedBy: item.requestedBy || item.requestedByUsername || '',
                                                     totalLcTruck: 0,
                                                     totalLcQuantity: 0,
                                                     totalQuantity: 0,
@@ -3806,13 +3851,7 @@ function LCReceive({
                                                     <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{entry.importer || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.exporter || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
-                                                    {/* <td className="px-6 py-4 text-sm text-gray-600">
-                                                        {!isNaN(parseFloat(entry.indCnFCost)) && entry.indCnFCost !== '' ? `৳${parseFloat(entry.indCnFCost).toLocaleString('en-IN')}` : '-'}
-                                                    </td> */}
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
-                                                    {/* <td className="px-6 py-4 text-sm text-gray-600">
-                                                        {!isNaN(parseFloat(entry.bdCnFCost)) && entry.bdCnFCost !== '' ? `৳${parseFloat(entry.bdCnFCost).toLocaleString('en-IN')}` : '-'}
-                                                    </td> */}
                                                     <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 align-top">
                                                         {uniqueEntries.map((item, idx) => (
@@ -3829,6 +3868,11 @@ function LCReceive({
                                                             <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{Math.round(item.quantity)}</div>
                                                         ))}
                                                     </td>
+                                                    {isRequestedOnly && (
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-top whitespace-nowrap">
+                                                            <span className="font-semibold text-gray-800">{formatRequestedBy(entry.requestedBy || entry.entries[0]?.requestedBy, entry.requestedByUsername || entry.entries[0]?.requestedByUsername)}</span>
+                                                        </td>
+                                                    )}
                                                     <td className="px-6 py-4 text-right">
                                                         <div className="flex items-center justify-end space-x-3">
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details">
@@ -4080,6 +4124,14 @@ function LCReceive({
                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck</span>
                                                         <span className="text-gray-400 font-bold">:</span>
                                                         <span className="font-bold text-gray-900">{entry.totalLcTruck}</span>
+
+                                                        {isRequestedOnly && (
+                                                            <>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Requested By</span>
+                                                                <span className="text-gray-400 font-bold">:</span>
+                                                                <span className="font-semibold text-gray-700 truncate">{formatRequestedBy(entry.requestedBy || entry.entries[0]?.requestedBy, entry.requestedByUsername || entry.entries[0]?.requestedByUsername, employeesMap)}</span>
+                                                            </>
+                                                        )}
                                                     </div>
 
                                                     <div className="grid grid-cols-[100px_8px_1fr] gap-y-2 p-3 bg-gray-50/50 rounded-xl border border-gray-100 text-xs items-baseline text-left">
@@ -4116,7 +4168,7 @@ function LCReceive({
                     </div>
                 )
             }
-            {viewData && <ViewDetailsModal data={viewData} costOfGoods={costOfGoods} onClose={() => setViewData(null)} />}
+            {viewData && <ViewDetailsModal data={viewData} costOfGoods={costOfGoods} employeesMap={employeesMap} onClose={() => setViewData(null)} />}
         </div >
     );
 }

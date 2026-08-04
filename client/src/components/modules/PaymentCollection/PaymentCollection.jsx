@@ -498,8 +498,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             alert('Forbidden: You do not have permission to add payment collections');
             return;
         }
-        const totalAmountValue = newPayment.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        if (!newPayment.customerId || totalAmountValue <= 0) return;
+        if (!newPayment.customerId) {
+            alert('Please select a Customer / Party first');
+            return;
+        }
 
         setIsSubmitting(true);
         setSubmitStatus(null);
@@ -515,7 +517,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             const nextReceiptNo = `RC-${String(lastReceiptNo + 1).padStart(4, '0')}`;
             const initialStatus = 'Requested';
             const paymentEntries = newPayment.items
-                .filter(item => parseFloat(item.amount) > 0)
+                .filter(item => item.amount !== '' && item.amount !== null && !isNaN(parseFloat(item.amount)))
                 .map((item, idx) => ({
                     receiptNo: nextReceiptNo,
                     date: newPayment.date,
@@ -523,7 +525,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     bankName: item.bankName,
                     accountNo: item.accountNo,
                     branch: item.branch,
-                    amount: parseFloat(item.amount),
+                    amount: parseFloat(item.amount) || 0,
                     receiveBy: item.receiveBy,
                     place: item.place,
                     reference: newPayment.reference,
@@ -578,8 +580,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             alert('Forbidden: You do not have permission to edit payment collections');
             return;
         }
-        const activeItems = newPayment.items.filter(item => parseFloat(item.amount) > 0);
-        if (!newPayment.customerId || activeItems.length === 0) return;
+        if (!newPayment.customerId) {
+            alert('Please select a Customer / Party first');
+            return;
+        }
+        const activeItems = newPayment.items.filter(item => item.amount !== '' && item.amount !== null && !isNaN(parseFloat(item.amount)));
 
         setIsSubmitting(true);
         setSubmitStatus(null);
@@ -2109,8 +2114,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         <div className="md:col-span-2 flex items-center justify-end gap-3 pt-4 border-t border-gray-50 mt-6 relative z-10">
                             <button
                                 type="submit"
-                                disabled={isSubmitting || !newPayment.customerId || totalCollection <= 0}
-                                className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${(isSubmitting || !newPayment.customerId || totalCollection <= 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                disabled={isSubmitting}
+                                className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {isSubmitting ? (
                                     <>
