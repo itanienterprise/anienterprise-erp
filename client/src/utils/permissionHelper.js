@@ -55,7 +55,17 @@ export const MODULES_LIST = [
     },
     {
         key: 'sales',
-        label: 'Sales & Reports',
+        label: 'General Sale',
+        specialLabels: [
+            { key: 'special', label: 'Approve Sale' },
+            { key: 'saleRequest', label: 'Sale Request' },
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' }
+        ]
+    },
+    {
+        key: 'borderSale',
+        label: 'Border Sale',
         specialLabels: [
             { key: 'special', label: 'Approve Sale' },
             { key: 'saleRequest', label: 'Sale Request' },
@@ -167,8 +177,8 @@ export const getDefaultPermissionsForRole = (role) => {
             defaults[key] = permsObj;
         });
     } else if (roleLower === 'sales manager') {
-        // Sales Manager can access products, customers, sales, order, purchase, payment, bank, insurance, insurancePayment, returnProduct, transfer
-        const salesModules = ['product', 'customer', 'sales', 'order', 'purchase', 'transfer', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+        // Sales Manager can access products, customers, sales, borderSale, order, purchase, payment, bank, insurance, insurancePayment, returnProduct, transfer
+        const salesModules = ['product', 'customer', 'sales', 'borderSale', 'order', 'purchase', 'transfer', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
         salesModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
@@ -194,8 +204,8 @@ export const getDefaultPermissionsForRole = (role) => {
         });
         defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false };
     } else if (roleLower === 'border manager') {
-        // Border Manager can access port, cnf, ip, lcReceive, warehouse, lcManagement, purchase, transfer
-        const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'transfer', 'lcManagement', 'lcGp', 'lcExpense', 'purchase'];
+        // Border Manager can access port, cnf, ip, lcReceive, warehouse, lcManagement, purchase, transfer, borderSale
+        const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'transfer', 'lcManagement', 'lcGp', 'lcExpense', 'purchase', 'borderSale'];
         borderModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };

@@ -162,7 +162,7 @@ const getDefaultPermissionsForRole = (role) => {
 
   const modules = [
     'employees', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup',
-    'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank',
+    'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'borderSale', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank',
     'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore'
   ];
 
@@ -186,7 +186,7 @@ const getDefaultPermissionsForRole = (role) => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
   } else if (roleLower === 'sales manager') {
-    const salesModules = ['product', 'customer', 'sales', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+    const salesModules = ['product', 'customer', 'sales', 'borderSale', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
     salesModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
@@ -197,7 +197,7 @@ const getDefaultPermissionsForRole = (role) => {
     });
     defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false, showRate: false };
   } else if (roleLower === 'border manager') {
-    const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense'];
+    const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'borderSale'];
     borderModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });

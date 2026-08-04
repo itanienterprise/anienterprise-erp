@@ -253,14 +253,15 @@ const SaleManagement = ({
         return (currentUser.role || '').toLowerCase() === 'border manager';
     }, [currentUser]);
 
-    const canApprove = hasPermission(currentUser, 'sales', 'special');
-    const canViewSaleRequest = hasPermission(currentUser, 'sales', 'saleRequest');
-    const canViewEditRequest = hasPermission(currentUser, 'sales', 'editRequest');
+    const moduleKey = saleType === 'Border' ? 'borderSale' : (saleType === 'Order' ? 'order' : (saleType === 'Purchase' ? 'purchase' : 'sales'));
+    const canApprove = hasPermission(currentUser, moduleKey, 'special');
+    const canViewSaleRequest = hasPermission(currentUser, moduleKey, 'saleRequest');
+    const canViewEditRequest = hasPermission(currentUser, moduleKey, 'editRequest');
 
     // Fine-grained permission flags from System Access
-    const canAdd = hasPermission(currentUser, 'sales', 'add');
-    const canEdit = hasPermission(currentUser, 'sales', 'edit');
-    const canDelete = hasPermission(currentUser, 'sales', 'delete');
+    const canAdd = hasPermission(currentUser, moduleKey, 'add');
+    const canEdit = hasPermission(currentUser, moduleKey, 'edit');
+    const canDelete = hasPermission(currentUser, moduleKey, 'delete');
 
     const canUserEditSale = (sale) => {
         if (!sale) return false;

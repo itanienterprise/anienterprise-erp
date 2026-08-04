@@ -2706,7 +2706,7 @@ function App() {
               </div>
             </div>
           )}
-          {(hasPermission(currentUser, 'sales', 'view') || hasPermission(currentUser, 'order', 'view')) && (
+          {(hasPermission(currentUser, 'sales', 'view') || hasPermission(currentUser, 'borderSale', 'view') || hasPermission(currentUser, 'order', 'view') || hasPermission(currentUser, 'purchase', 'view')) && (
             <div>
               <button
                 onClick={() => toggleSidebarDropdown('sale')}
@@ -2747,26 +2747,30 @@ function App() {
                       {pendingModules.order && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                     </button>
                   )}
-                  <button
-                    onClick={() => { handleViewChange('general-sale-section'); }}
-                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <div className="flex items-center">
-                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>General Sale</span>
-                    </div>
-                    {pendingModules.generalSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                  </button>
-                  <button
-                    onClick={() => { handleViewChange('border-sale-section'); }}
-                    className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <div className="flex items-center">
-                      <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Border Sale</span>
-                    </div>
-                    {pendingModules.borderSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                  </button>
+                  {hasPermission(currentUser, 'sales', 'view') && (
+                    <button
+                      onClick={() => { handleViewChange('general-sale-section'); }}
+                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <div className="flex items-center">
+                        <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>General Sale</span>
+                      </div>
+                      {pendingModules.generalSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                    </button>
+                  )}
+                  {hasPermission(currentUser, 'borderSale', 'view') && (
+                    <button
+                      onClick={() => { handleViewChange('border-sale-section'); }}
+                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <div className="flex items-center">
+                        <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Border Sale</span>
+                      </div>
+                      {pendingModules.borderSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                    </button>
+                  )}
                   {hasPermission(currentUser, 'returnProduct', 'view') && (
                     <button
                       onClick={() => { handleViewChange('return-product-section'); }}
