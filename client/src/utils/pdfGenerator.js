@@ -5517,28 +5517,32 @@ export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
         // Prepare columns & rows
+        const hasChina = records.some(r => r.country === 'CHINA');
         const tableHeaders = [
-            ['Date', 'LC No', 'Supplier', 'Invoice No', 'Truck No', 'Product', 'Brand', 'Quantity (kg)', 'Invoice Value (RS)', 'Net Bill (RS)', 'Rate / KG (BDT)', 'C&F & Other (BDT) ', 'Net Costing/kg (BDT)']
+            ['Date', 'LC No', 'Supplier', 'Invoice No', 'Truck No', 'Product', 'Brand', 'Quantity (kg)', hasChina ? 'Invoice Value (USD)' : 'Invoice Value (RS)', hasChina ? 'Net Bill (USD)' : 'Net Bill (RS)', 'Rate / KG (BDT)', 'C&F & Other (BDT) ', 'Net Costing/kg (BDT)']
         ];
 
         const totals = { quantity: 0, amount: 0, netBill: 0 };
 
         const tableRows = records.map(record => {
-            const billSum = record.totalBill !== undefined ? record.totalBill : ((parseFloat(record.amount) || 0) + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0));
-            const rebatePct = record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9');
-            const rebateVal = record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
-            const netBillVal = record.netBill !== undefined ? record.netBill : (billSum - rebateVal);
+            const isChina = record.country === 'CHINA';
             const qtyVal = parseFloat(record.quantity) || 0;
+            const amountVal = parseFloat(record.amount) || 0;
+            const billSum = isChina ? amountVal : (record.totalBill !== undefined ? record.totalBill : (amountVal + (parseFloat(record.indTruckFare) || 0) + (parseFloat(record.slofCf) || 0)));
+            const rebatePct = isChina ? 0 : (record.rebate !== undefined ? record.rebate : (record.redate !== undefined ? record.redate : '2.9'));
+            const rebateVal = isChina ? 0 : (record.rebateAmount !== undefined ? record.rebateAmount : (record.redateAmount !== undefined ? record.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100)));
+            const netBillVal = isChina ? amountVal : (record.netBill !== undefined ? record.netBill : (billSum - rebateVal));
+
             const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
             const dollarRateVal = parseFloat(record.rsToDollar) || 0;
-            const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+            const rateKgUsdVal = isChina ? (qtyVal ? (amountVal / qtyVal) : 0) : (dollarRateVal ? (rateKgVal / dollarRateVal) : 0);
             const bdtRateVal = parseFloat(record.dollarRateBdt) || 0;
             const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
             const cfExpVal = parseFloat(record.cfOtherExpense !== undefined ? record.cfOtherExpense : '9') || 0;
             const costingKgVal = rateKgBdtVal + cfExpVal;
 
             totals.quantity += qtyVal;
-            totals.amount += parseFloat(record.amount) || 0;
+            totals.amount += amountVal;
             totals.netBill += parseFloat(netBillVal) || 0;
 
             return [
@@ -5550,7 +5554,7 @@ export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
                 record.product || '-',
                 record.brand || '-',
                 qtyVal ? `${Math.round(qtyVal).toLocaleString('en-US')}` : '—',
-                record.amount ? `${Math.round(record.amount).toLocaleString('en-US')}` : '—',
+                amountVal ? `${Math.round(amountVal).toLocaleString('en-US')}` : '—',
                 netBillVal ? `${Math.round(netBillVal).toLocaleString('en-US')}` : '—',
                 rateKgBdtVal ? `${Number(rateKgBdtVal).toFixed(2)}` : '—',
                 cfExpVal ? `${Number(cfExpVal).toFixed(2)}` : '—',
