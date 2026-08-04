@@ -987,11 +987,6 @@ function App() {
 
 
   const toggleSelection = (id) => {
-    // Only admin user or admin employee can use selection mode
-    const isAdminUser = currentUser?.username === 'admin';
-    const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
-    if (!isAdminUser && !isAdminRole) return;
-
     const newSelection = new Set(selectedItems);
     if (newSelection.has(id)) {
       newSelection.delete(id);
@@ -1010,11 +1005,6 @@ function App() {
   // Click-outside detection for stock report filter panel
 
   const toggleSelectAll = (items) => {
-    // Only admin user or admin employee can use selection mode
-    const isAdminUser = currentUser?.username === 'admin';
-    const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
-    if (!isAdminUser && !isAdminRole) return;
-
     if (selectedItems.size === items.length) {
       setSelectedItems(new Set());
       setIsSelectionMode(false);
@@ -1025,11 +1015,6 @@ function App() {
   };
 
   const startLongPress = (id) => {
-    // Only admin user or admin employee can use selection mode
-    const isAdminUser = currentUser?.username === 'admin';
-    const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
-    if (!isAdminUser && !isAdminRole) return;
-
     isLongPressTriggered.current = false;
     longPressTimer.current = setTimeout(() => {
       isLongPressTriggered.current = true;
@@ -1038,7 +1023,7 @@ function App() {
       } else {
         setIsSelectionMode(true);
       }
-    }, 700); // 700ms for long press
+    }, 500); // 500ms for long press
   };
   const toggleStockGroupSelection = (productName) => {
     const records = stockRecords.filter(item =>
@@ -1687,6 +1672,7 @@ function App() {
             startLongPress={startLongPress}
             endLongPress={endLongPress}
             isLongPressTriggered={isLongPressTriggered}
+            toggleSelection={toggleSelection}
             onDelete={handleDelete}
             setShowLcReport={setShowLcReport}
             lcSearchQuery={lcSearchQuery}

@@ -443,6 +443,7 @@ function LCReceive({
     startLongPress,
     endLongPress,
     isLongPressTriggered,
+    toggleSelection,
     onDelete,
     setShowLcReport,
     lcSearchQuery,
@@ -474,6 +475,7 @@ function LCReceive({
     const [searchQuery, setSearchQuery] = useState('');
     const [lcRecords, setLcRecords] = useState([]);
     const [costOfGoods, setCostOfGoods] = useState([]);
+    const [confirmModalConfig, setConfirmModalConfig] = useState(null);
 
     const fetchCnFs = async () => {
         try {
@@ -1810,6 +1812,287 @@ function LCReceive({
         }
     };
 
+    const handleToggleItem = (e, groupedKey) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (!groupedKey) return;
+
+        if (toggleSelection) {
+            toggleSelection(groupedKey);
+        } else {
+            const newSet = new Set(selectedItems);
+            if (newSet.has(groupedKey)) {
+                newSet.delete(groupedKey);
+            } else {
+                newSet.add(groupedKey);
+            }
+            setSelectedItems(newSet);
+            if (setIsSelectionMode) {
+                setIsSelectionMode(newSet.size > 0);
+            }
+        }
+    };
+
+    const executeBulkAccept = async (recordsToAccept) => {
+        try {
+            setIsSubmitting(true);
+            setConfirmModalConfig(null);
+
+            const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
+            const actionUsername = currentUser?.username || '';
+
+            const promises = [];
+            for (const record of recordsToAccept) {
+                const ids = record.allIds || record.ids || [];
+                for (const id of ids) {
+                    const originalRecord = stockRecords.find(r => r._id === id);
+                    if (!originalRecord) continue;
+
+                    const { _id, createdAt, __v, ...rest } = originalRecord;
+                    const updatedData = {
+                        ...rest,
+                        status: 'In Stock',
+                        acceptedBy: actionBy,
+                        approvedBy: actionBy,
+                        approvedByUsername: actionUsername
+                    };
+                    promises.push(axios.put(`${API_BASE_URL}/api/stock/${id}`, { data: encryptData(updatedData) }));
+                }
+
+                if (addNotification && record.entries && record.entries[0]) {
+                    const firstEntry = record.entries[0];
+                    const requesterUsername = firstEntry.requestedByUsername;
+
+                    if (requesterUsername) {
+                        const now = new Date();
+                        const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+                        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const adminName = currentUser?.name || currentUser?.username || 'Admin';
+                        const requesterName = firstEntry.requestedBy || firstEntry.requestedByUsername || 'an employee';
+
+                        const targetRoles = ['admin', 'incharge', 'sales manager'];
+                        const targetUsers = [requesterUsername];
+                        if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                        await addNotification(
+                            `LC Receive Accepted`,
+                            `${dateStr} | ${timeStr} | ${adminName} has accepted the LC receive entry (${firstEntry.lcNo || ''}) requested by ${requesterName}`,
+                            targetRoles,
+                            targetUsers
+                        );
+                    }
+                }
+            }
+
+            await Promise.all(promises);
+
+            setSelectedItems(new Set());
+            if (setIsSelectionMode) setIsSelectionMode(false);
+            if (fetchStockRecords) fetchStockRecords();
+            fetchWarehouses();
+            if (refreshPendingIndicators) refreshPendingIndicators();
+        } catch (error) {
+            console.error('Error performing bulk accept:', error);
+            setConfirmModalConfig({
+                title: 'Operation Failed',
+                message: 'Failed to accept selected items. Please try again.',
+                type: 'danger',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null)
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleBulkAccept = () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+
+        // Search across all records (including requested ones) for selected items in 'Requested' status
+        const requestedSelectedRecords = lcReceiveRecords.filter(item => {
+            const dateStr = formatDate(item.date);
+            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+            const isSelected = selectedItems.has(groupedKey) || selectedItems.has(item._id);
+            const isReq = (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected';
+            return isSelected && isReq;
+        });
+
+        const recordsToAcceptMap = requestedSelectedRecords.reduce((acc, item) => {
+            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+            if (!acc[groupedKey]) {
+                acc[groupedKey] = {
+                    groupedKey,
+                    date: item.date,
+                    lcNo: item.lcNo,
+                    entries: [],
+                    allIds: []
+                };
+            }
+            acc[groupedKey].entries.push(item);
+            acc[groupedKey].allIds.push(item._id);
+            return acc;
+        }, {});
+        const recordsToAccept = Object.values(recordsToAcceptMap);
+
+        if (recordsToAccept.length === 0) {
+            setConfirmModalConfig({
+                title: 'No Pending Requests Selected',
+                message: requestedCount > 0 
+                    ? `The selected items are already In Stock. You have ${requestedCount} pending request(s) waiting for approval.`
+                    : 'The selected items are already In Stock and there are no pending requests.',
+                type: 'info',
+                confirmText: requestedCount > 0 ? `Switch to Requested (${requestedCount})` : 'OK',
+                cancelText: requestedCount > 0 ? 'Close' : null,
+                onConfirm: () => {
+                    setConfirmModalConfig(null);
+                    if (requestedCount > 0) {
+                        setIsRequestedOnly(true);
+                        setSelectedItems(new Set());
+                    }
+                },
+                onClose: () => setConfirmModalConfig(null)
+            });
+            return;
+        }
+
+        setConfirmModalConfig({
+            title: 'Confirm Bulk Accept',
+            message: `Are you sure you want to accept ${recordsToAccept.length} selected LC Receive request(s)?`,
+            type: 'success',
+            confirmText: 'Accept Selected',
+            cancelText: 'Cancel',
+            onConfirm: () => executeBulkAccept(recordsToAccept),
+            onClose: () => setConfirmModalConfig(null)
+        });
+    };
+
+    const executeBulkReject = async (recordsToReject) => {
+        try {
+            setIsSubmitting(true);
+            setConfirmModalConfig(null);
+
+            const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
+
+            const promises = [];
+            for (const record of recordsToReject) {
+                const ids = record.allIds || record.ids || [];
+                for (const id of ids) {
+                    const originalRecord = stockRecords.find(r => r._id === id);
+                    if (!originalRecord) continue;
+
+                    const { _id, createdAt, __v, ...rest } = originalRecord;
+                    const updatedData = {
+                        ...rest,
+                        status: 'Rejected',
+                        rejectedBy: actionBy
+                    };
+                    promises.push(axios.put(`${API_BASE_URL}/api/stock/${id}`, { data: encryptData(updatedData) }));
+                }
+
+                if (addNotification && record.entries && record.entries[0]) {
+                    const firstEntry = record.entries[0];
+                    const requesterUsername = firstEntry.requestedByUsername;
+
+                    if (requesterUsername) {
+                        const now = new Date();
+                        const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+                        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const adminName = currentUser?.name || currentUser?.username || 'Admin';
+                        const requesterName = firstEntry.requestedBy || firstEntry.requestedByUsername || 'an employee';
+
+                        const targetRoles = ['admin', 'incharge', 'sales manager'];
+                        const targetUsers = [requesterUsername];
+                        if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                        await addNotification(
+                            `LC Receive Rejected`,
+                            `${dateStr} | ${timeStr} | ${adminName} has rejected the LC receive entry (${firstEntry.lcNo || ''}) requested by ${requesterName}`,
+                            targetRoles,
+                            targetUsers
+                        );
+                    }
+                }
+            }
+
+            await Promise.all(promises);
+
+            setSelectedItems(new Set());
+            if (setIsSelectionMode) setIsSelectionMode(false);
+            if (fetchStockRecords) fetchStockRecords();
+            fetchWarehouses();
+            if (refreshPendingIndicators) refreshPendingIndicators();
+        } catch (error) {
+            console.error('Error performing bulk reject:', error);
+            setConfirmModalConfig({
+                title: 'Operation Failed',
+                message: 'Failed to reject selected items.',
+                type: 'danger',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null)
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleBulkReject = () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+
+        const requestedSelectedRecords = lcReceiveRecords.filter(item => {
+            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+            const isSelected = selectedItems.has(groupedKey) || selectedItems.has(item._id);
+            const isReq = (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected';
+            return isSelected && isReq;
+        });
+
+        const recordsToRejectMap = requestedSelectedRecords.reduce((acc, item) => {
+            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+            if (!acc[groupedKey]) {
+                acc[groupedKey] = {
+                    groupedKey,
+                    date: item.date,
+                    lcNo: item.lcNo,
+                    entries: [],
+                    allIds: []
+                };
+            }
+            acc[groupedKey].entries.push(item);
+            acc[groupedKey].allIds.push(item._id);
+            return acc;
+        }, {});
+        const recordsToReject = Object.values(recordsToRejectMap);
+
+        if (recordsToReject.length === 0) {
+            setConfirmModalConfig({
+                title: 'No Pending Requests Selected',
+                message: requestedCount > 0 
+                    ? `The selected items are already In Stock. You have ${requestedCount} pending request(s) waiting for approval.`
+                    : 'The selected items are already In Stock and there are no pending requests.',
+                type: 'info',
+                confirmText: requestedCount > 0 ? `Switch to Requested (${requestedCount})` : 'OK',
+                cancelText: requestedCount > 0 ? 'Close' : null,
+                onConfirm: () => {
+                    setConfirmModalConfig(null);
+                    if (requestedCount > 0) {
+                        setIsRequestedOnly(true);
+                        setSelectedItems(new Set());
+                    }
+                },
+                onClose: () => setConfirmModalConfig(null)
+            });
+            return;
+        }
+
+        setConfirmModalConfig({
+            title: 'Confirm Bulk Reject',
+            message: `Are you sure you want to reject ${recordsToReject.length} selected LC Receive request(s)?`,
+            type: 'danger',
+            confirmText: 'Reject Selected',
+            cancelText: 'Cancel',
+            onConfirm: () => executeBulkReject(recordsToReject),
+            onClose: () => setConfirmModalConfig(null)
+        });
+    };
+
     const getFilteredProducts = (input) => {
         if (!input) return products;
         const lowInput = input.toLowerCase();
@@ -2077,6 +2360,55 @@ function LCReceive({
         const unit = filteredRecords[0]?.unit || 'kg';
 
         return { totalPackets, totalQuantity, totalTrucks, unit };
+    }, [filteredRecords]);
+
+    const groupedRecordsList = useMemo(() => {
+        return Object.values(filteredRecords.reduce((acc, item) => {
+            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+
+            if (!acc[groupedKey]) {
+                acc[groupedKey] = {
+                    groupedKey,
+                    date: item.date,
+                    lcNo: item.lcNo,
+                    port: item.port,
+                    status: item.status,
+                    warehouse: item.warehouse || '',
+                    indianCnF: item.indianCnF,
+                    indCnFCost: item.indCnFCost,
+                    bdCnF: item.bdCnF,
+                    bdCnFCost: item.bdCnFCost,
+                    importer: item.importer,
+                    exporter: item.exporter,
+                    billOfEntry: item.billOfEntry,
+                    requestedBy: item.requestedBy || item.requestedByUsername || '',
+                    totalLcTruck: 0,
+                    totalLcQuantity: 0,
+                    totalQuantity: 0,
+                    truckEntries: new Set(),
+                    products: new Set(),
+                    ids: [],
+                    allIds: [],
+                    entries: []
+                };
+            }
+
+            const itemQty = parseFloat(item.quantity) || 0;
+            acc[groupedKey].totalQuantity += itemQty;
+            acc[groupedKey].totalLcQuantity += itemQty;
+
+            const truckEntryKey = `${item.date}-${item.productName}-${item.truckNo}`;
+            if (!acc[groupedKey].truckEntries.has(truckEntryKey)) {
+                acc[groupedKey].truckEntries.add(truckEntryKey);
+                acc[groupedKey].totalLcTruck += (parseFloat(item.truckNo) || 0);
+            }
+
+            if (item.productName) acc[groupedKey].products.add(item.productName);
+            acc[groupedKey].ids.push(item._id);
+            acc[groupedKey].allIds.push(item._id);
+            acc[groupedKey].entries.push(item);
+            return acc;
+        }, {}));
     }, [filteredRecords]);
 
     return (
@@ -3608,251 +3940,219 @@ function LCReceive({
             {/* Table Section */}
             {
                 !showStockForm && (
-                    <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
-                        {/* ... Table logic ... */}
-                        <div className="overflow-x-auto hidden md:block">
-                            <table className="w-full">
-                                <thead className="bg-gray-50/50 border-b border-gray-100">
-                                    <tr>
-                                        {isSelectionMode && (
-                                            <th className="px-6 py-4 w-12">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedItems.size === lcReceiveRecords.length && lcReceiveRecords.length > 0}
-                                                    onChange={(e) => {
-                                                        // Bulk select logic if needed
-                                                    }}
-                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                />
-                                            </th>
-                                        )}
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('date')}
+                    <div className="space-y-4">
+                        {/* Bulk Action Bar */}
+                        {selectedItems.size > 0 && (
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4 animate-in fade-in duration-200">
+                                <div className="flex items-center gap-3">
+                                    <span className="inline-flex items-center justify-center bg-blue-600 text-white font-extrabold text-xs px-3 py-1 rounded-full shadow-sm">
+                                        {selectedItems.size} Selected
+                                    </span>
+                                    <span className="text-xs font-semibold text-gray-700">
+                                        LC Receive entries selected
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {isRequestedOnly && canApprove && (
+                                        <button
+                                            onClick={handleBulkAccept}
+                                            disabled={isSubmitting}
+                                            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                            title="Accept all selected LC receive requests"
                                         >
-                                            <div className="flex items-center">
-                                                Date
-                                                {renderSortIcon('date')}
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('lcNo')}
+                                            <CheckIcon className="w-4 h-4" />
+                                            <span>Bulk Accept ({selectedItems.size})</span>
+                                        </button>
+                                    )}
+                                    {isRequestedOnly && canApprove && (
+                                        <button
+                                            onClick={handleBulkReject}
+                                            disabled={isSubmitting}
+                                            className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                            title="Reject all selected LC receive requests"
                                         >
-                                            <div className="flex items-center">
-                                                LC No
-                                                {renderSortIcon('lcNo')}
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('port')}
-                                        >
-                                            <div className="flex items-center">
-                                                Port
-                                                {renderSortIcon('port')}
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('importer')}
-                                        >
-                                            <div className="flex items-center">
-                                                Importer
-                                                {renderSortIcon('importer')}
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('exporter')}
-                                        >
-                                            <div className="flex items-center">
-                                                Exporter
-                                                {renderSortIcon('exporter')}
-                                            </div>
-                                        </th>
+                                            <XIcon className="w-4 h-4" />
+                                            <span>Bulk Reject ({selectedItems.size})</span>
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => { setSelectedItems(new Set()); if (setIsSelectionMode) setIsSelectionMode(false); }}
+                                        className="px-3.5 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+                                    >
+                                        Deselect All
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('indianCnF')}
-                                        >
-                                            <div className="flex items-center">
-                                                Ind C&F
-                                                {renderSortIcon('indianCnF')}
-                                            </div>
-                                        </th>
-                                        {/* <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('indCnFCost')}
-                                        >
-                                            <div className="flex items-center">
-                                                Cost
-                                                {renderSortIcon('indCnFCost')}
-                                            </div>
-                                        </th> */}
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('bdCnF')}
-                                        >
-                                            <div className="flex items-center">
-                                                BD C&F
-                                                {renderSortIcon('bdCnF')}
-                                            </div>
-                                        </th>
-                                        {/* <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('bdCnFCost')}
-                                        >
-                                            <div className="flex items-center">
-                                                Cost
-                                                {renderSortIcon('bdCnFCost')}
-                                            </div>
-                                        </th> */}
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('billOfEntry')}
-                                        >
-                                            <div className="flex items-center">
-                                                Bill Entry
-                                                {renderSortIcon('billOfEntry')}
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('productName')}
-                                        >
-                                            <div className="flex items-center">
-                                                Product
-                                                {renderSortIcon('productName')}
-                                            </div>
-                                        </th>
-                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('totalLcTruck')}
-                                        >
-                                            <div className="flex items-center">
-                                                Truck
-                                                {renderSortIcon('totalLcTruck')}
-                                            </div>
-                                        </th>
-                                                                        <th
-                                            className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                            onClick={() => handleSort('totalLcQuantity')}
-                                        >
-                                            <div className="flex items-center">
-                                                Quantity
-                                                {renderSortIcon('totalLcQuantity')}
-                                            </div>
-                                        </th>
-                                        {isRequestedOnly && (
+                        <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
+                            <div className="overflow-x-auto hidden md:block">
+                                <table className="w-full">
+                                    <thead className="bg-gray-50/50 border-b border-gray-100">
+                                        <tr>
+                                            {(isSelectionMode || selectedItems.size > 0) && (
+                                                <th className="px-6 py-4 w-12 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={groupedRecordsList.length > 0 && selectedItems.size === groupedRecordsList.length}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                const allKeys = groupedRecordsList.map(g => g.groupedKey);
+                                                                setSelectedItems(new Set(allKeys));
+                                                                if (setIsSelectionMode) setIsSelectionMode(true);
+                                                            } else {
+                                                                setSelectedItems(new Set());
+                                                                if (setIsSelectionMode) setIsSelectionMode(false);
+                                                            }
+                                                        }}
+                                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4"
+                                                    />
+                                                </th>
+                                            )}
                                             <th
                                                 className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
-                                                onClick={() => handleSort('requestedBy')}
+                                                onClick={() => handleSort('date')}
                                             >
                                                 <div className="flex items-center">
-                                                    Requested By
-                                                    {renderSortIcon('requestedBy')}
+                                                    Date
+                                                    {renderSortIcon('date')}
                                                 </div>
                                             </th>
-                                        )}
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {filteredRecords.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={isSelectionMode ? (isRequestedOnly ? 14 : 13) : (isRequestedOnly ? 13 : 12)} className="px-6 py-12 text-center text-gray-400 bg-white/50">
-                                                <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                                <p>No LC receive records found</p>
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        Object.values(filteredRecords.reduce((acc, item) => {
-                                            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
-
-                                            if (!acc[groupedKey]) {
-                                                acc[groupedKey] = {
-                                                    groupedKey,
-                                                    date: item.date,
-                                                    lcNo: item.lcNo,
-                                                    port: item.port,
-                                                    status: item.status,
-                                                    warehouse: item.warehouse || '',
-                                                    indianCnF: item.indianCnF,
-                                                    indCnFCost: item.indCnFCost,
-                                                    bdCnF: item.bdCnF,
-                                                    bdCnFCost: item.bdCnFCost,
-                                                    importer: item.importer,
-                                                    exporter: item.exporter,
-                                                    billOfEntry: item.billOfEntry,
-                                                    requestedBy: item.requestedBy || item.requestedByUsername || '',
-                                                    totalLcTruck: 0,
-                                                    totalLcQuantity: 0,
-                                                    totalQuantity: 0,
-                                                    truckEntries: new Set(),
-                                                    products: new Set(),
-                                                    ids: [],
-                                                    allIds: [],
-                                                    entries: []
-                                                };
-                                            }
-
-                                            const itemQty = parseFloat(item.quantity) || 0;
-                                            acc[groupedKey].totalQuantity += itemQty;
-                                            acc[groupedKey].totalLcQuantity += itemQty;
-
-                                            const truckEntryKey = `${item.date}-${item.productName}-${item.truckNo}`;
-                                            if (!acc[groupedKey].truckEntries.has(truckEntryKey)) {
-                                                acc[groupedKey].truckEntries.add(truckEntryKey);
-                                                acc[groupedKey].totalLcTruck += (parseFloat(item.truckNo) || 0);
-                                            }
-
-                                            if (item.productName) acc[groupedKey].products.add(item.productName);
-                                            acc[groupedKey].ids.push(item._id);
-                                            acc[groupedKey].allIds.push(item._id);
-                                            acc[groupedKey].entries.push(item);
-                                            return acc;
-                                        }, {})).map((entry) => {
-                                            const uniqueEntriesMap = entry.entries.reduce((acc, item) => {
-                                                const key = `${item.productName}-${item.truckNo}-${item.unit}`;
-                                                if (!acc[key]) {
-                                                    acc[key] = { ...item, quantity: 0 };
-                                                }
-                                                acc[key].quantity += (parseFloat(item.quantity) || 0);
-                                                return acc;
-                                            }, {});
-                                            const uniqueEntries = Object.values(uniqueEntriesMap);
-
-                                            return (
-                                                <tr
-                                                    key={entry.groupedKey}
-                                                    className={`transition-colors duration-200 cursor-pointer select-none ${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'}`}
-                                                    onMouseDown={() => startLongPress(entry.groupedKey)}
-                                                    onMouseUp={endLongPress}
-                                                    onMouseLeave={endLongPress}
-                                                    onClick={() => {
-                                                        if (isLongPressTriggered.current) return;
-                                                        if (isSelectionMode) toggleSelection(entry.groupedKey);
-                                                    }}
+                                            <th
+                                                className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                onClick={() => handleSort('lcNo')}
+                                            >
+                                                <div className="flex items-center">
+                                                    LC No
+                                                    {renderSortIcon('lcNo')}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                onClick={() => handleSort('port')}
+                                            >
+                                                <div className="flex items-center">
+                                                    Port
+                                                    {renderSortIcon('port')}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                onClick={() => handleSort('importer')}
+                                            >
+                                                <div className="flex items-center">
+                                                    Importer
+                                                    {renderSortIcon('importer')}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                onClick={() => handleSort('exporter')}
+                                            >
+                                                <div className="flex items-center">
+                                                    Exporter
+                                                    {renderSortIcon('exporter')}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                onClick={() => handleSort('indianCnF')}
+                                            >
+                                                <div className="flex items-center">
+                                                    IND C&F
+                                                    {renderSortIcon('indianCnF')}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                onClick={() => handleSort('bdCnF')}
+                                            >
+                                                <div className="flex items-center">
+                                                    BD C&F
+                                                    {renderSortIcon('bdCnF')}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                onClick={() => handleSort('billOfEntry')}
+                                            >
+                                                <div className="flex items-center">
+                                                    Bill Entry
+                                                    {renderSortIcon('billOfEntry')}
+                                                </div>
+                                            </th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Truck</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
+                                            {isRequestedOnly && (
+                                                <th
+                                                    className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                    onClick={() => handleSort('requestedBy')}
                                                 >
-                                                    {isSelectionMode && (
-                                                        <td className="px-6 py-4">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedItems.has(entry.groupedKey)}
-                                                                onChange={(e) => { e.stopPropagation(); toggleSelection(entry.groupedKey); }}
-                                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                            />
-                                                        </td>
-                                                    )}
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{entry.importer || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.exporter || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
+                                                    <div className="flex items-center">
+                                                        Requested By
+                                                        {renderSortIcon('requestedBy')}
+                                                    </div>
+                                                </th>
+                                            )}
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {filteredRecords.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={(isSelectionMode || selectedItems.size > 0) ? (isRequestedOnly ? 14 : 13) : (isRequestedOnly ? 13 : 12)} className="px-6 py-12 text-center text-gray-400 bg-white/50">
+                                                    <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                                    <p>No LC receive records found</p>
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            groupedRecordsList.map((entry) => {
+                                                const uniqueEntriesMap = entry.entries.reduce((acc, item) => {
+                                                    const key = `${item.productName}-${item.truckNo}-${item.unit}`;
+                                                    if (!acc[key]) {
+                                                        acc[key] = { ...item, quantity: 0 };
+                                                    }
+                                                    acc[key].quantity += (parseFloat(item.quantity) || 0);
+                                                    return acc;
+                                                }, {});
+                                                const uniqueEntries = Object.values(uniqueEntriesMap);
+
+                                                return (
+                                                    <tr
+                                                        key={entry.groupedKey}
+                                                        className={`transition-colors duration-200 cursor-pointer select-none ${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'}`}
+                                                        onMouseDown={() => startLongPress && startLongPress(entry.groupedKey)}
+                                                        onMouseUp={endLongPress}
+                                                        onMouseLeave={endLongPress}
+                                                        onTouchStart={() => startLongPress && startLongPress(entry.groupedKey)}
+                                                        onTouchEnd={endLongPress}
+                                                        onClick={(e) => {
+                                                            if (isLongPressTriggered && isLongPressTriggered.current) return;
+                                                            if (e.target.closest('button') || e.target.closest('a')) return;
+                                                            if (isSelectionMode || selectedItems.size > 0) {
+                                                                handleToggleItem(e, entry.groupedKey);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {(isSelectionMode || selectedItems.size > 0) && (
+                                                            <td className="px-6 py-4">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedItems.has(entry.groupedKey)}
+                                                                    onChange={(e) => handleToggleItem(e, entry.groupedKey)}
+                                                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4"
+                                                                />
+                                                            </td>
+                                                        )}
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{entry.importer || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.exporter || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 align-top">
                                                         {uniqueEntries.map((item, idx) => (
                                                             <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0 truncate max-w-xs">{item.productName || '-'}</div>
@@ -4166,11 +4466,84 @@ function LCReceive({
                             )}
                         </div>
                     </div>
-                )
-            }
+                </div>
+            )
+        }
             {viewData && <ViewDetailsModal data={viewData} costOfGoods={costOfGoods} employeesMap={employeesMap} onClose={() => setViewData(null)} />}
-        </div >
+            {confirmModalConfig && (
+                <ConfirmModal
+                    isOpen={!!confirmModalConfig}
+                    title={confirmModalConfig.title}
+                    message={confirmModalConfig.message}
+                    type={confirmModalConfig.type}
+                    confirmText={confirmModalConfig.confirmText}
+                    cancelText={confirmModalConfig.cancelText}
+                    isSubmitting={isSubmitting}
+                    onConfirm={confirmModalConfig.onConfirm}
+                    onClose={confirmModalConfig.onClose || (() => setConfirmModalConfig(null))}
+                />
+            )}
+        </div>
     );
 }
+
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', confirmText = 'Confirm', cancelText = 'Cancel', isSubmitting = false }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200">
+                <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
+                    type === 'danger' ? 'bg-red-100 text-red-600' :
+                    type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                }`}>
+                    {type === 'danger' ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    ) : type === 'success' ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    ) : (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    )}
+                </div>
+
+                <h3 className="text-base font-extrabold text-gray-900 mb-1.5">{title}</h3>
+                <p className="text-xs text-gray-500 mb-6 leading-relaxed">{message}</p>
+
+                <div className="flex items-center justify-center gap-3">
+                    {onClose && cancelText && (
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={isSubmitting}
+                            className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                            {cancelText}
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onConfirm || onClose}
+                        disabled={isSubmitting}
+                        className={`w-full px-4 py-2.5 text-white text-xs font-bold rounded-xl shadow-lg transition-all transform active:scale-95 disabled:opacity-50 cursor-pointer ${
+                            type === 'danger'
+                                ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
+                                : type === 'success'
+                                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                                : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
+                        }`}
+                    >
+                        {isSubmitting ? 'Processing...' : confirmText}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default LCReceive;
