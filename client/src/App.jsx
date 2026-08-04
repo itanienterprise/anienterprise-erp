@@ -395,7 +395,7 @@ function App() {
         stock: hasRequestedStockMgmt || hasRequestedTransfer,
         transfer: hasRequestedTransfer,
         sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder || hasRequestedPurchase,
-        crm: hasRequestedPaymentCollection || hasRequestedPayToCustomer,
+        crm: false,
         paymentCollection: hasRequestedPaymentCollection,
         payToCustomer: hasRequestedPayToCustomer,
         lcReceive: hasRequestedLC,
