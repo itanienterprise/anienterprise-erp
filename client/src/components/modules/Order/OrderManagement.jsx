@@ -18,7 +18,14 @@ const OrderManagement = ({
     onDeleteConfirm,
     setShowSalesReport,
     setSalesReportData,
-    setSalesReportSearchQuery
+    setSalesReportSearchQuery,
+    isSelectionMode = false,
+    setIsSelectionMode,
+    selectedItems = new Set(),
+    setSelectedItems,
+    startLongPress,
+    endLongPress,
+    isLongPressTriggered
 }) => {
     // --- State Management ---
     const [sales, setSales] = useState([]);
@@ -62,6 +69,7 @@ const OrderManagement = ({
     const [editingId, setEditingId] = useState(null);
     const [originalData, setOriginalData] = useState(null);
     const [viewRecord, setViewRecord] = useState(null);
+    const [confirmModalConfig, setConfirmModalConfig] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [collapsedRows, setCollapsedRows] = useState([]);
 
@@ -1852,6 +1860,46 @@ const OrderManagement = ({
                 </div>
             )}
 
+            {/* Bulk Actions Bar */}
+            {selectedItems.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] ring-1 ring-white/20 px-4 py-2 rounded-full flex items-center gap-4 overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-blue-50/20 to-white/5 pointer-events-none"></div>
+                        <div className="flex items-center gap-2.5 pr-4 border-r border-slate-900/10 relative z-10">
+                            <div className="w-7 h-7 rounded-full bg-blue-600 shadow-md flex items-center justify-center font-black text-[11px] text-white border border-white/20">
+                                {selectedItems.size}
+                            </div>
+                            <span className="text-[11px] font-black text-slate-800 tracking-tight">Items Selected</span>
+                        </div>
+                        <div className="flex items-center gap-2 relative z-10">
+                            <button
+                                type="button"
+                                onClick={handleBulkAccept}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+                            >
+                                <CheckIcon className="w-4 h-4" />
+                                <span>Bulk Accept</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleBulkReject}
+                                className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+                            >
+                                <XIcon className="w-4 h-4" />
+                                <span>Bulk Reject</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { if (setSelectedItems) setSelectedItems(new Set()); if (setIsSelectionMode) setIsSelectionMode(false); }}
+                                className="px-3.5 py-1.5 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+                            >
+                                <span>Deselect All</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Table Container matching General Sale */}
             {!showForm && (
                 <div className="sale-mgmt-table-container">
@@ -1859,7 +1907,25 @@ const OrderManagement = ({
                         <table className="sale-mgmt-table">
                             <thead>
                                 <tr>
-                                    <th className="sale-mgmt-th text-center">SL</th>
+                                    <th className="sale-mgmt-th text-center">
+                                        {(isSelectionMode || selectedItems.size > 0) ? (
+                                            <input autoComplete="off"
+                                                type="checkbox"
+                                                checked={getFilteredData.length > 0 && selectedItems.size === getFilteredData.length}
+                                                onChange={() => {
+                                                    const data = getFilteredData;
+                                                    if (selectedItems.size === data.length) {
+                                                        if (setSelectedItems) setSelectedItems(new Set());
+                                                        if (setIsSelectionMode) setIsSelectionMode(false);
+                                                    } else {
+                                                        if (setSelectedItems) setSelectedItems(new Set(data.map(s => s._id)));
+                                                        if (setIsSelectionMode) setIsSelectionMode(true);
+                                                    }
+                                                }}
+                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            />
+                                        ) : 'SL'}
+                                    </th>
                                     <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                         <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                     </th>
@@ -1963,9 +2029,33 @@ const OrderManagement = ({
                                      }
 
                                     return (
-                                        <tr key={order._id} className="hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle">
-                                            <td className="px-3 py-4 text-center">
-                                                <span className="text-gray-400 font-medium">{index + 1}</span>
+                                        <tr
+                                            key={order._id}
+                                            onMouseDown={() => startLongPress && startLongPress(order._id)}
+                                            onMouseUp={endLongPress}
+                                            onMouseLeave={endLongPress}
+                                            onTouchStart={() => startLongPress && startLongPress(order._id)}
+                                            onTouchEnd={endLongPress}
+                                            onClick={(e) => {
+                                                if (isLongPressTriggered && isLongPressTriggered.current) return;
+                                                if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input')) return;
+                                                if (isSelectionMode || selectedItems.size > 0) {
+                                                    toggleSelection(order._id);
+                                                }
+                                            }}
+                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${selectedItems.has(order._id) ? 'bg-blue-50' : ''}`}
+                                        >
+                                            <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                {(isSelectionMode || selectedItems.size > 0) ? (
+                                                    <input autoComplete="off"
+                                                        type="checkbox"
+                                                        checked={selectedItems.has(order._id)}
+                                                        onChange={() => toggleSelection(order._id)}
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    />
+                                                ) : (
+                                                    <span className="text-gray-400 font-medium">{index + 1}</span>
+                                                )}
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-medium text-gray-600">{formatDate(order.date)}</div>
@@ -2365,6 +2455,66 @@ const OrderManagement = ({
                     </div>
                 </div>
             )}
+
+            {confirmModalConfig && (
+                <ConfirmModal
+                    isOpen={!!confirmModalConfig}
+                    title={confirmModalConfig.title}
+                    message={confirmModalConfig.message}
+                    type={confirmModalConfig.type}
+                    confirmText={confirmModalConfig.confirmText}
+                    cancelText={confirmModalConfig.cancelText}
+                    onConfirm={confirmModalConfig.onConfirm}
+                    onClose={() => setConfirmModalConfig(null)}
+                    isSubmitting={isSubmitting}
+                />
+            )}
+        </div>
+    );
+};
+
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', confirmText = 'Confirm', cancelText = 'Cancel', isSubmitting = false }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200">
+                <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
+                    type === 'danger' ? 'bg-red-100 text-red-600' :
+                    type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                }`}>
+                    {type === 'danger' ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    ) : (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    )}
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
+                <p className="text-sm text-gray-500 mb-6">{message}</p>
+                <div className="flex gap-3">
+                    <button
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all text-sm disabled:opacity-50"
+                    >
+                        {cancelText}
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        disabled={isSubmitting}
+                        className={`flex-1 px-4 py-2 text-white rounded-xl font-bold transition-all text-sm shadow-md disabled:opacity-50 ${
+                            type === 'danger' ? 'bg-red-600 hover:bg-red-700' :
+                            type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                    >
+                        {isSubmitting ? 'Processing...' : confirmText}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

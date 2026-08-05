@@ -866,6 +866,8 @@ const Customer = ({
 
     const filteredPaymentHistory = useMemo(() => {
         const filtered = (viewData?.paymentHistory || []).filter(item => {
+            if ((item.status || '').toLowerCase() === 'requested') return false;
+
             const matchesSearch = !historySearchQuery ||
                 ((item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
                 ((item.bankName || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
@@ -908,6 +910,8 @@ const Customer = ({
 
     const filteredPayToCustomerHistory = useMemo(() => {
         const filtered = (viewData?.payToCustomerHistory || []).filter(item => {
+            if ((item.status || '').toLowerCase() === 'requested') return false;
+
             const matchesSearch = !historySearchQuery ||
                 ((item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
                 ((item.bankName || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
@@ -956,17 +960,21 @@ const Customer = ({
             sortDate: new Date(s.date)
         }));
 
-        const payments = (viewData.paymentHistory || []).map(p => ({
-            ...p,
-            type: 'payment',
-            sortDate: new Date(p.date)
-        }));
+        const payments = (viewData.paymentHistory || [])
+            .filter(p => (p.status || '').toLowerCase() !== 'requested')
+            .map(p => ({
+                ...p,
+                type: 'payment',
+                sortDate: new Date(p.date)
+            }));
 
-        const payouts = (viewData.payToCustomerHistory || []).map(pc => ({
-            ...pc,
-            type: 'payToCustomer',
-            sortDate: new Date(pc.date)
-        }));
+        const payouts = (viewData.payToCustomerHistory || [])
+            .filter(pc => (pc.status || '').toLowerCase() !== 'requested')
+            .map(pc => ({
+                ...pc,
+                type: 'payToCustomer',
+                sortDate: new Date(pc.date)
+            }));
 
         const directPurchases = (viewData.purchaseHistory || []).map(pu => ({
             ...pu,
@@ -1127,11 +1135,13 @@ const Customer = ({
             type: 'sale',
             sortDate: new Date(s.date)
         }));
-        const payments = (viewData.paymentHistory || []).map(p => ({
-            ...p,
-            type: 'payment',
-            sortDate: new Date(p.date)
-        }));
+        const payments = (viewData.paymentHistory || [])
+            .filter(p => (p.status || '').toLowerCase() !== 'requested')
+            .map(p => ({
+                ...p,
+                type: 'payment',
+                sortDate: new Date(p.date)
+            }));
         const all = [...sales, ...payments].sort((a, b) => a.sortDate - b.sortDate);
 
         let currentBalance = 0;

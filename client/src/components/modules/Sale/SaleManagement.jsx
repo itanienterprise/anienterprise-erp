@@ -53,6 +53,7 @@ const SaleManagement = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [viewData, setViewData] = useState(null);
+    const [confirmModalConfig, setConfirmModalConfig] = useState(null);
     const [_customerSearch, setCustomerSearch] = useState('');
     const [collapsedRows, setCollapsedRows] = useState([]);
     const [expandedMobileRows, setExpandedMobileRows] = useState([]);
@@ -214,6 +215,230 @@ const SaleManagement = ({
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const executeBulkAccept = async (recordsToAccept) => {
+        try {
+            setIsSubmitting(true);
+            setConfirmModalConfig(null);
+
+            const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
+            const now = new Date();
+            const dateStr = formatDate(now);
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const adminName = currentUser?.name || currentUser?.username || 'Admin';
+
+            for (const sale of recordsToAccept) {
+                const { _id, createdAt: _createdAt, ...rest } = sale;
+                const finalStatus = (parseFloat(sale.paidAmount || 0) >= parseFloat(sale.totalAmount || 0) && parseFloat(sale.totalAmount || 0) > 0)
+                    ? 'Complete'
+                    : 'Pending';
+
+                const updatedData = {
+                    ...rest,
+                    status: finalStatus,
+                    isEdited: false,
+                    acceptedBy: actionBy,
+                };
+
+                await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
+
+                if (finalStatus === 'Complete' || finalStatus === 'Pending') {
+                    try {
+                        await processSaleEffects(updatedData, false);
+                    } catch (err) {
+                        console.error(`Error in processSaleEffects for bulk accept on sale ${_id}:`, err);
+                    }
+                }
+
+                if (addNotification) {
+                    try {
+                        const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
+                        const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
+
+                        const targetRoles = ['admin', 'incharge', 'sales manager'];
+                        const targetUsers = [sale.requestedByUsername].filter(Boolean);
+                        if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                        await addNotification(
+                            `${sType} Accepted`,
+                            `${dateStr} | ${timeStr} | ${adminName} has accepted the ${sType.toLowerCase()} entry (${sale.invoiceNo || 'No Invoice'}) requested by ${requesterName}`,
+                            targetRoles,
+                            targetUsers
+                        );
+                    } catch (err) {
+                        console.error('Error sending bulk accept notification:', err);
+                    }
+                }
+            }
+
+            setSelectedItems(new Set());
+            if (setIsSelectionMode) setIsSelectionMode(false);
+            try { fetchSales(); } catch (e) { console.error('fetchSales error', e); }
+            try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
+            try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
+            try { fetchStockRecords(); } catch (e) { console.error('fetchStockRecords error', e); }
+            if (refreshPendingIndicators) refreshPendingIndicators();
+        } catch (error) {
+            console.error('Error performing bulk accept:', error);
+            setConfirmModalConfig({
+                title: 'Operation Failed',
+                message: 'Failed to accept selected items. Please try again.',
+                type: 'danger',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null)
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleBulkAccept = () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+
+        const requestedSelectedRecords = displayedSales.filter(item => {
+            const isSelected = selectedItems.has(item._id);
+            const statusLow = (item.status || '').toLowerCase();
+            const isReq = statusLow.includes('requested') || item.isEdited === true;
+            return isSelected && isReq;
+        });
+
+        if (requestedSelectedRecords.length === 0) {
+            setConfirmModalConfig({
+                title: 'No Pending Requests Selected',
+                message: requestedCount > 0 
+                    ? `The selected items are already approved. You have ${requestedCount} pending request(s) waiting for approval.`
+                    : 'The selected items are already approved and there are no pending requests.',
+                type: 'info',
+                confirmText: requestedCount > 0 ? `Switch to Requested (${requestedCount})` : 'OK',
+                cancelText: requestedCount > 0 ? 'Close' : null,
+                onConfirm: () => {
+                    setConfirmModalConfig(null);
+                    if (requestedCount > 0) {
+                        setIsRequestedOnly(true);
+                        setSelectedItems(new Set());
+                    }
+                },
+                onClose: () => setConfirmModalConfig(null)
+            });
+            return;
+        }
+
+        setConfirmModalConfig({
+            title: 'Confirm Bulk Accept',
+            message: `Are you sure you want to accept ${requestedSelectedRecords.length} selected ${saleType === 'Border' ? 'Border Sale' : 'Sale'} request(s)?`,
+            type: 'success',
+            confirmText: 'Accept Selected',
+            cancelText: 'Cancel',
+            onConfirm: () => executeBulkAccept(requestedSelectedRecords),
+            onClose: () => setConfirmModalConfig(null)
+        });
+    };
+
+    const executeBulkReject = async (recordsToReject) => {
+        try {
+            setIsSubmitting(true);
+            setConfirmModalConfig(null);
+
+            const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
+            const now = new Date();
+            const dateStr = formatDate(now);
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const adminName = currentUser?.name || currentUser?.username || 'Admin';
+
+            for (const sale of recordsToReject) {
+                const { _id, createdAt: _createdAt, ...rest } = sale;
+                const updatedData = {
+                    ...rest,
+                    status: 'Rejected',
+                    isEdited: false,
+                    rejectedBy: actionBy,
+                };
+
+                await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
+
+                if (addNotification) {
+                    try {
+                        const requesterName = sale.requestedBy || sale.requestedByUsername || 'an employee';
+                        const sType = saleType === 'Border' ? 'Border Sale' : 'General Sale';
+
+                        const targetRoles = ['admin', 'incharge', 'sales manager'];
+                        const targetUsers = [sale.requestedByUsername].filter(Boolean);
+                        if (!targetUsers.includes('admin')) targetUsers.push('admin');
+
+                        await addNotification(
+                            `${sType} Rejected`,
+                            `${dateStr} | ${timeStr} | ${adminName} has rejected the ${sType.toLowerCase()} entry (${sale.invoiceNo || 'No Invoice'}) requested by ${requesterName}`,
+                            targetRoles,
+                            targetUsers
+                        );
+                    } catch (err) {
+                        console.error('Error sending bulk reject notification:', err);
+                    }
+                }
+            }
+
+            setSelectedItems(new Set());
+            if (setIsSelectionMode) setIsSelectionMode(false);
+            try { fetchSales(); } catch (e) { console.error('fetchSales error', e); }
+            try { fetchCustomers(); } catch (e) { console.error('fetchCustomers error', e); }
+            try { fetchWarehouses(); } catch (e) { console.error('fetchWarehouses error', e); }
+            try { fetchStockRecords(); } catch (e) { console.error('fetchStockRecords error', e); }
+            if (refreshPendingIndicators) refreshPendingIndicators();
+        } catch (error) {
+            console.error('Error performing bulk reject:', error);
+            setConfirmModalConfig({
+                title: 'Operation Failed',
+                message: 'Failed to reject selected items.',
+                type: 'danger',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null)
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleBulkReject = () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+
+        const requestedSelectedRecords = displayedSales.filter(item => {
+            const isSelected = selectedItems.has(item._id);
+            const statusLow = (item.status || '').toLowerCase();
+            const isReq = statusLow.includes('requested') || item.isEdited === true;
+            return isSelected && isReq;
+        });
+
+        if (requestedSelectedRecords.length === 0) {
+            setConfirmModalConfig({
+                title: 'No Pending Requests Selected',
+                message: requestedCount > 0 
+                    ? `The selected items are already processed. You have ${requestedCount} pending request(s) waiting for approval.`
+                    : 'The selected items are already processed and there are no pending requests.',
+                type: 'info',
+                confirmText: requestedCount > 0 ? `Switch to Requested (${requestedCount})` : 'OK',
+                cancelText: requestedCount > 0 ? 'Close' : null,
+                onConfirm: () => {
+                    setConfirmModalConfig(null);
+                    if (requestedCount > 0) {
+                        setIsRequestedOnly(true);
+                        setSelectedItems(new Set());
+                    }
+                },
+                onClose: () => setConfirmModalConfig(null)
+            });
+            return;
+        }
+
+        setConfirmModalConfig({
+            title: 'Confirm Bulk Reject',
+            message: `Are you sure you want to reject ${requestedSelectedRecords.length} selected ${saleType === 'Border' ? 'Border Sale' : 'Sale'} request(s)?`,
+            type: 'danger',
+            confirmText: 'Reject Selected',
+            cancelText: 'Cancel',
+            onConfirm: () => executeBulkReject(requestedSelectedRecords),
+            onClose: () => setConfirmModalConfig(null)
+        });
     };
 
     const handleSort = (key) => {
@@ -1340,6 +1565,21 @@ const SaleManagement = ({
             alert(`Forbidden: You do not have permission to ${editingId ? 'edit' : 'add'} sales`);
             return;
         }
+
+        if (saleType === 'Border') {
+            if (!formData.indianCnF || !formData.indianCnF.trim()) {
+                alert('IND C&F is required');
+                return;
+            }
+            if (!formData.bdCnf || !formData.bdCnf.trim()) {
+                alert('BD C&F is required');
+                return;
+            }
+            if (!formData.companyName || !formData.companyName.trim()) {
+                alert('Company Name is required');
+                return;
+            }
+        }
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
@@ -2057,156 +2297,101 @@ const SaleManagement = ({
             .slice(0, 50);
     };
 
+    const getProductsForLc = (lcNo) => {
+        if (!lcNo || !lcNo.toString().trim()) return [];
+        const cleanLc = lcNo.toString().trim().toLowerCase();
+
+        const productNamesSet = new Set();
+
+        // 1. From lcRecords (LC Management records)
+        (lcRecords || []).forEach(lc => {
+            const curLcNo = (lc.lcNo || lc.lcNumber || '').toString().trim().toLowerCase();
+            if (curLcNo === cleanLc) {
+                if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+                    lc.productsList.forEach(p => {
+                        if (p.productName) productNamesSet.add(p.productName.toString().trim());
+                        else if (p.product) productNamesSet.add(p.product.toString().trim());
+                    });
+                }
+                if (lc.productName) productNamesSet.add(lc.productName.toString().trim());
+                if (lc.product) productNamesSet.add(lc.product.toString().trim());
+            }
+        });
+
+        // 2. From stockRecords (LC Receive / Stock)
+        (stockRecords || []).forEach(st => {
+            const curLcNo = (st.lcNo || '').toString().trim().toLowerCase();
+            if (curLcNo === cleanLc) {
+                if (st.productName) productNamesSet.add(st.productName.toString().trim());
+                if (st.product) productNamesSet.add(st.product.toString().trim());
+                if (Array.isArray(st.entries)) {
+                    st.entries.forEach(e => {
+                        if (e.productName) productNamesSet.add(e.productName.toString().trim());
+                        if (e.product) productNamesSet.add(e.product.toString().trim());
+                    });
+                }
+                if (Array.isArray(st.brandEntries)) {
+                    st.brandEntries.forEach(be => {
+                        if (be.productName) productNamesSet.add(be.productName.toString().trim());
+                        if (be.product) productNamesSet.add(be.product.toString().trim());
+                    });
+                }
+            }
+        });
+
+        const matchedProducts = [];
+        const matchedIds = new Set();
+
+        productNamesSet.forEach(pName => {
+            const resolvedName = resolveProductName(pName);
+            const prodObj = products.find(p =>
+                (p.name || '').trim().toLowerCase() === (resolvedName || '').trim().toLowerCase() ||
+                (p.name || '').trim().toLowerCase() === (pName || '').trim().toLowerCase() ||
+                (p.ipName || '').trim().toLowerCase() === (pName || '').trim().toLowerCase()
+            );
+
+            if (prodObj && !matchedIds.has(prodObj._id)) {
+                matchedIds.add(prodObj._id);
+                matchedProducts.push(prodObj);
+            } else if (!prodObj) {
+                const dummyId = `raw-${pName}`;
+                if (!matchedIds.has(dummyId)) {
+                    matchedIds.add(dummyId);
+                    matchedProducts.push({ _id: dummyId, name: pName });
+                }
+            }
+        });
+
+        return matchedProducts;
+    };
+
     const getFilteredProducts = () => {
-        return products.filter(p =>
-            (p.name || '').toLowerCase().includes(productSearch.toLowerCase()) ||
-            (p.hsCode || '').toLowerCase().includes(productSearch.toLowerCase())
+        let selectedLcNo = '';
+        if (saleType === 'Border') {
+            selectedLcNo = formData.lcNo || '';
+        } else if (activeItemIndex !== null) {
+            const item = formData.items[activeItemIndex];
+            const entry = item?.brandEntries?.[activeEntryIndex || 0];
+            selectedLcNo = entry?.lcNo || formData.lcNo || '';
+        }
+
+        const lcProducts = getProductsForLc(selectedLcNo);
+
+        let targetProducts = products;
+        if (selectedLcNo && lcProducts.length > 0) {
+            targetProducts = lcProducts;
+        }
+
+        const search = (productSearch || '').toLowerCase();
+        return targetProducts.filter(p =>
+            (p.name || '').toLowerCase().includes(search) ||
+            (p.hsCode || '').toLowerCase().includes(search)
         );
-    };
-
-    const getBrandsForSelectedProduct = () => {
-        if (!saleFilters.productName) return [];
-        const selectedProduct = products.find(p => p.name === saleFilters.productName);
-        if (!selectedProduct) return [];
-
-        const brandsSet = new Set();
-        if (selectedProduct.brand) brandsSet.add(selectedProduct.brand);
-        if (selectedProduct.brands && Array.isArray(selectedProduct.brands)) {
-            selectedProduct.brands.forEach(b => {
-                if (b.brand) brandsSet.add(b.brand);
-            });
-        }
-        return [...brandsSet].filter(Boolean).sort();
-    };
-
-    const getFilteredBrands = () => {
-        // Only show brands if a product is selected
-        if (activeItemIndex === null) return [];
-        const item = formData.items[activeItemIndex];
-        if (!item.productId) return [];
-
-        const selectedProduct = products.find(p => p._id === item.productId);
-        if (!selectedProduct) return [];
-
-        const brandsSet = new Set();
-        if (selectedProduct.brand) brandsSet.add(selectedProduct.brand);
-        if (selectedProduct.brands && Array.isArray(selectedProduct.brands)) {
-            selectedProduct.brands.forEach(b => {
-                if (b.brand) brandsSet.add(b.brand);
-            });
-        }
-
-        const brands = [...brandsSet].filter(Boolean);
-        return brands.filter(b => b.toLowerCase().includes(brandSearch.toLowerCase()));
-    };
-    const getFilteredWarehouses = () => {
-        const uniqueWhs = [];
-        const seen = new Set();
-
-        // 1. Add all warehouses from the master list
-        warehouses.forEach(w => {
-            const name = (w.name || w.whName || w.warehouse || '').trim();
-            if (name && !seen.has(name.toLowerCase())) {
-                seen.add(name.toLowerCase());
-                uniqueWhs.push({ _id: w._id, whName: name });
-            }
-        });
-
-        // 2. Add any additional warehouses found in stockRecords (e.g. initial LC receives)
-        stockRecords.forEach(record => {
-            const name = (record.name || record.whName || record.warehouse || '').trim();
-            if (name && !seen.has(name.toLowerCase())) {
-                seen.add(name.toLowerCase());
-                uniqueWhs.push({ _id: `stock-${name}`, whName: name });
-            }
-        });
-
-        return uniqueWhs.filter(w =>
-            w.whName.toLowerCase().includes(warehouseSearch.toLowerCase())
-        );
-    };
-
-    const handleCustomerSelect = (customer) => {
-        // Calculate Previous Balance
-        const salesHistory = customer.salesHistory || [];
-        const paymentHistory = customer.paymentHistory || [];
-
-        const totalAmount = salesHistory.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        const totalSalesPaid = salesHistory.reduce((sum, item) => sum + (parseFloat(item.paid) || 0), 0);
-        const totalDiscount = salesHistory.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
-        const totalHistoryPaid = paymentHistory.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-        const previousBalance = Math.max(0, totalAmount - totalSalesPaid - totalDiscount - totalHistoryPaid);
-
-        setFormData(prev => ({
-            ...prev,
-            customerId: customer.customerId || customer._id,
-            companyName: customer.companyName || '',
-            customerName: customer.customerName || '',
-            address: customer.address || '',
-            contact: customer.phone || '',
-            previousBalance: previousBalance.toFixed(2)
-        }));
-        setActiveDropdown(null);
-    };
-
-    const handleCompanyNameSelect = (customer) => {
-        if (!customer) {
-            setFormData(prev => ({
-                ...prev,
-                companyName: '',
-                customerId: '',
-                customerName: '',
-                address: '',
-                contact: '',
-                previousBalance: '0.00'
-            }));
-            setCompanyNameSearch('');
-            setActiveDropdown(null);
-            return;
-        }
-        setCompanyNameSearch(customer.companyName || '');
-        handleCustomerSelect(customer);
-    };
-
-    const handleImporterSelect = (importer) => {
-        if (importer === null) {
-            setFormData(prev => ({ ...prev, importer: '' }));
-            setImporterSearch('');
-        } else {
-            const value = typeof importer === 'object' ? (importer.name || '') : importer;
-            setFormData(prev => ({ ...prev, importer: value }));
-            setImporterSearch('');
-        }
-        setActiveDropdown(null);
-        setHighlightedIndex(-1);
-    };
-
-    const handleExporterSelect = (exporterName) => {
-        if (exporterName === null) {
-            setFormData(prev => ({ ...prev, exporter: '' }));
-            setExporterSearch('');
-        } else {
-            const value = typeof exporterName === 'object' ? (exporterName.name || '') : exporterName;
-            setFormData(prev => ({ ...prev, exporter: value }));
-            setExporterSearch('');
-        }
-        setActiveDropdown(null);
-        setHighlightedIndex(-1);
-    };
-
-    const handlePortSelect = (port) => {
-        if (port === null) {
-            setFormData(prev => ({ ...prev, port: '' }));
-            setPortSearch('');
-        } else {
-            const value = typeof port === 'object' ? (port.name || '') : port;
-            setFormData(prev => ({ ...prev, port: value }));
-            setPortSearch('');
-        }
-        setActiveDropdown(null);
     };
 
     const handleLcSelect = (lc) => {
+        const selectedLcNo = lc?.lcNo || (typeof lc === 'string' ? lc : '');
+
         if (saleType === 'Border') {
             if (!lc) {
                 setFormData(prev => ({
@@ -2215,16 +2400,52 @@ const SaleManagement = ({
                 }));
                 setLcSearch('');
             } else {
+                const lcProducts = getProductsForLc(selectedLcNo);
+                if (lc.productName && !lcProducts.some(p => p.name === lc.productName)) {
+                    const resolved = resolveProductName(lc.productName);
+                    const matched = products.find(p => p.name === resolved || p.name === lc.productName);
+                    if (matched) lcProducts.push(matched);
+                    else lcProducts.push({ _id: `raw-${lc.productName}`, name: lc.productName });
+                }
+                if (Array.isArray(lc.productsList)) {
+                    lc.productsList.forEach(p => {
+                        const pName = p.productName || p.product;
+                        if (pName && !lcProducts.some(lp => lp.name === pName)) {
+                            const resolved = resolveProductName(pName);
+                            const matched = products.find(m => m.name === resolved || m.name === pName);
+                            if (matched) lcProducts.push(matched);
+                            else lcProducts.push({ _id: `raw-${pName}`, name: pName });
+                        }
+                    });
+                }
+
                 setFormData(prev => {
                     const newData = {
                         ...prev,
-                        lcNo: lc.lcNo
+                        lcNo: selectedLcNo
                     };
 
                     // Auto-fill associated fields if they are empty
                     if (!newData.importer && lc.importerName) newData.importer = lc.importerName;
                     if (!newData.exporter && lc.exporterName) newData.exporter = lc.exporterName;
                     if (!newData.port && lc.port) newData.port = lc.port;
+
+                    // Auto-select product if there is ONLY 1 product for this LC No
+                    if (lcProducts.length === 1 && newData.items && newData.items.length > 0) {
+                        const singleProd = lcProducts[0];
+                        const newItems = [...newData.items];
+                        newItems[0] = {
+                            ...newItems[0],
+                            productId: singleProd._id,
+                            productName: singleProd.name,
+                            brand: '',
+                            brandEntries: (newItems[0].brandEntries || [{}]).map(be => ({
+                                ...be,
+                                lcNo: selectedLcNo
+                            }))
+                        };
+                        newData.items = newItems;
+                    }
 
                     return newData;
                 });
@@ -2233,6 +2454,9 @@ const SaleManagement = ({
         } else {
             // General sale (brand-wise LC)
             if (activeItemIndex === null || activeEntryIndex === null) return;
+
+            const lcProducts = getProductsForLc(selectedLcNo);
+
             setFormData(prev => {
                 const newItems = [...prev.items];
                 const item = { ...newItems[activeItemIndex] };
@@ -2242,7 +2466,7 @@ const SaleManagement = ({
                 if (!lc) {
                     entry.lcNo = '';
                 } else {
-                    entry.lcNo = lc.lcNo;
+                    entry.lcNo = selectedLcNo;
                     if (lc.brand) {
                         entry.brand = lc.brand;
                         entry.brandName = lc.brand;
@@ -2251,6 +2475,14 @@ const SaleManagement = ({
 
                 newBrandEntries[activeEntryIndex] = entry;
                 item.brandEntries = newBrandEntries;
+
+                // Auto-select product if there is ONLY 1 product for this LC and item doesn't have a product selected yet
+                if (lc && lcProducts.length === 1 && !item.productId) {
+                    const singleProd = lcProducts[0];
+                    item.productId = singleProd._id;
+                    item.productName = singleProd.name;
+                }
+
                 newItems[activeItemIndex] = item;
 
                 const newData = {
@@ -3642,7 +3874,7 @@ const SaleManagement = ({
                             {/* Border Field: IND C&F */}
                             {saleType === 'Border' && (
                                 <div className="sale-mgmt-input-group relative ind-cnf-dropdown-container">
-                                    <label className="sale-mgmt-label">IND C&F</label>
+                                    <label className="sale-mgmt-label">IND C&F <span className="text-red-500">*</span></label>
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -3703,7 +3935,7 @@ const SaleManagement = ({
                             {/* Border Field: BD C&F */}
                             {saleType === 'Border' && (
                                 <div className="sale-mgmt-input-group relative bd-cnf-dropdown-container">
-                                    <label className="sale-mgmt-label">BD C&F</label>
+                                    <label className="sale-mgmt-label">BD C&F <span className="text-red-500">*</span></label>
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -3826,7 +4058,7 @@ const SaleManagement = ({
                                 <>
                                     {/* Company Name Select */}
                                     <div className="sale-mgmt-input-group relative company-dropdown-container">
-                                        <label className="sale-mgmt-label">Company Name</label>
+                                        <label className="sale-mgmt-label">Company Name <span className="text-red-500">*</span></label>
                                         <div className="relative">
                                             <input
                                                 type="text"
@@ -4724,7 +4956,7 @@ const SaleManagement = ({
             )}
 
             {/* Bulk Actions Bar */}
-            {isSelectionMode && saleType === 'Border' && selectedItems.size > 0 && (
+            {selectedItems.size > 0 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className="bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] ring-1 ring-white/20 px-4 py-2 rounded-full flex items-center gap-4 overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-tr from-blue-50/20 to-white/5 pointer-events-none"></div>
@@ -4758,6 +4990,60 @@ const SaleManagement = ({
 
             {/* Sales Table & Cards */}
             {!showForm && (
+                <div className="space-y-4">
+                    {/* Bulk Action Bar - LC Receive Style */}
+                    {selectedItems.size > 0 && (
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4 animate-in fade-in duration-200">
+                            <div className="flex items-center gap-3">
+                                <span className="inline-flex items-center justify-center bg-blue-600 text-white font-extrabold text-xs px-3 py-1 rounded-full shadow-sm">
+                                    {selectedItems.size} Selected
+                                </span>
+                                <span className="text-xs font-semibold text-gray-700">
+                                    {saleType === 'Border' ? 'Border Sale' : 'Sale'} entries selected
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {isRequestedOnly && canApprove && (
+                                    <button
+                                        onClick={handleBulkAccept}
+                                        disabled={isSubmitting}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                        title="Accept all selected requests"
+                                    >
+                                        <CheckIcon className="w-4 h-4" />
+                                        <span>Bulk Accept ({selectedItems.size})</span>
+                                    </button>
+                                )}
+                                {isRequestedOnly && canApprove && (
+                                    <button
+                                        onClick={handleBulkReject}
+                                        disabled={isSubmitting}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                        title="Reject all selected requests"
+                                    >
+                                        <XIcon className="w-4 h-4" />
+                                        <span>Bulk Reject ({selectedItems.size})</span>
+                                    </button>
+                                )}
+                                {saleType === 'Border' && !isRequestedOnly && (
+                                    <button
+                                        onClick={() => setShowBulkRateModal(true)}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        <EditIcon className="w-4 h-4" />
+                                        <span>Edit Rate</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => { setSelectedItems(new Set()); if (setIsSelectionMode) setIsSelectionMode(false); }}
+                                    className="px-3.5 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+                                >
+                                    Deselect All
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                 <div className="sale-mgmt-table-container">
                     {/* Desktop Table View */}
                     <div className="hidden md:block overflow-x-auto">
@@ -4766,20 +5052,21 @@ const SaleManagement = ({
                                 {saleType === 'Border' ? (
                                     <tr>
                                         <th className="sale-mgmt-th text-center">
-                                            {isSelectionMode ? (
+                                            {(isSelectionMode || selectedItems.size > 0) ? (
                                                 <input autoComplete="off"
                                                     type="checkbox"
-                                                    checked={selectedItems.size === getFilteredData().length && getFilteredData().length > 0}
+                                                    checked={getFilteredData().length > 0 && selectedItems.size === getFilteredData().length}
                                                     onChange={() => {
                                                         const data = getFilteredData();
                                                         if (selectedItems.size === data.length) {
                                                             setSelectedItems(new Set());
-                                                            setIsSelectionMode(false);
+                                                            if (setIsSelectionMode) setIsSelectionMode(false);
                                                         } else {
                                                             setSelectedItems(new Set(data.map(s => s._id)));
+                                                            if (setIsSelectionMode) setIsSelectionMode(true);
                                                         }
                                                     }}
-                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                 />
                                             ) : '#'}
                                         </th>
@@ -4819,20 +5106,21 @@ const SaleManagement = ({
                                 ) : (
                                     <tr>
                                         <th className="sale-mgmt-th text-center">
-                                            {isSelectionMode ? (
+                                            {(isSelectionMode || selectedItems.size > 0) ? (
                                                 <input autoComplete="off"
                                                     type="checkbox"
-                                                    checked={selectedItems.size === getFilteredData().length && getFilteredData().length > 0}
+                                                    checked={getFilteredData().length > 0 && selectedItems.size === getFilteredData().length}
                                                     onChange={() => {
                                                         const data = getFilteredData();
                                                         if (selectedItems.size === data.length) {
                                                             setSelectedItems(new Set());
-                                                            setIsSelectionMode(false);
+                                                            if (setIsSelectionMode) setIsSelectionMode(false);
                                                         } else {
                                                             setSelectedItems(new Set(data.map(s => s._id)));
+                                                            if (setIsSelectionMode) setIsSelectionMode(true);
                                                         }
                                                     }}
-                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                 />
                                             ) : 'SL'}
                                         </th>
@@ -4934,22 +5222,18 @@ const SaleManagement = ({
                                                 onTouchEnd={endLongPress}
                                                 onClick={() => {
                                                     if (isLongPressTriggered && isLongPressTriggered.current) return;
-                                                    isSelectionMode && toggleSelection(sale._id);
+                                                    (isSelectionMode || selectedItems.size > 0) && toggleSelection(sale._id);
                                                 }}
                                                 className={`hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px] ${selectedItems.has(sale._id) ? 'bg-blue-50' : ''}`}
                                             >
                                                 <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                                    {isSelectionMode ? (
-                                                        canUserEditSale(sale) ? (
-                                                            <input autoComplete="off"
-                                                                type="checkbox"
-                                                                checked={selectedItems.has(sale._id)}
-                                                                onChange={() => toggleSelection(sale._id)}
-                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-4 h-4" /> // Empty space for non-editable
-                                                        )
+                                                    {(isSelectionMode || selectedItems.size > 0) ? (
+                                                        <input autoComplete="off"
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(sale._id)}
+                                                            onChange={() => toggleSelection(sale._id)}
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        />
                                                     ) : (
                                                         <span className="text-gray-400 font-medium">{index + 1}</span>
                                                     )}
@@ -5031,21 +5315,29 @@ const SaleManagement = ({
                                     return (
                                         <tr
                                             key={sale._id}
-                                            onClick={() => isMultiple && toggleRowExpansion(sale._id)}
+                                            onMouseDown={() => startLongPress(sale._id)}
+                                            onMouseUp={endLongPress}
+                                            onMouseLeave={endLongPress}
+                                            onTouchStart={() => startLongPress(sale._id)}
+                                            onTouchEnd={endLongPress}
+                                            onClick={() => {
+                                                if (isLongPressTriggered && isLongPressTriggered.current) return;
+                                                if (isSelectionMode || selectedItems.size > 0) {
+                                                    toggleSelection(sale._id);
+                                                } else if (isMultiple) {
+                                                    toggleRowExpansion(sale._id);
+                                                }
+                                            }}
                                             className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''}`}
                                         >
                                             <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                                {isSelectionMode ? (
-                                                    canUserEditSale(sale) ? (
-                                                        <input autoComplete="off"
-                                                            type="checkbox"
-                                                            checked={selectedItems.has(sale._id)}
-                                                            onChange={() => toggleSelection(sale._id)}
-                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-4 h-4" /> // Empty space for non-editable
-                                                    )
+                                                {(isSelectionMode || selectedItems.size > 0) ? (
+                                                    <input autoComplete="off"
+                                                        type="checkbox"
+                                                        checked={selectedItems.has(sale._id)}
+                                                        onChange={() => toggleSelection(sale._id)}
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    />
                                                 ) : (
                                                     <span className="text-gray-400 font-medium">{index + 1}</span>
                                                 )}
@@ -5352,32 +5644,28 @@ const SaleManagement = ({
                             return (
                                 <div
                                     key={sale._id}
-                                    onMouseDown={() => saleType === 'Border' && startLongPress(sale._id)}
+                                    onMouseDown={() => startLongPress(sale._id)}
                                     onMouseUp={endLongPress}
                                     onMouseLeave={endLongPress}
-                                    onTouchStart={() => saleType === 'Border' && startLongPress(sale._id)}
+                                    onTouchStart={() => startLongPress(sale._id)}
                                     onTouchEnd={endLongPress}
                                     className={`sale-mgmt-mobile-card group cursor-pointer transition-all ${isExpanded ? 'shadow-md ring-1 ring-blue-500/10 p-4' : 'hover:bg-gray-50/30 p-2.5'} ${selectedItems.has(sale._id) ? 'bg-blue-50 ring-1 ring-blue-500/30' : ''}`}
                                     onClick={() => {
                                         if (isLongPressTriggered && isLongPressTriggered.current) return;
-                                        isSelectionMode && saleType === 'Border' ? toggleSelection(sale._id) : toggleMobileRowExpansion(sale._id);
+                                        (isSelectionMode || selectedItems.size > 0) ? toggleSelection(sale._id) : toggleMobileRowExpansion(sale._id);
                                     }}
                                 >
                                     {/* Collapsed Single Line View / Expanded Header Row */}
                                     <div className={`flex items-center justify-between min-w-0 ${isExpanded ? 'border-b border-gray-50 pb-3 mb-4' : ''}`}>
                                         <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
-                                            {isSelectionMode && saleType === 'Border' && (
+                                            {(isSelectionMode || selectedItems.size > 0) && (
                                                 <div className="flex-shrink-0 pr-1" onClick={(e) => e.stopPropagation()}>
-                                                    {canUserEditSale(sale) ? (
-                                                        <input autoComplete="off"
-                                                            type="checkbox"
-                                                            checked={selectedItems.has(sale._id)}
-                                                            onChange={() => toggleSelection(sale._id)}
-                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-4 h-4" />
-                                                    )}
+                                                    <input autoComplete="off"
+                                                        type="checkbox"
+                                                        checked={selectedItems.has(sale._id)}
+                                                        onChange={() => toggleSelection(sale._id)}
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    />
                                                 </div>
                                             )}
                                             {/* Date & Inv */}
@@ -5603,6 +5891,7 @@ const SaleManagement = ({
                         })}
                     </div>
                 </div>
+                </div>
             )}
             {viewData && renderViewModal()}
 
@@ -5656,6 +5945,83 @@ const SaleManagement = ({
                     </div>
                 </div>
             )}
+
+            {confirmModalConfig && (
+                <ConfirmModal
+                    isOpen={!!confirmModalConfig}
+                    title={confirmModalConfig.title}
+                    message={confirmModalConfig.message}
+                    type={confirmModalConfig.type}
+                    confirmText={confirmModalConfig.confirmText}
+                    cancelText={confirmModalConfig.cancelText}
+                    onConfirm={confirmModalConfig.onConfirm}
+                    onClose={confirmModalConfig.onClose || (() => setConfirmModalConfig(null))}
+                    isSubmitting={isSubmitting}
+                />
+            )}
+        </div>
+    );
+};
+
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', confirmText = 'Confirm', cancelText = 'Cancel', isSubmitting = false }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200">
+                <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
+                    type === 'danger' ? 'bg-red-100 text-red-600' :
+                    type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                }`}>
+                    {type === 'danger' ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    ) : type === 'success' ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    ) : (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    )}
+                </div>
+
+                <h3 className="text-base font-extrabold text-gray-900 mb-1.5">{title}</h3>
+                <p className="text-xs text-gray-500 mb-6 leading-relaxed">{message}</p>
+
+                <div className="flex items-center justify-center gap-3">
+                    {onClose && cancelText && (
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={isSubmitting}
+                            className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all disabled:opacity-50"
+                        >
+                            {cancelText}
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        disabled={isSubmitting}
+                        className={`px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
+                            type === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20' :
+                            type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
+                        }`}
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                <span>Processing...</span>
+                            </>
+                        ) : (
+                            confirmText
+                        )}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

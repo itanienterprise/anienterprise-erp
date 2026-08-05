@@ -39,13 +39,47 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
 
+    // Selection & Bulk Actions
+    const [selectedItems, setSelectedItems] = useState(new Set());
+    const [confirmModalConfig, setConfirmModalConfig] = useState(null);
+
+    const longPressTimerRef = useRef(null);
+    const isLongPressRef = useRef(false);
+
+    const handleLongPressStart = (groupKey) => {
+        isLongPressRef.current = false;
+        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = setTimeout(() => {
+            isLongPressRef.current = true;
+            setSelectedItems(prev => {
+                const next = new Set(prev);
+                if (next.has(groupKey)) {
+                    next.delete(groupKey);
+                } else {
+                    next.add(groupKey);
+                }
+                return next;
+            });
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                try { navigator.vibrate(50); } catch (e) {}
+            }
+        }, 500);
+    };
+
+    const handleLongPressEnd = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+    };
+
     const requestedCount = useMemo(() => {
-        const unique = new Set(payments.filter(p => (p.status || '').toLowerCase() === 'requested').map(p => p.receiptNo || p.id));
+        const unique = new Set(payments.filter(p => (p.status || '').toLowerCase() === 'requested').map(p => p.id || p.receiptNo));
         return unique.size;
     }, [payments]);
 
     const editRequestedCount = useMemo(() => {
-        const unique = new Set(payments.filter(p => (p.isEdited === true || p.isEdited === 'true') && (p.status || '').toLowerCase() !== 'requested').map(p => p.receiptNo || p.id));
+        const unique = new Set(payments.filter(p => (p.isEdited === true || p.isEdited === 'true') && (p.status || '').toLowerCase() !== 'requested').map(p => p.id || p.receiptNo));
         return unique.size;
     }, [payments]);
 
@@ -71,6 +105,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
     const [filters, setFilters] = useState(initialFilterState);
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(null);
     const [filterSearchInputs, setFilterSearchInputs] = useState({ bankName: '', branch: '', method: '', customer: '' });
+
+    useEffect(() => {
+        setSelectedItems(new Set());
+    }, [isRequestedOnly, isEditRequestedOnly, searchQuery, filters]);
 
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
@@ -393,11 +431,20 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`);
             const customer = custRes.data;
 
+            const groupItemIds = new Set((paymentGroup.items || []).map(i => i.id).filter(Boolean));
+            const groupReceiptNo = paymentGroup.receiptNo;
+
+            const isItemMatch = (p) => {
+                if (p.id && groupItemIds.has(p.id)) return true;
+                if (groupReceiptNo && p.receiptNo && p.receiptNo === groupReceiptNo) return true;
+                return false;
+            };
+
             if (newStatus === 'Rejected') {
                 if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
                     // Revert edit request back to original data before edit
                     const updatedHistory = (customer.paymentHistory || []).map(p => {
-                        if (p.receiptNo === paymentGroup.receiptNo) {
+                        if (isItemMatch(p)) {
                             if (p.originalData) {
                                 const { originalData, ...rest } = p;
                                 return {
@@ -413,13 +460,13 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
                 } else {
                     // Remove requested payment
-                    const updatedHistory = (customer.paymentHistory || []).filter(p => p.receiptNo !== paymentGroup.receiptNo);
+                    const updatedHistory = (customer.paymentHistory || []).filter(p => !isItemMatch(p));
                     await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, paymentHistory: updatedHistory });
                 }
             } else {
                 // Accept
                 const updatedHistory = (customer.paymentHistory || []).map(p => {
-                    if (p.receiptNo === paymentGroup.receiptNo) {
+                    if (isItemMatch(p)) {
                         const { originalData, ...rest } = p;
                         return { ...rest, status: 'Accepted', isEdited: false };
                     }
@@ -456,6 +503,227 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         } catch (error) {
             console.error('Error updating payment status:', error);
             alert('Failed to update payment status');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleBulkAccept = () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+
+        const pendingSelectedGroups = displayedGroups.filter(group => {
+            const isSelected = selectedItems.has(group.key);
+            const isPending = (group.status || '').toLowerCase() === 'requested' || group.isEdited === true;
+            return isSelected && isPending;
+        });
+
+        if (pendingSelectedGroups.length === 0) {
+            setConfirmModalConfig({
+                title: 'No Pending Requests Selected',
+                message: (requestedCount > 0 || editRequestedCount > 0)
+                    ? `The selected items are already accepted. You have pending request(s) waiting for approval.`
+                    : 'The selected items are already accepted and there are no pending requests.',
+                type: 'info',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null),
+                onClose: () => setConfirmModalConfig(null)
+            });
+            return;
+        }
+
+        setConfirmModalConfig({
+            title: 'Confirm Bulk Accept',
+            message: `Are you sure you want to accept ${pendingSelectedGroups.length} selected Payment Collection request(s)?`,
+            type: 'success',
+            confirmText: 'Accept Selected',
+            cancelText: 'Cancel',
+            onConfirm: () => executeBulkAccept(pendingSelectedGroups),
+            onClose: () => setConfirmModalConfig(null)
+        });
+    };
+
+    const executeBulkAccept = async (groupsToAccept) => {
+        try {
+            setIsSubmitting(true);
+            setConfirmModalConfig(null);
+
+            const actorName = currentUser?.name || currentUser?.username || 'Admin';
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB');
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const customerMap = {};
+            groupsToAccept.forEach(group => {
+                if (!customerMap[group.customerId]) {
+                    customerMap[group.customerId] = [];
+                }
+                customerMap[group.customerId].push(group);
+            });
+
+            for (const [customerId, customerGroups] of Object.entries(customerMap)) {
+                const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
+                const customer = custRes.data;
+
+                const targetItemIds = new Set();
+                const targetReceiptNos = new Set();
+                customerGroups.forEach(g => {
+                    if (g.receiptNo) targetReceiptNos.add(g.receiptNo);
+                    (g.items || []).forEach(item => {
+                        if (item.id) targetItemIds.add(item.id);
+                        if (item.receiptNo) targetReceiptNos.add(item.receiptNo);
+                    });
+                });
+
+                const updatedHistory = (customer.paymentHistory || []).map(p => {
+                    const matchesId = p.id && targetItemIds.has(p.id);
+                    const matchesReceipt = p.receiptNo && targetReceiptNos.has(p.receiptNo);
+                    if (matchesId || matchesReceipt) {
+                        const { originalData, ...rest } = p;
+                        return { ...rest, status: 'Accepted', isEdited: false };
+                    }
+                    return p;
+                });
+
+                await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, paymentHistory: updatedHistory });
+            }
+
+            if (addNotification) {
+                await addNotification(
+                    'Bulk Payment Requests Accepted',
+                    `${dateStr} | ${timeStr} | ${actorName} bulk accepted ${groupsToAccept.length} payment collection request(s)`,
+                    ['admin', 'incharge', 'sales manager'],
+                    ['admin']
+                );
+            }
+
+            setSelectedItems(new Set());
+            fetchPayments();
+        } catch (error) {
+            console.error('Error performing bulk accept:', error);
+            setConfirmModalConfig({
+                title: 'Operation Failed',
+                message: 'Failed to accept selected payment requests.',
+                type: 'danger',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null)
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleBulkReject = () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+
+        const pendingSelectedGroups = displayedGroups.filter(group => {
+            const isSelected = selectedItems.has(group.key);
+            const isPending = (group.status || '').toLowerCase() === 'requested' || group.isEdited === true;
+            return isSelected && isPending;
+        });
+
+        if (pendingSelectedGroups.length === 0) {
+            setConfirmModalConfig({
+                title: 'No Pending Requests Selected',
+                message: 'None of the selected items are pending requests.',
+                type: 'info',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null),
+                onClose: () => setConfirmModalConfig(null)
+            });
+            return;
+        }
+
+        setConfirmModalConfig({
+            title: 'Confirm Bulk Reject',
+            message: `Are you sure you want to reject ${pendingSelectedGroups.length} selected Payment Collection request(s)?`,
+            type: 'danger',
+            confirmText: 'Reject Selected',
+            cancelText: 'Cancel',
+            onConfirm: () => executeBulkReject(pendingSelectedGroups),
+            onClose: () => setConfirmModalConfig(null)
+        });
+    };
+
+    const executeBulkReject = async (groupsToReject) => {
+        try {
+            setIsSubmitting(true);
+            setConfirmModalConfig(null);
+
+            const actorName = currentUser?.name || currentUser?.username || 'Admin';
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB');
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const customerMap = {};
+            groupsToReject.forEach(group => {
+                if (!customerMap[group.customerId]) {
+                    customerMap[group.customerId] = [];
+                }
+                customerMap[group.customerId].push(group);
+            });
+
+            for (const [customerId, customerGroups] of Object.entries(customerMap)) {
+                const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
+                const customer = custRes.data;
+
+                const editRequestIds = new Set();
+                const editRequestReceipts = new Set();
+                const newRequestIds = new Set();
+                const newRequestReceipts = new Set();
+
+                customerGroups.forEach(g => {
+                    const isEditReq = g.isEdited === true && (g.status || '').toLowerCase() !== 'requested';
+                    (g.items || []).forEach(item => {
+                        if (isEditReq) {
+                            if (item.id) editRequestIds.add(item.id);
+                            if (item.receiptNo) editRequestReceipts.add(item.receiptNo);
+                        } else {
+                            if (item.id) newRequestIds.add(item.id);
+                            if (item.receiptNo) newRequestReceipts.add(item.receiptNo);
+                        }
+                    });
+                    if (g.receiptNo) {
+                        if (isEditReq) editRequestReceipts.add(g.receiptNo);
+                        else newRequestReceipts.add(g.receiptNo);
+                    }
+                });
+
+                const updatedHistory = (customer.paymentHistory || [])
+                    .filter(p => !((p.id && newRequestIds.has(p.id)) || (p.receiptNo && newRequestReceipts.has(p.receiptNo))))
+                    .map(p => {
+                        if ((p.id && editRequestIds.has(p.id)) || (p.receiptNo && editRequestReceipts.has(p.receiptNo))) {
+                            if (p.originalData) {
+                                const { originalData, ...rest } = p;
+                                return { ...rest, ...originalData, isEdited: false };
+                            }
+                            return { ...p, isEdited: false };
+                        }
+                        return p;
+                    });
+
+                await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, paymentHistory: updatedHistory });
+            }
+
+            if (addNotification) {
+                await addNotification(
+                    'Bulk Payment Requests Rejected',
+                    `${dateStr} | ${timeStr} | ${actorName} bulk rejected ${groupsToReject.length} payment collection request(s)`,
+                    ['admin', 'incharge', 'sales manager'],
+                    ['admin']
+                );
+            }
+
+            setSelectedItems(new Set());
+            fetchPayments();
+        } catch (error) {
+            console.error('Error performing bulk reject:', error);
+            setConfirmModalConfig({
+                title: 'Operation Failed',
+                message: 'Failed to reject selected payment requests.',
+                type: 'danger',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null)
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -814,6 +1082,35 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
         return matchSearch && isDateMatch && matchMethod && matchBankName && matchBranch && matchCustomer;
     });
+
+    const displayedGroups = useMemo(() => {
+        const groups = [];
+        filteredPayments.forEach(payment => {
+            const groupKey = `${payment.date}-${payment.receiptNo || payment.id}-${payment.customerId}`;
+            let group = groups.find(g => g.key === groupKey);
+            if (!group) {
+                group = {
+                    key: groupKey,
+                    date: payment.date,
+                    receiptNo: payment.receiptNo,
+                    companyName: payment.companyName,
+                    customerName: payment.customerName,
+                    customerId: payment.customerId,
+                    customerAddress: payment.customerAddress || '',
+                    status: payment.status,
+                    isEdited: payment.isEdited,
+                    items: []
+                };
+                groups.push(group);
+            }
+            group.items.push(payment);
+            if ((payment.status || '').toLowerCase() === 'requested') {
+                group.status = 'Requested';
+            }
+            group.isEdited = group.isEdited || payment.isEdited === true || payment.isEdited === 'true';
+        });
+        return groups;
+    }, [filteredPayments]);
 
     const calculateCustomerBalance = (customer) => {
         if (!customer) return 0;
@@ -1226,75 +1523,112 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             )}
 
             {!showAddModal && (
-                <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
-                    {/* Table Header Row */}
-                    <div className="overflow-x-auto">
-                        <table className="sale-mgmt-table hidden md:table">
-                            <thead>
-                                <tr>
-                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
-                                        <div className="flex items-center">Date {renderSortIcon('date')}</div>
-                                    </th>
-                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('receiptNo')}>
-                                        <div className="flex items-center">Receipt No {renderSortIcon('receiptNo')}</div>
-                                    </th>
-                                    <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('customerName')}>
-                                        <div className="flex items-center">Party {renderSortIcon('customerName')}</div>
-                                    </th>
-                                    <th className="sale-mgmt-th">Location</th>
-                                    <th className="sale-mgmt-th">Payment Method</th>
-                                    <th className="sale-mgmt-th">Bank Name</th>
-                                    <th className="sale-mgmt-th">Branch</th>
-                                    <th className="sale-mgmt-th">Account Number</th>
-                                    <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('amount')}>
-                                        <div className="flex items-center justify-center">Amount {renderSortIcon('amount')}</div>
-                                    </th>
-                                    <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
-                                        <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
-                                    </th>
-                                    <th className="sale-mgmt-th text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {isLoading ? (
-                                    Array(5).fill(0).map((_, i) => (
-                                        <tr key={i} className="animate-pulse">
-                                            <td colSpan={9} className="px-6 py-12 text-center">
-                                                <div className="flex flex-col items-center gap-2">
-                                                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
-                                                        <DollarSignIcon className="w-6 h-6 text-blue-500" />
-                                                    </div>
-                                                    <p className="text-gray-500 font-medium">Loading transaction history...</p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : filteredPayments.length > 0 ? (
-                                    (() => {
-                                        const groups = [];
-                                        filteredPayments.forEach(payment => {
-                                            const groupKey = `${payment.date}-${payment.receiptNo}-${payment.customerId}`;
-                                            let group = groups.find(g => g.key === groupKey);
-                                            if (!group) {
-                                                group = {
-                                                    key: groupKey,
-                                                    date: payment.date,
-                                                    receiptNo: payment.receiptNo,
-                                                    companyName: payment.companyName,
-                                                    customerName: payment.customerName,
-                                                    customerId: payment.customerId,
-                                                    customerAddress: payment.customerAddress || '',
-                                                    status: payment.status,
-                                                    isEdited: payment.isEdited,
-                                                    items: []
-                                                };
-                                                groups.push(group);
-                                            }
-                                            group.items.push(payment);
-                                            group.isEdited = group.isEdited || payment.isEdited === true || payment.isEdited === 'true';
-                                        });
+                <div className="space-y-4">
+                    {/* Bulk Action Bar */}
+                    {selectedItems.size > 0 && (
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4 animate-in fade-in duration-200">
+                            <div className="flex items-center gap-3">
+                                <span className="inline-flex items-center justify-center bg-blue-600 text-white font-extrabold text-xs px-3 py-1 rounded-full shadow-sm">
+                                    {selectedItems.size} Selected
+                                </span>
+                                <span className="text-xs font-semibold text-gray-700">
+                                    Payment Collection entries selected
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {canApprove && (
+                                    <button
+                                        onClick={handleBulkAccept}
+                                        disabled={isSubmitting}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                        title="Accept all selected payment requests"
+                                    >
+                                        <CheckIcon className="w-4 h-4" />
+                                        <span>Bulk Accept ({selectedItems.size})</span>
+                                    </button>
+                                )}
+                                {canApprove && (
+                                    <button
+                                        onClick={handleBulkReject}
+                                        disabled={isSubmitting}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-red-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                                        title="Reject all selected payment requests"
+                                    >
+                                        <XIcon className="w-4 h-4" />
+                                        <span>Bulk Reject ({selectedItems.size})</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setSelectedItems(new Set())}
+                                    className="px-3.5 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
+                                >
+                                    Deselect All
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
-                                        return groups.map((group, groupIdx) => {
+                    <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
+                        {/* Table Header Row */}
+                        <div className="overflow-x-auto">
+                            <table className="sale-mgmt-table hidden md:table">
+                                <thead>
+                                    <tr>
+                                        {selectedItems.size > 0 && (
+                                            <th className="sale-mgmt-th w-10 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={displayedGroups.length > 0 && displayedGroups.every(g => selectedItems.has(g.key))}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedItems(new Set(displayedGroups.map(g => g.key)));
+                                                        } else {
+                                                            setSelectedItems(new Set());
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                />
+                                            </th>
+                                        )}
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
+                                            <div className="flex items-center">Date {renderSortIcon('date')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('receiptNo')}>
+                                            <div className="flex items-center">Receipt No {renderSortIcon('receiptNo')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('customerName')}>
+                                            <div className="flex items-center">Party {renderSortIcon('customerName')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th">Location</th>
+                                        <th className="sale-mgmt-th">Payment Method</th>
+                                        <th className="sale-mgmt-th">Bank Name</th>
+                                        <th className="sale-mgmt-th">Branch</th>
+                                        <th className="sale-mgmt-th">Account Number</th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('amount')}>
+                                            <div className="flex items-center justify-center">Amount {renderSortIcon('amount')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
+                                            <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
+                                        </th>
+                                        <th className="sale-mgmt-th text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {isLoading ? (
+                                        Array(5).fill(0).map((_, i) => (
+                                            <tr key={i} className="animate-pulse">
+                                                <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11} className="px-6 py-12 text-center">
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
+                                                            <DollarSignIcon className="w-6 h-6 text-blue-500" />
+                                                        </div>
+                                                        <p className="text-gray-500 font-medium">Loading transaction history...</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : displayedGroups.length > 0 ? (
+                                        displayedGroups.map((group) => {
                                             const isMultiple = group.items.length > 1;
                                             const isExpanded = expandedRows.has(group.key);
                                             const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -1302,9 +1636,50 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                             return (
                                                 <tr
                                                     key={group.key}
-                                                    onClick={() => isMultiple && toggleRowExpansion(group.key)}
-                                                    className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''}`}
+                                                    onMouseDown={() => handleLongPressStart(group.key)}
+                                                    onMouseUp={handleLongPressEnd}
+                                                    onMouseLeave={handleLongPressEnd}
+                                                    onTouchStart={() => handleLongPressStart(group.key)}
+                                                    onTouchEnd={handleLongPressEnd}
+                                                    onTouchMove={handleLongPressEnd}
+                                                    onClick={(e) => {
+                                                        if (isLongPressRef.current) {
+                                                            e.stopPropagation();
+                                                            return;
+                                                        }
+                                                        if (selectedItems.size > 0) {
+                                                            e.stopPropagation();
+                                                            const newSelected = new Set(selectedItems);
+                                                            if (newSelected.has(group.key)) {
+                                                                newSelected.delete(group.key);
+                                                            } else {
+                                                                newSelected.add(group.key);
+                                                            }
+                                                            setSelectedItems(newSelected);
+                                                            return;
+                                                        }
+                                                        if (isMultiple) toggleRowExpansion(group.key);
+                                                    }}
+                                                    className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle select-none ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''} ${selectedItems.has(group.key) ? 'bg-blue-50/70 font-medium' : ''}`}
                                                 >
+                                                    {selectedItems.size > 0 && (
+                                                        <td className="px-3 py-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedItems.has(group.key)}
+                                                                onChange={(e) => {
+                                                                    const newSelected = new Set(selectedItems);
+                                                                    if (e.target.checked) {
+                                                                        newSelected.add(group.key);
+                                                                    } else {
+                                                                        newSelected.delete(group.key);
+                                                                    }
+                                                                    setSelectedItems(newSelected);
+                                                                }}
+                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            />
+                                                        </td>
+                                                    )}
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         <div className="text-sm font-medium text-gray-600 leading-tight">{formatDate(group.date)}</div>
                                                     </td>
@@ -1445,20 +1820,19 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                     </td>
                                                 </tr>
                                             );
-                                        });
-                                    })()
-                                ) : (
-                                    <tr>
-                                        <td colSpan={canManage ? 8 : 7} className="px-6 py-12 text-center">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
-                                                    <SearchIcon className="w-6 h-6 text-gray-400" />
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11} className="px-6 py-12 text-center">
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
+                                                        <SearchIcon className="w-6 h-6 text-gray-400" />
+                                                    </div>
+                                                    <p className="text-gray-500 font-medium">No payments found</p>
                                                 </div>
-                                                <p className="text-gray-500 font-medium">No payments found</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
+                                            </td>
+                                        </tr>
+                                    )}
                             </tbody>
                         </table>
 
@@ -1472,37 +1846,59 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                         <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                                     </div>
                                 ))
-                            ) : (() => {
-                                const groups = [];
-                                filteredPayments.forEach(payment => {
-                                    const groupKey = `${payment.date}-${payment.receiptNo}-${payment.customerId}`;
-                                    let group = groups.find(g => g.key === groupKey);
-                                    if (!group) {
-                                        group = {
-                                            key: groupKey,
-                                            date: payment.date,
-                                            receiptNo: payment.receiptNo,
-                                            companyName: payment.companyName,
-                                            customerName: payment.customerName,
-                                            customerId: payment.customerId,
-                                            items: []
-                                        };
-                                        groups.push(group);
-                                    }
-                                    group.items.push(payment);
-                                });
-
-                                return groups.length > 0 ? groups.map((group, index) => {
+                            ) : displayedGroups.length > 0 ? (
+                                displayedGroups.map((group) => {
                                     const isExpanded = expandedMobileCards === group.key;
                                     const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
                                     return (
                                         <div
                                             key={group.key}
-                                            className={`mobile-card transition-all duration-300 ${isExpanded ? 'expanded' : 'collapsed'}`}
-                                            onClick={() => setExpandedMobileCards(isExpanded ? null : group.key)}
+                                            className={`mobile-card transition-all duration-300 select-none ${isExpanded ? 'expanded' : 'collapsed'} ${selectedItems.has(group.key) ? 'ring-2 ring-blue-500 bg-blue-50/30' : ''}`}
+                                            onMouseDown={() => handleLongPressStart(group.key)}
+                                            onMouseUp={handleLongPressEnd}
+                                            onMouseLeave={handleLongPressEnd}
+                                            onTouchStart={() => handleLongPressStart(group.key)}
+                                            onTouchEnd={handleLongPressEnd}
+                                            onTouchMove={handleLongPressEnd}
+                                            onClick={(e) => {
+                                                if (isLongPressRef.current) {
+                                                    e.stopPropagation();
+                                                    return;
+                                                }
+                                                if (selectedItems.size > 0) {
+                                                    e.stopPropagation();
+                                                    const newSelected = new Set(selectedItems);
+                                                    if (newSelected.has(group.key)) {
+                                                        newSelected.delete(group.key);
+                                                    } else {
+                                                        newSelected.add(group.key);
+                                                    }
+                                                    setSelectedItems(newSelected);
+                                                    return;
+                                                }
+                                                setExpandedMobileCards(isExpanded ? null : group.key);
+                                            }}
                                         >
                                             <div className="mobile-card-header">
+                                                {selectedItems.size > 0 && (
+                                                    <div onClick={(e) => e.stopPropagation()} className="pr-2 flex items-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(group.key)}
+                                                            onChange={(e) => {
+                                                                const newSelected = new Set(selectedItems);
+                                                                if (e.target.checked) {
+                                                                    newSelected.add(group.key);
+                                                                } else {
+                                                                    newSelected.delete(group.key);
+                                                                }
+                                                                setSelectedItems(newSelected);
+                                                            }}
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        />
+                                                    </div>
+                                                )}
                                                 <div className="flex-1 min-w-0 pr-2">
                                                     <div className="mobile-card-title truncate">{group.companyName || group.customerName}</div>
                                                     <div className="text-[10px] text-gray-500 truncate mt-0.5">
@@ -1591,19 +1987,19 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                             )}
                                         </div>
                                     );
-                                }) : (
+                                }) ) : (
                                     <div className="text-center py-8">
                                         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-50 mb-3">
                                             <SearchIcon className="w-6 h-6 text-gray-400" />
                                         </div>
                                         <p className="text-gray-500 font-medium">No payments found</p>
                                     </div>
-                                );
-                            })()}
+                                )}
                         </div>
                     </div>
                 </div>
-            )}
+            </div>
+        )}
             {/* Add Collection Card (Style Match with Add Customer) */}
             {showAddModal && (
                 <div className="payment-form-container">
@@ -2207,6 +2603,80 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     </div>
                 </div>
             )}
+
+            {/* Bulk Action Confirmation Modal */}
+            {confirmModalConfig && (
+                <ConfirmModal
+                    isOpen={!!confirmModalConfig}
+                    title={confirmModalConfig.title}
+                    message={confirmModalConfig.message}
+                    type={confirmModalConfig.type}
+                    confirmText={confirmModalConfig.confirmText}
+                    cancelText={confirmModalConfig.cancelText}
+                    onConfirm={confirmModalConfig.onConfirm}
+                    onClose={confirmModalConfig.onClose || (() => setConfirmModalConfig(null))}
+                    isSubmitting={isSubmitting}
+                />
+            )}
+        </div>
+    );
+};
+
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', confirmText = 'Confirm', cancelText = 'Cancel', isSubmitting = false }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200">
+                <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
+                    type === 'danger' ? 'bg-red-100 text-red-600' :
+                    type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                }`}>
+                    {type === 'danger' ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    ) : type === 'success' ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    ) : (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    )}
+                </div>
+
+                <h3 className="text-base font-extrabold text-gray-900 mb-1.5">{title}</h3>
+                <p className="text-xs text-gray-500 mb-6 leading-relaxed">{message}</p>
+
+                <div className="flex items-center justify-center gap-3">
+                    {onClose && cancelText && (
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={isSubmitting}
+                            className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                            {cancelText}
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onConfirm || onClose}
+                        disabled={isSubmitting}
+                        className={`w-full px-4 py-2.5 text-white text-xs font-bold rounded-xl shadow-lg transition-all transform active:scale-95 disabled:opacity-50 cursor-pointer ${
+                            type === 'danger'
+                                ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
+                                : type === 'success'
+                                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                                : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
+                        }`}
+                    >
+                        {isSubmitting ? 'Processing...' : confirmText}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

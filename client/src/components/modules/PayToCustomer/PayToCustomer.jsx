@@ -39,13 +39,47 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
 
+    // Bulk Selection States
+    const [selectedItems, setSelectedItems] = useState(new Set());
+    const [confirmModalConfig, setConfirmModalConfig] = useState(null);
+
+    // Long Press Timer Ref for item selection
+    const longPressTimerRef = useRef(null);
+    const isLongPressRef = useRef(false);
+
+    const handleLongPressStart = (itemKey) => {
+        isLongPressRef.current = false;
+        longPressTimerRef.current = setTimeout(() => {
+            isLongPressRef.current = true;
+            setSelectedItems(prev => {
+                const next = new Set(prev);
+                if (next.has(itemKey)) {
+                    next.delete(itemKey);
+                } else {
+                    next.add(itemKey);
+                }
+                return next;
+            });
+            if (navigator.vibrate) {
+                try { navigator.vibrate(50); } catch (e) { }
+            }
+        }, 500);
+    };
+
+    const handleLongPressEnd = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+    };
+
     const requestedCount = useMemo(() => {
-        const unique = new Set(payments.filter(p => (p.status || '').toLowerCase() === 'requested').map(p => p.receiptNo || p.id));
+        const unique = new Set(payments.filter(p => (p.status || '').toLowerCase() === 'requested').map(p => p.id || p.receiptNo));
         return unique.size;
     }, [payments]);
 
     const editRequestedCount = useMemo(() => {
-        const unique = new Set(payments.filter(p => (p.isEdited === true || p.isEdited === 'true') && (p.status || '').toLowerCase() !== 'requested').map(p => p.receiptNo || p.id));
+        const unique = new Set(payments.filter(p => (p.isEdited === true || p.isEdited === 'true') && (p.status || '').toLowerCase() !== 'requested').map(p => p.id || p.receiptNo));
         return unique.size;
     }, [payments]);
 
@@ -69,6 +103,10 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
         selectedYear: new Date().getFullYear()
     };
     const [filters, setFilters] = useState(initialFilterState);
+
+    useEffect(() => {
+        setSelectedItems(new Set());
+    }, [isRequestedOnly, isEditRequestedOnly, searchQuery, filters]);
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(null);
     const [filterSearchInputs, setFilterSearchInputs] = useState({ bankName: '', branch: '', method: '', customer: '' });
 
@@ -435,10 +473,19 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`);
             const customer = custRes.data;
 
+            const groupItemIds = new Set((paymentGroup.items || []).map(i => i.id).filter(Boolean));
+            const groupReceiptNo = paymentGroup.receiptNo;
+
+            const isItemMatch = (p) => {
+                if (p.id && groupItemIds.has(p.id)) return true;
+                if (groupReceiptNo && p.receiptNo && p.receiptNo === groupReceiptNo) return true;
+                return false;
+            };
+
             if (newStatus === 'Rejected') {
                 if (paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested') {
                     const updatedHistory = (customer.payToCustomerHistory || []).map(p => {
-                        if (p.receiptNo === paymentGroup.receiptNo) {
+                        if (isItemMatch(p)) {
                             if (p.originalData) {
                                 const { originalData, ...rest } = p;
                                 return {
@@ -453,12 +500,12 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                     });
                     await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, payToCustomerHistory: updatedHistory });
                 } else {
-                    const updatedHistory = (customer.payToCustomerHistory || []).filter(p => p.receiptNo !== paymentGroup.receiptNo);
+                    const updatedHistory = (customer.payToCustomerHistory || []).filter(p => !isItemMatch(p));
                     await axios.put(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`, { ...customer, payToCustomerHistory: updatedHistory });
                 }
             } else {
                 const updatedHistory = (customer.payToCustomerHistory || []).map(p => {
-                    if (p.receiptNo === paymentGroup.receiptNo) {
+                    if (isItemMatch(p)) {
                         const { originalData, ...rest } = p;
                         return { ...rest, status: 'Accepted', isEdited: false };
                     }
@@ -494,6 +541,227 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
         } catch (error) {
             console.error('Error updating payout status:', error);
             alert('Failed to update payout status');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleBulkAccept = () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+
+        const pendingSelectedGroups = displayedGroups.filter(group => {
+            const isSelected = selectedItems.has(group.key);
+            const isPending = (group.status || '').toLowerCase() === 'requested' || group.isEdited === true;
+            return isSelected && isPending;
+        });
+
+        if (pendingSelectedGroups.length === 0) {
+            setConfirmModalConfig({
+                title: 'No Pending Requests Selected',
+                message: (requestedCount > 0 || editRequestedCount > 0)
+                    ? `The selected items are already accepted. You have pending request(s) waiting for approval.`
+                    : 'The selected items are already accepted and there are no pending requests.',
+                type: 'info',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null),
+                onClose: () => setConfirmModalConfig(null)
+            });
+            return;
+        }
+
+        setConfirmModalConfig({
+            title: 'Confirm Bulk Accept',
+            message: `Are you sure you want to accept ${pendingSelectedGroups.length} selected Pay To Customer request(s)?`,
+            type: 'success',
+            confirmText: 'Accept Selected',
+            cancelText: 'Cancel',
+            onConfirm: () => executeBulkAccept(pendingSelectedGroups),
+            onClose: () => setConfirmModalConfig(null)
+        });
+    };
+
+    const executeBulkAccept = async (groupsToAccept) => {
+        try {
+            setIsSubmitting(true);
+            setConfirmModalConfig(null);
+
+            const actorName = currentUser?.name || currentUser?.username || 'Admin';
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB');
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const customerMap = {};
+            groupsToAccept.forEach(group => {
+                if (!customerMap[group.customerId]) {
+                    customerMap[group.customerId] = [];
+                }
+                customerMap[group.customerId].push(group);
+            });
+
+            for (const [customerId, customerGroups] of Object.entries(customerMap)) {
+                const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
+                const customer = custRes.data;
+
+                const targetItemIds = new Set();
+                const targetReceiptNos = new Set();
+                customerGroups.forEach(g => {
+                    if (g.receiptNo) targetReceiptNos.add(g.receiptNo);
+                    (g.items || []).forEach(item => {
+                        if (item.id) targetItemIds.add(item.id);
+                        if (item.receiptNo) targetReceiptNos.add(item.receiptNo);
+                    });
+                });
+
+                const updatedHistory = (customer.payToCustomerHistory || []).map(p => {
+                    const matchesId = p.id && targetItemIds.has(p.id);
+                    const matchesReceipt = p.receiptNo && targetReceiptNos.has(p.receiptNo);
+                    if (matchesId || matchesReceipt) {
+                        const { originalData, ...rest } = p;
+                        return { ...rest, status: 'Accepted', isEdited: false };
+                    }
+                    return p;
+                });
+
+                await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, payToCustomerHistory: updatedHistory });
+            }
+
+            if (addNotification) {
+                await addNotification(
+                    'Bulk Payout Requests Accepted',
+                    `${dateStr} | ${timeStr} | ${actorName} bulk accepted ${groupsToAccept.length} payout request(s)`,
+                    ['admin', 'incharge', 'sales manager'],
+                    ['admin']
+                );
+            }
+
+            setSelectedItems(new Set());
+            fetchPayments();
+        } catch (error) {
+            console.error('Error performing bulk accept:', error);
+            setConfirmModalConfig({
+                title: 'Operation Failed',
+                message: 'Failed to accept selected payout requests.',
+                type: 'danger',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null)
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleBulkReject = () => {
+        if (!selectedItems || selectedItems.size === 0) return;
+
+        const pendingSelectedGroups = displayedGroups.filter(group => {
+            const isSelected = selectedItems.has(group.key);
+            const isPending = (group.status || '').toLowerCase() === 'requested' || group.isEdited === true;
+            return isSelected && isPending;
+        });
+
+        if (pendingSelectedGroups.length === 0) {
+            setConfirmModalConfig({
+                title: 'No Pending Requests Selected',
+                message: 'None of the selected items are pending requests.',
+                type: 'info',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null),
+                onClose: () => setConfirmModalConfig(null)
+            });
+            return;
+        }
+
+        setConfirmModalConfig({
+            title: 'Confirm Bulk Reject',
+            message: `Are you sure you want to reject ${pendingSelectedGroups.length} selected Pay To Customer request(s)?`,
+            type: 'danger',
+            confirmText: 'Reject Selected',
+            cancelText: 'Cancel',
+            onConfirm: () => executeBulkReject(pendingSelectedGroups),
+            onClose: () => setConfirmModalConfig(null)
+        });
+    };
+
+    const executeBulkReject = async (groupsToReject) => {
+        try {
+            setIsSubmitting(true);
+            setConfirmModalConfig(null);
+
+            const actorName = currentUser?.name || currentUser?.username || 'Admin';
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB');
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const customerMap = {};
+            groupsToReject.forEach(group => {
+                if (!customerMap[group.customerId]) {
+                    customerMap[group.customerId] = [];
+                }
+                customerMap[group.customerId].push(group);
+            });
+
+            for (const [customerId, customerGroups] of Object.entries(customerMap)) {
+                const custRes = await axios.get(`${API_BASE_URL}/api/customers/${customerId}`);
+                const customer = custRes.data;
+
+                const editRequestIds = new Set();
+                const editRequestReceipts = new Set();
+                const newRequestIds = new Set();
+                const newRequestReceipts = new Set();
+
+                customerGroups.forEach(g => {
+                    const isEditReq = g.isEdited === true && (g.status || '').toLowerCase() !== 'requested';
+                    (g.items || []).forEach(item => {
+                        if (isEditReq) {
+                            if (item.id) editRequestIds.add(item.id);
+                            if (item.receiptNo) editRequestReceipts.add(item.receiptNo);
+                        } else {
+                            if (item.id) newRequestIds.add(item.id);
+                            if (item.receiptNo) newRequestReceipts.add(item.receiptNo);
+                        }
+                    });
+                    if (g.receiptNo) {
+                        if (isEditReq) editRequestReceipts.add(g.receiptNo);
+                        else newRequestReceipts.add(g.receiptNo);
+                    }
+                });
+
+                const updatedHistory = (customer.payToCustomerHistory || [])
+                    .filter(p => !((p.id && newRequestIds.has(p.id)) || (p.receiptNo && newRequestReceipts.has(p.receiptNo))))
+                    .map(p => {
+                        if ((p.id && editRequestIds.has(p.id)) || (p.receiptNo && editRequestReceipts.has(p.receiptNo))) {
+                            if (p.originalData) {
+                                const { originalData, ...rest } = p;
+                                return { ...rest, ...originalData, isEdited: false };
+                            }
+                            return { ...p, isEdited: false };
+                        }
+                        return p;
+                    });
+
+                await axios.put(`${API_BASE_URL}/api/customers/${customerId}`, { ...customer, payToCustomerHistory: updatedHistory });
+            }
+
+            if (addNotification) {
+                await addNotification(
+                    'Bulk Payout Requests Rejected',
+                    `${dateStr} | ${timeStr} | ${actorName} bulk rejected ${groupsToReject.length} payout request(s)`,
+                    ['admin', 'incharge', 'sales manager'],
+                    ['admin']
+                );
+            }
+
+            setSelectedItems(new Set());
+            fetchPayments();
+        } catch (error) {
+            console.error('Error performing bulk reject:', error);
+            setConfirmModalConfig({
+                title: 'Operation Failed',
+                message: 'Failed to reject selected payout requests.',
+                type: 'danger',
+                confirmText: 'OK',
+                onConfirm: () => setConfirmModalConfig(null)
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -818,6 +1086,35 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
         return matchSearch && isDateMatch && matchMethod && matchBankName && matchBranch && matchCustomer;
     });
 
+    const displayedGroups = useMemo(() => {
+        const groups = [];
+        filteredPayments.forEach(payment => {
+            const groupKey = `${payment.date}-${payment.receiptNo || payment.id}-${payment.customerId}`;
+            let group = groups.find(g => g.key === groupKey);
+            if (!group) {
+                group = {
+                    key: groupKey,
+                    date: payment.date,
+                    receiptNo: payment.receiptNo,
+                    companyName: payment.companyName,
+                    customerName: payment.customerName,
+                    customerId: payment.customerId,
+                    customerAddress: payment.customerAddress || '',
+                    status: payment.status,
+                    isEdited: payment.isEdited,
+                    items: []
+                };
+                groups.push(group);
+            }
+            group.items.push(payment);
+            if ((payment.status || '').toLowerCase() === 'requested') {
+                group.status = 'Requested';
+            }
+            group.isEdited = group.isEdited || payment.isEdited === true || payment.isEdited === 'true';
+        });
+        return groups;
+    }, [filteredPayments]);
+
     return (
         <div className="space-y-6">
             {!showAddModal && (
@@ -976,10 +1273,64 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
 
             {!showAddModal && (
                 <div className="bg-white/60 backdrop-blur-xl border border-white/50 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
+                    {/* Top Floating Bulk Action Bar */}
+                    {selectedItems.size > 0 && (
+                        <div className="bulk-action-bar-container animate-in slide-in-from-top duration-200">
+                            <div className="bulk-action-bar flex items-center justify-between gap-4 bg-white/95 backdrop-blur border border-blue-100 rounded-2xl shadow-xl px-5 py-3.5 mb-4">
+                                <div className="flex items-center gap-3">
+                                    <span className="flex items-center justify-center w-7 h-7 bg-blue-600 text-white rounded-full text-xs font-bold shadow-sm">
+                                        {selectedItems.size}
+                                    </span>
+                                    <span className="text-sm font-semibold text-gray-700">Item(s) Selected</span>
+                                    <button
+                                        onClick={() => setSelectedItems(new Set())}
+                                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold hover:underline cursor-pointer ml-1"
+                                    >
+                                        Deselect All
+                                    </button>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleBulkAccept}
+                                        disabled={isSubmitting}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                                    >
+                                        <CheckIcon className="w-4 h-4" />
+                                        <span>Accept Selected</span>
+                                    </button>
+                                    <button
+                                        onClick={handleBulkReject}
+                                        disabled={isSubmitting}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                                    >
+                                        <XIcon className="w-4 h-4" />
+                                        <span>Reject Selected</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="sale-mgmt-table-container">
                         <table className="sale-mgmt-table hidden md:table">
                             <thead>
                                 <tr>
+                                    {selectedItems.size > 0 && (
+                                        <th className="sale-mgmt-th w-10 text-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={displayedGroups.length > 0 && displayedGroups.every(g => selectedItems.has(g.key))}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedItems(new Set(displayedGroups.map(g => g.key)));
+                                                    } else {
+                                                        setSelectedItems(new Set());
+                                                    }
+                                                }}
+                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            />
+                                        </th>
+                                    )}
                                     <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                         <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                     </th>
@@ -1007,7 +1358,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                 {isLoading ? (
                                     Array(5).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan={11} className="px-6 py-12 text-center">
+                                            <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11} className="px-6 py-12 text-center">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
                                                         <DollarSignIcon className="w-6 h-6 text-blue-500" />
@@ -1017,187 +1368,203 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                             </td>
                                         </tr>
                                     ))
-                                ) : filteredPayments.length > 0 ? (
-                                    (() => {
-                                        const groups = [];
-                                        filteredPayments.forEach(payment => {
-                                            const groupKey = `${payment.date}-${payment.receiptNo}-${payment.customerId}`;
-                                            let group = groups.find(g => g.key === groupKey);
-                                            if (!group) {
-                                                group = {
-                                                    key: groupKey,
-                                                    date: payment.date,
-                                                    receiptNo: payment.receiptNo,
-                                                    companyName: payment.companyName,
-                                                    customerName: payment.customerName,
-                                                    customerId: payment.customerId,
-                                                    customerAddress: payment.customerAddress || '',
-                                                    status: payment.status,
-                                                    isEdited: payment.isEdited,
-                                                    items: []
-                                                };
-                                                groups.push(group);
-                                            }
-                                            group.items.push(payment);
-                                            group.isEdited = group.isEdited || payment.isEdited === true || payment.isEdited === 'true';
-                                        });
+                                ) : displayedGroups.length > 0 ? (
+                                    displayedGroups.map((group) => {
+                                        const isMultiple = group.items.length > 1;
+                                        const isExpanded = expandedRows.has(group.key);
+                                        const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
-                                        return groups.map((group) => {
-                                            const isMultiple = group.items.length > 1;
-                                            const isExpanded = expandedRows.has(group.key);
-                                            const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-
-                                            return (
-                                                <tr
-                                                    key={group.key}
-                                                    onClick={() => isMultiple && toggleRowExpansion(group.key)}
-                                                    className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''}`}
-                                                >
-                                                    <td className="px-3 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-medium text-gray-600 leading-tight">{formatDate(group.date)}</div>
+                                        return (
+                                            <tr
+                                                key={group.key}
+                                                onMouseDown={() => handleLongPressStart(group.key)}
+                                                onMouseUp={handleLongPressEnd}
+                                                onMouseLeave={handleLongPressEnd}
+                                                onTouchStart={() => handleLongPressStart(group.key)}
+                                                onTouchEnd={handleLongPressEnd}
+                                                onTouchMove={handleLongPressEnd}
+                                                onClick={(e) => {
+                                                    if (isLongPressRef.current) {
+                                                        e.stopPropagation();
+                                                        return;
+                                                    }
+                                                    if (selectedItems.size > 0) {
+                                                        e.stopPropagation();
+                                                        const newSelected = new Set(selectedItems);
+                                                        if (newSelected.has(group.key)) {
+                                                            newSelected.delete(group.key);
+                                                        } else {
+                                                            newSelected.add(group.key);
+                                                        }
+                                                        setSelectedItems(newSelected);
+                                                        return;
+                                                    }
+                                                    if (isMultiple) toggleRowExpansion(group.key);
+                                                }}
+                                                className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle select-none ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''} ${selectedItems.has(group.key) ? 'bg-blue-50/70 font-medium' : ''}`}
+                                            >
+                                                {selectedItems.size > 0 && (
+                                                    <td className="px-3 py-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedItems.has(group.key)}
+                                                            onChange={(e) => {
+                                                                const newSelected = new Set(selectedItems);
+                                                                if (e.target.checked) {
+                                                                    newSelected.add(group.key);
+                                                                } else {
+                                                                    newSelected.delete(group.key);
+                                                                }
+                                                                setSelectedItems(newSelected);
+                                                            }}
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        />
                                                     </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-semibold text-blue-600 leading-tight">{group.receiptNo || '—'}</div>
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap">
-                                                        <div className="text-sm text-gray-500 leading-tight truncate max-w-[150px]">{group.customerAddress || '—'}</div>
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap">
-                                                        {isMultiple && !isExpanded ? (
-                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
-                                                        ) : (
-                                                            <div className="flex flex-col gap-1">
-                                                                {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-sm text-gray-800 font-bold leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                        {item.method || '—'}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap">
-                                                        {isMultiple && !isExpanded ? (
-                                                            <span className="px-1.5 py-0.5 bg-gray-50 text-gray-500 border border-gray-100 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
-                                                        ) : (
-                                                            <div className="flex flex-col gap-1">
-                                                                {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-sm font-semibold text-gray-700 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                        {item.method === 'Cash' ? (item.receiveBy || '—') : (item.bankName || '—')}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap">
-                                                        {isMultiple && !isExpanded ? (
-                                                            <span className="text-[13px] font-semibold text-gray-400">—</span>
-                                                        ) : (
-                                                            <div className="flex flex-col gap-1">
-                                                                {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-sm font-semibold text-gray-800 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                        {item.method === 'Cash' ? (item.place || '—') : (item.branch || '—')}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap">
-                                                        {isMultiple && !isExpanded ? (
-                                                            <span className="text-[13px] font-semibold text-gray-400">—</span>
-                                                        ) : (
-                                                            <div className="flex flex-col gap-1">
-                                                                {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-sm font-semibold text-gray-800 font-mono leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                        {item.accountNo || '—'}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                        {isMultiple && !isExpanded ? (
-                                                            <div className="inline-block px-3 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-sm font-black">
-                                                                ৳{Number(totalAmount).toLocaleString('en-IN')}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex flex-col gap-1">
-                                                                {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-sm font-black text-gray-900 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                        ৳{Number(item.amount || 0).toLocaleString('en-IN')}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center whitespace-nowrap">
-                                                        {group.isEdited === true ? (
-                                                            <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                                                Edit Requested
-                                                            </span>
-                                                        ) : (
-                                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${group.status === 'Requested' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
-                                                                {group.status === 'Requested' ? 'Requested' : (group.status || 'Accepted')}
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                                        <div className="flex items-center justify-center gap-1.5">
-                                                            <button
-                                                                onClick={() => handleGenerateReceipt(group.items[0], totalAmount, group.items)}
-                                                                className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
-                                                                title="Voucher Receipt"
-                                                            >
-                                                                <FileTextIcon className="w-5 h-5" />
-                                                            </button>
-                                                            {((group.status === 'Requested' && canApprove) || (group.isEdited && canApproveEditRequest)) && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => handleStatusUpdate(group, 'Accepted')}
-                                                                        className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
-                                                                        title="Accept"
-                                                                    >
-                                                                        <CheckIcon className="w-5 h-5" />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleStatusUpdate(group, 'Rejected')}
-                                                                        className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                                                        title="Reject"
-                                                                    >
-                                                                        <XIcon className="w-5 h-5" />
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                            {canEdit && (
-                                                                <button
-                                                                    onClick={() => handleEditInitiation(group.items[0])}
-                                                                    className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                                                                    title="Edit"
-                                                                >
-                                                                    <EditIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            {canDelete && (
-                                                                <button
-                                                                    onClick={() => handleDeletePayment(group.items[0])}
-                                                                    className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                                                    title="Delete"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                </button>
-                                                            )}
+                                                )}
+                                                <td className="px-3 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-medium text-gray-600 leading-tight">{formatDate(group.date)}</div>
+                                                </td>
+                                                <td className="px-3 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-semibold text-blue-600 leading-tight">{group.receiptNo || '—'}</div>
+                                                </td>
+                                                <td className="px-3 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
+                                                </td>
+                                                <td className="px-3 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-500 leading-tight truncate max-w-[150px]">{group.customerAddress || '—'}</div>
+                                                </td>
+                                                <td className="px-3 py-4 whitespace-nowrap">
+                                                    {isMultiple && !isExpanded ? (
+                                                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
+                                                    ) : (
+                                                        <div className="flex flex-col gap-1">
+                                                            {group.items.map((item, idx) => (
+                                                                <div key={idx} className={`text-sm text-gray-800 font-bold leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    {item.method || '—'}
+                                                                </div>
+                                                            ))}
                                                         </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        });
-                                    })()
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-4 whitespace-nowrap">
+                                                    {isMultiple && !isExpanded ? (
+                                                        <span className="px-1.5 py-0.5 bg-gray-50 text-gray-500 border border-gray-100 rounded text-[9px] font-bold uppercase tracking-wider">Multiple</span>
+                                                    ) : (
+                                                        <div className="flex flex-col gap-1">
+                                                            {group.items.map((item, idx) => (
+                                                                <div key={idx} className={`text-sm font-semibold text-gray-700 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    {item.method === 'Cash' ? (item.receiveBy || '—') : (item.bankName || '—')}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-4 whitespace-nowrap">
+                                                    {isMultiple && !isExpanded ? (
+                                                        <span className="text-[13px] font-semibold text-gray-400">—</span>
+                                                    ) : (
+                                                        <div className="flex flex-col gap-1">
+                                                            {group.items.map((item, idx) => (
+                                                                <div key={idx} className={`text-sm font-semibold text-gray-800 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    {item.method === 'Cash' ? (item.place || '—') : (item.branch || '—')}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-4 whitespace-nowrap">
+                                                    {isMultiple && !isExpanded ? (
+                                                        <span className="text-[13px] font-semibold text-gray-400">—</span>
+                                                    ) : (
+                                                        <div className="flex flex-col gap-1">
+                                                            {group.items.map((item, idx) => (
+                                                                <div key={idx} className={`text-sm font-semibold text-gray-800 font-mono leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    {item.accountNo || '—'}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                    {isMultiple && !isExpanded ? (
+                                                        <div className="inline-block px-3 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-sm font-black">
+                                                            ৳{Number(totalAmount).toLocaleString('en-IN')}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex flex-col gap-1">
+                                                            {group.items.map((item, idx) => (
+                                                                <div key={idx} className={`text-sm font-black text-gray-900 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    ৳{Number(item.amount || 0).toLocaleString('en-IN')}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-4 text-center whitespace-nowrap">
+                                                    {group.isEdited === true ? (
+                                                        <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200/60 inline-flex items-center gap-1 shadow-sm">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                            Edit Requested
+                                                        </span>
+                                                    ) : (
+                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${group.status === 'Requested' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
+                                                            {group.status === 'Requested' ? 'Requested' : (group.status || 'Accepted')}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        <button
+                                                            onClick={() => handleGenerateReceipt(group.items[0], totalAmount, group.items)}
+                                                            className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
+                                                            title="Voucher Receipt"
+                                                        >
+                                                            <FileTextIcon className="w-5 h-5" />
+                                                        </button>
+                                                        {((group.status === 'Requested' && canApprove) || (group.isEdited && canApproveEditRequest)) && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleStatusUpdate(group, 'Accepted')}
+                                                                    className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors"
+                                                                    title="Accept"
+                                                                >
+                                                                    <CheckIcon className="w-5 h-5" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleStatusUpdate(group, 'Rejected')}
+                                                                    className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                                                    title="Reject"
+                                                                >
+                                                                    <XIcon className="w-5 h-5" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        {canEdit && (
+                                                            <button
+                                                                onClick={() => handleEditInitiation(group.items[0])}
+                                                                className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                title="Edit"
+                                                            >
+                                                                <EditIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {canDelete && (
+                                                            <button
+                                                                onClick={() => handleDeletePayment(group.items[0])}
+                                                                className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                                                title="Delete"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
                                 ) : (
                                     <tr>
-                                        <td colSpan={11} className="px-6 py-12 text-center">
+                                        <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center gap-2">
                                                 <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
                                                     <SearchIcon className="w-6 h-6 text-gray-400" />
@@ -1773,6 +2140,76 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 payments={payments}
             />
 
+            {confirmModalConfig && (
+                <ConfirmModal
+                    isOpen={!!confirmModalConfig}
+                    onClose={confirmModalConfig.onClose || (() => setConfirmModalConfig(null))}
+                    onConfirm={confirmModalConfig.onConfirm}
+                    title={confirmModalConfig.title}
+                    message={confirmModalConfig.message}
+                    type={confirmModalConfig.type}
+                    confirmText={confirmModalConfig.confirmText}
+                    cancelText={confirmModalConfig.cancelText}
+                    isSubmitting={isSubmitting}
+                />
+            )}
+
+        </div>
+    );
+};
+
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', confirmText = 'Confirm', cancelText = 'Cancel', isSubmitting = false }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200">
+                <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
+                    type === 'danger' ? 'bg-red-100 text-red-600' :
+                    type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                }`}>
+                    {type === 'danger' ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    ) : type === 'success' ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    ) : (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    )}
+                </div>
+
+                <h3 className="text-base font-extrabold text-gray-900 mb-1.5">{title}</h3>
+                <p className="text-xs text-gray-500 mb-6 leading-relaxed">{message}</p>
+
+                <div className="flex items-center justify-center gap-3">
+                    {onClose && cancelText && (
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={isSubmitting}
+                            className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                            {cancelText}
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        disabled={isSubmitting}
+                        className={`w-full px-4 py-2.5 text-white text-xs font-bold rounded-xl shadow-lg transition-all disabled:opacity-50 cursor-pointer ${
+                            type === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-500/20' :
+                            type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                        }`}
+                    >
+                        {isSubmitting ? 'Processing...' : confirmText}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };
