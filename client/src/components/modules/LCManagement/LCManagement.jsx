@@ -12,6 +12,7 @@ import { decryptData } from '../../../utils/encryption';
 import { generateLCManagementReportPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { getCogNetBillBdt } from '../../../utils/lcValueUtils';
 
 const gridColsClassMap = {
     1: 'md:grid-cols-1',
@@ -31,10 +32,10 @@ const getExpiryColorClass = (expiryDateStr) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     expiry.setHours(0, 0, 0, 0);
-    
+
     const diffTime = expiry.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) {
         return 'text-red-600 font-bold'; // Red (expired)
     } else if (diffDays <= 15) {
@@ -50,10 +51,10 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     shipment.setHours(0, 0, 0, 0);
-    
+
     const diffTime = shipment.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays <= 0) {
         return 'text-red-600 font-bold'; // Red (date hit/passed)
     } else if (diffDays <= 7) {
@@ -306,7 +307,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
     const activeBankInfo = useMemo(() => {
         if (!data) return { marginBill: 0, bankBill: 0, totalBankBill: 0 };
-        
+
         const origMarginBill = parseFloat(data.marginBill) || 0;
         const origBankBill = parseFloat(data.bankBill) || 0;
         const origMarginPaid = parseFloat(data.marginPaid) || 0;
@@ -385,26 +386,26 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         allStockRecords.forEach(record => {
             const indCnF = (record.indianCnF || '').toLowerCase().trim();
             const bdCnF = (record.bdCnF || '').toLowerCase().trim();
-            
+
             const isMatch = indCnF === targetName || bdCnF === targetName;
             const status = (record.status || '').toLowerCase();
             const isAccepted = !status.includes('requested') && !status.includes('rejected');
-            
+
             if (isMatch && isAccepted) {
                 const qty = !isNaN(parseFloat(record.totalLcQuantity)) ? parseFloat(record.totalLcQuantity) : (!isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (parseFloat(record.inHouseQuantity) || 0));
-                
+
                 let commissionRate = 0;
                 if (indCnF === targetName && record.indCnFComm !== undefined && record.indCnFComm !== null && record.indCnFComm !== '') {
                     commissionRate = parseFloat(record.indCnFComm);
                 } else if (bdCnF === targetName && record.bdCnFComm !== undefined && record.bdCnFComm !== null && record.bdCnFComm !== '') {
                     commissionRate = parseFloat(record.bdCnFComm);
                 }
-                
+
                 const rawUom = indCnF === targetName
                     ? (record.indCnFUom || record.uom || 'QTY')
                     : (record.bdCnFUom || record.uom || 'QTY');
                 const uom = typeof rawUom === 'string' ? rawUom.toUpperCase() : 'QTY';
-                
+
                 let totalCommission = 0;
                 if (indCnF === targetName && record.indCnFCost !== undefined && record.indCnFCost !== null && record.indCnFCost !== '') {
                     totalCommission = parseFloat(record.indCnFCost);
@@ -423,7 +424,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                         totalCommission = commissionRate;
                     }
                 }
-                
+
                 records.push({
                     id: record._id,
                     lcNo: record.lcNo,
@@ -441,16 +442,16 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             const isBorder = sTypeLow === 'border' || sTypeLow === 'border sale' || (sale.invoiceNo || '').startsWith('BS');
             if (!isBorder) return;
             if (sale.status && sale.status.toLowerCase().includes('rejected')) return;
-            
+
             const saleIndCnF = (sale.indianCnF || '').toLowerCase().trim();
             const saleBdCnf = (sale.bdCnf || '').toLowerCase().trim();
-            
+
             const isMatch = targetName === saleIndCnF || targetName === saleBdCnf;
             if (!isMatch) return;
-            
+
             const isIndianAgent = (saleIndCnF === targetName);
             const savedTotalComm = isIndianAgent ? (parseFloat(sale.indCommissionTotal) || 0) : (parseFloat(sale.bdCommissionTotal) || 0);
-            
+
             records.push({
                 id: sale._id,
                 lcNo: sale.lcNo,
@@ -530,7 +531,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             if (p.billFrom && p.billTo) {
                 const fromStr = toYYYYMMDD(p.billFrom);
                 const toStr = toYYYYMMDD(p.billTo);
-                
+
                 records.forEach(r => {
                     const rDateStr = toYYYYMMDD(r.date);
                     if (rDateStr && rDateStr >= fromStr && rDateStr <= toStr) {
@@ -832,7 +833,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         const isEnabled = !!data.enableValueQtyAdjustment;
         const actualAdjustmentQtyKg = isEnabled ? adjustmentQtyKg : 0;
         const adjustedQtyKg = openingQtyKg + actualAdjustmentQtyKg;
-        
+
         const getRatePerTon = (rVal) => {
             const r = parseFloat(rVal) || 0;
             return r > 0 && r < 10 ? r * 1000 : r;
@@ -844,7 +845,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
         const getProductReceivedQtyKg = (pName) => {
             const cleanPName = (pName || '').trim().toLowerCase();
-            
+
             const receiptsMap = {};
             allStockRecords
                 .filter(s => {
@@ -908,6 +909,11 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             return rQty + bQty;
         };
 
+        const dollarRate = parseFloat(data.updatedDollarRate || data.dollarRate || 0);
+
+        const matchingCogRecords = (costOfGoodsRecords || []).filter(cog => cleanLc(cog.lcNo) === lcNoClean);
+        const totalCogNetBill = matchingCogRecords.reduce((sum, rec) => sum + getCogNetBillBdt(rec, dollarRate), 0);
+
         const timeline = getLCHistoryTimeline(data);
         const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || data;
         const origProducts = (originalLc.productsList && originalLc.productsList.length > 0)
@@ -935,7 +941,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                 billValueUsd += pRecQtyTons * (pRate + pFreight);
             });
         }
-        
+
         if (billValueUsd === 0 && totalReceivedQtyKg > 0) {
             const pRecQtyTons = totalReceivedQtyKg / 1000;
             const rootRateVal = originalLc.rate || data.rate || (origProducts[0]?.rate);
@@ -948,10 +954,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
             billValueUsd = pRecQtyTons * (pRate + pFreight);
         }
 
-        const dollarRate = parseFloat(data.updatedDollarRate || data.dollarRate || 0);
-
         const adjustedTotalAmount = dollarRate > 0 && billValueUsd > 0
-            ? billValueUsd * dollarRate 
+            ? billValueUsd * dollarRate
             : (isEnabled && openingQtyKg > 0
                 ? openingValue + (actualAdjustmentQtyKg * (openingValue / openingQtyKg))
                 : openingValue);
@@ -1206,8 +1210,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const cnfArrivals = allStockRecords.filter(s => {
         const recordLcNoClean = cleanLc(s.lcNo);
         const status = (s.status || '').toLowerCase();
-        return recordLcNoClean === lcNoClean && 
-            (status === 'accepted' || status === 'in stock') && 
+        return recordLcNoClean === lcNoClean &&
+            (status === 'accepted' || status === 'in stock') &&
             (s.bdCnF || s.indianCnF);
     });
 
@@ -1512,7 +1516,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
             cnfPayments.forEach(p => {
                 if (!p.cnfName || p.cnfName.toLowerCase().trim() !== agentLower) return;
-                
+
                 const isDirectRef = cleanLc(p.reference) === lcNoClean;
                 const allocatedAmt = allocations[p._id] || 0;
 
@@ -1832,7 +1836,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                         </div>
                                     </div>
 
-                                    <div 
+                                    <div
                                         className="bg-white p-4 md:p-5 transition-all hover:bg-gray-50/50 group text-center md:text-left flex flex-col items-center md:items-start justify-center md:justify-start"
                                     >
                                         <div className="flex items-center justify-center md:justify-start gap-2 md:gap-3 mb-2 md:mb-3">
@@ -1890,9 +1894,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             const status = (s.status || '').toLowerCase();
                                             const isAccepted = status === 'accepted' || status === 'in stock';
                                             return isAccepted &&
-                                                   cleanLc(s.lcNo) === lcNoClean &&
-                                                   String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
-                                                   String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                cleanLc(s.lcNo) === lcNoClean &&
+                                                String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                         });
                                         return sum + matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.quantity) || 0), 0);
                                     }, 0);
@@ -1902,9 +1906,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             const status = (s.status || '').toLowerCase();
                                             const isAccepted = status === 'accepted' || status === 'in stock';
                                             return isAccepted &&
-                                                   cleanLc(s.lcNo) === lcNoClean &&
-                                                   String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
-                                                   String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                cleanLc(s.lcNo) === lcNoClean &&
+                                                String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                         });
                                         return sum + matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.sweepedQuantity) || 0), 0);
                                     }, 0);
@@ -2159,8 +2163,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none"
                                                             >
                                                                 <div className={`p-2 rounded-xl shrink-0 ${item.source === 'LC Receive'
-                                                                        ? 'bg-emerald-50 text-emerald-600'
-                                                                        : 'bg-indigo-50 text-indigo-600'
+                                                                    ? 'bg-emerald-50 text-emerald-600'
+                                                                    : 'bg-indigo-50 text-indigo-600'
                                                                     }`}>
                                                                     {item.source === 'LC Receive' ? (
                                                                         <BuildingIcon className="w-4 h-4" />
@@ -2175,8 +2179,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 <div className="text-right shrink-0">
                                                                     <p className="text-xs font-black text-gray-900">{parseNum(item.quantity).toLocaleString('en-US')} kg</p>
                                                                     <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded mt-1 border ${item.source === 'LC Receive'
-                                                                            ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
-                                                                            : 'bg-indigo-50/50 text-indigo-700 border-indigo-100/30'
+                                                                        ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
+                                                                        : 'bg-indigo-50/50 text-indigo-700 border-indigo-100/30'
                                                                         }`}>
                                                                         {item.source}
                                                                     </span>
@@ -2263,9 +2267,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                             const status = (s.status || '').toLowerCase();
                                                             const isAccepted = status === 'accepted' || status === 'in stock';
                                                             return isAccepted &&
-                                                                   cleanLc(s.lcNo) === lcNoClean &&
-                                                                   String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
-                                                                   String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                                cleanLc(s.lcNo) === lcNoClean &&
+                                                                String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                                         });
 
                                                         const lcReceiveQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
@@ -2342,9 +2346,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 const status = (s.status || '').toLowerCase();
                                                                 const isAccepted = status === 'accepted' || status === 'in stock';
                                                                 return isAccepted &&
-                                                                       cleanLc(s.lcNo) === lcNoClean &&
-                                                                       String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
-                                                                       String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                                    cleanLc(s.lcNo) === lcNoClean &&
+                                                                    String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                    String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                                             });
                                                             return sum + matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.quantity) || 0), 0);
                                                         }, 0).toLocaleString('en-IN')}
@@ -2368,9 +2372,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 const status = (s.status || '').toLowerCase();
                                                                 const isAccepted = status === 'accepted' || status === 'in stock';
                                                                 return isAccepted &&
-                                                                       cleanLc(s.lcNo) === lcNoClean &&
-                                                                       String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
-                                                                       String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                                    cleanLc(s.lcNo) === lcNoClean &&
+                                                                    String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                    String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                                             });
                                                             const lcRecQty = matchingStocks.reduce((sSum, s) => sSum + (parseFloat(s.quantity) || 0), 0);
                                                             return sum + (costingKgVal * lcRecQty);
@@ -2382,9 +2386,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 const status = (s.status || '').toLowerCase();
                                                                 const isAccepted = status === 'accepted' || status === 'in stock';
                                                                 return isAccepted &&
-                                                                       cleanLc(s.lcNo) === lcNoClean &&
-                                                                       String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
-                                                                       String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                                    cleanLc(s.lcNo) === lcNoClean &&
+                                                                    String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                    String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                                             });
                                                             const ihQty = matchingStocks.reduce((sSum, s) => {
                                                                 const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
@@ -2412,9 +2416,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 const status = (s.status || '').toLowerCase();
                                                                 const isAccepted = status === 'accepted' || status === 'in stock';
                                                                 return isAccepted &&
-                                                                       cleanLc(s.lcNo) === lcNoClean &&
-                                                                       String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
-                                                                       String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                                    cleanLc(s.lcNo) === lcNoClean &&
+                                                                    String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                                    String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                                             });
                                                             const ihQty = matchingStocks.reduce((sSum, s) => {
                                                                 const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
@@ -2452,9 +2456,9 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                         const status = (s.status || '').toLowerCase();
                                                         const isAccepted = status === 'accepted' || status === 'in stock';
                                                         return isAccepted &&
-                                                               cleanLc(s.lcNo) === lcNoClean &&
-                                                               String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
-                                                               String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
+                                                            cleanLc(s.lcNo) === lcNoClean &&
+                                                            String(s.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase() &&
+                                                            String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                                     });
 
                                                     const lcReceiveQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
@@ -2647,8 +2651,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                                         <div className="flex items-center">
                                                                             <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border shrink-0 ${gp.status === 'Active'
-                                                                                    ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
-                                                                                    : 'bg-gray-50 text-gray-500 border-gray-200/30'
+                                                                                ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
+                                                                                : 'bg-gray-50 text-gray-500 border-gray-200/30'
                                                                                 }`}>
                                                                                 {gp.status || 'Active'}
                                                                             </span>
@@ -2839,10 +2843,10 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 <div className="text-right shrink-0">
                                                                     <p className="text-xs font-black text-gray-900">৳{bill.totalBill.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                                                                     <span className={`inline-block text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded mt-1 border ${bill.status === 'Paid'
-                                                                            ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
-                                                                            : bill.status === 'Partial Paid'
-                                                                                ? 'bg-amber-50/50 text-amber-700 border-amber-100/30'
-                                                                                : 'bg-rose-50/50 text-rose-700 border-rose-100/30'
+                                                                        ? 'bg-emerald-50/50 text-emerald-700 border-emerald-100/30'
+                                                                        : bill.status === 'Partial Paid'
+                                                                            ? 'bg-amber-50/50 text-amber-700 border-amber-100/30'
+                                                                            : 'bg-rose-50/50 text-rose-700 border-rose-100/30'
                                                                         }`}>
                                                                         {bill.status}
                                                                     </span>
@@ -2937,8 +2941,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                     {exp.cnfAgent || exp.bankName || exp.insuranceCo || exp.insuranceName || exp.name || '-'}
                                                                 </td>
                                                                 <td className={`px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right whitespace-nowrap ${parseNum(exp.amount) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                                    {parseNum(exp.amount) < 0 
-                                                                        ? `-৳${Math.abs(parseNum(exp.amount)).toLocaleString('en-IN')}` 
+                                                                    {parseNum(exp.amount) < 0
+                                                                        ? `-৳${Math.abs(parseNum(exp.amount)).toLocaleString('en-IN')}`
                                                                         : `৳${parseNum(exp.amount).toLocaleString('en-IN')}`}
                                                                 </td>
                                                                 <td className="px-3 md:px-6 py-3 md:py-4 text-sm text-gray-500 truncate max-w-[200px]">{exp.remarks || '-'}</td>
@@ -2959,8 +2963,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     <td className={`px-3 md:px-6 py-3 md:py-4 text-sm font-bold text-right ${expenseTabRecords.reduce((sum, exp) => sum + parseNum(exp.amount), 0) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                         {(() => {
                                                             const total = expenseTabRecords.reduce((sum, exp) => sum + parseNum(exp.amount), 0);
-                                                            return total < 0 
-                                                                ? `-৳${Math.abs(total).toLocaleString('en-IN')}` 
+                                                            return total < 0
+                                                                ? `-৳${Math.abs(total).toLocaleString('en-IN')}`
                                                                 : `৳${total.toLocaleString('en-IN')}`;
                                                         })()}
                                                     </td>
@@ -2996,8 +3000,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                         </div>
                                                                         <div className="text-right shrink-0">
                                                                             <p className={`text-xs font-black ${parseNum(exp.amount) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                                                {parseNum(exp.amount) < 0 
-                                                                                    ? `-৳${Math.abs(parseNum(exp.amount)).toLocaleString('en-IN')}` 
+                                                                                {parseNum(exp.amount) < 0
+                                                                                    ? `-৳${Math.abs(parseNum(exp.amount)).toLocaleString('en-IN')}`
                                                                                     : `৳${parseNum(exp.amount).toLocaleString('en-IN')}`}
                                                                             </p>
                                                                         </div>
@@ -3235,7 +3239,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
                                     <div className="mt-4 p-4 bg-gray-50 rounded-xl flex justify-between items-center text-left">
                                         <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total LC Value</span>
-                                        <span className="text-xl font-black text-gray-900">৳{parseFloat(activeMilestone.totalAmount || data.totalAmount || 0).toLocaleString('en-IN')}</span>
+                                        <span className="text-xl font-black text-gray-900">
+                                            ৳{(() => {
+                                                const totalDollar = activeProducts.reduce((sum, item) => sum + (parseFloat(item.totalDollar) || 0), 0);
+                                                const dRate = parseFloat(activeMilestone.isOriginal ? (data.openingDollarRate || activeMilestone.dollarRate || data.dollarRate || 0) : (activeMilestone.dollarRate || data.dollarRate || 0));
+                                                const calcVal = (totalDollar > 0 && dRate > 0) ? (totalDollar * dRate) : parseFloat(activeMilestone.totalAmount || data.totalAmount || 0);
+                                                return calcVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                            })()}
+                                        </span>
                                     </div>
 
                                     {!activeMilestone.isOriginal && (
@@ -4772,6 +4783,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [dollarRateModalRecord, setDollarRateModalRecord] = useState(null);
     const [lcReceiveModalRecord, setLcReceiveModalRecord] = useState(null);
     const [marginReturns, setMarginReturns] = useState([]);
+    const [costOfGoodsRecords, setCostOfGoodsRecords] = useState([]);
 
     // Amendment states
     const [showAmendmentForm, setShowAmendmentForm] = useState(false);
@@ -4834,8 +4846,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
     const [sortConfig, setSortConfig] = useState({ key: 'openingDate', direction: 'desc' });
 
-    const canAdd    = hasPermission(currentUser, 'lcManagement', 'add');
-    const canEdit   = hasPermission(currentUser, 'lcManagement', 'edit');
+    const canAdd = hasPermission(currentUser, 'lcManagement', 'add');
+    const canEdit = hasPermission(currentUser, 'lcManagement', 'edit');
     const canDelete = hasPermission(currentUser, 'lcManagement', 'delete');
     const canSpecial = hasPermission(currentUser, 'lcManagement', 'special');
     const canSpecialEdit = hasPermission(currentUser, 'lcManagement', 'specialEdit');
@@ -5144,8 +5156,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
                         ? targetSource.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0) / 1000
                         : (parseFloat(targetSource.grandTotalQuantity || targetSource.quantity) || 0) / 1000;
 
-                    const piRate = firstProd 
-                        ? (parseFloat(firstProd.rate || 0) + parseFloat(firstProd.freight || 0)) 
+                    const piRate = firstProd
+                        ? (parseFloat(firstProd.rate || 0) + parseFloat(firstProd.freight || 0))
                         : (parseFloat(targetSource.rate || 0) + parseFloat(targetSource.freight || 0));
 
                     nextState.quantity = piQtyTons > 0 ? String(piQtyTons) : prev.quantity;
@@ -5338,7 +5350,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const fetchInitialData = async () => {
         setIsLoading(true);
         try {
-            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes, marginReturnRes] = await Promise.all([
+            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes, marginReturnRes, cogRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/importers`),
@@ -5353,12 +5365,14 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 axios.get(`${API_BASE_URL}/api/lc-expenses`),
                 axios.get(`${API_BASE_URL}/api/ports`),
                 axios.get(`${API_BASE_URL}/api/insurance-payments`),
-                axios.get(`${API_BASE_URL}/api/margin-returns`).catch(() => ({ data: [] }))
+                axios.get(`${API_BASE_URL}/api/margin-returns`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/cost-of-goods`).catch(() => ({ data: [] }))
             ]);
             setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
             setLcExpenses(Array.isArray(expenseRes.data) ? expenseRes.data : []);
             setInsurancePayments(Array.isArray(insPayRes.data) ? insPayRes.data : []);
             setMarginReturns(Array.isArray(marginReturnRes?.data) ? marginReturnRes.data : []);
+            setCostOfGoodsRecords(Array.isArray(cogRes?.data) ? cogRes.data : []);
 
             const freshLcRecords = Array.isArray(lcRes.data) ? lcRes.data : [];
             setLcRecords(freshLcRecords);
@@ -5932,9 +5946,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                     : (parseFloat(targetSource.grandTotalQuantity || targetSource.quantity) || 0) / 1000;
 
                 if (piQtyTons > 0) resolvedQty = piQtyTons;
-                
-                const rateVal = firstProd 
-                    ? (parseFloat(firstProd.rate || 0) + parseFloat(firstProd.freight || 0)) 
+
+                const rateVal = firstProd
+                    ? (parseFloat(firstProd.rate || 0) + parseFloat(firstProd.freight || 0))
                     : (parseFloat(targetSource.rate || 0) + parseFloat(targetSource.freight || 0));
                 if (rateVal > 0) {
                     resolvedRate = rateVal < 10 ? String(rateVal * 1000) : String(rateVal);
@@ -6486,7 +6500,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
         const adjustedQtyKg = openingQtyKg + actualAdjustmentQtyKg;
         const adjustedQtyTons = adjustedQtyKg / 1000;
-        
+
         const timeline = getLCHistoryTimeline(record);
         const latestMilestone = timeline[timeline.length - 1] || {};
         const totalDollar = getMilestoneTotalDollar(latestMilestone, record);
@@ -6503,7 +6517,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
         const getProductReceivedQtyKg = (pName) => {
             const cleanPName = (pName || '').trim().toLowerCase();
-            
+
             // Stock Receipts
             const receiptsMap = {};
             allStockRecords
@@ -6566,6 +6580,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
             return rQty + bQty;
         };
 
+        const matchingCogRecords = (costOfGoodsRecords || []).filter(cog => cleanLc(cog.lcNo) === lcNoClean);
+        const totalCogNetBill = matchingCogRecords.reduce((sum, rec) => sum + getCogNetBillBdt(rec, dollarRate), 0);
+
         const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || record;
         const origProducts = (originalLc.productsList && originalLc.productsList.length > 0)
             ? originalLc.productsList
@@ -6592,7 +6609,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 billValueUsd += pRecQtyTons * (pRate + pFreight);
             });
         }
-        
+
         if (billValueUsd === 0 && totalReceivedQtyKg > 0) {
             const pRecQtyTons = totalReceivedQtyKg / 1000;
             const rootRateVal = originalLc.rate || record.rate || (origProducts[0]?.rate);
@@ -6605,8 +6622,8 @@ const LCManagement = ({ addNotification, currentUser }) => {
             billValueUsd = pRecQtyTons * (pRate + pFreight);
         }
 
-        const adjustedTotalAmount = dollarRate > 0 
-            ? billValueUsd * dollarRate 
+        const adjustedTotalAmount = dollarRate > 0
+            ? billValueUsd * dollarRate
             : (isEnabled && openingQtyKg > 0
                 ? openingValue + (actualAdjustmentQtyKg * (openingValue / openingQtyKg))
                 : openingValue);
@@ -6644,7 +6661,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 adjustedQuantity: adj.adjustedQtyTons,
                 adjustedTotalAmount: adj.adjustedTotalAmount
             };
-            
+
             const tempState = {
                 ...updatedRecord,
                 totalAmount: adj.adjustedTotalAmount
@@ -6657,7 +6674,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
             // Optimistic UI update
             setLcRecords(prev => prev.map(r => r._id === record._id ? updatedRecord : r));
-            
+
             const response = await axios.put(`${API_BASE_URL}/api/lc-management/${record._id}`, updatedRecord);
             if (response.data) {
                 addNotification?.('LC Adjustment updated successfully', 'success');
@@ -6878,7 +6895,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
             const totalExpense = getLcTotalPaidExpense(record);
             const bk = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (record.bankName || '').trim().toUpperCase());
             const displayBankName = bk?.shortName || record.bankName || '-';
-            
+
             return {
                 openingDate: record.openingDate,
                 expiryDate: record.expiryDate,
@@ -7203,11 +7220,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         key={statusOption}
                                                         type="button"
                                                         onClick={() => setLcFilters({ ...lcFilters, lcStatus: statusOption })}
-                                                        className={`flex-1 py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
-                                                            lcFilters.lcStatus === statusOption
+                                                        className={`flex-1 py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${lcFilters.lcStatus === statusOption
                                                                 ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
                                                                 : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {statusOption}
                                                     </button>
@@ -8446,7 +8462,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Quantity</span>
                                                     <p className="text-sm font-bold text-gray-800">
-                                                        {prevMilestoneForAmendment 
+                                                        {prevMilestoneForAmendment
                                                             ? `${parseFloat(getMilestoneTotalQty(prevMilestoneForAmendment) || 0).toLocaleString('en-US')} Ton`
                                                             : 'N/A'
                                                         }
@@ -8455,7 +8471,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Rate</span>
                                                     <p className="text-sm font-bold text-gray-800">
-                                                        {prevMilestoneForAmendment 
+                                                        {prevMilestoneForAmendment
                                                             ? `$${parseFloat(getMilestoneRate(prevMilestoneForAmendment, selectedLcForAmendment) || 0).toLocaleString('en-IN')}`
                                                             : 'N/A'
                                                         }
@@ -8466,7 +8482,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Dollar</span>
                                                     <p className="text-sm font-bold text-blue-600">
-                                                        {prevMilestoneForAmendment 
+                                                        {prevMilestoneForAmendment
                                                             ? `$${parseFloat(getMilestoneTotalDollar(prevMilestoneForAmendment, selectedLcForAmendment) || 0).toLocaleString('en-IN')}`
                                                             : 'N/A'
                                                         }
@@ -8475,12 +8491,12 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                 <div>
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Amount</span>
                                                     <p className="text-sm font-bold text-gray-800">
-                                                        {prevMilestoneForAmendment 
+                                                        {prevMilestoneForAmendment
                                                             ? `৳${parseFloat(
-                                                                (getMilestoneTotalDollar(prevMilestoneForAmendment, selectedLcForAmendment) * 
-                                                                (parseFloat(prevMilestoneForAmendment.dollarRate || selectedLcForAmendment.dollarRate) || 0)
+                                                                (getMilestoneTotalDollar(prevMilestoneForAmendment, selectedLcForAmendment) *
+                                                                    (parseFloat(prevMilestoneForAmendment.dollarRate || selectedLcForAmendment.dollarRate) || 0)
                                                                 ).toFixed(2)
-                                                              ).toLocaleString('en-IN')}`
+                                                            ).toLocaleString('en-IN')}`
                                                             : 'N/A'
                                                         }
                                                     </p>
@@ -9214,7 +9230,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                            {isLoading ? (
+                                {isLoading ? (
                                     <tr>
                                         <td colSpan="17" className="px-6 py-12 text-center text-sm text-gray-500">
                                             <div className="flex flex-col items-center gap-2">
@@ -9310,7 +9326,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                             .reduce((sum, gp) => sum + (parseFloat(gp.gpQuantity) || 0), 0);
                                         const remGpKg = Math.max(0, adj.adjustedQtyKg - totalGpQtyKg);
                                         return (
-                                            <React.Fragment key={record._id}>
+                                            <React.Fragment key={record._id ? `${record._id}_${index}` : index}>
                                                 <tr className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-400 whitespace-nowrap">{index + 1}</td>
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
@@ -9343,34 +9359,34 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     </td>
                                                     <td className="px-2 py-3 text-sm text-gray-600 whitespace-nowrap truncate max-w-[80px]" title={displayPort}>{displayPort}</td>
                                                     <td className="px-2 py-3 text-sm font-bold text-gray-900 max-w-[120px]">
-                                                         {record.productsList && record.productsList.length > 0 ? (
-                                                             <div className="flex flex-col gap-0.5">
-                                                                 {record.productsList.map((p, idx) => (
-                                                                     <div key={idx} className="truncate whitespace-nowrap" title={p.productName}>
-                                                                         {p.productName}
-                                                                     </div>
-                                                                 ))}
-                                                             </div>
-                                                         ) : (
-                                                             <span className="truncate whitespace-nowrap block">{record.productName || '-'}</span>
-                                                         )}
-                                                     </td>
+                                                        {record.productsList && record.productsList.length > 0 ? (
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {record.productsList.map((p, idx) => (
+                                                                    <div key={idx} className="truncate whitespace-nowrap" title={p.productName}>
+                                                                        {p.productName}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="truncate whitespace-nowrap block">{record.productName || '-'}</span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-2 py-3 text-sm text-right text-gray-600 whitespace-nowrap">
                                                         <span className="font-bold text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')}</span>
                                                     </td>
                                                     <td className="px-2 py-3 text-sm text-right text-gray-600 whitespace-nowrap">
-                                                         <div className="flex items-center justify-end gap-1">
-                                                             <span className="font-bold text-gray-900">{adj.totalReceivedQtyKg.toLocaleString('en-US')}</span>
-                                                             {canEditLcReceive && (
-                                                                 <button
-                                                                     onClick={(e) => { e.stopPropagation(); setLcReceiveModalRecord(record); }}
-                                                                     className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                                                                     title="Update LC Receive Quantity"
-                                                                 >
-                                                                     <EditIcon className="w-3 h-3" />
-                                                                 </button>
-                                                             )}
-                                                         </div>
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <span className="font-bold text-gray-900">{adj.totalReceivedQtyKg.toLocaleString('en-US')}</span>
+                                                            {canEditLcReceive && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setLcReceiveModalRecord(record); }}
+                                                                    className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                                                                    title="Update LC Receive Quantity"
+                                                                >
+                                                                    <EditIcon className="w-3 h-3" />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-2 py-3 text-sm text-right whitespace-nowrap">
                                                         <span className={`font-black ${combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>
@@ -9412,9 +9428,9 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                         })()}
                                                     </td>
                                                     <td className="px-2 py-3 text-sm text-center whitespace-nowrap">
-                                                         <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold border ${getStatusBadgeClass(record.lcStatus)}`}>
-                                                             {record.lcStatus === 'Completed' ? 'Completed' : 'Active'}
-                                                         </span>
+                                                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold border ${getStatusBadgeClass(record.lcStatus)}`}>
+                                                            {record.lcStatus === 'Completed' ? 'Completed' : 'Active'}
+                                                        </span>
                                                     </td>
                                                     <td className="px-2 py-3 text-center">
                                                         <div className="flex items-center justify-center gap-4">
@@ -9605,10 +9621,10 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                                                                             const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + (parseFloat(b.quantity) || 0), 0);
                                                                                                             return iSum + (brandSubtotal || parseFloat(item.quantity) || 0);
                                                                                                         }, 0);
-                                                                                                    
+
                                                                                                     const rootProductMatches = String(s.productName || '').toLowerCase().trim() === String(p.productName || '').toLowerCase().trim();
                                                                                                     const rootQty = rootProductMatches ? (parseFloat(s.currentTotalQty) || parseFloat(s.totalQuantity) || parseFloat(s.totalQty) || parseFloat(s.qty) || parseFloat(s.quantity) || parseFloat(s.total) || 0) : 0;
-                                                                                                    
+
                                                                                                     return sum + (matchingItemsQty || rootQty);
                                                                                                 }, 0);
 
@@ -9912,7 +9928,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                 </div>
                             ))
                         ) : sortedRecords.length > 0 ? (
-                            sortedRecords.map((record) => {
+                            sortedRecords.map((record, index) => {
                                 // Helper for sanitized numeric parsing
                                 const parseNum = (val) => {
                                     if (val === null || val === undefined) return 0;
@@ -10001,7 +10017,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
 
                                 return (
                                     <div
-                                        key={record._id}
+                                        key={record._id ? `${record._id}_${index}` : index}
                                         className={`bg-white rounded-2xl border ${isCardExpanded ? 'border-blue-100 ring-4 ring-blue-500/5 shadow-lg' : 'border-gray-100 shadow-sm'} p-5 transition-all duration-300 overflow-hidden text-left`}
                                     >
                                         {/* Collapsed View: Redesigned Premium Card Header */}
@@ -10107,18 +10123,18 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <div className="font-bold text-gray-900 break-words text-[11px]">
-                                                         {record.productsList && record.productsList.length > 0 ? (
-                                                             <div className="flex flex-col gap-0.5">
-                                                                 {record.productsList.map((p, idx) => (
-                                                                     <div key={idx} className="break-words">
-                                                                         {p.productName}
-                                                                     </div>
-                                                                 ))}
-                                                             </div>
-                                                         ) : (
-                                                             <span className="break-words block">{record.productName || '-'}</span>
-                                                         )}
-                                                     </div>
+                                                        {record.productsList && record.productsList.length > 0 ? (
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {record.productsList.map((p, idx) => (
+                                                                    <div key={idx} className="break-words">
+                                                                        {p.productName}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="break-words block">{record.productName || '-'}</span>
+                                                        )}
+                                                    </div>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quantity</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
@@ -10181,7 +10197,7 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                                     <span className={`font-black text-[11px] ${totalExpense > 0 ? 'text-rose-600' : 'text-gray-400'}`}>
                                                         {totalExpense > 0 ? `৳${totalExpense.toLocaleString('en-IN')}` : '—'}
                                                     </span>
-                                                    
+
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <div>

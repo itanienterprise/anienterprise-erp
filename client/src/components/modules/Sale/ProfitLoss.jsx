@@ -5,7 +5,7 @@ import {
 } from '../../Icons';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
-import { getAdjustedLcValues } from '../../../utils/lcValueUtils';
+import { getAdjustedLcValues, getCogNetBillBdt } from '../../../utils/lcValueUtils';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 export default function ProfitLoss({ salesRecords, products }) {
@@ -120,10 +120,11 @@ export default function ProfitLoss({ salesRecords, products }) {
     return costOfGoodsRecords.filter(rec => cleanLc(rec.lcNo) === lcNoClean);
   }, [selectedLc, costOfGoodsRecords]);
 
-  // Sum of netBill for these Cost of Goods records
+  // Sum of netBill in BDT for these Cost of Goods records
   const totalLcCostOfGoodsAmount = useMemo(() => {
-    return selectedLcCostOfGoods.reduce((sum, rec) => sum + (parseFloat(rec.netBill) || 0), 0);
-  }, [selectedLcCostOfGoods]);
+    const fallbackRate = selectedLc?.dollarRate || 0;
+    return selectedLcCostOfGoods.reduce((sum, rec) => sum + getCogNetBillBdt(rec, fallbackRate), 0);
+  }, [selectedLcCostOfGoods, selectedLc]);
 
   // Sum of quantity for these Cost of Goods records
   const totalLcCostOfGoodsQty = useMemo(() => {
@@ -988,7 +989,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                         </div>
                         <div>
                           <div className="text-[10px] text-gray-400 font-black uppercase">Total (BDT)</div>
-                          <div className="text-xs font-black text-gray-800">৳ {parseFloat(selectedLc.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="text-xs font-black text-gray-800">৳ {((parseFloat(selectedLc.totalDollar || 0) * parseFloat(selectedLc.dollarRate || 0)) || parseFloat(selectedLc.totalAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </div>
                       </div>
                       <div className="border-t border-gray-200/60 pt-2 mt-1">
@@ -1129,7 +1130,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                 <div className="p-5 flex-1 flex flex-col items-center justify-center space-y-4">
                   {/* Donut Chart */}
                   <div className="relative flex items-center justify-center my-1">
-                    <div 
+                    <div
                       className="w-32 h-32 rounded-full shadow-inner flex items-center justify-center transition-all duration-300"
                       style={{
                         background: pieData.gradientString
@@ -1248,7 +1249,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                               </td>
                               <td className="py-2.5 px-4 text-right font-bold text-gray-900">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                               <td className="py-2.5 px-4 text-right font-semibold text-gray-900">{parseFloat(rec.quantity || 0).toLocaleString()} KG</td>
-                              <td className="py-2.5 px-6 text-right font-black text-blue-600">৳ {Math.round(rec.netBill || 0).toLocaleString('en-IN')}</td>
+                              <td className="py-2.5 px-6 text-right font-black text-blue-600">৳ {Math.round(costingKgVal * (parseFloat(rec.quantity) || 0)).toLocaleString('en-IN')}</td>
                             </tr>
                           );
                         })

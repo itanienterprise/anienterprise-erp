@@ -98,10 +98,55 @@ export const getLCHistoryTimeline = (lc) => {
 };
 
 /**
+ * Helper to calculate Cost/KG in BDT for a Cost of Goods (COG) record.
+ */
+export const getRecCostingKg = (rec) => {
+    if (!rec) return 0;
+    if (rec.costingKg !== undefined && rec.costingKg !== null && rec.costingKg !== '') {
+        return parseFloat(rec.costingKg) || 0;
+    }
+    const isChina = rec.country === 'CHINA';
+    const amount = parseFloat(rec.amount) || 0;
+    const qty = parseFloat(rec.quantity) || 0;
+    const bdtRate = parseFloat(rec.dollarRateBdt) || 0;
+    const expense = parseFloat(rec.cfOtherExpense !== undefined ? rec.cfOtherExpense : 9) || 0;
+
+    if (isChina) {
+        const rateKgUsd = qty ? (amount / qty) : 0;
+        const rateKgBdt = rateKgUsd * bdtRate;
+        return rateKgBdt + expense;
+    } else {
+        const indTruckFare = parseFloat(rec.indTruckFare) || 0;
+        const truckChangeFare = parseFloat(rec.truckChangeFare) || 0;
+        const slofCf = parseFloat(rec.slofCf) || 0;
+        const totalBill = rec.totalBill !== undefined ? parseFloat(rec.totalBill) : (amount + indTruckFare + truckChangeFare + slofCf);
+        const rebatePct = parseFloat(rec.rebate !== undefined ? rec.rebate : (rec.redate !== undefined ? rec.redate : 2.9)) || 0;
+        const rebateAmount = rec.rebateAmount !== undefined ? parseFloat(rec.rebateAmount) : (rec.redateAmount !== undefined ? parseFloat(rec.redateAmount) : ((totalBill * rebatePct) / 100));
+        const netBill = rec.netBill !== undefined && rec.netBill !== null && rec.netBill !== '' ? parseFloat(rec.netBill) : (totalBill - rebateAmount);
+        const rateKg = qty ? (netBill / qty) : 0;
+        const dollarRate = parseFloat(rec.rsToDollar) || 0;
+        const rateKgUsd = dollarRate ? (rateKg / dollarRate) : 0;
+        const rateKgBdt = rateKgUsd * bdtRate;
+        return rateKgBdt + expense;
+    }
+};
+
+/**
+ * Helper to calculate Net Bill in BDT for a Cost of Goods (COG) record.
+ * Net Bill BDT = Cost/KG (BDT) * Quantity (KG).
+ */
+export const getCogNetBillBdt = (rec) => {
+    if (!rec) return 0;
+    const qty = parseFloat(rec.quantity) || 0;
+    const costingKg = getRecCostingKg(rec);
+    return costingKg * qty;
+};
+
+/**
  * Calculate adjusted LC values (received qty, bill value USD, total value BDT).
  * Matches the TOTAL VALUE column in the LC Management table.
  */
-export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecords = []) => {
+export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecords = [], allCostOfGoodsRecords = []) => {
     if (!record) return { adjustedTotalAmount: 0, billValueUsd: 0, dollarRate: 0, openingValue: 0 };
 
     const totalQtyTons = record.productsList && record.productsList.length > 0
@@ -180,6 +225,9 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
     const latestMilestone = timeline[timeline.length - 1] || {};
     const totalDollar = getMilestoneTotalDollar(latestMilestone, record);
     const dollarRate = parseFloat(record.updatedDollarRate || record.dollarRate || latestMilestone.dollarRate || 0);
+
+    const matchingCogRecords = (allCostOfGoodsRecords || []).filter(cog => cleanLc(cog.lcNo) === lcNoClean);
+    const totalCogNetBill = matchingCogRecords.reduce((sum, rec) => sum + getCogNetBillBdt(rec, dollarRate), 0);
 
     const getRatePerTon = (rVal) => {
         const r = parseFloat(rVal) || 0;

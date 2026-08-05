@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { 
-    PlusIcon, 
-    SearchIcon, 
-    EditIcon, 
-    TrashIcon, 
-    XIcon, 
-    DollarSignIcon, 
-    CalendarIcon, 
-    BuildingIcon, 
-    FileTextIcon, 
+import {
+    PlusIcon,
+    SearchIcon,
+    EditIcon,
+    TrashIcon,
+    XIcon,
+    DollarSignIcon,
+    CalendarIcon,
+    BuildingIcon,
+    FileTextIcon,
     RotateCcwIcon,
     DownloadIcon,
     ChevronDownIcon,
@@ -110,7 +110,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
     // Calculate adjusted LC values matching LC Management module exactly
     const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecords = []) => {
         if (!record) return { adjustedTotalAmount: 0, billValueUsd: 0, dollarRate: 0, openingValue: 0 };
-        
+
         const totalQtyTons = record.productsList && record.productsList.length > 0
             ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
             : (parseFloat(record.quantity) || 0);
@@ -287,7 +287,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                 billValueUsd += pRecQtyTons * (pRate + pFreight);
             });
         }
-        
+
         if (billValueUsd === 0 && totalReceivedQtyKg > 0) {
             const pRecQtyTons = totalReceivedQtyKg / 1000;
             const rootRateVal = originalLc.rate || record.rate || (origProducts[0]?.rate);
@@ -301,7 +301,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
         }
 
         const adjustedTotalAmount = dollarRate > 0 && billValueUsd > 0
-            ? billValueUsd * dollarRate 
+            ? billValueUsd * dollarRate
             : (isEnabled && openingQtyKg > 0
                 ? openingValue + (actualAdjustmentQtyKg * (openingValue / openingQtyKg))
                 : openingValue);
@@ -350,7 +350,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             const lcBankClean = cleanStr(lc.bankName);
             const lcBranchClean = cleanStr(lc.bankBranch || lc.branch || lc.branchName);
 
-            const matchedBank = banks.find(b => 
+            const matchedBank = banks.find(b =>
                 cleanStr(b.bankName) === lcBankClean ||
                 cleanStr(b.shortName) === lcBankClean
             );
@@ -452,7 +452,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
     // Filtered Return Records
     const filteredRecords = useMemo(() => {
         return marginReturns.filter(item => {
-            const matchesSearch = !searchQuery.trim() || 
+            const matchesSearch = !searchQuery.trim() ||
                 (item.lcNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (item.importerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (item.bankName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
