@@ -150,14 +150,18 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
 
         const borderSaleQtyKg = allSalesRecords
             .filter(s => {
-                const recordLcNoClean = cleanLc(s.lcNo);
+                const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
+                    cleanLc(s.lcNumber) === lcNoClean ||
+                    cleanLc(s.lc_no) === lcNoClean ||
+                    (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
                 const isBorder = sTypeLow.includes('border') ||
                     (s.invoiceNo || '').startsWith('BS') ||
                     (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                    (recordLcNoClean === lcNoClean && !!(s.port || s.importer));
+                    (matchesLc && !!(s.port || s.importer));
                 const status = (s.status || '').toLowerCase();
-                return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+                const isValidStatus = !status.includes('rejected') && status !== 'requested';
+                return matchesLc && isValidStatus && isBorder;
             })
             .reduce((sum, s) => {
                 const itemSubtotal = (s.items || []).reduce((iSum, item) => {
@@ -238,13 +242,18 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
 
             const bQty = allSalesRecords
                 .filter(s => {
-                    const recordLcNoClean = cleanLc(s.lcNo);
+                    const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
+                        cleanLc(s.lcNumber) === lcNoClean ||
+                        cleanLc(s.lc_no) === lcNoClean ||
+                        (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
                     const sTypeLow = (s.saleType || '').toLowerCase().trim();
                     const isBorder = sTypeLow.includes('border') ||
                         (s.invoiceNo || '').startsWith('BS') ||
-                        (!s.saleType && !!(s.lcNo || s.port || s.importer));
+                        (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
+                        (matchesLc && !!(s.port || s.importer));
                     const status = (s.status || '').toLowerCase();
-                    return recordLcNoClean === lcNoClean && status === 'accepted' && isBorder;
+                    const isValidStatus = !status.includes('rejected') && status !== 'requested';
+                    return matchesLc && isValidStatus && isBorder;
                 })
                 .reduce((sum, s) => {
                     const matchingItems = (s.items || []).filter(item => {
