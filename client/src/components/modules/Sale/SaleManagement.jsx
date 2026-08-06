@@ -5280,7 +5280,7 @@ const SaleManagement = ({
                                                 }}
                                                 className={`hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px] ${selectedItems.has(sale._id) ? 'bg-blue-50' : ''} ${highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
                                                 ref={el => { const id = sale.invoiceNo || sale._id; if (id) rowRefs.current[id] = el; }}
-                                                    style={highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
+                                                    style={highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                             >
                                                 <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                     {(isSelectionMode || selectedItems.size > 0) ? (
@@ -5386,7 +5386,7 @@ const SaleManagement = ({
                                             }}
                                             className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''} ${highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
                                         ref={el => { if (sale.invoiceNo) rowRefs.current[sale.invoiceNo] = el; }}
-                                                    style={highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
+                                                    style={highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                         >
                                             <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                 {(isSelectionMode || selectedItems.size > 0) ? (

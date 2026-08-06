@@ -1729,7 +1729,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                     }}
                                                     className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle select-none ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''} ${selectedItems.has(group.key) ? 'bg-blue-50/70 font-medium' : ''} ${highlightId && ((group.receiptNo && String(group.receiptNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) || (group.ids && group.ids.some(id => String(id) === String(highlightId)))) ? "notif-row-highlight" : ""}`}
                                                     ref={el => { if (group.receiptNo) rowRefs.current[group.receiptNo] = el; }}
-                                                    style={highlightId && ((group.receiptNo && String(group.receiptNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) || (group.ids && group.ids.some(id => String(id) === String(highlightId)))) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
+                                                    style={highlightId && ((group.receiptNo && String(group.receiptNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) || (group.ids && group.ids.some(id => String(id) === String(highlightId)))) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                                 >
                                                     {selectedItems.size > 0 && (
                                                         <td className="px-3 py-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>

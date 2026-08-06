@@ -2043,7 +2043,7 @@ function IPManagement({
                                                 key={record._id}
                                                 className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none ${highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
                                                  ref={el => { if (record.ipNumber) rowRefs.current[record.ipNumber] = el; }}
-                                                    style={highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
+                                                    style={highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                                 onMouseDown={() => startLongPress(record._id)}
                                                 onMouseUp={endLongPress}
                                                 onMouseLeave={endLongPress}

@@ -4135,7 +4135,7 @@ function PI({
 
                                             return (
                                                 <tr key={record._id} className={`hover:bg-gray-50/50 transition-colors ${highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (record.piNumber) rowRefs.current[record.piNumber] = el; }}
-                                                    style={highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}>
+                                                    style={highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}>
                                                     <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
                                                     <td className="px-6 py-4 text-sm font-bold text-blue-600">
                                                         {record.piNumber}

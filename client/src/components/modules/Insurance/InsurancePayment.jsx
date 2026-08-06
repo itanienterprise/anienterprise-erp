@@ -1267,7 +1267,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                             (p.amount && (String(p.amount).replace(/,/g, '').trim() === String(highlightId).toLowerCase().trim().replace(/,/g, '') || (typeof p.amount === 'number' && String(p.amount.toFixed(2)).replace(/,/g, '').trim() === String(highlightId).toLowerCase().trim().replace(/,/g, '')))) ||
                                                             (p.reference && p.reference !== '-' && String(p.reference).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
                                                             (p.companyName && payments.filter(item => (item.companyName || '').toLowerCase().trim() === p.companyName.toLowerCase().trim()).length === 1 && p.companyName.toLowerCase().trim() === String(highlightId).toLowerCase().trim())
-                                                        ) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined
+                                                        ) ? { borderLeft: '5px solid #f59e0b' } : undefined
                                                     }
                                                 >
                                                     <td className="px-4 py-3 whitespace-nowrap text-gray-700">{formatDate(p.date)}</td>

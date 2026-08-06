@@ -4195,7 +4195,7 @@ function LCReceive({
             (entry.lcNo && (String(entry.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(entry.lcNo).toLowerCase().trim()) || String(entry.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim()))) ||
             (entry.entries && entry.entries.some(e => e.lcNo && (String(e.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(e.lcNo).toLowerCase().trim()) || String(e.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim())))) ||
             (entry.allIds && entry.allIds.some(id => String(id) === String(highlightId)))
-        ) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined
+        ) ? { borderLeft: '5px solid #f59e0b' } : undefined
     }
     onMouseDown={() => startLongPress && startLongPress(entry.groupedKey)}
     onMouseUp={endLongPress}

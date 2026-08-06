@@ -9386,7 +9386,7 @@ style={
     highlightId && (
         String(record._id) === String(highlightId) ||
         (record.lcNo && String(record.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
-    ) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined
+    ) ? { borderLeft: '5px solid #f59e0b' } : undefined
 }>
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-400 whitespace-nowrap">{index + 1}</td>
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>

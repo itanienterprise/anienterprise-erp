@@ -789,7 +789,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                             ) : filteredPurchases.length > 0 ? (
                                 filteredPurchases.map(p => (
                                     <tr key={p._id} className={`hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 align-middle ${highlightId && (String(p._id) === String(highlightId) || (p.purchaseNo && String(p.purchaseNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (p.purchaseNo) rowRefs.current[p.purchaseNo] = el; }}
-                                                    style={highlightId && (String(p._id) === String(highlightId) || (p.purchaseNo && String(p.purchaseNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}>
+                                                    style={highlightId && (String(p._id) === String(highlightId) || (p.purchaseNo && String(p.purchaseNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}>
                                         <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-600 align-top">{formatDate(p.date)}</td>
                                         <td className="px-3 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 align-top">{p.purchaseNo || '—'}</td>
                                         <td className="px-3 py-4 whitespace-nowrap text-sm font-semibold text-gray-800 align-top">{p.companyName || p.supplierName || '—'}</td>

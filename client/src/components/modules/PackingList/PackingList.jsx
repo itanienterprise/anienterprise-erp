@@ -2145,7 +2145,7 @@ function PackingList({
                                                     (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
                                                     (rec.invoiceNo && String(rec.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
                                                     (rec.piNumber && String(rec.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
-                                                ) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
+                                                ) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                             >
                                                 <td className="px-6 py-4 font-bold text-gray-800">{rec.packingListNumber}</td>
                                                 <td className="px-6 py-4 text-gray-600">{formatDate(rec.date)}</td>

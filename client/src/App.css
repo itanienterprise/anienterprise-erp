@@ -337,39 +337,50 @@ body.app-modal-open-active header {
    Global Notification deep-link row highlight animation
    Works on <tr> by targeting its <td> children
    ═══════════════════════════════════════════════════════════ */
-@keyframes notif-cell-glow {
-    0%   { background-color: rgba(251, 191, 36, 0.50); }
-    25%  { background-color: rgba(251, 191, 36, 0.65); }
-    65%  { background-color: rgba(251, 191, 36, 0.30); }
-    100% { background-color: rgba(251, 191, 36, 0.00); }
+/* ── Notification deep-link row highlight (Real Staggered Column Wave Left-to-Right) ── */
+@keyframes notif-wave-pass {
+    0% {
+        background-color: rgba(254, 252, 232, 0.35) !important;
+    }
+    30% {
+        background-color: rgba(253, 224, 71, 0.85) !important;
+        box-shadow: inset 0 0 12px rgba(234, 179, 8, 0.45) !important;
+    }
+    60% {
+        background-color: rgba(254, 240, 138, 0.55) !important;
+    }
+    100% {
+        background-color: rgba(254, 252, 232, 0.35) !important;
+    }
 }
 
 .notif-row-highlight > td,
 .notif-row-highlight > th {
-    animation: notif-cell-glow 3.5s ease-out forwards !important;
-    transition: none !important;
+    animation: notif-wave-pass 1.8s ease-in-out infinite !important;
+    background-color: rgba(254, 240, 138, 0.45) !important;
 }
+
+/* Staggered delays to create a continuous left-to-right wave across table columns */
+.notif-row-highlight > td:nth-child(1)  { animation-delay: 0.00s !important; }
+.notif-row-highlight > td:nth-child(2)  { animation-delay: 0.08s !important; }
+.notif-row-highlight > td:nth-child(3)  { animation-delay: 0.16s !important; }
+.notif-row-highlight > td:nth-child(4)  { animation-delay: 0.24s !important; }
+.notif-row-highlight > td:nth-child(5)  { animation-delay: 0.32s !important; }
+.notif-row-highlight > td:nth-child(6)  { animation-delay: 0.40s !important; }
+.notif-row-highlight > td:nth-child(7)  { animation-delay: 0.48s !important; }
+.notif-row-highlight > td:nth-child(8)  { animation-delay: 0.56s !important; }
+.notif-row-highlight > td:nth-child(9)  { animation-delay: 0.64s !important; }
+.notif-row-highlight > td:nth-child(10) { animation-delay: 0.72s !important; }
+.notif-row-highlight > td:nth-child(11) { animation-delay: 0.80s !important; }
+.notif-row-highlight > td:nth-child(12) { animation-delay: 0.88s !important; }
+.notif-row-highlight > td:nth-child(13) { animation-delay: 0.96s !important; }
+.notif-row-highlight > td:nth-child(14) { animation-delay: 1.04s !important; }
+.notif-row-highlight > td:nth-child(15) { animation-delay: 1.12s !important; }
+.notif-row-highlight > td:nth-child(16) { animation-delay: 1.20s !important; }
+.notif-row-highlight > td:nth-child(17) { animation-delay: 1.28s !important; }
+.notif-row-highlight > td:nth-child(18) { animation-delay: 1.36s !important; }
 
 .notif-row-highlight > td:first-child,
 .notif-row-highlight > th:first-child {
-    border-left: 3px solid #f59e0b !important;
-    padding-left: calc(0.75rem - 3px) !important;
-}
-/* ── Notification deep-link row highlight ─────────────────── */
-@keyframes notif-cell-glow {
-    0%   { background-color: #fde047 !important; box-shadow: inset 0 0 10px #eab308 !important; }
-    50%  { background-color: #fef08a !important; box-shadow: inset 0 0 16px #ca8a04 !important; }
-    100% { background-color: #fde047 !important; box-shadow: inset 0 0 10px #eab308 !important; }
-}
-
-.notif-row-highlight,
-.notif-row-highlight > td,
-.notif-row-highlight > th {
-    animation: notif-cell-glow 1.5s ease-in-out infinite !important;
-    background-color: #fde047 !important;
-}
-
-.notif-row-highlight > td:first-child,
-.notif-row-highlight > th:first-child {
-    border-left: 5px solid #d97706 !important;
+    border-left: 5px solid #f59e0b !important;
 }

@@ -2074,7 +2074,7 @@ const OrderManagement = ({
                                             }}
                                             className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${selectedItems.has(order._id) ? 'bg-blue-50' : ''} ${highlightId && (String(order._id) === String(highlightId) || (order.invoiceNo && String(order.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
                                             ref={el => { const id = order.invoiceNo || order.orderNo; if (id) rowRefs.current[id] = el; }}
-                                                    style={highlightId && (String(order._id) === String(highlightId) || (order.invoiceNo && String(order.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
+                                                    style={highlightId && (String(order._id) === String(highlightId) || (order.invoiceNo && String(order.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                         >
                                             <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                 {(isSelectionMode || selectedItems.size > 0) ? (
