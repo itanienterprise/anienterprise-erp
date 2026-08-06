@@ -10,7 +10,13 @@ export const MODULES_LIST = [
     { key: 'importerExporter', label: 'Importer / Exporter' },
     { key: 'cnf', label: 'C&F Management' },
     { key: 'cnfPayment', label: 'C&F Payment' },
-    { key: 'ipManagement', label: 'IP Management' },
+    {
+        key: 'ipManagement',
+        label: 'IP Management',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     { key: 'pi', label: 'PI Management' },
     { key: 'packingList', label: 'Packing List' },
     { key: 'trSetup', label: 'TR Setup' },
@@ -82,7 +88,8 @@ export const MODULES_LIST = [
             { key: 'special', label: 'Approve Payment' },
             { key: 'paymentRequest', label: 'Payment Request' },
             { key: 'editRequest', label: 'Edit Request' },
-            { key: 'approveEditRequest', label: 'Approve Edit Request' }
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
+            { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
     {
@@ -92,12 +99,23 @@ export const MODULES_LIST = [
             { key: 'special', label: 'Approve Payment' },
             { key: 'paymentRequest', label: 'Payment Request' },
             { key: 'editRequest', label: 'Edit Request' },
-            { key: 'approveEditRequest', label: 'Approve Edit Request' }
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
+            { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
     { key: 'bank', label: 'Bank Management' },
     { key: 'insurance', label: 'Insurance Management' },
-    { key: 'insurancePayment', label: 'Insurance Payment' },
+    {
+        key: 'insurancePayment',
+        label: 'Insurance Payment',
+        specialLabels: [
+            { key: 'special', label: 'Approve Payment' },
+            { key: 'paymentRequest', label: 'Payment Request' },
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     {
         key: 'lcManagement',
         label: 'LC Management',

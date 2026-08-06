@@ -1762,7 +1762,7 @@ apiRouter.get('/api/insurance', async (req, res) => {
 });
 
 // Insurance Payment APIs
-apiRouter.post('/api/insurance-payments', adminOrSalesManager, async (req, res) => {
+apiRouter.post('/api/insurance-payments', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const newRecord = new InsurancePayment({ data: encryptedData });
@@ -1773,7 +1773,7 @@ apiRouter.post('/api/insurance-payments', adminOrSalesManager, async (req, res) 
   }
 });
 
-apiRouter.delete('/api/insurance-payments/:id', adminOnly, async (req, res) => {
+apiRouter.delete('/api/insurance-payments/:id', async (req, res) => {
   try {
     const deletedRecord = await InsurancePayment.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'Payment record not found' });
@@ -1783,7 +1783,7 @@ apiRouter.delete('/api/insurance-payments/:id', adminOnly, async (req, res) => {
   }
 });
 
-apiRouter.put('/api/insurance-payments/:id', adminOnly, async (req, res) => {
+apiRouter.put('/api/insurance-payments/:id', async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedRecord = await InsurancePayment.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });

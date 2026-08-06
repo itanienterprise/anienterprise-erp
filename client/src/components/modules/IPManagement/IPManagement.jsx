@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon, EyeIcon, PDFIcon, PlusIcon, DownloadIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon, EyeIcon, PDFIcon, PlusIcon, DownloadIcon, BarChartIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -8,6 +8,7 @@ import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './IPManagement.css';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { generateIPManagementReportPDF } from '../../../utils/pdfGenerator';
 
 // Modal to show all LCs using a specific IP
 const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRecords = [], onClose }) => {
@@ -544,6 +545,7 @@ function IPManagement({
     const canAdd = hasPermission(currentUser, 'ipManagement', 'add');
     const canEdit = hasPermission(currentUser, 'ipManagement', 'edit');
     const canDelete = hasPermission(currentUser, 'ipManagement', 'delete');
+    const canShowEntryBy = hasPermission(currentUser, 'ipManagement', 'showEntryBy');
     const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
@@ -1034,8 +1036,14 @@ function IPManagement({
                 ? `${API_BASE_URL}/api/ip-records/${editingId}`
                 : `${API_BASE_URL}/api/ip-records`;
 
+            const payload = {
+                ...formData,
+                entryBy: editingId ? (formData.entryBy || currentUser?.username || currentUser?.id || '') : (currentUser?.username || currentUser?.id || ''),
+                entryByName: editingId ? (formData.entryByName || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || '')
+            };
+
             if (editingId) {
-                await axios.put(url, formData);
+                await axios.put(url, payload);
 
                 // Add notification for IP Update
                 if (addNotification) {
@@ -1046,7 +1054,7 @@ function IPManagement({
                     );
                 }
             } else {
-                await axios.post(url, formData);
+                await axios.post(url, payload);
 
                 // Add notification for New IP
                 if (addNotification) {
@@ -1086,7 +1094,9 @@ function IPManagement({
             status: 'Active',
             ipAttachment: '',
             ipAttachmentName: '',
-            isExtended: false
+            isExtended: false,
+            entryBy: '',
+            entryByName: ''
         });
         setEditingId(null);
         setSubmitStatus(null);
@@ -1150,7 +1160,9 @@ function IPManagement({
             port: record.port || '',
             ipAttachment: record.ipAttachment || '',
             ipAttachmentName: record.ipAttachmentName || '',
-            isExtended: record.isExtended || false
+            isExtended: record.isExtended || false,
+            entryBy: record.entryBy || record.createdBy || record.userId || '',
+            entryByName: record.entryByName || record.createdByName || ''
         });
         setEditingId(record._id);
         setShowIpForm(true);
@@ -1272,6 +1284,23 @@ function IPManagement({
 
         return true;
     });
+
+    const generatePDFReport = () => {
+        const sortedData = sortData(filteredIpRecords);
+        const totals = {
+            totalQuantity: sortedData.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0),
+            totalRemainingQuantity: sortedData.reduce((sum, r) => sum + (parseFloat(r.remainingQuantity) || 0), 0),
+            totalIpBalance: sortedData.reduce((sum, r) => sum + (parseFloat(r.ipBalance) || 0), 0),
+            totalLcCount: sortedData.reduce((sum, r) => sum + (parseInt(r.totalLcCount) || 0), 0)
+        };
+
+        generateIPManagementReportPDF(
+            sortedData,
+            totals,
+            searchQuery,
+            filters
+        );
+    };
 
     return (
         <div className="ip-management space-y-6">
@@ -1534,6 +1563,15 @@ function IPManagement({
                                 </div>
                             )}
                         </div>
+
+                        <button
+                            onClick={generatePDFReport}
+                            className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all h-[40px] shadow-sm transform active:scale-95 md:hover:scale-105"
+                        >
+                            <BarChartIcon className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm font-medium">Report</span>
+                        </button>
+
                         {canManage && (
                             <button
                                 onClick={() => setShowIpForm(!showIpForm)}
@@ -1913,6 +1951,7 @@ function IPManagement({
                                                     />
                                                 </th>
                                             )}
+                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">SL</th>
                                             <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('openingDate')}>
                                                 <div className="flex items-center">Date <SortIcon config={sortConfig.ip} columnKey="openingDate" /></div>
                                             </th>
@@ -1949,11 +1988,16 @@ function IPManagement({
                                             <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('computedStatus')}>
                                                 <div className="flex items-center">Status <SortIcon config={sortConfig.ip} columnKey="computedStatus" /></div>
                                             </th>
+                                            {canShowEntryBy && (
+                                                <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('entryBy')}>
+                                                    <div className="flex items-center">Entry By <SortIcon config={sortConfig.ip} columnKey="entryBy" /></div>
+                                                </th>
+                                            )}
                                             <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {sortData(filteredIpRecords).map((record) => (
+                                        {sortData(filteredIpRecords).map((record, idx) => (
                                             <tr
                                                 key={record._id}
                                                 className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
@@ -1980,6 +2024,7 @@ function IPManagement({
                                                         />
                                                     </td>
                                                 )}
+                                                <td className="px-3 py-3 text-sm font-semibold text-gray-500 whitespace-nowrap">{idx + 1}</td>
                                                 <td className="px-3 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
                                                 <td className={`px-3 py-3 text-sm font-semibold whitespace-nowrap ${
                                                     record.computedStatus === 'Active' ? 'text-green-700' :
@@ -2005,6 +2050,11 @@ function IPManagement({
                                                         {record.computedStatus}
                                                     </span>
                                                 </td>
+                                                {canShowEntryBy && (
+                                                    <td className="px-3 py-3 text-sm font-semibold text-gray-700 whitespace-nowrap">
+                                                        {record.entryBy || record.entryByName || record.createdBy || record.createdByName || record.userId || '-'}
+                                                    </td>
+                                                )}
                                                 <td className="px-3 py-3">
                                                     <div className="flex items-center space-x-3">
                                                         <button onClick={(e) => { e.stopPropagation(); setViewIpLcData(record); }} className="text-gray-400 hover:text-indigo-600 transition-colors" title="View LCs">

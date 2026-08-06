@@ -309,18 +309,21 @@ function App() {
     generalSale: false,
     borderSale: false,
     purchase: false,
-    order: false
+    order: false,
+    insurancePayment: false,
+    insurance: false
   });
 
   const fetchPendingEntries = async () => {
     if (!isAuthenticated) return;
     try {
-      const [stockRes, salesRes, purchasesRes, customersRes, whRes] = await Promise.all([
+      const [stockRes, salesRes, purchasesRes, customersRes, whRes, insPaymentsRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/stock`),
         axios.get(`${API_BASE_URL}/api/sales`),
         axios.get(`${API_BASE_URL}/api/purchases`),
         axios.get(`${API_BASE_URL}/api/customers`),
-        axios.get(`${API_BASE_URL}/api/warehouses`)
+        axios.get(`${API_BASE_URL}/api/warehouses`),
+        axios.get(`${API_BASE_URL}/api/insurance-payments`)
       ]);
       const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
       const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
@@ -390,6 +393,9 @@ function App() {
         });
       });
 
+      const insPaymentsData = Array.isArray(insPaymentsRes?.data) ? insPaymentsRes.data : [];
+      const hasRequestedInsurancePayment = insPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
+
       setPendingModules({
         lc: hasRequestedLC,
         stock: hasRequestedStockMgmt || hasRequestedTransfer,
@@ -403,7 +409,9 @@ function App() {
         order: hasRequestedOrder,
         generalSale: hasRequestedGeneralSale,
         borderSale: hasRequestedBorderSale,
-        purchase: hasRequestedPurchase
+        purchase: hasRequestedPurchase,
+        insurancePayment: hasRequestedInsurancePayment,
+        insurance: hasRequestedInsurancePayment
       });
     } catch (err) {
       console.error('Error checking pending entries:', err);
@@ -2103,7 +2111,10 @@ function App() {
         );
       case 'insurance-payment-section':
         return (
-          <InsurancePayment />
+          <InsurancePayment
+            currentUser={currentUser}
+            addNotification={addNotification}
+          />
         );
       case 'lc-gp-section':
         return (
@@ -2446,6 +2457,9 @@ function App() {
                 <div className="flex items-center">
                   <ShieldIcon className="w-5 h-5 mr-3" />
                   <span className="font-medium text-sm">Insurance</span>
+                  {(pendingModules?.insurancePayment || pendingModules?.insurance) && (
+                    <span className="ml-2 w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                  )}
                 </div>
                 <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${insuranceDropdownOpen ? 'transform rotate-180' : ''}`} />
               </button>
@@ -2463,10 +2477,15 @@ function App() {
                   {hasPermission(currentUser, 'insurancePayment', 'view') && (
                     <button
                       onClick={() => { handleViewChange('insurance-payment-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      className={`w-full flex flex-row items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
                     >
-                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Insurance Payment</span>
+                      <div className="flex items-center">
+                        <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Insurance Payment</span>
+                      </div>
+                      {pendingModules?.insurancePayment && (
+                        <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                      )}
                     </button>
                   )}
                 </div>

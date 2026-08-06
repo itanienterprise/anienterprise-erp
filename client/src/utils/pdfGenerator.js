@@ -3519,6 +3519,189 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
     }
 };
 
+export const generateInsurancePaymentReportPDF = (payments, filters, dateStr, lcs = []) => {
+    try {
+        const doc = new jsPDF('l', 'mm', 'a4');
+
+        const formatDate = (dateString) => {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // Header
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 32, pageWidth - margin, 32);
+
+        // Report Title Box
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 45, 29, 90, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("INSURANCE PAYMENT REPORT", pageWidth / 2, 34, { align: 'center' });
+
+        // Info Row
+        let yPos = 44;
+        doc.setFontSize(10);
+
+        const colonX = margin + 33;
+        const valueX = margin + 36;
+
+        const dateRangeStr = (filters?.startDate || filters?.endDate)
+            ? `${filters.startDate ? formatDate(filters.startDate) : 'Start'} to ${filters.endDate ? formatDate(filters.endDate) : 'Present'}`
+            : 'All Time';
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range", margin, yPos);
+        doc.text(":", colonX, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(dateRangeStr, valueX, yPos);
+
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, yPos, { align: 'right' });
+
+        if (filters?.companyName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Company Name", margin, yPos);
+            doc.text(":", colonX, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.companyName, valueX, yPos);
+        }
+
+        yPos += 5;
+        doc.setFont('helvetica', 'bold');
+        doc.text("Total Records", margin, yPos);
+        doc.text(":", colonX, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text((payments.length || 0).toString(), valueX, yPos);
+
+        // Table Data
+        const tableRows = [];
+        let totalPaid = 0;
+        let totalAdjusted = 0;
+
+        const sortedPayments = [...payments].sort((a, b) => new Date(b.date) - new Date(a.date));
+        sortedPayments.forEach((p, idx) => {
+            const lc = (lcs || []).find(l => l.lcNo === p.lcNo);
+            const paidVal = p.type === 'Return Collection' ? 0 : (parseFloat(p.amount) || 0);
+            const adjVal = parseFloat(p.adjustedAmount) || 0;
+
+            totalPaid += paidVal;
+            totalAdjusted += adjVal;
+
+            const grossPremStr = lc ? (parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+            const returnAmtStr = (p.isAdjustReturn || p.type === 'Return Collection')
+                ? (lc ? (parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-')
+                : '0.00';
+
+            tableRows.push([
+                idx + 1,
+                formatDate(p.date),
+                p.companyName || '-',
+                p.lcNo || '-',
+                p.method || '-',
+                (p.reference || '').trim() || '-',
+                grossPremStr,
+                returnAmtStr,
+                paidVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                adjVal > 0 ? adjVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+                p.status || 'Adjusted'
+            ]);
+        });
+
+        // Add Grand Total row
+        tableRows.push([
+            { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: totalPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: totalAdjusted.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: '', styles: { fillColor: [240, 240, 240] } }
+        ]);
+
+        autoTable(doc, {
+            startY: yPos + 8,
+            head: [['SL', 'Date', 'Insurance Company', 'LC No', 'Method', 'Reference', 'Gross Premium', 'Return Amount', 'Paid', 'Adjusted', 'Status']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                fontSize: 9,
+                cellPadding: 1.4,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0],
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                fontSize: 9,
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: 8, halign: 'center' },
+                1: { cellWidth: 20, halign: 'center' },
+                2: { cellWidth: 50, halign: 'left', overflow: 'hidden' },
+                3: { cellWidth: 28, halign: 'left' },
+                4: { cellWidth: 18, halign: 'center' },
+                5: { cellWidth: 22, halign: 'left' },
+                6: { cellWidth: 32, halign: 'right' },
+                7: { cellWidth: 32, halign: 'right' },
+                8: { cellWidth: 26, halign: 'right' },
+                9: { cellWidth: 26, halign: 'right' },
+                10: { cellWidth: 15, halign: 'center' }
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // Signatures
+        let finalY = doc.lastAutoTable.finalY + 30;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 30;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+
+    } catch (error) {
+        console.error("Insurance Payment Report PDF Generation Error:", error);
+        alert(`Failed to generate Insurance Payment Report PDF: ${error.message}`);
+    }
+};
+
 export const generateCustomerHistoryPDF = (customer, historyData, summary, filters, activeTab) => {
     try {
         const isPurchase = activeTab === 'purchase';
@@ -6049,4 +6232,190 @@ export const generatePayToCustomerReportPDF = (payments, filters, dateStr) => {
         alert(`Failed to generate Pay To Customer Report PDF: ${error.message}`);
     }
 };
+
+export const generateIPManagementReportPDF = (reportData, totals, searchQuery = '', filters = {}) => {
+    try {
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // Header info
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+
+        // Separator line
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 32, pageWidth - margin, 32);
+
+        // Report Title Box
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("IP MANAGEMENT REPORT", pageWidth / 2, 34, { align: 'center' });
+
+        // Info row
+        let yPos = 44;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        const currentDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.text(`Printed on: ${currentDateStr}`, pageWidth - margin, yPos, { align: 'right' });
+
+        // Date Range
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
+        doc.text(`${start} to ${end}`, margin + 25, yPos);
+
+        if (searchQuery) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Search:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`"${searchQuery}"`, margin + 25, yPos);
+        }
+
+        if (filters.importer) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Importer:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.importer, margin + 25, yPos);
+        }
+
+        if (filters.port) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Port:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.port, margin + 25, yPos);
+        }
+
+        if (filters.productName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Product:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.productName, margin + 25, yPos);
+        }
+
+        const tableHeaders = [
+            ['SL', 'Date', 'Close Date', 'IP Number', 'Ref No', 'Importer', 'Port', 'Product Name', 'Quantity', 'LC Rem', 'IP Balance', 'Total LC', 'Status']
+        ];
+
+        const tableRows = reportData.map((record, index) => [
+            index + 1,
+            formatDate(record.openingDate),
+            formatDate(record.closeDate),
+            String(record.ipNumber || '-').trim(),
+            String(record.referenceNo || '-').trim(),
+            String(record.ipParty || '-').trim(),
+            String(record.port || '-').trim(),
+            String(record.productName || '-').trim(),
+            `${(parseFloat(record.quantity) || 0).toLocaleString('en-IN')} kg`,
+            `${(parseFloat(record.remainingQuantity) || 0).toLocaleString('en-IN')} kg`,
+            `${(parseFloat(record.ipBalance) || 0).toLocaleString('en-IN')} kg`,
+            String(record.totalLcCount || 0),
+            String(record.computedStatus || record.status || 'Active')
+        ]);
+
+        const footerRow = [
+            { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `${(totals.totalQuantity || 0).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `${(totals.totalRemainingQuantity || 0).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `${(totals.totalIpBalance || 0).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `${totals.totalLcCount || 0}`, styles: { halign: 'center', fontStyle: 'bold' } },
+            { content: '', styles: { halign: 'center' } }
+        ];
+
+        autoTable(doc, {
+            startY: yPos + 8,
+            head: tableHeaders,
+            body: tableRows,
+            foot: [footerRow],
+            showFoot: 'lastPage',
+            theme: 'grid',
+            styles: {
+                fontSize: 9,
+                cellPadding: 1.5,
+                textColor: [0, 0, 0],
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 8 }, // SL
+                1: { halign: 'center', cellWidth: 22 }, // Date
+                2: { halign: 'center', cellWidth: 22 }, // Close Date
+                3: { halign: 'left', cellWidth: 28 },   // IP Number
+                4: { halign: 'left', cellWidth: 16 },   // Ref No
+                5: { halign: 'left', cellWidth: 33, overflow: 'hidden' },   // Importer
+                6: { halign: 'center', cellWidth: 22 }, // Port
+                7: { halign: 'left', cellWidth: 28, overflow: 'hidden' },   // Product Name
+                8: { halign: 'right', cellWidth: 26 },  // Quantity
+                9: { halign: 'right', cellWidth: 26 },  // LC Rem
+                10: { halign: 'right', cellWidth: 30 },  // IP Balance
+                11: { halign: 'center', cellWidth: 10 },// Total LC
+                12: { halign: 'center', cellWidth: 17 } // Status
+            },
+            footStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.1
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        let finalY = doc.lastAutoTable.finalY + 25;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 25;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (err) {
+        console.error("Error generating IP Management Report PDF:", err);
+        alert(`Failed to generate IP Management Report PDF: ${err.message}`);
+    }
+};
+
 

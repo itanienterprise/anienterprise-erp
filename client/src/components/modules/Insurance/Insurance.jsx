@@ -223,12 +223,13 @@ const Insurance = ({ onDeleteConfirm }) => {
 
     const handleView = (record) => {
         const aggregates = insuranceTotals[record.companyName] || { totalPremium: 0, returnAmount: 0 };
-        const history = insurancePayments.filter(p => p.insuranceId === record._id);
+        const history = insurancePayments.filter(p => p.insuranceId === record._id && p.status !== 'Requested');
 
         let paidPremium = parseFloat(record.paidPremium || 0);
         let paidReturn = parseFloat(record.paidReturn || 0);
 
         history.forEach(p => {
+            if (p.status === 'Requested') return;
             const adjustment = parseFloat(p.adjustedAmount || 0);
             const amount = parseFloat(p.amount || 0);
 
@@ -304,6 +305,7 @@ const Insurance = ({ onDeleteConfirm }) => {
         });
 
         insurancePayments.forEach(payment => {
+            if (payment.status === 'Requested') return;
             const adjustment = parseFloat(payment.adjustedAmount || 0);
             const amount = parseFloat(payment.amount || 0);
 
@@ -721,7 +723,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                         let paidReturn = parseFloat(item.paidReturn || 0);
 
                                         insurancePayments.forEach(p => {
-                                            if (p.insuranceId === item._id) {
+                                            if (p.insuranceId === item._id && p.status !== 'Requested') {
                                                 const adjustment = parseFloat(p.adjustedAmount || 0);
                                                 const amount = parseFloat(p.amount || 0);
 
@@ -788,7 +790,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                             let paidReturn = parseFloat(item.paidReturn || 0);
 
                             insurancePayments.forEach(p => {
-                                if (p.insuranceId === item._id) {
+                                if (p.insuranceId === item._id && p.status !== 'Requested') {
                                     const adjustment = parseFloat(p.adjustedAmount || 0);
                                     const amount = parseFloat(p.amount || 0);
 

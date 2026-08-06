@@ -50,9 +50,11 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
             const invQty = matchedCog ? (parseFloat(matchedCog.quantity) || 0) : 0;
             acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0, packet: 0, invoiceQty: invQty };
         }
-        acc[key].quantity += (parseFloat(item.quantity) || 0);
-        acc[key].sweepedQuantity += (parseFloat(item.sweepedQuantity) || 0);
-        acc[key].inHouseQuantity += (parseFloat(item.inHouseQuantity) || 0);
+        const arrQty = parseFloat(item.quantity) || 0;
+        const swpQty = parseFloat(item.sweepedQuantity) || 0;
+        acc[key].quantity += arrQty;
+        acc[key].sweepedQuantity += swpQty;
+        acc[key].inHouseQuantity += (arrQty - swpQty);
         acc[key].packet += (parseFloat(item.packet) || 0);
         return acc;
     }, {});
@@ -295,7 +297,7 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
                                         <td className="px-4 py-3 text-sm text-gray-900 text-center font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.packet) || 0), 0)).toLocaleString('en-US')}</td>
                                         <td className="px-4 py-3 text-sm text-gray-900 text-right font-black">{Math.round(data.totalQuantity).toLocaleString('en-US')} kg</td>
                                         <td className="px-4 py-3 text-sm text-red-600 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.sweepedQuantity) || 0), 0)).toLocaleString('en-US')} kg</td>
-                                        <td className="px-4 py-3 text-sm text-blue-700 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-US')} kg</td>
+                                        <td className="px-4 py-3 text-sm text-blue-700 text-right font-black">{Math.round(data.entries.reduce((sum, e) => sum + ((parseFloat(e.quantity) || 0) - (parseFloat(e.sweepedQuantity) || 0)), 0)).toLocaleString('en-US')} kg</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -404,7 +406,7 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
 
                                     <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">In Qty</span>
                                     <span className="text-blue-300 font-bold">:</span>
-                                    <span className="font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + (parseFloat(e.inHouseQuantity) || 0), 0)).toLocaleString('en-US')} kg</span>
+                                    <span className="font-black text-blue-700">{Math.round(data.entries.reduce((sum, e) => sum + ((parseFloat(e.quantity) || 0) - (parseFloat(e.sweepedQuantity) || 0)), 0)).toLocaleString('en-US')} kg</span>
                                 </div>
                             </div>
                         </div>
@@ -4275,7 +4277,7 @@ function LCReceive({
                                     acc[groupedKey].totalQuantity += itemQty;
                                     acc[groupedKey].totalLcQuantity += itemQty;
                                     acc[groupedKey].totalShort += (parseFloat(item.sweepedQuantity) || 0);
-                                    acc[groupedKey].totalInQty += (parseFloat(item.inHouseQuantity) || 0);
+                                    acc[groupedKey].totalInQty += (itemQty - (parseFloat(item.sweepedQuantity) || 0));
 
                                     const truckEntryKey = `${item.date}-${item.productName}-${item.truckNo}`;
                                     if (!acc[groupedKey].truckEntries.has(truckEntryKey)) {
