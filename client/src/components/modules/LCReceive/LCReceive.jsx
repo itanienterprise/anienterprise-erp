@@ -467,13 +467,61 @@ function LCReceive({
     fetchProducts,
     salesRecords = [],
     addNotification,
-    refreshPendingIndicators
+    refreshPendingIndicators,
+    highlightId, isRequestedNotif
 }) {
+    
     const isAccountManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
     const [cnfs, setCnfs] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+    const rowRefs = useRef({});
+        useEffect(() => {
+        if (!highlightId) return;
+
+        const targetItem = lcReceiveRecords.find(item => 
+            (item.lcNo && String(item.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+            (item.lcNo && String(highlightId).toLowerCase().includes(String(item.lcNo).toLowerCase().trim())) ||
+            (item.lcNo && String(item.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim())) ||
+            String(item._id) === String(highlightId)
+        );
+
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase().includes('requested');
+            if (isReq) {
+                setIsRequestedOnly(true);
+            }
+        }
+
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => {
+                const cleanK = k.trim().toLowerCase();
+                return cleanK === target || cleanK.includes(target) || target.includes(cleanK);
+            });
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setLcSearchQuery(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId, lcReceiveRecords]);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [lcRecords, setLcRecords] = useState([]);
     const [costOfGoods, setCostOfGoods] = useState([]);
@@ -546,6 +594,7 @@ function LCReceive({
     };
     const [viewData, setViewData] = useState(null);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const [employeesMap, setEmployeesMap] = useState({});
 
@@ -4122,10 +4171,34 @@ function LCReceive({
 
                                                 return (
                                                     <tr
-                                                        key={entry.groupedKey}
-                                                        className={`transition-colors duration-200 cursor-pointer select-none ${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'}`}
-                                                        onMouseDown={() => startLongPress && startLongPress(entry.groupedKey)}
-                                                        onMouseUp={endLongPress}
+    key={entry.groupedKey}
+    className={`transition-colors duration-200 cursor-pointer select-none ${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} ${
+        highlightId && (
+            (entry.lcNo && (String(entry.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(entry.lcNo).toLowerCase().trim()) || String(entry.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim()))) ||
+            (entry.entries && entry.entries.some(e => e.lcNo && (String(e.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(e.lcNo).toLowerCase().trim()) || String(e.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim())))) ||
+            (entry.allIds && entry.allIds.some(id => String(id) === String(highlightId))) ||
+            (String(entry.groupedKey || '').toLowerCase().includes(String(highlightId).toLowerCase().trim()))
+        ) ? 'notif-row-highlight' : ''
+    }`}
+    ref={el => {
+        if (entry.lcNo) rowRefs.current[entry.lcNo] = el;
+        if (entry.groupedKey) rowRefs.current[entry.groupedKey] = el;
+        if (entry.entries) {
+            entry.entries.forEach(e => {
+                if (e.lcNo) rowRefs.current[e.lcNo] = el;
+                if (e._id) rowRefs.current[e._id] = el;
+            });
+        }
+    }}
+    style={
+        highlightId && (
+            (entry.lcNo && (String(entry.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(entry.lcNo).toLowerCase().trim()) || String(entry.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim()))) ||
+            (entry.entries && entry.entries.some(e => e.lcNo && (String(e.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(e.lcNo).toLowerCase().trim()) || String(e.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim())))) ||
+            (entry.allIds && entry.allIds.some(id => String(id) === String(highlightId)))
+        ) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined
+    }
+    onMouseDown={() => startLongPress && startLongPress(entry.groupedKey)}
+    onMouseUp={endLongPress}
                                                         onMouseLeave={endLongPress}
                                                         onTouchStart={() => startLongPress && startLongPress(entry.groupedKey)}
                                                         onTouchEnd={endLongPress}

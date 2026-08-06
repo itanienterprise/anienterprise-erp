@@ -53,8 +53,10 @@ function PackingList({
     fetchPorts,
     onDeleteConfirm,
     addNotification,
-    currentUser
+    currentUser,
+    highlightId
 }) {
+    
     const canAdd = hasPermission(currentUser, 'packingList', 'add');
     const canEdit = hasPermission(currentUser, 'packingList', 'edit');
     const canDelete = hasPermission(currentUser, 'packingList', 'delete');
@@ -65,6 +67,33 @@ function PackingList({
     const [records, setRecords] = useState([]);
     const [piRecords, setPiRecords] = useState([]);
     const [lcRecords, setLcRecords] = useState([]);
+
+    const rowRefs = useRef({});
+    useEffect(() => {
+        if (!highlightId) return;
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => k.trim().toLowerCase() === target || k.trim().toLowerCase().includes(target) || target.includes(k.trim().toLowerCase()));
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchTerm(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId]);
+
     const [banks, setBanks] = useState([]);
     const [ipRecords, setIpRecords] = useState([]);
     const [trSetups, setTrSetups] = useState([]);
@@ -2095,7 +2124,11 @@ function PackingList({
                                         }
 
                                         return (
-                                            <tr key={rec._id} className="hover:bg-gray-50/50">
+                                            <tr key={rec._id}
+                                                className={`hover:bg-gray-50/50 ${highlightId && (String(rec._id) === String(highlightId) || (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
+                                                ref={el => { if (rec.packingListNumber) rowRefs.current[rec.packingListNumber] = el; if (rec._id) rowRefs.current[rec._id] = el; if (rec.piNumber) rowRefs.current[rec.piNumber] = el; }}
+                                                style={highlightId && (String(rec._id) === String(highlightId) || (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
+                                            >
                                                 <td className="px-6 py-4 font-bold text-gray-800">{rec.packingListNumber}</td>
                                                 <td className="px-6 py-4 text-gray-600">{formatDate(rec.date)}</td>
                                                 <td className="px-6 py-4 text-gray-600">{rec.piNumber || 'N/A'}</td>

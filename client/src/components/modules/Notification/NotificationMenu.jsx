@@ -1,8 +1,134 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BellIcon, XIcon } from '../../Icons';
 import './NotificationMenu.css';
 
-const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onClearAll, onMarkAsRead, currentUser }) => {
+// Fallback: map notification title keywords → view name
+// Used for older notifications that don't have a stored `link` field.
+const TITLE_TO_VIEW = {
+    // Specific compound terms first
+    'insurance payment': 'insurance-payment-section',
+    'insurance request': 'insurance-payment-section',
+    'insurance': 'insurance-payment-section',
+
+    'border sale': 'border-sale-section',
+    'general sale': 'general-sale-section',
+    
+    'payment collection': 'payment-collection-section',
+    'payment request': 'payment-collection-section',
+    'payment': 'payment-collection-section',
+    'receipt': 'payment-collection-section',
+    'collection': 'payment-collection-section',
+
+    'payout': 'pay-to-customer-section',
+
+    'sale': 'general-sale-section',
+
+    'purchase': 'purchase-sale-section',
+
+    'order': 'order-sale-section',
+
+    'packing list': 'packing-list-section',
+    'packing': 'packing-list-section',
+
+    'proforma': 'pi-section',
+    'pi': 'pi-section',
+
+    'lc receive': 'lc-entry-section',
+    'lc record': 'lc-entry-section',
+    'lc': 'lc-entry-section',
+
+    'ip record': 'ip-section',
+    'ip': 'ip-section',
+
+    'stock transfer': 'transfer-section',
+    'transfer': 'transfer-section',
+
+    'backup': 'backup-restore-section',
+    'restore': 'backup-restore-section',
+};
+
+function resolveLink(notif) {
+    if (notif.link) return notif.link;
+
+    let text = '';
+    if (typeof notif.title === 'string') text += notif.title + ' ';
+    else if (notif.title && typeof notif.title === 'object') text += (notif.title.title || notif.title.message || '') + ' ';
+
+    if (typeof notif.message === 'string') text += notif.message + ' ';
+    else if (notif.message && typeof notif.message === 'object') text += (notif.message.message || '') + ' ';
+
+    text = text.toLowerCase();
+
+    for (const [keyword, view] of Object.entries(TITLE_TO_VIEW)) {
+        if (text.includes(keyword)) return view;
+    }
+    return null;
+}
+
+// Extract the entry identifier from the notification message.
+// Messages typically contain the ID inside parentheses, e.g. "(RC-0117)" or "(INV-2026-001)"
+function extractHighlightId(notif) {
+    if (notif.highlightId) return notif.highlightId;
+
+    let text = '';
+    if (typeof notif.message === 'string') text += notif.message + ' ';
+    else if (notif.message && typeof notif.message === 'object') text += (notif.message.message || '') + ' ';
+
+    if (typeof notif.title === 'string') text += notif.title;
+    else if (notif.title && typeof notif.title === 'object') text += (notif.title.title || notif.title.message || '');
+
+    if (!text.trim()) return null;
+
+    // 1. Parentheses format: e.g. "(LC: 087326010617)", "(Invoice No: PL-001)", "(RC-0117)"
+    const parenMatch = text.match(/\(([^)]+)\)/);
+    if (parenMatch) {
+        const inner = parenMatch[1].trim();
+        if (inner.includes(':')) {
+            const afterColon = inner.split(':', 1)[1].trim();
+            const firstWord = afterColon.split(/\s+/)[0];
+            if (firstWord) return firstWord.trim();
+        }
+        const firstToken = inner.split(/\s+/)[0];
+        if (firstToken && firstToken.length >= 2) return firstToken.trim();
+    }
+
+    // 2. Colon or hash prefix: e.g. "LC No: 087326010617", "PI No: PI-0012"
+    const prefixMatch = text.match(/(?:PI|LC|IP|Invoice|Order|Receipt|Payout|Payment|Purchase|Sale|PL)\s*(?:No|Number|#)?\s*[:#]\s*([A-Za-z0-9\-_\/.]+)/i);
+    if (prefixMatch) {
+        return prefixMatch[1].trim();
+    }
+
+    // 3. Standard code formats: e.g. RC-0117, SAL-0042, PUR-0015, PTC-0023, PL-005, PI-0012
+    const codeMatch = text.match(/\b([A-Za-z]{2,4}\-?[0-9]{2,})\b/);
+    if (codeMatch) {
+        return codeMatch[1].trim();
+    }
+
+    // 4. Long numeric LC number e.g. 087326010617
+    const numMatch = text.match(/\b([0-9]{6,})\b/);
+    if (numMatch) {
+        return numMatch[1].trim();
+    }
+
+    // 5. Currency Amount figure e.g. ৳35,193.99 or ৳50,000
+    const amountMatch = text.match(/৳\s*([0-9,]+(?:\.[0-9]+)?)/);
+    if (amountMatch) {
+        return amountMatch[1].trim();
+    }
+
+    // 6. Fallback for party/company name in text: "for <Name> was/has/is" or "from <Name> was/has/is"
+    const forMatch = text.match(/(?:for|from)\s+([A-Za-z0-9\s\-_\/.]+?)\s+(?:was|has|is|been|submitted|created|updated|added|rejected|approved)/i);
+    if (forMatch) {
+        const val = forMatch[1].trim();
+        if (val.length >= 3 && !val.toLowerCase().startsWith('a ')) {
+            return val;
+        }
+    }
+
+    return null;
+}
+
+const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onClearAll, onMarkAsRead, currentUser, onNavigate }) => {
     if (!isOpen) return null;
 
     const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin === true;
@@ -46,6 +172,17 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
         return message;
     };
 
+    const handleItemClick = (notif) => {
+        onMarkAsRead(notif._id);
+        const view = resolveLink(notif);
+        if (view && onNavigate) {
+            const highlightId = extractHighlightId(notif);
+            const titleMsg = (notif.title || '') + ' ' + (notif.message || '');
+            const isRequested = /request/i.test(titleMsg);
+            onNavigate(view, highlightId, isRequested);
+        }
+    };
+
     return (
         <>
             <div
@@ -87,28 +224,41 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
                     <div className="notification-body">
                         {notifications.length > 0 ? (
                             <ul className="notification-list">
-                                {notifications.map((notif) => (
-                                    <li
-                                        key={notif._id}
-                                        className={`notification-item ${notif.isUnread ? 'unread' : ''}`}
-                                        onClick={() => onMarkAsRead(notif._id)}
-                                    >
-                                        <div className="flex items-start">
-                                            {notif.isUnread && <div className="unread-dot" />}
-                                            <div className={notif.isUnread ? 'ml-3 flex-1' : 'flex-1'}>
-                                                <p className={`text-sm tracking-tight ${notif.isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
-                                                    {renderTitle(notif.title)}
-                                                </p>
-                                                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                                                    {renderMessage(notif.message, notif.title)}
-                                                </p>
-                                                <p className="notification-time">
-                                                    {formatTime(notif.createdAt)}
-                                                </p>
+                                {notifications.map((notif) => {
+                                    const targetView = resolveLink(notif);
+                                    const isNavigable = !!targetView;
+                                    return (
+                                        <li
+                                            key={notif._id}
+                                            className={`notification-item ${notif.isUnread ? 'unread' : ''} ${isNavigable ? 'notification-item--navigable' : ''}`}
+                                            onClick={() => handleItemClick(notif)}
+                                            title={isNavigable ? 'Click to go to this entry' : undefined}
+                                            style={{ cursor: isNavigable ? 'pointer' : 'default' }}
+                                        >
+                                            <div className="flex items-start">
+                                                {notif.isUnread && <div className="unread-dot" />}
+                                                <div className={notif.isUnread ? 'ml-3 flex-1' : 'flex-1'}>
+                                                    <p className={`text-sm tracking-tight ${notif.isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
+                                                        {renderTitle(notif.title)}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                                                        {renderMessage(notif.message, notif.title)}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <p className="notification-time">
+                                                            {formatTime(notif.createdAt)}
+                                                        </p>
+                                                        {isNavigable && (
+                                                            <span className="text-[10px] font-semibold text-blue-500">
+                                                                View entry →
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </li>
-                                ))}
+                                        </li>
+                                    );
+                                })}
                             </ul>
                         ) : (
                             <div className="flex flex-col items-center justify-center h-32 text-center px-4">
@@ -137,3 +287,5 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
 };
 
 export default NotificationMenu;
+
+

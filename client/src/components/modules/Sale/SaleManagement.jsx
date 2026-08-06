@@ -34,12 +34,55 @@ const SaleManagement = ({
     currentUser,
     addNotification,
     refreshPendingIndicators,
-    fetchSalesGlobal
+    fetchSalesGlobal,
+    highlightId, isRequestedNotif
 }) => {
+    
     const [showForm, setShowForm] = useState(false);
     const [sales, setSales] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [customers, setCustomers] = useState([]);
+
+    const rowRefs = useRef({});
+    useEffect(() => {
+        if (!highlightId) return;
+
+        const targetItem = sales.find(s => s.invoiceNo === highlightId || s._id === highlightId);
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase() === 'requested';
+            const isEditReq = (targetItem.isEdited === true || targetItem.isEdited === 'true') && !isReq;
+            if (isReq) {
+                setIsRequestedOnly(true);
+                setIsEditRequestedOnly(false);
+            } else if (isEditReq) {
+                setIsEditRequestedOnly(true);
+                setIsRequestedOnly(false);
+            }
+        }
+
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => k.trim().toLowerCase() === target || k.trim().toLowerCase().includes(target) || target.includes(k.trim().toLowerCase()));
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchQuery(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId, sales]);
+
     const [products, setProducts] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
     const [stockRecords, setStockRecords] = useState([]);
@@ -78,6 +121,7 @@ const SaleManagement = ({
     const [bdCnfSearch, setBdCnfSearch] = useState('');
     const [exporterSearch, setExporterSearch] = useState('');
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
     const [originalData, setOriginalData] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
@@ -5224,7 +5268,9 @@ const SaleManagement = ({
                                                     if (isLongPressTriggered && isLongPressTriggered.current) return;
                                                     (isSelectionMode || selectedItems.size > 0) && toggleSelection(sale._id);
                                                 }}
-                                                className={`hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px] ${selectedItems.has(sale._id) ? 'bg-blue-50' : ''}`}
+                                                className={`hover:bg-blue-50/50 transition-all border-b border-gray-50 text-[13px] ${selectedItems.has(sale._id) ? 'bg-blue-50' : ''} ${highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
+                                                ref={el => { const id = sale.invoiceNo || sale._id; if (id) rowRefs.current[id] = el; }}
+                                                    style={highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
                                             >
                                                 <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                     {(isSelectionMode || selectedItems.size > 0) ? (
@@ -5328,7 +5374,9 @@ const SaleManagement = ({
                                                     toggleRowExpansion(sale._id);
                                                 }
                                             }}
-                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''}`}
+                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''} ${highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
+                                        ref={el => { if (sale.invoiceNo) rowRefs.current[sale.invoiceNo] = el; }}
+                                                    style={highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
                                         >
                                             <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                 {(isSelectionMode || selectedItems.size > 0) ? (

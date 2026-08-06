@@ -59,3 +59,25 @@
 .lc-manage-select::-webkit-scrollbar-thumb:hover {
     background: #cbd5e1;
 }
+/* ── Notification deep-link row highlight ─────────────────── */
+@keyframes notif-cell-glow {
+    0%   { background-color: #fde047 !important; color: #000000 !important; }
+    20%  { background-color: #fef08a !important; color: #000000 !important; }
+    60%  { background-color: #fef9c3 !important; }
+    100% { background-color: transparent !important; }
+}
+
+.notif-row-highlight {
+    animation: notif-cell-glow 4.5s ease-out forwards !important;
+}
+
+.notif-row-highlight > td,
+.notif-row-highlight > th {
+    animation: notif-cell-glow 4.5s ease-out forwards !important;
+    transition: none !important;
+}
+
+.notif-row-highlight > td:first-child,
+.notif-row-highlight > th:first-child {
+    border-left: 4px solid #eab308 !important;
+}

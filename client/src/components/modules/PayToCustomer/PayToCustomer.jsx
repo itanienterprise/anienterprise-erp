@@ -9,7 +9,7 @@ import axios, { api } from '../../../utils/api';
 import PayToCustomerReport from './PayToCustomerReport';
 import './PayToCustomer.css';
 
-const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators }) => {
+const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -37,6 +37,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
 
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
 
     // Bulk Selection States
@@ -46,6 +47,49 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
     // Long Press Timer Ref for item selection
     const longPressTimerRef = useRef(null);
     const isLongPressRef = useRef(false);
+    const rowRefs = useRef({});
+
+    // Scroll to and highlight the row matching highlightId when it arrives
+    useEffect(() => {
+        if (!highlightId) return;
+
+        // Auto-switch to Requested or Edit Requested filter if the target item requires it
+        const targetItem = payments.find(p => p.receiptNo === highlightId || p.id === highlightId);
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase() === 'requested';
+            const isEditReq = (targetItem.isEdited === true || targetItem.isEdited === 'true') && !isReq;
+            if (isReq) {
+                setIsRequestedOnly(true);
+                setIsEditRequestedOnly(false);
+            } else if (isEditReq) {
+                setIsEditRequestedOnly(true);
+                setIsRequestedOnly(false);
+            }
+        }
+
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => k.trim().toLowerCase() === target || k.trim().toLowerCase().includes(target) || target.includes(k.trim().toLowerCase()));
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchQuery(''); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId, payments]);
+
 
     const handleLongPressStart = (itemKey) => {
         isLongPressRef.current = false;
@@ -1401,7 +1445,9 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                     }
                                                     if (isMultiple) toggleRowExpansion(group.key);
                                                 }}
-                                                className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle select-none ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''} ${selectedItems.has(group.key) ? 'bg-blue-50/70 font-medium' : ''}`}
+                                                className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle select-none ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''} ${selectedItems.has(group.key) ? 'bg-blue-50/70 font-medium' : ''} ${highlightId && ((group.receiptNo && String(group.receiptNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) || (group.ids && group.ids.some(id => String(id) === String(highlightId)))) ? "notif-row-highlight" : ""}`}
+                                                ref={el => { if (group.receiptNo) rowRefs.current[group.receiptNo] = el; }}
+                                                    style={highlightId && ((group.receiptNo && String(group.receiptNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) || (group.ids && group.ids.some(id => String(id) === String(highlightId)))) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
                                             >
                                                 {selectedItems.size > 0 && (
                                                     <td className="px-3 py-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>

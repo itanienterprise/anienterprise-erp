@@ -25,13 +25,42 @@ const OrderManagement = ({
     setSelectedItems,
     startLongPress,
     endLongPress,
-    isLongPressTriggered
+    isLongPressTriggered,
+    highlightId
 }) => {
+    
     // --- State Management ---
     const [sales, setSales] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const rowRefs = useRef({});
+    useEffect(() => {
+        if (!highlightId) return;
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => k.trim().toLowerCase() === target || k.trim().toLowerCase().includes(target) || target.includes(k.trim().toLowerCase()));
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchQuery(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId]);
+
 
     // --- Permission Checks ---
     const canAdd = useMemo(() => hasPermission(currentUser, 'order', 'add') || hasPermission(currentUser, 'sales', 'add'), [currentUser]);
@@ -2043,7 +2072,9 @@ const OrderManagement = ({
                                                     toggleSelection(order._id);
                                                 }
                                             }}
-                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${selectedItems.has(order._id) ? 'bg-blue-50' : ''}`}
+                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${selectedItems.has(order._id) ? 'bg-blue-50' : ''} ${highlightId && (String(order._id) === String(highlightId) || (order.invoiceNo && String(order.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
+                                            ref={el => { const id = order.invoiceNo || order.orderNo; if (id) rowRefs.current[id] = el; }}
+                                                    style={highlightId && (String(order._id) === String(highlightId) || (order.invoiceNo && String(order.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
                                         >
                                             <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                 {(isSelectionMode || selectedItems.size > 0) ? (

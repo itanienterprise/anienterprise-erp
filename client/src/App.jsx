@@ -272,7 +272,7 @@ function App() {
     }
   };
 
-  const addNotification = async (title, message, targetRoles = ['admin', 'incharge', 'sales manager'], targetUsers = [], isSystemic = false) => {
+  const addNotification = async (title, message, targetRoles = ['admin', 'incharge', 'sales manager'], targetUsers = [], isSystemic = false, link = '') => {
     try {
       const newNotif = {
         title,
@@ -280,6 +280,7 @@ function App() {
         targetRoles,
         targetUsers, // Added targetUsers for specific employee notifications
         isSystemic,
+        link,        // View to navigate to when notification is clicked
         readByUsers: [],
         createdBy: currentUser?.username,
         createdByName: currentUser?.name || currentUser?.username
@@ -522,6 +523,9 @@ function App() {
     setCurrentView(view);
     setSidebarOpen(false);
   };
+
+  const [notifHighlightId, setNotifHighlightId] = useState(null);
+  const [notifIsRequested, setNotifIsRequested] = useState(false);
 
   // Manage body class when modal is open inside main (handles all modular modals dynamically)
   useEffect(() => {
@@ -1665,6 +1669,7 @@ function App() {
       case 'lc-entry-section':
         return (
           <LCReceive
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             currentUser={currentUser}
             stockRecords={allStockRecords}
             addNotification={addNotification}
@@ -1711,6 +1716,7 @@ function App() {
       case 'ip-section':
         return (
           <IPManagement
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             key={refreshKey}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
@@ -1734,6 +1740,7 @@ function App() {
       case 'pi-section':
         return (
           <PI
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             key={refreshKey}
             importers={importers}
             exporters={exporters}
@@ -1748,6 +1755,7 @@ function App() {
       case 'packing-list-section':
         return (
           <PackingList
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             key={refreshKey}
             importers={importers}
             exporters={exporters}
@@ -1962,11 +1970,11 @@ function App() {
         );
       case 'payment-collection-section':
         return (
-          <PaymentCollection addNotification={addNotification} currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />
+          <PaymentCollection addNotification={addNotification} currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} highlightId={notifHighlightId} isRequestedNotif={notifIsRequested} />
         );
       case 'pay-to-customer-section':
         return (
-          <PayToCustomer addNotification={addNotification} currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />
+          <PayToCustomer addNotification={addNotification} currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} highlightId={notifHighlightId} isRequestedNotif={notifIsRequested} />
         );
       case 'warehouse-section':
         return (
@@ -1994,6 +2002,7 @@ function App() {
       case 'transfer-section':
         return (
           <TransferManagement
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             currentUser={currentUser}
             addNotification={addNotification}
           />
@@ -2001,6 +2010,7 @@ function App() {
       case 'purchase-sale-section':
         return (
           <PurchaseManagement
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             key={refreshKey}
             currentUser={currentUser}
             addNotification={addNotification}
@@ -2011,6 +2021,7 @@ function App() {
       case 'order-sale-section':
         return (
           <OrderManagement
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             key={refreshKey}
             currentUser={currentUser}
             addNotification={addNotification}
@@ -2045,6 +2056,7 @@ function App() {
             setSaleFilters={setSaleFilters}
             refreshPendingIndicators={fetchPendingEntries}
             fetchSalesGlobal={fetchSales}
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
           />
         );
       case 'border-sale-section':
@@ -2070,6 +2082,7 @@ function App() {
             setSaleFilters={setSaleFilters}
             refreshPendingIndicators={fetchPendingEntries}
             fetchSalesGlobal={fetchSales}
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
           />
         );
       case 'employee-section':
@@ -2112,6 +2125,7 @@ function App() {
       case 'insurance-payment-section':
         return (
           <InsurancePayment
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             currentUser={currentUser}
             addNotification={addNotification}
           />
@@ -2886,6 +2900,20 @@ function App() {
                 onClearAll={handleClearAll}
                 onMarkAsRead={handleMarkAsRead}
                 currentUser={currentUser}
+                onNavigate={(view, highlightId, isRequested) => {
+                  if (view) {
+                    handleViewChange(view);
+                    setShowNotifications(false);
+                    if (highlightId || isRequested) {
+                      setNotifHighlightId(highlightId);
+                      setNotifIsRequested(!!isRequested);
+                      setTimeout(() => {
+                        setNotifHighlightId(null);
+                        setNotifIsRequested(false);
+                      }, 6000);
+                    }
+                  }
+                }}
               />
             </div>
           </div>

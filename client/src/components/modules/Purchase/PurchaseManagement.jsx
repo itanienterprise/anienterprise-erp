@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useRef,  useState, useEffect, useMemo } from 'react';
 import axios from '../../../utils/api';
 import {
     SearchIcon, PlusIcon, EditIcon, TrashIcon, CheckIcon, XIcon,
@@ -8,11 +8,48 @@ import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
-const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, refreshPendingIndicators }) => {
+const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
+    
     const [purchases, setPurchases] = useState([]);
     const [warehousesList, setWarehousesList] = useState(['HILI', 'DINAJPUR', 'CHATTOGRAM', 'DHAKA']);
     const [customersList, setCustomersList] = useState([]);
     const [productsList, setProductsList] = useState([]);
+
+    const rowRefs = useRef({});
+    useEffect(() => {
+        if (!highlightId) return;
+
+        const targetItem = purchases.find(p => p.purchaseNo === highlightId || p._id === highlightId);
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase() === 'requested';
+            if (isReq) {
+                setIsRequestedOnly(true);
+            }
+        }
+
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => k.trim().toLowerCase() === target || k.trim().toLowerCase().includes(target) || target.includes(k.trim().toLowerCase()));
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchQuery(''); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId, purchases]);
+
     const [activeProductDropdown, setActiveProductDropdown] = useState(null);
     const [productSearch, setProductSearch] = useState('');
     const [activeBrandDropdown, setActiveBrandDropdown] = useState(null);
@@ -27,6 +64,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
 
     // Form Modal States
     const [showModal, setShowModal] = useState(false);
@@ -750,7 +788,8 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                                 </tr>
                             ) : filteredPurchases.length > 0 ? (
                                 filteredPurchases.map(p => (
-                                    <tr key={p._id} className="hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 align-middle">
+                                    <tr key={p._id} className={`hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 align-middle ${highlightId && (String(p._id) === String(highlightId) || (p.purchaseNo && String(p.purchaseNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (p.purchaseNo) rowRefs.current[p.purchaseNo] = el; }}
+                                                    style={highlightId && (String(p._id) === String(highlightId) || (p.purchaseNo && String(p.purchaseNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}>
                                         <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-600 align-top">{formatDate(p.date)}</td>
                                         <td className="px-3 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 align-top">{p.purchaseNo || '—'}</td>
                                         <td className="px-3 py-4 whitespace-nowrap text-sm font-semibold text-gray-800 align-top">{p.companyName || p.supplierName || '—'}</td>

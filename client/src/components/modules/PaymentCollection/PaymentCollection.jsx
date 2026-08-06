@@ -9,7 +9,7 @@ import axios from '../../../utils/api';
 import PaymentCollectionReport from './PaymentCollectionReport';
 import './PaymentCollection.css';
 
-const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators }) => {
+const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -34,9 +34,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
     const canApproveEditRequest = hasPermission(currentUser, 'paymentCollection', 'approveEditRequest') || isAdmin;
     const canViewEditRequest = hasPermission(currentUser, 'paymentCollection', 'editRequest') || hasPermission(currentUser, 'paymentCollection', 'approveEditRequest') || canApprove;
     const canViewPaymentRequest = hasPermission(currentUser, 'paymentCollection', 'paymentRequest') || hasPermission(currentUser, 'paymentCollection', 'paymentApprovalRequest') || canApprove;
+    const canShowEntryBy = isAdmin || (currentUser?.role || '').toLowerCase() === 'incharge' || hasPermission(currentUser, 'paymentCollection', 'showEntryBy');
 
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
 
     // Selection & Bulk Actions
@@ -45,6 +47,53 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
     const longPressTimerRef = useRef(null);
     const isLongPressRef = useRef(false);
+    const rowRefs = useRef({});
+
+    // Scroll to and highlight the row matching highlightId when it arrives
+    useEffect(() => {
+        if (!highlightId) return;
+
+        // Auto-switch to Requested or Edit Requested filter if the target item requires it
+        const targetItem = payments.find(p => p.receiptNo === highlightId || p.id === highlightId);
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase() === 'requested';
+            const isEditReq = (targetItem.isEdited === true || targetItem.isEdited === 'true') && !isReq;
+            if (isReq) {
+                setIsRequestedOnly(true);
+                setIsEditRequestedOnly(false);
+            } else if (isEditReq) {
+                setIsEditRequestedOnly(true);
+                setIsRequestedOnly(false);
+            }
+        }
+
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => k.trim().toLowerCase() === target || k.trim().toLowerCase().includes(target) || target.includes(k.trim().toLowerCase()));
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) {
+                        setSearchQuery('');
+                        setTimeout(scrollToRow, 300);
+                    }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+
+        return () => clearTimeout(t1);
+    }, [highlightId, payments]);
 
     const handleLongPressStart = (groupKey) => {
         isLongPressRef.current = false;
@@ -800,7 +849,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     status: initialStatus,
                     isEdited: false,
                     discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
-                    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+                    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    entryBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                    entryByName: currentUser?.name || currentUser?.username || 'Admin'
                 }));
 
             const updatedCustomer = {
@@ -905,7 +956,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     ...(originalData ? { originalData } : {}),
                     // The discount is stored only on the first item to prevent duplicate totals
                     discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
-                    id: item.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+                    id: item.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    entryBy: existingItem?.entryBy || existingItem?.entryByName || currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                    entryByName: existingItem?.entryByName || existingItem?.entryBy || currentUser?.name || currentUser?.username || 'Admin',
+                    editedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                    editedByName: currentUser?.name || currentUser?.username || 'Admin'
                 };
             });
 
@@ -1099,6 +1154,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     customerAddress: payment.customerAddress || '',
                     status: payment.status,
                     isEdited: payment.isEdited,
+                    entryBy: payment.entryBy || payment.entryByName || '',
+                    entryByName: payment.entryByName || payment.entryBy || '',
+                    editedBy: payment.editedBy || payment.editedByName || '',
+                    editedByName: payment.editedByName || payment.editedBy || '',
                     items: []
                 };
                 groups.push(group);
@@ -1108,6 +1167,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 group.status = 'Requested';
             }
             group.isEdited = group.isEdited || payment.isEdited === true || payment.isEdited === 'true';
+            // Keep the most-recent editedBy
+            if (payment.editedBy || payment.editedByName) {
+                group.editedBy = payment.editedBy || payment.editedByName || group.editedBy;
+                group.editedByName = payment.editedByName || payment.editedBy || group.editedByName;
+            }
         });
         return groups;
     }, [filteredPayments]);
@@ -1610,6 +1674,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
                                             <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
                                         </th>
+                                        {canShowEntryBy && (
+                                            <th className="sale-mgmt-th text-center">Entry By</th>
+                                        )}
                                         <th className="sale-mgmt-th text-center">Actions</th>
                                     </tr>
                                 </thead>
@@ -1617,7 +1684,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                     {isLoading ? (
                                         Array(5).fill(0).map((_, i) => (
                                             <tr key={i} className="animate-pulse">
-                                                <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11} className="px-6 py-12 text-center">
+                                                <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
                                                     <div className="flex flex-col items-center gap-2">
                                                         <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
                                                             <DollarSignIcon className="w-6 h-6 text-blue-500" />
@@ -1660,7 +1727,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                         }
                                                         if (isMultiple) toggleRowExpansion(group.key);
                                                     }}
-                                                    className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle select-none ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''} ${selectedItems.has(group.key) ? 'bg-blue-50/70 font-medium' : ''}`}
+                                                    className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle select-none ${isMultiple ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/30' : ''} ${selectedItems.has(group.key) ? 'bg-blue-50/70 font-medium' : ''} ${highlightId && ((group.receiptNo && String(group.receiptNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) || (group.ids && group.ids.some(id => String(id) === String(highlightId)))) ? "notif-row-highlight" : ""}`}
+                                                    ref={el => { if (group.receiptNo) rowRefs.current[group.receiptNo] = el; }}
+                                                    style={highlightId && ((group.receiptNo && String(group.receiptNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) || (group.ids && group.ids.some(id => String(id) === String(highlightId)))) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
                                                 >
                                                     {selectedItems.size > 0 && (
                                                         <td className="px-3 py-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>
@@ -1771,6 +1840,20 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                             </span>
                                                         )}
                                                     </td>
+                                                    {canShowEntryBy && (
+                                                        <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center whitespace-nowrap`}>
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <span className="text-xs font-semibold text-gray-700">
+                                                                    {group.entryBy || group.entryByName || '—'}
+                                                                </span>
+                                                                {(group.editedBy || group.editedByName) && (
+                                                                    <span className="text-[10px] text-amber-600 font-medium">
+                                                                        ✎ {group.editedBy || group.editedByName}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    )}
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center`} onClick={(e) => e.stopPropagation()}>
                                                         <div className="flex items-center justify-center gap-1.5">
                                                             <button
@@ -1823,7 +1906,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11} className="px-6 py-12 text-center">
+                                            <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
                                                         <SearchIcon className="w-6 h-6 text-gray-400" />
@@ -1946,6 +2029,22 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                     <span className="mobile-card-label text-blue-600">Amount:</span>
                                                                     <span className="mobile-card-value font-black text-blue-600">৳{Number(item.amount || 0).toLocaleString('en-IN')}</span>
                                                                 </div>
+
+                                                                {canShowEntryBy && idx === group.items.length - 1 && (
+                                                                    <div className="mobile-card-row">
+                                                                        <span className="mobile-card-label">Entry By:</span>
+                                                                        <div className="flex flex-col items-end">
+                                                                            <span className="mobile-card-value font-semibold text-gray-700">
+                                                                                {group.entryBy || group.entryByName || '—'}
+                                                                            </span>
+                                                                            {(group.editedBy || group.editedByName) && (
+                                                                                <span className="text-[10px] text-amber-600 font-medium">
+                                                                                    ✎ {group.editedBy || group.editedByName}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
 
                                                                 {canManage && (
                                                                     <div className="mobile-card-actions pt-2">

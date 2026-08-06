@@ -524,12 +524,41 @@ function IPManagement({
     ports,
     products = [],
     addNotification,
-    currentUser
+    currentUser,
+    highlightId
 }) {
+    
     const [showIpForm, setShowIpForm] = useState(false);
     const [ipRecords, setIpRecords] = useState([]);
     const [lcRecords, setLcRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+
+    const rowRefs = useRef({});
+    useEffect(() => {
+        if (!highlightId) return;
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => k.trim().toLowerCase() === target || k.trim().toLowerCase().includes(target) || target.includes(k.trim().toLowerCase()));
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchTerm(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId]);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [showFilters, setShowFilters] = useState(false);
@@ -2008,7 +2037,9 @@ function IPManagement({
                                         {sortData(filteredIpRecords).map((record, idx) => (
                                             <tr
                                                 key={record._id}
-                                                className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none`}
+                                                className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none ${highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
+                                                 ref={el => { if (record.ipNumber) rowRefs.current[record.ipNumber] = el; }}
+                                                    style={highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
                                                 onMouseDown={() => startLongPress(record._id)}
                                                 onMouseUp={endLongPress}
                                                 onMouseLeave={endLongPress}

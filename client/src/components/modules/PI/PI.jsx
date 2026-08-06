@@ -19,8 +19,10 @@ function PI({
     fetchPorts,
     onDeleteConfirm,
     addNotification,
-    currentUser
+    currentUser,
+    highlightId
 }) {
+    
     const DEFAULT_DESC_GOODS = "Insurance to be covered by the opener.\nPartial Bill & Partial Payment be allowed.\nNegotiation is unrestricted in any Bank in India.\nAll Foreign Bank Charges outside India are on account of Importer.\n\nTRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
     const DEFAULT_DECLARATION = "1. Deliveries age quoted in good faith, however we shall not be responsible for delays due to reasons beyond our control.\n2. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.";
     const STYLE2_DECLARATION = "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.\nWe do certify that we have no local agent in Bangladesh and the quoted price is net and no commission is payable.";
@@ -36,6 +38,33 @@ function PI({
     const [records, setRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const rowRefs = useRef({});
+    useEffect(() => {
+        if (!highlightId) return;
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => k.trim().toLowerCase() === target || k.trim().toLowerCase().includes(target) || target.includes(k.trim().toLowerCase()));
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchQuery(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId]);
+
     const [submitStatus, setSubmitStatus] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
@@ -4105,7 +4134,8 @@ function PI({
                                                 : (parseFloat(record.grandTotalQuantity || record.quantity) || 0);
 
                                             return (
-                                                <tr key={record._id} className="hover:bg-gray-50/50 transition-colors">
+                                                <tr key={record._id} className={`hover:bg-gray-50/50 transition-colors ${highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (record.piNumber) rowRefs.current[record.piNumber] = el; }}
+                                                    style={highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}>
                                                     <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
                                                     <td className="px-6 py-4 text-sm font-bold text-blue-600">
                                                         {record.piNumber}

@@ -6,11 +6,59 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateInsurancePaymentReportPDF } from '../../../utils/pdfGenerator';
 
-const InsurancePayment = ({ currentUser: propCurrentUser, addNotification }) => {
+const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif }) => {
+    
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+
+    const rowRefs = useRef({});
+        useEffect(() => {
+        if (!highlightId) return;
+
+        const cleanH = String(highlightId).toLowerCase().trim();
+        const targetItem = payments.find(p => 
+            (p.lcNo && (String(p.lcNo).toLowerCase().trim() === cleanH || cleanH.includes(String(p.lcNo).toLowerCase().trim()))) ||
+            (p.companyName && (String(p.companyName).toLowerCase().trim() === cleanH || cleanH.includes(String(p.companyName).toLowerCase().trim()))) ||
+            (p.reference && (String(p.reference).toLowerCase().trim() === cleanH || cleanH.includes(String(p.reference).toLowerCase().trim()))) ||
+            String(p._id) === cleanH
+        );
+
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase() === 'requested';
+            if (isReq) {
+                setIsRequestedOnly(true);
+            }
+        }
+
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => {
+                const cleanK = k.trim().toLowerCase();
+                return cleanK === target || cleanK.includes(target) || target.includes(cleanK);
+            });
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchQuery(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId, payments]);
+
     const [localCurrentUser] = useState(() => {
         try {
             const saved = localStorage.getItem('currentUser');
@@ -39,6 +87,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification }) => 
 
     // Requested Filter State
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
     const [isRequestMode, setIsRequestMode] = useState(false);
 
     const requestedCount = React.useMemo(() => {
@@ -322,13 +371,13 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification }) => 
                 if (isRequestMode) {
                     addNotification(
                         'New Insurance Payment Requested',
-                        `A payment request of ৳${paymentData.amount.toLocaleString('en-IN')} for ${paymentData.companyName} was submitted by ${currentUser?.name || currentUser?.username || 'User'}.`,
+                        `A payment request of ৳${paymentData.amount.toLocaleString('en-IN')} for ${paymentData.companyName} (${paymentData.lcNo ? `LC: ${paymentData.lcNo}` : paymentData.companyName}) was submitted by ${currentUser?.name || currentUser?.username || 'User'}.`,
                         ['Admin', 'Incharge', 'Accounts Manager']
                     );
                 } else {
                     addNotification(
                         isEditMode ? 'Insurance Payment Updated' : 'New Insurance Payment Added',
-                        `Insurance payment for ${paymentData.companyName} has been ${isEditMode ? 'updated' : 'added'} by ${currentUser?.name || currentUser?.username || 'User'}.`,
+                        `Insurance payment for ${paymentData.companyName} (${paymentData.lcNo ? `LC: ${paymentData.lcNo}` : paymentData.companyName}) has been ${isEditMode ? 'updated' : 'added'} by ${currentUser?.name || currentUser?.username || 'User'}.`,
                         ['Admin', 'Incharge', 'Accounts Manager']
                     );
                 }
@@ -361,7 +410,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification }) => 
             if (addNotification) {
                 addNotification(
                     'Insurance Payment Approved',
-                    `Insurance payment request of ৳${(payment.amount || 0).toLocaleString('en-IN')} for ${payment.companyName} has been approved by ${currentUser?.name || currentUser?.username || 'Admin'}.`,
+                    `Insurance payment request of ৳${(payment.amount || 0).toLocaleString('en-IN')} for ${payment.companyName} (${payment.lcNo ? `LC: ${payment.lcNo}` : payment.companyName}) has been approved by ${currentUser?.name || currentUser?.username || 'Admin'}.`,
                     ['Admin', 'Incharge', 'Accounts Manager', 'Sales Manager']
                 );
             }
@@ -383,7 +432,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification }) => 
             if (addNotification) {
                 addNotification(
                     'Insurance Payment Request Rejected',
-                    `Payment request of ৳${(payment.amount || 0).toLocaleString('en-IN')} for ${payment.companyName} was rejected by ${currentUser?.name || currentUser?.username || 'Admin'}.`,
+                    `Payment request of ৳${(payment.amount || 0).toLocaleString('en-IN')} for ${payment.companyName} (${payment.lcNo ? `LC: ${payment.lcNo}` : payment.companyName}) was rejected by ${currentUser?.name || currentUser?.username || 'Admin'}.`,
                     ['Admin', 'Incharge', 'Accounts Manager']
                 );
             }
@@ -1191,7 +1240,36 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification }) => 
                                         filteredPayments.map((p) => {
                                             const lc = lcs.find(l => l.lcNo === p.lcNo);
                                             return (
-                                                <tr key={p._id} className="hover:bg-gray-50/50 transition-colors group">
+                                                <tr key={p._id}
+                                                    className={`hover:bg-gray-50/50 transition-colors group ${
+                                                        highlightId && (
+                                                            String(p._id) === String(highlightId) ||
+                                                            (p.lcNo && String(p.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim().replace(/,/g, '')) ||
+                                                            (p.amount && (String(p.amount).replace(/,/g, '').trim() === String(highlightId).toLowerCase().trim().replace(/,/g, '') || (typeof p.amount === 'number' && String(p.amount.toFixed(2)).replace(/,/g, '').trim() === String(highlightId).toLowerCase().trim().replace(/,/g, '')))) ||
+                                                            (p.reference && p.reference !== '-' && String(p.reference).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                            (p.companyName && payments.filter(item => (item.companyName || '').toLowerCase().trim() === p.companyName.toLowerCase().trim()).length === 1 && p.companyName.toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+                                                        ) ? "notif-row-highlight" : ""
+                                                    }`}
+                                                    ref={el => {
+                                                        if (p.lcNo) rowRefs.current[p.lcNo] = el;
+                                                        if (p.amount) {
+                                                            rowRefs.current[String(p.amount)] = el;
+                                                            rowRefs.current[String(p.amount).replace(/,/g, '')] = el;
+                                                        }
+                                                        if (p.companyName) rowRefs.current[p.companyName] = el;
+                                                        if (p.reference) rowRefs.current[p.reference] = el;
+                                                        if (p._id) rowRefs.current[p._id] = el;
+                                                    }}
+                                                    style={
+                                                        highlightId && (
+                                                            String(p._id) === String(highlightId) ||
+                                                            (p.lcNo && String(p.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim().replace(/,/g, '')) ||
+                                                            (p.amount && (String(p.amount).replace(/,/g, '').trim() === String(highlightId).toLowerCase().trim().replace(/,/g, '') || (typeof p.amount === 'number' && String(p.amount.toFixed(2)).replace(/,/g, '').trim() === String(highlightId).toLowerCase().trim().replace(/,/g, '')))) ||
+                                                            (p.reference && p.reference !== '-' && String(p.reference).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                            (p.companyName && payments.filter(item => (item.companyName || '').toLowerCase().trim() === p.companyName.toLowerCase().trim()).length === 1 && p.companyName.toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+                                                        ) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined
+                                                    }
+                                                >
                                                     <td className="px-4 py-3 whitespace-nowrap text-gray-700">{formatDate(p.date)}</td>
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         <div className="font-bold text-gray-900">{p.companyName}</div>
