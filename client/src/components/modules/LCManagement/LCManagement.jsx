@@ -4764,7 +4764,9 @@ const getStatusBadgeClass = (status) => {
     }
 };
 
-const LCManagement = ({ addNotification, currentUser }) => {
+const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNotif }) => {
+    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    
     const [lcRecords, setLcRecords] = useState([]);
     const [banks, setBanks] = useState([]);
     const [banksRaw, setBanksRaw] = useState([]);
@@ -4777,6 +4779,57 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const [piList, setPiList] = useState([]);
     const [piRecordsRaw, setPiRecordsRaw] = useState([]);
     const [productItems, setProductItems] = useState([]);
+
+    const rowRefs = useRef({});
+
+    useEffect(() => {
+        if (isRequestedNotif) {
+            setIsRequestedOnly(true);
+        }
+    }, [isRequestedNotif]);
+
+    useEffect(() => {
+        if (!highlightId) return;
+
+        const cleanH = String(highlightId).toLowerCase().trim();
+        const targetItem = lcRecords.find(item => 
+            (item.lcNo && String(item.lcNo).toLowerCase().trim() === cleanH) ||
+            String(item._id) === cleanH
+        );
+
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase().includes('requested');
+            if (isReq) {
+                setIsRequestedOnly(true);
+            }
+        }
+
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => {
+                const cleanK = k.trim().toLowerCase();
+                return cleanK === target || cleanK.includes(target) || target.includes(cleanK);
+            });
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchQuery(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId, lcRecords]);
     const [isLoading, setIsLoading] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -5362,8 +5415,14 @@ const LCManagement = ({ addNotification, currentUser }) => {
     const fetchInitialData = async () => {
         setIsLoading(true);
         try {
-            const [lcRes, bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes, marginReturnRes, cogRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/lc-management`),
+            // 1. Fetch main LC records first and render table instantly
+            const lcRes = await axios.get(`${API_BASE_URL}/api/lc-management`);
+            const freshLcRecords = Array.isArray(lcRes.data) ? lcRes.data : [];
+            setLcRecords(freshLcRecords);
+            setIsLoading(false);
+
+            // 2. Fetch secondary metadata in background without blocking UI
+            const [bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes, marginReturnRes, cogRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/importers`),
                 axios.get(`${API_BASE_URL}/api/exporters`),
@@ -5380,85 +5439,44 @@ const LCManagement = ({ addNotification, currentUser }) => {
                 axios.get(`${API_BASE_URL}/api/margin-returns`).catch(() => ({ data: [] })),
                 axios.get(`${API_BASE_URL}/api/cost-of-goods`).catch(() => ({ data: [] }))
             ]);
+
             setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
             setLcExpenses(Array.isArray(expenseRes.data) ? expenseRes.data : []);
             setInsurancePayments(Array.isArray(insPayRes.data) ? insPayRes.data : []);
             setMarginReturns(Array.isArray(marginReturnRes?.data) ? marginReturnRes.data : []);
             setCostOfGoodsRecords(Array.isArray(cogRes?.data) ? cogRes.data : []);
 
-            const freshLcRecords = Array.isArray(lcRes.data) ? lcRes.data : [];
-            setLcRecords(freshLcRecords);
-            // Sync the open modal's viewData to its fresh version so the LC Bill tab updates immediately
-            setViewData(prev => {
-                if (!prev) return prev;
-                const fresh = freshLcRecords.find(r => r._id === prev._id);
-                return fresh ? fresh : prev;
-            });
+            setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
+            setBanksRaw(Array.isArray(bankRes.data) ? bankRes.data : []);
+            setImporters(Array.isArray(impRes.data) ? impRes.data : []);
+            setExporters(Array.isArray(expRes.data) ? expRes.data : []);
+            setInsuranceCos(Array.isArray(insRes.data) ? insRes.data : []);
+            setInsuranceRecordsRaw(Array.isArray(insRes.data) ? insRes.data : []);
 
-            const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
-            const decryptedStock = rawStock.map(item => {
-                try {
-                    let d = item.data ? decryptData(item.data) : item;
-                    // Robust Guard: If the result is a string or still has an inner 'data' string, decrypt again
-                    if (typeof d === 'string') {
-                        try { d = decryptData(d); } catch (e) { }
-                    } else if (d && d.data && typeof d.data === 'string' && !d.lcNo) {
-                        try { d = decryptData(d.data); } catch (e) { }
-                    }
-                    return d;
-                } catch {
-                    return item;
-                }
-            });
-            setAllStockRecords(decryptedStock);
+            setIpRecordsRaw(Array.isArray(ipRes.data) ? ipRes.data : []);
+            const validIps = (Array.isArray(ipRes.data) ? ipRes.data : [])
+                .filter(i => i.ipNo && !i.status?.toLowerCase().includes('rejected'))
+                .map(i => i.ipNo);
+            setIpList([...new Set(validIps)]);
 
-            const rawSales = Array.isArray(saleRes.data) ? saleRes.data : [];
-            const decryptedSales = rawSales.map(item => {
-                try {
-                    let d = item.data ? decryptData(item.data) : item;
-                    // Robust Guard: If the result is a string or still has an inner 'data' string, decrypt again
-                    if (typeof d === 'string') {
-                        try { d = decryptData(d); } catch (e) { }
-                    } else if (d && d.data && typeof d.data === 'string' && !d.lcNo && !d.saleType) {
-                        try { d = decryptData(d.data); } catch (e) { }
-                    }
-                    return d;
-                } catch {
-                    return item;
-                }
-            });
-            setAllSalesRecords(decryptedSales);
+            setPiRecordsRaw(Array.isArray(piRes.data) ? piRes.data : []);
+            const validPis = (Array.isArray(piRes.data) ? piRes.data : [])
+                .filter(p => p.piNumber && !p.status?.toLowerCase().includes('rejected'))
+                .map(p => p.piNumber);
+            setPiList([...new Set(validPis)]);
 
-            // Filter banks to only show those NOT marked as Indian (from PI Module)
-            const moduleBanks = Array.isArray(bankRes.data) ? bankRes.data.filter(b => !b.isIndian) : [];
-            setBanksRaw(moduleBanks);
-            const uniqueBankNames = Array.from(new Set(moduleBanks.map(b => (b.bankName || '').trim().toUpperCase()))).filter(Boolean);
-            setBanks(uniqueBankNames);
-
-            setImporters(Array.isArray(impRes.data) ? impRes.data.map(i => i.name) : []);
-            setExporters(Array.isArray(expRes.data) ? expRes.data.map(e => e.name) : []);
-
-            const rawIns = Array.isArray(insRes.data) ? insRes.data : [];
-            setInsuranceRecordsRaw(rawIns);
-            setInsuranceCos(rawIns.map(i => i.companyName));
-
-            const rawIps = Array.isArray(ipRes.data) ? ipRes.data : [];
-            setIpRecordsRaw(rawIps);
-            setIpList(rawIps.map(ip => ip.ipNumber));
-
-            const rawPis = Array.isArray(piRes.data) ? piRes.data : [];
-            setPiRecordsRaw(rawPis);
-            setPiList(rawPis.map(pi => {
-                const isRevised = pi.revisions && pi.revisions.length > 0;
-                return isRevised ? `${pi.piNumber} (REVISED)` : pi.piNumber;
-            }));
-
-            setProductItems(Array.isArray(prodRes.data) ? prodRes.data.map(p => p.name) : []);
+            setProductItems(Array.isArray(prodRes.data) ? prodRes.data : []);
+            setAllStockRecords(Array.isArray(stockRes.data) ? stockRes.data : []);
+            setAllSalesRecords(Array.isArray(saleRes.data) ? saleRes.data : []);
             setPorts(Array.isArray(portRes.data) ? portRes.data : []);
+
+            setViewData(prev => {
+                if (!prev) return null;
+                const updated = freshLcRecords.find(item => item._id === prev._id);
+                return updated || prev;
+            });
         } catch (error) {
-            console.error('Error fetching LC initial data:', error);
-            addNotification?.('Failed to load LC records', 'error');
-        } finally {
+            console.error("Failed to fetch initial LC data:", error);
             setIsLoading(false);
         }
     };
@@ -6781,6 +6799,13 @@ const LCManagement = ({ addNotification, currentUser }) => {
     };
 
     const filteredRecords = lcRecords.filter(record => {
+        if (isRequestedOnly) {
+            const st = (record.status || '').toLowerCase();
+            if (!st.includes('requested')) return false;
+        } else {
+            const st = (record.status || '').toLowerCase();
+            if (st.includes('requested')) return false;
+        }
         const query = searchQuery.toLowerCase();
         const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
             (record.productsList && record.productsList.some(p => (p.productName || '').toLowerCase().includes(query)));
@@ -9347,7 +9372,22 @@ const LCManagement = ({ addNotification, currentUser }) => {
                                         const remGpKg = Math.max(0, adj.adjustedQtyKg - totalGpQtyKg);
                                         return (
                                             <React.Fragment key={record._id ? `${record._id}_${index}` : index}>
-                                                <tr className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                                <tr className={`hover:bg-gray-50/50 transition-colors border-b border-gray-50 group ${
+    highlightId && (
+        String(record._id) === String(highlightId) ||
+        (record.lcNo && String(record.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+    ) ? "notif-row-highlight" : ""
+}`}
+ref={el => {
+    if (record.lcNo) rowRefs.current[record.lcNo] = el;
+    if (record._id) rowRefs.current[record._id] = el;
+}}
+style={
+    highlightId && (
+        String(record._id) === String(highlightId) ||
+        (record.lcNo && String(record.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+    ) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined
+}>
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-400 whitespace-nowrap">{index + 1}</td>
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
                                                     <td className={`px-2 py-3 text-sm font-bold whitespace-nowrap ${getShipmentDateColorClass(record.latestShipmentDate)}`}>{formatDate(record.latestShipmentDate) || '—'}</td>

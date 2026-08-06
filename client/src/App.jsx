@@ -2158,7 +2158,7 @@ function App() {
           />
         );
       case 'lc-management-section':
-        return <LCManagement addNotification={addNotification} currentUser={currentUser} />;
+        return <LCManagement addNotification={addNotification} currentUser={currentUser} highlightId={notifHighlightId} isRequestedNotif={notifIsRequested} />;
       case 'return-product-section':
         return <ReturnProduct currentUser={currentUser} refreshPendingIndicators={fetchPendingEntries} />;
       case 'profit-loss-section':

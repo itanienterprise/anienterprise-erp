@@ -92,7 +92,7 @@ function PackingList({
             }
         }, 250);
         return () => clearTimeout(t1);
-    }, [highlightId]);
+    }, [highlightId, records]);
 
     const [banks, setBanks] = useState([]);
     const [ipRecords, setIpRecords] = useState([]);
@@ -324,23 +324,26 @@ function PackingList({
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
-            const [plRes, piRes, lcRes, bankRes, ipRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/packing-lists`),
+            // 1. Fetch Packing Lists first and render table instantly!
+            const plRes = await axios.get(`${API_BASE_URL}/api/packing-lists`);
+            setRecords(Array.isArray(plRes.data) ? plRes.data : []);
+            setIsLoading(false);
+
+            // 2. Fetch secondary data in background
+            const [piRes, lcRes, bankRes, ipRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/pi`),
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/ip-records`)
             ]);
-            setRecords(Array.isArray(plRes.data) ? plRes.data : []);
             setPiRecords(Array.isArray(piRes.data) ? piRes.data : []);
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
             setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
             setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
-            await fetchTrSetups();
+            fetchTrSetups();
         } catch (error) {
             console.error('Error fetching data:', error);
             showToast('Failed to fetch records', 'error');
-        } finally {
             setIsLoading(false);
         }
     };
@@ -2125,9 +2128,24 @@ function PackingList({
 
                                         return (
                                             <tr key={rec._id}
-                                                className={`hover:bg-gray-50/50 ${highlightId && (String(rec._id) === String(highlightId) || (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
-                                                ref={el => { if (rec.packingListNumber) rowRefs.current[rec.packingListNumber] = el; if (rec._id) rowRefs.current[rec._id] = el; if (rec.piNumber) rowRefs.current[rec.piNumber] = el; }}
-                                                style={highlightId && (String(rec._id) === String(highlightId) || (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
+                                                className={`hover:bg-gray-50/50 ${highlightId && (
+                                                    String(rec._id) === String(highlightId) ||
+                                                    (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                    (rec.invoiceNo && String(rec.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                    (rec.piNumber && String(rec.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+                                                ) ? "notif-row-highlight" : ""}`}
+                                                ref={el => {
+                                                    if (rec.packingListNumber) rowRefs.current[rec.packingListNumber] = el;
+                                                    if (rec.invoiceNo) rowRefs.current[rec.invoiceNo] = el;
+                                                    if (rec.piNumber) rowRefs.current[rec.piNumber] = el;
+                                                    if (rec._id) rowRefs.current[rec._id] = el;
+                                                }}
+                                                style={highlightId && (
+                                                    String(rec._id) === String(highlightId) ||
+                                                    (rec.packingListNumber && String(rec.packingListNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                    (rec.invoiceNo && String(rec.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                                    (rec.piNumber && String(rec.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+                                                ) ? { backgroundColor: '#fde047', borderLeft: '4px solid #eab308' } : undefined}
                                             >
                                                 <td className="px-6 py-4 font-bold text-gray-800">{rec.packingListNumber}</td>
                                                 <td className="px-6 py-4 text-gray-600">{formatDate(rec.date)}</td>

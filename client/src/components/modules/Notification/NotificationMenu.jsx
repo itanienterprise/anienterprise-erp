@@ -4,48 +4,58 @@ import './NotificationMenu.css';
 
 // Fallback: map notification title keywords → view name
 // Used for older notifications that don't have a stored `link` field.
-const TITLE_TO_VIEW = {
-    // Specific compound terms first
-    'insurance payment': 'insurance-payment-section',
-    'insurance request': 'insurance-payment-section',
-    'insurance': 'insurance-payment-section',
+const TITLE_TO_VIEW = [
+    // Document Code Matches (Highest Precision)
+    { pattern: /\bRC-[0-9]+/i, view: 'payment-collection-section' },
+    { pattern: /\bPTC-[0-9]+/i, view: 'pay-to-customer-section' },
+    { pattern: /\bPL-[0-9]+/i, view: 'packing-list-section' },
+    { pattern: /\bPI-[0-9]+/i, view: 'pi-section' },
+    { pattern: /\bORD-[0-9]+/i, view: 'order-sale-section' },
+    { pattern: /\bPUR-[0-9]+/i, view: 'purchase-sale-section' },
+    { pattern: /\bSAL-[0-9]+/i, view: 'general-sale-section' },
 
-    'border sale': 'border-sale-section',
-    'general sale': 'general-sale-section',
-    
-    'payment collection': 'payment-collection-section',
-    'payment request': 'payment-collection-section',
-    'payment': 'payment-collection-section',
-    'receipt': 'payment-collection-section',
-    'collection': 'payment-collection-section',
+    // Packing List (place BEFORE general sale to prevent 'Invoice No' from matching sale)
+    { pattern: /\bpacking(?:\s+list)?\b/i, view: 'packing-list-section' },
 
-    'payout': 'pay-to-customer-section',
+    // Insurance Payment (place BEFORE LC to prevent 'plc' from matching 'lc')
+    { pattern: /\b(?:insurance|gross premium|net premium)\b/i, view: 'insurance-payment-section' },
 
-    'sale': 'general-sale-section',
+    // Proforma Invoice / PI
+    { pattern: /\b(?:pi|proforma)\b/i, view: 'pi-section' },
 
-    'purchase': 'purchase-sale-section',
+    // IP Record
+    { pattern: /\bip\b/i, view: 'ip-section' },
 
-    'order': 'order-sale-section',
+    // LC Receive
+    { pattern: /\blc\s+receive\b/i, view: 'lc-entry-section' },
 
-    'packing list': 'packing-list-section',
-    'packing': 'packing-list-section',
+    // LC Management / Open
+    { pattern: /\blc\b/i, view: 'lc-management-section' },
 
-    'proforma': 'pi-section',
-    'pi': 'pi-section',
+    // Border Sale
+    { pattern: /\bborder\s+sale\b/i, view: 'border-sale-section' },
 
-    'lc receive': 'lc-entry-section',
-    'lc record': 'lc-entry-section',
-    'lc': 'lc-entry-section',
+    // Payout to Customer
+    { pattern: /\b(?:payout|pay\s+to\s+customer)\b/i, view: 'pay-to-customer-section' },
 
-    'ip record': 'ip-section',
-    'ip': 'ip-section',
+    // Payment Collection & Receipt
+    { pattern: /\b(?:payment|receipt|collection)\b/i, view: 'payment-collection-section' },
 
-    'stock transfer': 'transfer-section',
-    'transfer': 'transfer-section',
+    // Purchase
+    { pattern: /\bpurchase\b/i, view: 'purchase-sale-section' },
 
-    'backup': 'backup-restore-section',
-    'restore': 'backup-restore-section',
-};
+    // Order
+    { pattern: /\border\b/i, view: 'order-sale-section' },
+
+    // General Sale (place LAST so generic 'invoice' doesn't hijack packing lists or PIs)
+    { pattern: /\b(?:general\s+sale|sale)\b/i, view: 'general-sale-section' },
+
+    // Stock Transfer
+    { pattern: /\btransfer\b/i, view: 'transfer-section' },
+
+    // Backup & Restore
+    { pattern: /\b(?:backup|restore)\b/i, view: 'backup-restore-section' },
+];
 
 function resolveLink(notif) {
     if (notif.link) return notif.link;
@@ -59,14 +69,12 @@ function resolveLink(notif) {
 
     text = text.toLowerCase();
 
-    for (const [keyword, view] of Object.entries(TITLE_TO_VIEW)) {
-        if (text.includes(keyword)) return view;
+    for (const item of TITLE_TO_VIEW) {
+        if (item.pattern.test(text)) return item.view;
     }
     return null;
 }
 
-// Extract the entry identifier from the notification message.
-// Messages typically contain the ID inside parentheses, e.g. "(RC-0117)" or "(INV-2026-001)"
 function extractHighlightId(notif) {
     if (notif.highlightId) return notif.highlightId;
 
@@ -79,35 +87,39 @@ function extractHighlightId(notif) {
 
     if (!text.trim()) return null;
 
-    // 1. Parentheses format: e.g. "(LC: 087326010617)", "(Invoice No: PL-001)", "(RC-0117)"
-    const parenMatch = text.match(/\(([^)]+)\)/);
-    if (parenMatch) {
-        const inner = parenMatch[1].trim();
-        if (inner.includes(':')) {
-            const afterColon = inner.split(':', 1)[1].trim();
-            const firstWord = afterColon.split(/\s+/)[0];
-            if (firstWord) return firstWord.trim();
-        }
-        const firstToken = inner.split(/\s+/)[0];
-        if (firstToken && firstToken.length >= 2) return firstToken.trim();
-    }
-
-    // 2. Colon or hash prefix: e.g. "LC No: 087326010617", "PI No: PI-0012"
+    // 1. Prefix match: e.g. "LC No: 087326010476", "PI No: PI-0012", "Invoice No: PL-001"
     const prefixMatch = text.match(/(?:PI|LC|IP|Invoice|Order|Receipt|Payout|Payment|Purchase|Sale|PL)\s*(?:No|Number|#)?\s*[:#]\s*([A-Za-z0-9\-_\/.]+)/i);
     if (prefixMatch) {
         return prefixMatch[1].trim();
     }
 
-    // 3. Standard code formats: e.g. RC-0117, SAL-0042, PUR-0015, PTC-0023, PL-005, PI-0012
+    // 2. Standard code formats: e.g. RC-0117, SAL-0042, PUR-0015, PTC-0023, PL-005, PI-0012
     const codeMatch = text.match(/\b([A-Za-z]{2,4}\-?[0-9]{2,})\b/);
     if (codeMatch) {
         return codeMatch[1].trim();
     }
 
-    // 4. Long numeric LC number e.g. 087326010617
+    // 3. Long numeric LC number e.g. 087326010476 or 073926010078
     const numMatch = text.match(/\b([0-9]{6,})\b/);
     if (numMatch) {
         return numMatch[1].trim();
+    }
+
+    // 4. Parentheses format: only if inside parentheses there is an explicit code or number
+    const parenMatch = text.match(/\(([^)]+)\)/);
+    if (parenMatch) {
+        const inner = parenMatch[1].trim();
+        if (inner.includes(':')) {
+            const afterColon = inner.split(':').slice(1).join(':').trim();
+            const firstWord = afterColon.split(/\s+/)[0];
+            if (firstWord) return firstWord.trim();
+        }
+        const tokens = inner.split(/\s+/);
+        for (const t of tokens) {
+            if (/[0-9]/.test(t) && t.length >= 3) {
+                return t.trim();
+            }
+        }
     }
 
     // 5. Currency Amount figure e.g. ৳35,193.99 or ৳50,000

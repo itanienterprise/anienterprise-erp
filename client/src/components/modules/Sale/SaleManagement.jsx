@@ -45,9 +45,19 @@ const SaleManagement = ({
 
     const rowRefs = useRef({});
     useEffect(() => {
+        if (isRequestedNotif) {
+            setIsRequestedOnly(true);
+        }
+    }, [isRequestedNotif]);
+
+    useEffect(() => {
         if (!highlightId) return;
 
-        const targetItem = sales.find(s => s.invoiceNo === highlightId || s._id === highlightId);
+        const cleanH = String(highlightId).toLowerCase().trim();
+        const targetItem = sales.find(s => 
+            (s.invoiceNo && String(s.invoiceNo).toLowerCase().trim() === cleanH) ||
+            String(s._id) === cleanH
+        );
         if (targetItem) {
             const isReq = (targetItem.status || '').toLowerCase() === 'requested';
             const isEditReq = (targetItem.isEdited === true || targetItem.isEdited === 'true') && !isReq;

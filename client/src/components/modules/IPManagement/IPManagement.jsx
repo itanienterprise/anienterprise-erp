@@ -655,14 +655,18 @@ function IPManagement({
     const fetchIpRecords = async () => {
         setIsLoading(true);
         try {
-            const [ipRes, lcRes, stockRes, saleRes, piRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/ip-records`),
+            // 1. Fetch IP records first and render table instantly!
+            const ipRes = await axios.get(`${API_BASE_URL}/api/ip-records`);
+            setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
+            setIsLoading(false);
+
+            // 2. Fetch secondary metadata in background
+            const [lcRes, stockRes, saleRes, piRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/stock`),
                 axios.get(`${API_BASE_URL}/api/sales`),
                 axios.get(`${API_BASE_URL}/api/pi`)
             ]);
-            setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
             setPiRecords(Array.isArray(piRes.data) ? piRes.data : []);
 
