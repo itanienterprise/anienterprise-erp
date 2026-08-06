@@ -757,7 +757,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     productsList.forEach((prod, pIdx) => {
         const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
         const isLastProduct = pIdx === numProducts - 1;
-        const hasDoubleHsCode = !!(prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd);
+        const indHsEnabled = prod.showIndHsCode !== false && pi?.productsList?.[pIdx]?.showIndHsCode !== false;
+        const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled);
         let rowHeight = productRowHeight(numProducts, hasFreight);
         if (rowHeight && hasDoubleHsCode) {
             rowHeight += 5;
@@ -766,12 +767,12 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         firstRowIndexForProduct.push(tableBody.length);
 
         let requiredNewlines = 1;
-        if (prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) requiredNewlines += 1;
+        if ((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled) requiredNewlines += 1;
         if (showSafta && isLastProduct && (!hasFreight || numProducts === 1)) requiredNewlines += 2.5;
         if (numProducts === 1) {
             requiredNewlines += 2;
         } else {
-            requiredNewlines = (prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) ? 2 : 1;
+            requiredNewlines = ((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled) ? 2 : 1;
         }
 
         let cellText = "\n".repeat(requiredNewlines);
@@ -783,8 +784,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         let singleRowMinHeight = undefined;
         if (numProducts === 1) {
             const descTextHeight = getDescriptionBlockHeight(certFontSize, 108);
-            const prod = productsList[0] || {};
-            const hasDoubleHsCode = !!(prod.hsCodeInd || pi?.productsList?.[0]?.hsCodeInd);
+            const firstIndHsEnabled = prod.showIndHsCode !== false && pi?.productsList?.[0]?.showIndHsCode !== false;
+            const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[0]?.hsCodeInd) && firstIndHsEnabled);
             const offsetToDesc = -1 + 7.5 + (hasDoubleHsCode ? 5 : 0) + (showSafta ? 16.5 : 0) + 8;
             if (record.productsImage) {
                 try {
@@ -1030,7 +1031,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 drawY += nameGap;
 
                 doc.setFontSize(hsCodeFS);
-                if (prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) {
+                const isIndHsEnabled = prod.showIndHsCode !== false && pi?.productsList?.[pIdx]?.showIndHsCode !== false;
+                if ((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && isIndHsEnabled) {
                     const bdHsLine = `H.S. CODE NO.${prod.hsCode || ''} (BD)`;
                     const indHsLine = `H.S. CODE NO.${prod.hsCodeInd || pi.productsList[pIdx].hsCodeInd} (IND)`;
                     doc.text(bdHsLine, centerX, drawY, { align: 'center' });

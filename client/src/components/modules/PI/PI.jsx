@@ -105,7 +105,7 @@ function PI({
         totalFreight: '',
         grandTotal: '',
         grandTotalQuantity: '',
-        productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }],
+        productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: true }],
         invoiceStyle: 'Style 1 SAA',
         port: '',
         placeOfReceipt: '',
@@ -133,7 +133,7 @@ function PI({
         termsDeliveryPayment: 'CPT [PORT OF DISCHARGE], BANGLADESH, BY ROAD, BY TRUCK AGAINST \nIrrevocable at Sight Letter of Credit valid for 90 days & Negotiable within 21 days of Shipment.\nPacking: Export Standard.',
         declaration: DEFAULT_DECLARATION,
         status: 'Active',
-        certification: 'Value & Quantity, Country of Origin',
+        certification: 'Value & Quantity, Country of Origin, Packing',
         packingType: '',
         revisions: [],
         piRevision: '',
@@ -731,7 +731,8 @@ function PI({
                     rate: '',
                     amount: '',
                     freight: currentList.length > 0 ? currentList[0].freight : '',
-                    totalFreight: ''
+                    totalFreight: '',
+                    showIndHsCode: true
                 }
             ];
             return {
@@ -1272,7 +1273,7 @@ function PI({
             totalFreight: '',
             grandTotal: '',
             grandTotalQuantity: '',
-            productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' }],
+            productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: true }],
             port: '',
             placeOfReceipt: '',
             portOfLoading: 'ANY PLACE OF INDIA',
@@ -1300,7 +1301,7 @@ function PI({
             declaration: DEFAULT_DECLARATION,
             status: 'Active',
             invoiceStyle: 'Style 1 SAA',
-            certification: 'Value & Quantity, Country of Origin',
+            certification: 'Value & Quantity, Country of Origin, Packing',
             packingType: '',
             revisions: [],
             piRevision: '',
@@ -1314,7 +1315,7 @@ function PI({
 
     const handleEdit = (record) => {
         const loadedList = record.productsList && record.productsList.length > 0
-            ? record.productsList
+            ? record.productsList.map(p => ({ ...p, showIndHsCode: p.showIndHsCode !== undefined ? p.showIndHsCode : true }))
             : [{
                 productName: record.productName || '',
                 hsCode: record.hsCode || '',
@@ -1322,7 +1323,8 @@ function PI({
                 rate: record.rate || '',
                 amount: record.amount || '',
                 freight: record.freight || '',
-                totalFreight: record.totalFreight || ''
+                totalFreight: record.totalFreight || '',
+                showIndHsCode: record.showIndHsCode !== undefined ? record.showIndHsCode : true
             }];
 
         const parsedIpNumbers = record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
@@ -1428,7 +1430,7 @@ function PI({
 
     function getPiProductsList(pi) {
         if (pi.productsList && pi.productsList.length > 0) {
-            return pi.productsList.map(p => ({ ...p }));
+            return pi.productsList.map(p => ({ ...p, showIndHsCode: p.showIndHsCode !== undefined ? p.showIndHsCode : true }));
         }
         return [{
             productName: pi.productName || '',
@@ -1437,7 +1439,8 @@ function PI({
             rate: pi.rate || '',
             amount: pi.amount || '',
             freight: pi.freight || '',
-            totalFreight: pi.totalFreight || ''
+            totalFreight: pi.totalFreight || '',
+            showIndHsCode: pi.showIndHsCode !== undefined ? pi.showIndHsCode : true
         }];
     }
 
@@ -1639,6 +1642,7 @@ function PI({
                         amount: '',
                         freight: '',
                         totalFreight: '',
+                        showIndHsCode: true,
                         _fromIp: value
                     };
 
@@ -2862,43 +2866,47 @@ function PI({
                         </div>
 
                         {/* --- Reference Info --- */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Buyer Order No & Date</label>
-                            <input
-                                type="text"
-                                name="buyerOrderNo"
-                                value={formData.buyerOrderNo}
-                                onChange={handleInputChange}
-                                placeholder="Order details"
-                                autoComplete="off"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            />
-                        </div>
+                        {editingId && (
+                            <>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Buyer Order No & Date</label>
+                                    <input
+                                        type="text"
+                                        name="buyerOrderNo"
+                                        value={formData.buyerOrderNo}
+                                        onChange={handleInputChange}
+                                        placeholder="Order details"
+                                        autoComplete="off"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    />
+                                </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Other References</label>
-                            <input
-                                type="text"
-                                name="otherReferences"
-                                value={formData.otherReferences}
-                                onChange={handleInputChange}
-                                autoComplete="off"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            />
-                        </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Other References</label>
+                                    <input
+                                        type="text"
+                                        name="otherReferences"
+                                        value={formData.otherReferences}
+                                        onChange={handleInputChange}
+                                        autoComplete="off"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    />
+                                </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Buyer (if other than Consignee)</label>
-                            <input
-                                type="text"
-                                name="buyerName"
-                                value={formData.buyerName}
-                                onChange={handleInputChange}
-                                placeholder="Optional"
-                                autoComplete="off"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            />
-                        </div>                        {/* --- Products List Section --- */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Buyer (if other than Consignee)</label>
+                                    <input
+                                        type="text"
+                                        name="buyerName"
+                                        value={formData.buyerName}
+                                        onChange={handleInputChange}
+                                        placeholder="Optional"
+                                        autoComplete="off"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    />
+                                </div>
+                            </>
+                        )}                        {/* --- Products List Section --- */}
                         <div className="md:col-span-3 col-span-1 space-y-4">
                             <div className="flex items-center justify-between border-b border-gray-200 pb-2">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -3052,7 +3060,7 @@ function PI({
                                             </div>
 
                                             {/* Total Amount */}
-                                            <div className="space-y-2 md:col-span-3">
+                                            <div className="space-y-2 md:col-span-2">
                                                 <label className="text-sm font-medium text-gray-700">Total Amount (US $)</label>
                                                 <div className="relative">
                                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
@@ -3065,6 +3073,33 @@ function PI({
                                                     />
                                                 </div>
                                             </div>
+
+                                            {/* IND HS CODE Radio Controls */}
+                                            <div className="space-y-2 md:col-span-1">
+                                                <label className="text-sm font-medium text-gray-700 block">IND HS CODE (PDF)</label>
+                                                <div className="flex items-center gap-6 px-4 py-2 bg-white border border-gray-200 rounded-lg h-[42px]">
+                                                    <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
+                                                        <input
+                                                            type="radio"
+                                                            name={`showIndHsCode_${idx}`}
+                                                            checked={item.showIndHsCode !== false}
+                                                            onChange={() => handleProductFieldChange(idx, 'showIndHsCode', true)}
+                                                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                                        />
+                                                        <span>Enable</span>
+                                                    </label>
+                                                    <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
+                                                        <input
+                                                            type="radio"
+                                                            name={`showIndHsCode_${idx}`}
+                                                            checked={item.showIndHsCode === false}
+                                                            onChange={() => handleProductFieldChange(idx, 'showIndHsCode', false)}
+                                                            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                                        />
+                                                        <span>Disable</span>
+                                                    </label>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -3072,29 +3107,33 @@ function PI({
                         </div>
 
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Marks & No.</label>
-                            <input
-                                type="text"
-                                name="marksNo"
-                                value={formData.marksNo}
-                                onChange={handleInputChange}
-                                placeholder="CONTAINER/MARKS"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            />
-                        </div>
+                        {editingId && (
+                            <>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Marks & No.</label>
+                                    <input
+                                        type="text"
+                                        name="marksNo"
+                                        value={formData.marksNo}
+                                        onChange={handleInputChange}
+                                        placeholder="CONTAINER/MARKS"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    />
+                                </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">No. & Kind of Package</label>
-                            <input
-                                type="text"
-                                name="noKindPackage"
-                                value={formData.noKindPackage}
-                                onChange={handleInputChange}
-                                placeholder="e.g. 500 BAGS"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            />
-                        </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">No. & Kind of Package</label>
+                                    <input
+                                        type="text"
+                                        name="noKindPackage"
+                                        value={formData.noKindPackage}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g. 500 BAGS"
+                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    />
+                                </div>
+                            </>
+                        )}
 
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-blue-700 font-bold">Grand Total Quantity</label>
