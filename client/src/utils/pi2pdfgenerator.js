@@ -788,11 +788,27 @@ export const generatePI2PDF = (record) => {
 
     const sigImageWidth = 50;
     const sigImageX = pageWidth - margin - sigImageWidth - 5;
+    const leftSigX = margin + 5;
 
     // Anchor signature line 12mm above the page bottom border
     const sigLineY = boxBottom - 12;
     const sigTop = sigLineY - 18 - 1; // Sits 1mm above the signature line
 
+    // Importer Signature (Left)
+    if (record.partySignature) {
+        try {
+            doc.addImage(record.partySignature, 'PNG', leftSigX, sigTop + 3, sigImageWidth, 14);
+        } catch (e) {
+            console.error('Error adding importer signature to PDF:', e);
+        }
+    }
+
+    doc.line(leftSigX, sigLineY, leftSigX + sigImageWidth, sigLineY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text("Signature.", leftSigX + (sigImageWidth / 2), sigLineY + 4, { align: 'center' });
+
+    // Exporter Signature (Right)
     if (record.exporterSignature) {
         try {
             doc.addImage(record.exporterSignature, 'PNG', sigImageX, sigTop, sigImageWidth, 18);
