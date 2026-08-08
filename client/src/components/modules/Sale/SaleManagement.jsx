@@ -5218,7 +5218,7 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('dueAmount')}>
                                             <div className="flex items-center justify-center">Balance {renderSortIcon('dueAmount')}</div>
                                         </th>
-                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')} style={{ display: 'none' }}>
                                             <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
                                         </th>
                                         <th className="sale-mgmt-th text-center">Actions</th>
@@ -5575,7 +5575,7 @@ const SaleManagement = ({
                                                     })()}
                                                 </div>
                                             </td>
-                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                            <td className="px-3 py-4 whitespace-nowrap text-center" style={{ display: 'none' }}>
                                                 {(() => {
                                                     const storedDue = parseFloat(sale.dueAmount);
                                                     const storedTotal = parseFloat(sale.totalAmount) || 0;
