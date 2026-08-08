@@ -757,19 +757,18 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
         doc.setTextColor(255, 255, 255);
         doc.text("STOCK REPORT", pageWidth / 2, y + 5.5, { align: 'center' });
 
-        y += 12;
+        y += 15;
 
         // Filter info pill
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
         const dateRange = `${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} — ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`;
         const filterParts = [`Date: ${dateRange}`];
-        if (filters.productName) filterParts.push(`Product: ${filters.productName}`);
-        if (filters.warehouse && filters.warehouse !== 'All Warehouses') filterParts.push(`Warehouse: ${filters.warehouse}`);
         if (searchQuery) filterParts.push(`Search: ${searchQuery}`);
         const filterText = filterParts.join('   |   ');
 
+        // Center: Date Pill
         doc.setFontSize(8.5);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('helvetica', 'bold');
         doc.setTextColor(71, 85, 105);
         const filterTW = doc.getTextWidth(filterText);
         const pillW = Math.min(filterTW + 16, pageWidth - margin * 2);
@@ -780,13 +779,34 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
         doc.setTextColor(30, 41, 59);
         doc.text(filterText, pageWidth / 2, y + 1.5, { align: 'center' });
 
-        // Printed on (right)
+        // Right Side: Printed on
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(100, 116, 139);
         doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 1.5, { align: 'right' });
 
-        let yPos = y + 8;
+        // Left Side: Product Card (placed a little down on the left)
+        const prodNameStr = filters.productName 
+            ? (Array.isArray(filters.productName) ? filters.productName.join(', ') : filters.productName)
+            : '';
+
+        let yPos = y + 6;
+
+        if (prodNameStr) {
+            yPos += 3;
+            const prodLabel = `Product: ${prodNameStr}`;
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'bold');
+            const prodTW = doc.getTextWidth(prodLabel);
+            const prodPillW = prodTW + 10;
+            doc.setFillColor(241, 245, 249);
+            doc.setDrawColor(203, 213, 225);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(margin, yPos - 3, prodPillW, 7, 2, 2, 'FD');
+            doc.setTextColor(30, 41, 59);
+            doc.text(prodLabel, margin + 5, yPos + 1.5);
+            yPos += 7;
+        }
 
         const warehousesToRender = (filters.warehouse === 'All Warehouses' && stockRecords)
             ? (() => {
@@ -1401,73 +1421,12 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
         }); // End of warehousesToRender.forEach
 
 
-        // --- Footer / Summary (P&L Style Cards) ---
-        const cardWidth = 37;
-        const cardHeight = 24;
-        const cardGap = 2.5;
-        const totalCardsWidth = (cardWidth * 5) + (cardGap * 4);
-        let cardX = (pageWidth - totalCardsWidth) / 2;
-
-        const footerRequiredHeight = 44;
-        let finalY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : yPos) + 6;
-
-        if (finalY + footerRequiredHeight > pageHeight - 10) {
-            doc.addPage();
-            finalY = 15;
-        }
-
-        const cardColors = [
-            [79, 70, 229],   // OPENING - indigo
-            [217, 119, 6],   // TOTAL SALE - amber
-            [2, 132, 199],   // CLOSING - blue
-            [225, 29, 72],   // SHORTAGE - red
-            [16, 185, 129]   // DAMAGE - green
-        ];
-
-        const drawSummaryCard = (x, y, title, pktVal, qtyVal, colorRgb) => {
-            // Card background
-            doc.setFillColor(248, 250, 252);
-            doc.setDrawColor(226, 232, 240);
-            doc.setLineWidth(0.3);
-            doc.roundedRect(x, y, cardWidth, cardHeight, 2, 2, 'FD');
-
-            // Top color accent bar
-            doc.setFillColor(colorRgb[0], colorRgb[1], colorRgb[2]);
-            doc.roundedRect(x, y, cardWidth, 1.5, 2, 2, 'F');
-            doc.rect(x, y + 0.5, cardWidth, 1, 'F'); // fill the bottom half to make it flat-bottomed
-
-            // Title
-            doc.setFontSize(6.5);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(100, 116, 139);
-            doc.text(title, x + cardWidth / 2, y + 5.5, { align: 'center' });
-
-            // BAG value
-            doc.setFontSize(8.5);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(colorRgb[0], colorRgb[1], colorRgb[2]);
-            doc.text(pktVal.toString(), x + cardWidth / 2, y + 12, { align: 'center' });
-
-            // QTY label
-            const qtyStrVal = `${Math.round(qtyVal).toLocaleString('en-US')} kg`;
-            doc.setFontSize(7);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(100, 116, 139);
-            doc.text(qtyStrVal, x + cardWidth / 2, y + 19, { align: 'center' });
-        };
-
-        drawSummaryCard(cardX, finalY, "OPENING STOCK", globalGrandTotalPktStr, stockData.totalTotalInHouseQty, cardColors[0]);
-        cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "TOTAL SALE", globalTotalSalePktStr, stockData.totalSaleQty, cardColors[1]);
-        cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "CLOSING STOCK", globalInHousePktStr, stockData.totalInHouseQty, cardColors[2]);
-        cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "TOTAL SHORTAGE", globalTotalShortagePktStr, stockData.totalShortage || 0, cardColors[3]);
-        cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "TOTAL DAMAGE", globalTotalDamagePktStr, stockData.totalDamageQty || 0, cardColors[4]);
-
         // --- Signature Section ---
-        const sigY = finalY + cardHeight + 12;
+        let sigY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : yPos) + 16;
+        if (sigY + 15 > pageHeight - 10) {
+            doc.addPage();
+            sigY = 25;
+        }
         const sigWidth = 45;
         const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
 
@@ -1485,6 +1444,17 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
 
         doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
+
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - STOCK REPORT', margin, pageHeight - 6);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+        }
 
         const pdfOutput = doc.output('blob');
         const blobURL = URL.createObjectURL(pdfOutput);
