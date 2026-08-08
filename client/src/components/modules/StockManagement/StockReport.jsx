@@ -1250,7 +1250,7 @@ const StockReport = ({
                                 </>
                             )}
                         </div>
-                        <button onClick={() => generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages, searchQuery)} className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
+                        <button onClick={async () => { await generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages, searchQuery); }} className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
                             <PrinterIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                         </button>
                         <button onClick={onClose} className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-3.5 h-3.5 sm:w-6 sm:h-6 text-gray-500" /></button>

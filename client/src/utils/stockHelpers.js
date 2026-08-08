@@ -487,11 +487,15 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         }
         if (stockFilters.brand) {
             const itemBrand = (item.brand || '').trim().toLowerCase();
-            if (Array.isArray(stockFilters.brand)) {
-                if (stockFilters.brand.length > 0 && !stockFilters.brand.map(b => b.toLowerCase().trim()).includes(itemBrand)) return false;
-            } else if (typeof stockFilters.brand === 'string' && stockFilters.brand.trim() !== '') {
-                const selectedBrands = stockFilters.brand.split(',').map(b => b.trim().toLowerCase());
-                if (!selectedBrands.includes(itemBrand)) return false;
+            // Only apply brand filter if the record HAS a brand (warehouse transfer
+            // records may have no brand - they should pass through the brand filter)
+            if (itemBrand) {
+                if (Array.isArray(stockFilters.brand)) {
+                    if (stockFilters.brand.length > 0 && !stockFilters.brand.map(b => b.toLowerCase().trim()).includes(itemBrand)) return false;
+                } else if (typeof stockFilters.brand === 'string' && stockFilters.brand.trim() !== '') {
+                    const selectedBrands = stockFilters.brand.split(',').map(b => b.trim().toLowerCase());
+                    if (!selectedBrands.includes(itemBrand)) return false;
+                }
             }
         }
         if (stockFilters.productName) {
@@ -1109,15 +1113,27 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         // Apply brand filter if active
         if (stockFilters.brand) {
-            filteredBrands = filteredBrands.filter(b => (b.brand || '').trim() === stockFilters.brand);
-        } else if (isPriceReport) {
+            let selectedBrands = [];
+            if (Array.isArray(stockFilters.brand)) {
+                selectedBrands = stockFilters.brand.map(b => b.toLowerCase().trim()).filter(Boolean);
+            } else if (typeof stockFilters.brand === 'string' && stockFilters.brand.trim() !== '') {
+                selectedBrands = stockFilters.brand.split(',').map(b => b.trim().toLowerCase()).filter(Boolean);
+            }
+            if (selectedBrands.length > 0) {
+                filteredBrands = filteredBrands.filter(b => selectedBrands.includes((b.brand || '').trim().toLowerCase()));
+            }
+        }
+
+        if (isPriceReport) {
             // In Price Report mode, keep all LC entries with positive remaining stock
             filteredBrands = filteredBrands.filter(b => (b.inHouseQuantity || 0) > 0.001);
         } else {
-            // Standard view: keep items with positive in-house stock or active pending orders
+            // Standard view: keep items with positive in-house stock, opening, sale, or active pending orders
             filteredBrands = filteredBrands.filter(b => 
                 (b.inHouseQuantity || 0) > 0.001 ||
-                (b.orderQuantity || 0) > 0.001
+                (b.orderQuantity || 0) > 0.001 ||
+                (b.openingQuantity || 0) > 0.001 ||
+                (b.saleQuantity || 0) > 0.001
             );
         }
 

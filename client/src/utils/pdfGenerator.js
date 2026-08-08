@@ -685,7 +685,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
     }
 };
 
-export const generateStockReportPDF = (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products, damages = [], searchQuery = '') => {
+export const generateStockReportPDF = async (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products, damages = [], searchQuery = '') => {
     try {
         const doc = new jsPDF();
 
@@ -696,71 +696,97 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
         // --- Configuration ---
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
-        const margin = 5;
+        const margin = 10;
 
-        // --- Header ---
-        doc.setFontSize(22);
+        // Load company logo (same as P&L)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        // --- Header (identical to P&L) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 22, 22);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 20, 20, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 10, margin + 13, { align: 'center' });
+        }
+
+        doc.setTextColor(20, 25, 35);
+        doc.setFontSize(26);
         doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+        doc.text("ANI ENTERPRISE", margin + 24, margin + 13);
 
-        doc.setFontSize(10);
+        // Address (right aligned)
+        doc.setFontSize(9.5);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0); // Changed from 100 to 0 (Black)
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 3, { align: 'right', lineHeightFactor: 1.15 });
 
-        // Separator
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, 32, pageWidth - margin, 32);
+        // Orange divider line
+        let y = margin + 26;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
 
-        // Report Title
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
-        doc.setFontSize(12);
+        // Title badge
+        y += 3;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - 40, y, 80, 8, 2, 2, 'F');
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0);
-        doc.text("STOCK REPORT", pageWidth / 2, 34, { align: 'center' });
+        doc.setTextColor(255, 255, 255);
+        doc.text("STOCK REPORT", pageWidth / 2, y + 5.5, { align: 'center' });
 
-        // --- Info Row ---
-        let yPos = 47;
-        doc.setFontSize(10);
+        y += 12;
 
-        // Left Side: Date Range, LC No, Product
-        doc.setFont('helvetica', 'bold');
-        doc.text("Date Range:", margin, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
-
-        if (filters.productName) {
-            yPos += 5;
-            doc.setFont('helvetica', 'bold');
-            doc.text("Product:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(filters.productName, margin + 25, yPos);
-        }
-
-        if (filters.warehouse && filters.warehouse !== 'All Warehouses') {
-            yPos += 5;
-            doc.setFont('helvetica', 'bold');
-            doc.text("Warehouse:", margin, yPos);
-            doc.setFont('helvetica', 'bold');
-            doc.text(filters.warehouse, margin + 25, yPos);
-        }
-
-        if (searchQuery) {
-            yPos += 5;
-            doc.setFont('helvetica', 'bold');
-            doc.text("Search Query:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(searchQuery, margin + 25, yPos);
-        }
-
-        // Right Side: Printed On
+        // Filter info pill
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const dateRange = `${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} — ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`;
+        const filterParts = [`Date: ${dateRange}`];
+        if (filters.productName) filterParts.push(`Product: ${filters.productName}`);
+        if (filters.warehouse && filters.warehouse !== 'All Warehouses') filterParts.push(`Warehouse: ${filters.warehouse}`);
+        if (searchQuery) filterParts.push(`Search: ${searchQuery}`);
+        const filterText = filterParts.join('   |   ');
+
+        doc.setFontSize(8.5);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
+        doc.setTextColor(71, 85, 105);
+        const filterTW = doc.getTextWidth(filterText);
+        const pillW = Math.min(filterTW + 16, pageWidth - margin * 2);
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y - 3, pillW, 7, 2, 2, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(filterText, pageWidth / 2, y + 1.5, { align: 'center' });
+
+        // Printed on (right)
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 1.5, { align: 'right' });
+
+        let yPos = y + 8;
 
         const warehousesToRender = (filters.warehouse === 'All Warehouses' && stockRecords)
             ? (() => {
@@ -829,6 +855,14 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
         yPos += 5;
 
+        if (warehousesToRender.length === 0) {
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(150, 150, 150);
+            doc.text('No stock records found for the selected filters.', pageWidth / 2, yPos + 10, { align: 'center' });
+            yPos += 20;
+        }
+
         warehousesToRender.forEach((whItem, whIdx) => {
             const currentStockData = whItem.data;
             if (whIdx > 0) {
@@ -840,24 +874,21 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 }
             }
 
-            if (filters.warehouse === 'All Warehouses') {
-                doc.setFontSize(9.5);
+            if (whItem.name && whItem.name.trim() !== '') {
+                // Modern warehouse badge (P&L style)
+                const label = `WAREHOUSE: ${whItem.name.toUpperCase()}`;
+                doc.setFontSize(9);
                 doc.setFont('helvetica', 'bold');
-                doc.setTextColor(0);
-                const label = `Warehouse: ${whItem.name}`;
                 const textWidth = doc.getTextWidth(label);
-                const padding = 4;
-                const boxWidth = textWidth + (padding * 2);
-                const boxHeight = 6.5;
-                const boxX = (pageWidth - boxWidth) / 2;
-                const boxY = yPos;
+                const pillW = textWidth + 14;
+                const boxX = (pageWidth - pillW) / 2;
 
-                doc.setDrawColor(0);
-                doc.setLineWidth(0.2);
-                doc.rect(boxX, boxY, boxWidth, boxHeight);
-                doc.text(label, pageWidth / 2, boxY + 4.6, { align: 'center' });
+                doc.setFillColor(30, 41, 59);
+                doc.roundedRect(boxX, yPos - 3, pillW, 7, 2, 2, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.text(label, pageWidth / 2, yPos + 1.5, { align: 'center' });
 
-                yPos = boxY + boxHeight + 2;
+                yPos += 8;
             }
 
             // --- Data Preparation ---
@@ -1241,14 +1272,15 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     valign: 'top'
                 },
                 headStyles: {
-                    fillColor: [245, 245, 245],
-                    textColor: [0, 0, 0],
+                    fillColor: [30, 41, 59],
+                    textColor: [255, 255, 255],
                     fontStyle: 'bold',
                     halign: 'center',
-                    lineWidth: 0.1
+                    lineWidth: 0.1,
+                    fontSize: 9
                 },
                 columnStyles: getColumnStyles(),
-                margin: { left: margin, right: margin },
+                margin: { left: 5, right: 5 },
                 didParseCell: (data) => {
                     if (data.row.section === 'body') {
                         // Keep SUB TOTAL and Brand Total rows attached to the row above — prevents blank gaps
@@ -1365,90 +1397,74 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                 }
             });
 
-            yPos = doc.lastAutoTable.finalY + 5;
+            yPos = (doc.lastAutoTable ? doc.lastAutoTable.finalY : yPos) + 5;
         }); // End of warehousesToRender.forEach
 
 
-        // --- Footer / Summary ---
-        const cardWidth = 38;
-        const cardHeight = 22;
-        const cardGap = 2;
+        // --- Footer / Summary (P&L Style Cards) ---
+        const cardWidth = 37;
+        const cardHeight = 24;
+        const cardGap = 2.5;
         const totalCardsWidth = (cardWidth * 5) + (cardGap * 4);
         let cardX = (pageWidth - totalCardsWidth) / 2;
 
         const footerRequiredHeight = 44;
-        let finalY = doc.lastAutoTable.finalY + 6;
+        let finalY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : yPos) + 6;
 
         if (finalY + footerRequiredHeight > pageHeight - 10) {
             doc.addPage();
             finalY = 15;
         }
 
-        const drawSummaryCard = (x, y, title, pktVal, qtyVal, isBlue = false) => {
-            doc.setDrawColor(200);
-            doc.setLineWidth(0.2);
-            doc.setFillColor(255, 255, 255);
-            doc.rect(x, y, cardWidth, cardHeight, 'FD');
+        const cardColors = [
+            [79, 70, 229],   // OPENING - indigo
+            [217, 119, 6],   // TOTAL SALE - amber
+            [2, 132, 199],   // CLOSING - blue
+            [225, 29, 72],   // SHORTAGE - red
+            [16, 185, 129]   // DAMAGE - green
+        ];
 
-            doc.setFillColor(isBlue ? 240 : 245, isBlue ? 245 : 245, isBlue ? 255 : 245);
-            doc.rect(x, y, cardWidth, 7, 'F');
-            doc.setDrawColor(200, 200, 200);
-            doc.line(x, y + 7, x + cardWidth, y + 7);
+        const drawSummaryCard = (x, y, title, pktVal, qtyVal, colorRgb) => {
+            // Card background
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(x, y, cardWidth, cardHeight, 2, 2, 'FD');
 
-            doc.setFontSize(7);
+            // Top color accent bar
+            doc.setFillColor(colorRgb[0], colorRgb[1], colorRgb[2]);
+            doc.roundedRect(x, y, cardWidth, 1.5, 2, 2, 'F');
+            doc.rect(x, y + 0.5, cardWidth, 1, 'F'); // fill the bottom half to make it flat-bottomed
+
+            // Title
+            doc.setFontSize(6.5);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0);
-            const titleWidth = doc.getTextWidth(title);
-            doc.text(title, x + (cardWidth - titleWidth) / 2, y + 4.8);
+            doc.setTextColor(100, 116, 139);
+            doc.text(title, x + cardWidth / 2, y + 5.5, { align: 'center' });
 
-            // Row 1: BAG
-            doc.setFontSize(7.5);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(0);
-            const pktLabelWidth = doc.getTextWidth("BAG: ");
+            // BAG value
+            doc.setFontSize(8.5);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0);
-            const pktValStr = pktVal.toString();
-            const pktValWidth = doc.getTextWidth(pktValStr);
-            const pktTotalWidth = pktLabelWidth + pktValWidth;
-            const pktLineX = x + (cardWidth - pktTotalWidth) / 2;
+            doc.setTextColor(colorRgb[0], colorRgb[1], colorRgb[2]);
+            doc.text(pktVal.toString(), x + cardWidth / 2, y + 12, { align: 'center' });
 
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(0);
-            doc.text("BAG: ", pktLineX, y + 12.5);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0);
-            doc.text(pktValStr, pktLineX + pktLabelWidth, y + 12.5);
-
-            // Row 2: QTY
+            // QTY label
             const qtyStrVal = `${Math.round(qtyVal).toLocaleString('en-US')} kg`;
-            doc.setFontSize(7.5);
+            doc.setFontSize(7);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(0);
-            const qtyLabelWidth = doc.getTextWidth("QTY: ");
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0);
-            const qtyValWidth = doc.getTextWidth(qtyStrVal);
-            const qtyTotalWidth = qtyLabelWidth + qtyValWidth;
-            const qtyLineX = x + (cardWidth - qtyTotalWidth) / 2;
-
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(0);
-            doc.text("QTY: ", qtyLineX, y + 18);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0);
-            doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 18);
+            doc.setTextColor(100, 116, 139);
+            doc.text(qtyStrVal, x + cardWidth / 2, y + 19, { align: 'center' });
         };
 
-        drawSummaryCard(cardX, finalY, "OPENING STOCK", globalGrandTotalPktStr, stockData.totalTotalInHouseQty, false);
+        drawSummaryCard(cardX, finalY, "OPENING STOCK", globalGrandTotalPktStr, stockData.totalTotalInHouseQty, cardColors[0]);
         cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "TOTAL SALE", globalTotalSalePktStr, stockData.totalSaleQty, false);
+        drawSummaryCard(cardX, finalY, "TOTAL SALE", globalTotalSalePktStr, stockData.totalSaleQty, cardColors[1]);
         cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "CLOSING STOCK", globalInHousePktStr, stockData.totalInHouseQty, true);
+        drawSummaryCard(cardX, finalY, "CLOSING STOCK", globalInHousePktStr, stockData.totalInHouseQty, cardColors[2]);
         cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "TOTAL SHORTAGE", globalTotalShortagePktStr, stockData.totalShortage || 0, false);
+        drawSummaryCard(cardX, finalY, "TOTAL SHORTAGE", globalTotalShortagePktStr, stockData.totalShortage || 0, cardColors[3]);
         cardX += cardWidth + cardGap;
-        drawSummaryCard(cardX, finalY, "TOTAL DAMAGE", globalTotalDamagePktStr, stockData.totalDamageQty || 0, false);
+        drawSummaryCard(cardX, finalY, "TOTAL DAMAGE", globalTotalDamagePktStr, stockData.totalDamageQty || 0, cardColors[4]);
 
         // --- Signature Section ---
         const sigY = finalY + cardHeight + 12;
