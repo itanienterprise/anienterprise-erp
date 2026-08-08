@@ -1699,7 +1699,6 @@ export default function ProfitLoss({ salesRecords, products }) {
                             <tr key={`stock-${item._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
                               <td className="py-2.5 px-4">
                                 <div className="font-bold text-gray-950 whitespace-nowrap">{formatDate(dateStr)}</div>
-                                {item.truckNo && <div className="text-[10px] text-gray-400 font-medium break-words">Truck: {item.truckNo}</div>}
                               </td>
                               <td className="py-2.5 px-4">
                                 <div className="font-bold text-gray-950 break-words">{prodName}</div>
