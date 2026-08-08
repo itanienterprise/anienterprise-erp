@@ -827,10 +827,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
 
-        yPos += 8;
-        if (filters.warehouse === 'All Warehouses') {
-            yPos = Math.max(yPos, 68);
-        }
+        yPos += 5;
 
         warehousesToRender.forEach((whItem, whIdx) => {
             const currentStockData = whItem.data;
@@ -839,28 +836,28 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
                     doc.addPage();
                     yPos = 20;
                 } else {
-                    yPos += 12;
+                    yPos += 8;
                 }
             }
 
             if (filters.warehouse === 'All Warehouses') {
-                doc.setFontSize(10);
+                doc.setFontSize(9.5);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(0);
                 const label = `Warehouse: ${whItem.name}`;
                 const textWidth = doc.getTextWidth(label);
                 const padding = 4;
                 const boxWidth = textWidth + (padding * 2);
-                const boxHeight = 7;
+                const boxHeight = 6.5;
                 const boxX = (pageWidth - boxWidth) / 2;
-                const boxY = yPos - 5;
+                const boxY = yPos;
 
                 doc.setDrawColor(0);
                 doc.setLineWidth(0.2);
                 doc.rect(boxX, boxY, boxWidth, boxHeight);
-                doc.text(label, pageWidth / 2, boxY + 5, { align: 'center' });
+                doc.text(label, pageWidth / 2, boxY + 4.6, { align: 'center' });
 
-                yPos = boxY + boxHeight + 1;
+                yPos = boxY + boxHeight + 2;
             }
 
             // --- Data Preparation ---
@@ -1373,18 +1370,19 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
 
         // --- Footer / Summary ---
-        let finalY = doc.lastAutoTable.finalY + 12;
-
-        if (finalY + 60 > pageHeight) {
-            doc.addPage();
-            finalY = 20;
-        }
-
         const cardWidth = 38;
-        const cardHeight = 25;
+        const cardHeight = 22;
         const cardGap = 2;
         const totalCardsWidth = (cardWidth * 5) + (cardGap * 4);
         let cardX = (pageWidth - totalCardsWidth) / 2;
+
+        const footerRequiredHeight = 44;
+        let finalY = doc.lastAutoTable.finalY + 6;
+
+        if (finalY + footerRequiredHeight > pageHeight - 10) {
+            doc.addPage();
+            finalY = 15;
+        }
 
         const drawSummaryCard = (x, y, title, pktVal, qtyVal, isBlue = false) => {
             doc.setDrawColor(200);
@@ -1393,18 +1391,18 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
             doc.rect(x, y, cardWidth, cardHeight, 'FD');
 
             doc.setFillColor(isBlue ? 240 : 245, isBlue ? 245 : 245, isBlue ? 255 : 245);
-            doc.rect(x, y, cardWidth, 8, 'F');
+            doc.rect(x, y, cardWidth, 7, 'F');
             doc.setDrawColor(200, 200, 200);
-            doc.line(x, y + 8, x + cardWidth, y + 8);
+            doc.line(x, y + 7, x + cardWidth, y + 7);
 
             doc.setFontSize(7);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 0 : 0);
+            doc.setTextColor(0);
             const titleWidth = doc.getTextWidth(title);
-            doc.text(title, x + (cardWidth - titleWidth) / 2, y + 5.2); // Adjusted for center
+            doc.text(title, x + (cardWidth - titleWidth) / 2, y + 4.8);
 
             // Row 1: BAG
-            doc.setFontSize(8);
+            doc.setFontSize(7.5);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
             const pktLabelWidth = doc.getTextWidth("BAG: ");
@@ -1417,29 +1415,29 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
 
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
-            doc.text("BAG: ", pktLineX, y + 14.5); // Adjusted up
+            doc.text("BAG: ", pktLineX, y + 12.5);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
-            doc.text(pktValStr, pktLineX + pktLabelWidth, y + 14.5);
+            doc.text(pktValStr, pktLineX + pktLabelWidth, y + 12.5);
 
             // Row 2: QTY
             const qtyStrVal = `${Math.round(qtyVal).toLocaleString('en-US')} kg`;
-            doc.setFontSize(8);
+            doc.setFontSize(7.5);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
             const qtyLabelWidth = doc.getTextWidth("QTY: ");
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 0 : 0);
+            doc.setTextColor(0);
             const qtyValWidth = doc.getTextWidth(qtyStrVal);
             const qtyTotalWidth = qtyLabelWidth + qtyValWidth;
             const qtyLineX = x + (cardWidth - qtyTotalWidth) / 2;
 
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
-            doc.text("QTY: ", qtyLineX, y + 20.5); // Adjusted up
+            doc.text("QTY: ", qtyLineX, y + 18);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(isBlue ? 0 : 0);
-            doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 20.5);
+            doc.setTextColor(0);
+            doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 18);
         };
 
         drawSummaryCard(cardX, finalY, "OPENING STOCK", globalGrandTotalPktStr, stockData.totalTotalInHouseQty, false);
@@ -1453,7 +1451,7 @@ export const generateStockReportPDF = (stockData, filters, reportType = 'short',
         drawSummaryCard(cardX, finalY, "TOTAL DAMAGE", globalTotalDamagePktStr, stockData.totalDamageQty || 0, false);
 
         // --- Signature Section ---
-        const sigY = finalY + 45;
+        const sigY = finalY + cardHeight + 12;
         const sigWidth = 45;
         const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
 
@@ -1694,20 +1692,20 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         });
 
         // --- Footer / Summary ---
-        let finalY = doc.lastAutoTable.finalY + 12;
-
-        // Avoid page break issues for summary
-        if (finalY + 60 > pageHeight) {
-            doc.addPage();
-            finalY = 20;
-        }
-
-        // --- Card-Style Summary ---
         const cardWidth = 64;
-        const cardHeight = 25;
+        const cardHeight = 22;
         const cardGap = 4;
         const totalCardsWidth = (cardWidth * 2) + cardGap;
         let cardX = (pageWidth - totalCardsWidth) / 2; // Center horizontally
+
+        const footerRequiredHeight = 44;
+        let finalY = doc.lastAutoTable.finalY + 6;
+
+        // Avoid page break issues for summary
+        if (finalY + footerRequiredHeight > pageHeight - 10) {
+            doc.addPage();
+            finalY = 15;
+        }
 
         const drawSummaryCard = (x, y, title, pktVal, qtyVal, isBlue = false) => {
             // Main card border and background
@@ -1718,19 +1716,19 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
 
             // Header strip
             doc.setFillColor(245, 245, 245);
-            doc.rect(x, y, cardWidth, 8, 'F');
+            doc.rect(x, y, cardWidth, 7, 'F');
             doc.setDrawColor(200, 200, 200);
-            doc.line(x, y + 8, x + cardWidth, y + 8);
+            doc.line(x, y + 7, x + cardWidth, y + 7);
 
             // Header text (centered)
             doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
             const titleWidth = doc.getTextWidth(title);
-            doc.text(title, x + (cardWidth - titleWidth) / 2, y + 5.5);
+            doc.text(title, x + (cardWidth - titleWidth) / 2, y + 4.8);
 
             // Row 1: BAG (centered)
-            doc.setFontSize(10);
+            doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0); // gray label color
             const pktLabelWidth = doc.getTextWidth("BAG: ");
@@ -1744,11 +1742,11 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
 
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
-            doc.text("BAG: ", pktLineX, y + 15);
+            doc.text("BAG: ", pktLineX, y + 12.5);
 
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
-            doc.text(pktValStr, pktLineX + pktLabelWidth, y + 15);
+            doc.text(pktValStr, pktLineX + pktLabelWidth, y + 12.5);
 
             // Row 2: QTY (centered)
             const qtyStrVal = `${Math.round(qtyVal).toLocaleString('en-US')} kg`;
@@ -1764,11 +1762,11 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
 
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(0);
-            doc.text("QTY: ", qtyLineX, y + 21);
+            doc.text("QTY: ", qtyLineX, y + 18);
 
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
-            doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 21);
+            doc.text(qtyStrVal, qtyLineX + qtyLabelWidth, y + 18);
         };
 
         // Card 1: TOTAL INHOUSE STOCK
@@ -1783,7 +1781,7 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
         })(), totals.totalWhQty, true);
 
         // --- Signatures ---
-        const sigY = finalY + 45;
+        const sigY = finalY + cardHeight + 12;
         const sigWidth = 45;
         const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
         doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(0); doc.setDrawColor(0); doc.setLineWidth(0.2);
