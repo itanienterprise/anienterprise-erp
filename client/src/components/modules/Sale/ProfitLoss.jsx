@@ -7,6 +7,224 @@ import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { getAdjustedLcValues, getCogNetBillBdt } from '../../../utils/lcValueUtils';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { generateProfitLossPDF } from '../../../utils/pdfGenerator';
+
+const ThreeDPieChart = ({ items, total }) => {
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
+  if (!items || items.length === 0 || total === 0) {
+    return (
+      <div className="text-center text-xs text-gray-400 font-medium py-6">
+        No financial distribution data available.
+      </div>
+    );
+  }
+
+  const cx = 330;
+  const cy = 200;
+  const outerR = 150;
+  const innerR = 80;
+  const plateR = 162;
+
+  // Compute Donut Slice Paths
+  const slices = items.map((item, idx) => {
+    const midAngle = (item.startAngle + item.endAngle) / 2;
+    const isHovered = hoveredIdx === idx;
+    const explodeDist = isHovered ? 4 : 0;
+
+    const dx = explodeDist * Math.cos(midAngle);
+    const dy = explodeDist * Math.sin(midAngle);
+
+    const sCx = cx + dx;
+    const sCy = cy + dy;
+
+    // Slice arc points
+    const p1Out = { x: sCx + outerR * Math.cos(item.startAngle), y: sCy + outerR * Math.sin(item.startAngle) };
+    const p2Out = { x: sCx + outerR * Math.cos(item.endAngle), y: sCy + outerR * Math.sin(item.endAngle) };
+    const p1In  = { x: sCx + innerR * Math.cos(item.endAngle), y: sCy + innerR * Math.sin(item.endAngle) };
+    const p2In  = { x: sCx + innerR * Math.cos(item.startAngle), y: sCy + innerR * Math.sin(item.startAngle) };
+
+    const largeArc = (item.endAngle - item.startAngle) > Math.PI ? 1 : 0;
+
+    const pathD = `M ${p1Out.x} ${p1Out.y} A ${outerR} ${outerR} 0 ${largeArc} 1 ${p2Out.x} ${p2Out.y} L ${p1In.x} ${p1In.y} A ${innerR} ${innerR} 0 ${largeArc} 0 ${p2In.x} ${p2In.y} Z`;
+
+    // Anchor dot on mid radius
+    const dotR = (innerR + outerR) / 2;
+    const dotX = sCx + dotR * Math.cos(midAngle);
+    const dotY = sCy + dotR * Math.sin(midAngle);
+
+    const isRight = Math.cos(midAngle) >= 0;
+
+    return {
+      ...item,
+      idx,
+      midAngle,
+      pathD,
+      dotX,
+      dotY,
+      isRight,
+      naturalY: dotY,
+      adjustedY: dotY
+    };
+  });
+
+  // Collision resolution for callout lines
+  const callouts = useMemo(() => {
+    const solveSide = (sideItems) => {
+      if (sideItems.length <= 1) return sideItems;
+      const sorted = [...sideItems].sort((a, b) => a.naturalY - b.naturalY);
+      const minGap = 65;
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].adjustedY - sorted[i - 1].adjustedY < minGap) {
+          sorted[i].adjustedY = sorted[i - 1].adjustedY + minGap;
+        }
+      }
+      const avgNat = sorted.reduce((sum, i) => sum + i.naturalY, 0) / sorted.length;
+      const avgAdj = sorted.reduce((sum, i) => sum + i.adjustedY, 0) / sorted.length;
+      const shift = avgNat - avgAdj;
+      return sorted.map(item => ({
+        ...item,
+        adjustedY: Math.max(40, Math.min(360, item.adjustedY + shift))
+      }));
+    };
+
+    const left = solveSide(slices.filter(c => !c.isRight));
+    const right = solveSide(slices.filter(c => c.isRight));
+
+    return [...left, ...right];
+  }, [slices]);
+
+  return (
+    <div className="flex flex-col items-center justify-center w-full flex-1 my-auto py-1">
+      <div className="relative w-full aspect-[660/400] max-w-[660px] flex items-center justify-center">
+        <svg viewBox="0 0 660 400" className="w-full h-full overflow-visible">
+          <defs>
+            <filter id="plate-shadow" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="8" stdDeviation="6" floodColor="#0f172a" floodOpacity="0.12" />
+            </filter>
+            <filter id="center-shadow" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.08" />
+            </filter>
+          </defs>
+
+          {/* Outer 3D Plate Disc */}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={plateR}
+            fill="#ffffff"
+            stroke="#f1f5f9"
+            strokeWidth="3"
+            filter="url(#plate-shadow)"
+          />
+
+          {/* Donut Segment Slices */}
+          {slices.map((s, idx) => {
+            const isHovered = hoveredIdx === idx;
+            return (
+              <path
+                key={idx}
+                d={s.pathD}
+                fill={s.color}
+                stroke="#ffffff"
+                strokeWidth="2.5"
+                className="cursor-pointer transition-all duration-200 hover:brightness-110"
+                style={{ opacity: hoveredIdx === null || isHovered ? 1 : 0.7 }}
+                onMouseEnter={() => setHoveredIdx(idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+              />
+            );
+          })}
+
+          {/* Inner Central Disc */}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={innerR - 1}
+            fill="#ffffff"
+            stroke="#e2e8f0"
+            strokeWidth="2"
+            filter="url(#center-shadow)"
+          />
+          <text
+            x={cx}
+            y={cy - 9}
+            textAnchor="middle"
+            className="fill-slate-400 font-black uppercase tracking-wider"
+            style={{ fontSize: '13px' }}
+          >
+            Total Value
+          </text>
+          <text
+            x={cx}
+            y={cy + 20}
+            textAnchor="middle"
+            className="fill-slate-900 font-black"
+            style={{ fontSize: '20px' }}
+          >
+            ৳ {Math.round(total).toLocaleString('en-IN')}
+          </text>
+
+          {/* Callout Lines & Text Labels */}
+          {callouts.map((item) => {
+            const isHovered = hoveredIdx === item.idx;
+            const isRight = item.isRight;
+
+            const elbowX = isRight ? item.dotX + 40 : item.dotX - 40;
+            const elbowY = item.adjustedY;
+            const targetX = isRight ? 535 : 125;
+
+            return (
+              <g
+                key={`callout-${item.idx}`}
+                className="transition-all duration-200 cursor-pointer"
+                onMouseEnter={() => setHoveredIdx(item.idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+                style={{ opacity: hoveredIdx === null || isHovered ? 1 : 0.65 }}
+              >
+                {/* Connecting Polyline */}
+                <polyline
+                  points={`${item.dotX},${item.dotY} ${elbowX},${elbowY} ${targetX},${elbowY}`}
+                  fill="none"
+                  stroke="#334155"
+                  strokeWidth="2.25"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+
+                {/* Anchor Dot on Slice */}
+                <circle cx={item.dotX} cy={item.dotY} r="6" fill="#1e293b" stroke="#ffffff" strokeWidth="2" />
+
+                {/* Header Title & Subtitle */}
+                <g transform={`translate(${isRight ? targetX + 12 : targetX - 12}, ${elbowY})`}>
+                  <text
+                    x="0"
+                    y="-7"
+                    textAnchor={isRight ? 'start' : 'end'}
+                    fill={item.color}
+                    className="font-black tracking-wide"
+                    style={{ fontSize: '17px', fontWeight: 900 }}
+                  >
+                    {item.label}
+                  </text>
+                  <text
+                    x="0"
+                    y="18"
+                    textAnchor={isRight ? 'start' : 'end'}
+                    className="fill-slate-800 font-extrabold"
+                    style={{ fontSize: '15px', fontWeight: 800 }}
+                  >
+                    ৳ {Math.round(item.value).toLocaleString('en-IN')} ({item.pct.toFixed(1)}%)
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+};
 
 export default function ProfitLoss({ salesRecords, products }) {
   // Filters State
@@ -523,40 +741,38 @@ export default function ProfitLoss({ salesRecords, products }) {
     }, 0);
   }, [selectedLcStocks, products]);
 
-  // Financial Breakdown Pie Chart data for the selected LC
+  // Financial Breakdown 3D Pie Chart data for the selected LC
   const pieData = useMemo(() => {
-    if (!selectedLc) return { gradientString: 'conic-gradient(#e2e8f0 0deg 360deg)', total: 0, items: [] };
+    if (!selectedLc) return { total: 0, items: [] };
 
     const cog = totalLcCostOfGoodsAmount || 0;
     const exp = totalLcExpensesAmount || 0;
     const profit = Math.max(0, profitLossData.summary.totalProfit || 0);
 
     const rawItems = [
-      { label: 'Cost of Goods (COG)', value: cog, color: '#3b82f6', bgClass: 'bg-blue-500', textClass: 'text-blue-600' },
-      { label: 'LC Expenses', value: exp, color: '#f43f5e', bgClass: 'bg-rose-500', textClass: 'text-rose-600' },
-      { label: 'Net Profit', value: profit, color: '#10b981', bgClass: 'bg-emerald-500', textClass: 'text-emerald-600' },
+      { label: 'Cost of Goods (COG)', value: cog, color: '#3b82f6', darkColor: '#1d4ed8', bgClass: 'bg-blue-500', textClass: 'text-blue-600' },
+      { label: 'LC Expenses', value: exp, color: '#f43f5e', darkColor: '#be123c', bgClass: 'bg-rose-500', textClass: 'text-rose-600' },
+      { label: 'Net Profit', value: profit, color: '#10b981', darkColor: '#047857', bgClass: 'bg-emerald-500', textClass: 'text-emerald-600' },
     ];
 
     const items = rawItems.filter(item => item.value > 0);
     const total = items.reduce((sum, i) => sum + i.value, 0);
 
     if (total === 0) {
-      return { gradientString: 'conic-gradient(#e2e8f0 0deg 360deg)', total: 0, items: [] };
+      return { total: 0, items: [] };
     }
 
-    let currentDeg = 0;
+    let currentAngle = -Math.PI / 2;
     const slices = items.map(item => {
       const pct = (item.value / total) * 100;
-      const deg = (pct / 100) * 360;
-      const startDeg = currentDeg;
-      const endDeg = currentDeg + deg;
-      currentDeg += deg;
-      return { ...item, pct, startDeg, endDeg };
+      const angle = (pct / 100) * 2 * Math.PI;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + angle;
+      currentAngle += angle;
+      return { ...item, pct, startAngle, endAngle };
     });
 
-    const gradientString = `conic-gradient(${slices.map(s => `${s.color} ${s.startDeg}deg ${s.endDeg}deg`).join(', ')})`;
-
-    return { gradientString, total, items: slices };
+    return { total, items: slices };
   }, [selectedLc, totalLcCostOfGoodsAmount, totalLcExpensesAmount, profitLossData.summary.totalProfit]);
 
   // Product arrival, inhouse, short, and damage summary
@@ -679,11 +895,70 @@ export default function ProfitLoss({ salesRecords, products }) {
 
 
   const handlePrint = () => {
-    window.print();
+    generateProfitLossPDF({
+      profitLossData,
+      selectedLc,
+      selectedLcExpenses,
+      selectedLcCostOfGoods,
+      selectedLcStocks,
+      selectedLcSales,
+      productSummary,
+      totalLcExpensesAmount,
+      totalLcCostOfGoodsAmount,
+      totalLcCostOfGoodsQty,
+      totalLcReceiveAmount,
+      totalLcSalesAmount,
+      filterType,
+      selectedMonth,
+      selectedYear,
+      startDate,
+      endDate,
+      saleTypeFilter,
+      selectedProduct,
+      selectedLcNo,
+      pieData
+    });
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-8 print:bg-white print:p-0">
+    <div className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-8 print:bg-white print:p-2 print:overflow-visible">
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 8mm;
+          }
+          body {
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print\\:break-inside-avoid {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+          .print\\:grid-cols-2 {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 0.75rem !important;
+          }
+          .print\\:grid-cols-4 {
+            display: grid !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 0.5rem !important;
+          }
+          .print\\:min-h-0 {
+            min-height: 0 !important;
+          }
+          .print\\:p-3 {
+            padding: 0.75rem !important;
+          }
+          .print\\:py-2 {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+          }
+        }
+      `}</style>
 
       {/* Title Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-200 pb-4 gap-4 print:hidden">
@@ -924,11 +1199,11 @@ export default function ProfitLoss({ salesRecords, products }) {
 
       <div className="space-y-6 mt-3">
         {/* Print-Only Header */}
-        <div className="hidden print:block text-center space-y-2 border-b border-gray-300 pb-6 mb-6">
-          <h1 className="text-3xl font-black text-gray-900">M/S ANI ENTERPRISE</h1>
-          <p className="text-xs text-gray-500">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-          <div className="text-lg font-bold text-gray-800 uppercase tracking-wider py-1 border border-gray-800 inline-block px-8 mt-2">PROFIT & LOSS STATEMENT</div>
-          <p className="text-xs text-gray-600 mt-2 font-medium">
+        <div className="hidden print:block text-center space-y-1 border-b border-gray-300 pb-3 mb-3">
+          <h1 className="text-2xl font-black text-gray-900">M/S ANI ENTERPRISE</h1>
+          <p className="text-[10px] text-gray-500">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
+          <div className="text-sm font-bold text-gray-800 uppercase tracking-wider py-0.5 border border-gray-800 inline-block px-6 mt-1">PROFIT & LOSS STATEMENT</div>
+          <p className="text-[10px] text-gray-600 mt-1 font-medium">
             Period: {filterType === 'monthly' ? `Month: ${selectedMonth}/${selectedYear}` : filterType === 'yearly' ? `Year: ${selectedYear}` : filterType === 'custom' ? `${startDate} to ${endDate}` : 'All Time'}
             {saleTypeFilter !== 'All' ? ` | Type: ${saleTypeFilter} Sales` : ''}
             {selectedProduct !== 'All' ? ` | Product: ${selectedProduct}` : ''}
@@ -938,16 +1213,16 @@ export default function ProfitLoss({ salesRecords, products }) {
 
 
         {/* Metrics Grid Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print:grid-cols-4 print:gap-2 print:break-inside-avoid">
 
           {/* Metric 1: Total Revenue */}
-          <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
-              <DollarSignIcon className="w-6 h-6 text-blue-500" />
+          <div className="bg-white p-6 print:p-3 print:rounded-xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 w-24 h-24 print:w-10 print:h-10 bg-blue-500/5 rounded-bl-full flex items-start justify-end p-4 print:p-2 group-hover:scale-105 transition-transform">
+              <DollarSignIcon className="w-6 h-6 print:w-4 print:h-4 text-blue-500" />
             </div>
-            <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Total Revenue</div>
-            <div className="text-xl sm:text-2xl font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalRevenue).toLocaleString('en-IN')}</div>
-            <div className="text-[11px] mt-2.5 flex items-center gap-1.5 flex-wrap font-semibold">
+            <div className="text-xs print:text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 print:mb-1">Total Revenue</div>
+            <div className="text-xl sm:text-2xl print:text-base font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalRevenue).toLocaleString('en-IN')}</div>
+            <div className="text-[11px] print:text-[9px] mt-2.5 print:mt-1 flex items-center gap-1.5 flex-wrap font-semibold">
               {selectedLc ? (
                 <>
                   <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-extrabold border border-blue-100/80 shadow-2xs">
@@ -969,42 +1244,42 @@ export default function ProfitLoss({ salesRecords, products }) {
           </div>
 
           {/* Metric 2: Total COGS */}
-          <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
-              <ReceiptIcon className="w-6 h-6 text-amber-500" />
+          <div className="bg-white p-6 print:p-3 print:rounded-xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 w-24 h-24 print:w-10 print:h-10 bg-amber-500/5 rounded-bl-full flex items-start justify-end p-4 print:p-2 group-hover:scale-105 transition-transform">
+              <ReceiptIcon className="w-6 h-6 print:w-4 print:h-4 text-amber-500" />
             </div>
-            <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Cost of Goods Sold (COGS)</div>
-            <div className="text-xl sm:text-2xl font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalCost).toLocaleString('en-IN')}</div>
-            <div className="text-[11px] text-gray-400 mt-2 font-medium">Calculated based on product costs</div>
+            <div className="text-xs print:text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 print:mb-1">Cost of Goods Sold (COGS)</div>
+            <div className="text-xl sm:text-2xl print:text-base font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalCost).toLocaleString('en-IN')}</div>
+            <div className="text-[11px] print:text-[9px] text-gray-400 mt-2 print:mt-1 font-medium">Calculated based on product costs</div>
           </div>
 
           {/* Metric 3: Gross Profit */}
-          <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
-              <TrendingUpIcon className="w-6 h-6 text-emerald-500" />
+          <div className="bg-white p-6 print:p-3 print:rounded-xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 w-24 h-24 print:w-10 print:h-10 bg-emerald-500/5 rounded-bl-full flex items-start justify-end p-4 print:p-2 group-hover:scale-105 transition-transform">
+              <TrendingUpIcon className="w-6 h-6 print:w-4 print:h-4 text-emerald-500" />
             </div>
-            <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Net Profit / Loss</div>
-            <div className={`text-xl sm:text-2xl font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <div className="text-xs print:text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 print:mb-1">Net Profit / Loss</div>
+            <div className={`text-xl sm:text-2xl print:text-base font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               ৳ {Math.round(profitLossData.summary.totalProfit).toLocaleString('en-IN')}
             </div>
-            <div className="text-[11px] text-gray-400 mt-2 font-medium">Net profit before overheads</div>
+            <div className="text-[11px] print:text-[9px] text-gray-400 mt-2 print:mt-1 font-medium">Net profit before overheads</div>
           </div>
 
           {/* Metric 4: Profit Margin */}
-          <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-bl-full flex items-start justify-end p-4 group-hover:scale-105 transition-transform">
-              <BarChartIcon className="w-6 h-6 text-indigo-500" />
+          <div className="bg-white p-6 print:p-3 print:rounded-xl border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 w-24 h-24 print:w-10 print:h-10 bg-indigo-500/5 rounded-bl-full flex items-start justify-end p-4 print:p-2 group-hover:scale-105 transition-transform">
+              <BarChartIcon className="w-6 h-6 print:w-4 print:h-4 text-indigo-500" />
             </div>
-            <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Net Margin</div>
-            <div className={`text-xl sm:text-2xl font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+            <div className="text-xs print:text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 print:mb-1">Net Margin</div>
+            <div className={`text-xl sm:text-2xl print:text-base font-black ${profitLossData.summary.totalProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
               {profitLossData.summary.margin.toFixed(2)} %
             </div>
-            <div className="text-[11px] text-gray-400 mt-2 font-medium">Percentage of revenue retained</div>
+            <div className="text-[11px] print:text-[9px] text-gray-400 mt-2 print:mt-1 font-medium">Percentage of revenue retained</div>
           </div>
         </div>
 
         {/* Row 1: LC Details (left 50%) | LC Expense (right 50%) */}
-        <div className="flex flex-col lg:flex-row gap-4 mt-6">
+        <div className="flex flex-col lg:flex-row gap-4 mt-6 print:grid print:grid-cols-2 print:gap-3 print:mt-3 print:break-inside-avoid">
 
           {/* LEFT: LC Details Card — 50% */}
           <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col">
@@ -1252,75 +1527,34 @@ export default function ProfitLoss({ salesRecords, products }) {
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] flex-1 flex flex-col justify-center">
-                <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 mx-auto mb-4 animate-pulse">
-                  <ReceiptIcon className="w-8 h-8" />
+              <div className="bg-white p-8 print:p-3 print:py-4 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[220px] print:min-h-0 flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 print:w-8 print:h-8 print:mb-2 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
+                  <BarChartIcon className="w-8 h-8 print:w-4 print:h-4" />
                 </div>
-                <h3 className="text-lg font-black text-gray-900 mb-1">LC Expense</h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC to view payments.</p>
+                <h3 className="text-lg print:text-sm font-black text-gray-900 mb-1">LC Details</h3>
+                <p className="text-sm print:text-xs text-gray-500 max-w-sm mx-auto">Search or select an LC Number from the header input to inspect its details, margin status, products, and values.</p>
               </div>
             )}
 
-            {/* Financial Breakdown Pie Chart Card */}
+            {/* Financial Breakdown 3D Pie Chart (No Card) */}
             {selectedLc ? (
-              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col flex-1">
-                <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
-                  <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Financial Breakdown</h2>
-                  <p className="text-xs text-gray-500 font-medium">Cost & profit distribution for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
-                </div>
-                <div className="p-5 flex-1 flex flex-col items-center justify-center space-y-4">
-                  {/* Donut Chart */}
-                  <div className="relative flex items-center justify-center my-1">
-                    <div
-                      className="w-32 h-32 rounded-full shadow-inner flex items-center justify-center transition-all duration-300"
-                      style={{
-                        background: pieData.gradientString
-                      }}
-                    >
-                      <div className="w-20 h-20 bg-white rounded-full flex flex-col items-center justify-center shadow-md p-1 text-center">
-                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Total Value</span>
-                        <span className="text-[11px] font-black text-gray-900 truncate max-w-full px-1">
-                          ৳ {Math.round(pieData.total).toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Legend Items */}
-                  <div className="w-full space-y-1.5">
-                    {pieData.items.length === 0 ? (
-                      <div className="text-center text-xs text-gray-400 font-medium py-2">No financial distribution data available.</div>
-                    ) : (
-                      pieData.items.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-xs bg-slate-50/80 px-3 py-1.5 rounded-xl border border-slate-100/80">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2.5 h-2.5 rounded-full ${item.bgClass} shrink-0`} />
-                            <span className="font-bold text-gray-700 text-[11px]">{item.label}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-black text-gray-900 text-[11px]">৳ {Math.round(item.value).toLocaleString('en-IN')}</span>
-                            <span className="text-[10px] font-extrabold text-gray-400">({item.pct.toFixed(1)}%)</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+              <div className="animate-in fade-in duration-200 flex flex-col flex-1 items-center justify-center p-3 print:p-1">
+                <ThreeDPieChart items={pieData.items} total={pieData.total} />
               </div>
             ) : (
-              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] flex-1 flex flex-col justify-center">
-                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
-                  <BarChartIcon className="w-8 h-8" />
+              <div className="p-8 print:p-3 print:py-4 text-center min-h-[160px] print:min-h-0 flex-1 flex flex-col justify-center items-center">
+                <div className="w-16 h-16 print:w-8 print:h-8 print:mb-2 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mb-4 animate-pulse">
+                  <BarChartIcon className="w-8 h-8 print:w-4 print:h-4" />
                 </div>
-                <h3 className="text-lg font-black text-gray-900 mb-1">Financial Pie Chart</h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC to view cost breakdown.</p>
+                <h3 className="text-lg print:text-sm font-black text-gray-900 mb-1">Financial 3D Pie Chart</h3>
+                <p className="text-sm print:text-xs text-gray-500 max-w-sm mx-auto">Select an LC to view cost breakdown.</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Row 2: COG & LC Receive History (Left 50%) | Sales History & Product Stock (Right 50%) */}
-        <div className="flex flex-col lg:flex-row gap-4 mt-6">
+        <div className="flex flex-col lg:flex-row gap-4 mt-6 print:grid print:grid-cols-2 print:gap-3 print:mt-3 print:break-inside-avoid">
 
           {/* LEFT 50%: Cost of Goods (COG) Card + LC Receive History Card (directly under COG) */}
           <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col gap-4">
@@ -1415,12 +1649,12 @@ export default function ProfitLoss({ salesRecords, products }) {
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[200px] flex-1 flex flex-col justify-center">
-                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
-                  <ReceiptIcon className="w-8 h-8" />
+              <div className="bg-white p-8 print:p-3 print:py-4 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[200px] print:min-h-0 flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 print:w-8 print:h-8 print:mb-2 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
+                  <ReceiptIcon className="w-8 h-8 print:w-4 print:h-4" />
                 </div>
-                <h3 className="text-lg font-black text-gray-900 mb-1">Cost of Goods (COG)</h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to inspect all related Cost of Goods records, invoicing details, and actual costs.</p>
+                <h3 className="text-lg print:text-sm font-black text-gray-900 mb-1">Cost of Goods (COG)</h3>
+                <p className="text-sm print:text-xs text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to inspect all related Cost of Goods records, invoicing details, and actual costs.</p>
               </div>
             )}
 
@@ -1516,12 +1750,12 @@ export default function ProfitLoss({ salesRecords, products }) {
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] flex-1 flex flex-col justify-center">
-                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
-                  <BoxIcon className="w-8 h-8" />
+              <div className="bg-white p-8 print:p-3 print:py-4 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] print:min-h-0 flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 print:w-8 print:h-8 print:mb-2 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
+                  <BoxIcon className="w-8 h-8 print:w-4 print:h-4" />
                 </div>
-                <h3 className="text-lg font-black text-gray-900 mb-1">LC Receive History</h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC to view stock receive history.</p>
+                <h3 className="text-lg print:text-sm font-black text-gray-900 mb-1">LC Receive History</h3>
+                <p className="text-sm print:text-xs text-gray-500 max-w-sm mx-auto">Select an LC to view stock receive history.</p>
               </div>
             )}
           </div>
@@ -1580,12 +1814,12 @@ export default function ProfitLoss({ salesRecords, products }) {
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] flex-1 flex flex-col justify-center">
-                <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 mx-auto mb-4 animate-pulse">
-                  <TrendingUpIcon className="w-8 h-8" />
+              <div className="bg-white p-8 print:p-3 print:py-4 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] print:min-h-0 flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 print:w-8 print:h-8 print:mb-2 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 mx-auto mb-4 animate-pulse">
+                  <TrendingUpIcon className="w-8 h-8 print:w-4 print:h-4" />
                 </div>
-                <h3 className="text-lg font-black text-gray-900 mb-1">Sales History</h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC to view sales history.</p>
+                <h3 className="text-lg print:text-sm font-black text-gray-900 mb-1">Sales History</h3>
+                <p className="text-sm print:text-xs text-gray-500 max-w-sm mx-auto">Select an LC to view sales history.</p>
               </div>
             )}
 
@@ -1655,12 +1889,12 @@ export default function ProfitLoss({ salesRecords, products }) {
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[220px] flex-1 flex flex-col justify-center">
-                <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 mx-auto mb-4 animate-pulse">
-                  <BoxIcon className="w-8 h-8" />
+              <div className="bg-white p-8 print:p-3 print:py-4 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[220px] print:min-h-0 flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 print:w-8 print:h-8 print:mb-2 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 mx-auto mb-4 animate-pulse">
+                  <BoxIcon className="w-8 h-8 print:w-4 print:h-4" />
                 </div>
-                <h3 className="text-lg font-black text-gray-900 mb-1">Product Stock & Arrivals</h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to analyze product quantities, inhouse stock, shortage amounts, and damages.</p>
+                <h3 className="text-lg print:text-sm font-black text-gray-900 mb-1">Product Stock & Arrivals</h3>
+                <p className="text-sm print:text-xs text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to analyze product quantities, inhouse stock, shortage amounts, and damages.</p>
               </div>
             )}
           </div>

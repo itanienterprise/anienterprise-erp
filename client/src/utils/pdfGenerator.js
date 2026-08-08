@@ -6416,4 +6416,524 @@ export const generateIPManagementReportPDF = (reportData, totals, searchQuery = 
     }
 };
 
+export const generateProfitLossPDF = async (params) => {
+    try {
+        const {
+            profitLossData,
+            selectedLc,
+            selectedLcExpenses = [],
+            selectedLcCostOfGoods = [],
+            selectedLcStocks = [],
+            selectedLcSales = [],
+            productSummary = [],
+            totalLcExpensesAmount = 0,
+            totalLcCostOfGoodsAmount = 0,
+            totalLcCostOfGoodsQty = 0,
+            totalLcReceiveAmount = 0,
+            totalLcSalesAmount = 0,
+            filterType,
+            selectedMonth,
+            selectedYear,
+            startDate,
+            endDate,
+            saleTypeFilter,
+            selectedProduct,
+            selectedLcNo,
+            pieData
+        } = params;
+
+        const doc = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 10;
+
+        // Load company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 22, 22);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 20, 20, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 10, margin + 13, { align: 'center' });
+        }
+
+        doc.setTextColor(20, 25, 35);
+        doc.setFontSize(26);
+        doc.setFont('helvetica', 'bold');
+        doc.text("ANI ENTERPRISE", margin + 24, margin + 13);
+
+        // Contact Info (Right Aligned)
+        doc.setFontSize(9.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 3, { align: 'right', lineHeightFactor: 1.15 });
+
+        // --- Invoice Header Title Badge ---
+        let y = margin + 26;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - 45, y - 6, 90, 8, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text("PROFIT & LOSS STATEMENT", pageWidth / 2, y - 0.5, { align: 'center' });
+
+        let currentY = y + 4;
+
+        // LC No Badge Box (if LC is selected)
+        if (selectedLcNo && selectedLcNo !== 'All') {
+            currentY += 5;
+            const lcText = `LC No: ${selectedLcNo}`;
+            doc.setFontSize(9.5);
+            doc.setFont('helvetica', 'bold');
+            const lcWidth = doc.getTextWidth(lcText) + 14;
+
+            doc.setFillColor(241, 245, 249);
+            doc.setDrawColor(203, 213, 225);
+            doc.setLineWidth(0.3);
+            doc.roundedRect((pageWidth / 2) - (lcWidth / 2), currentY - 5, lcWidth, 7, 2, 2, 'FD');
+
+            doc.setTextColor(30, 41, 59);
+            doc.text(lcText, pageWidth / 2, currentY - 0.3, { align: 'center' });
+            currentY += 10;
+        } else {
+            currentY += 8;
+        }
+
+        // SECTION 1: 2x2 Summary Cards (Left) + Donut Infographic Chart (Right)
+        const sec1StartY = currentY;
+        const colWidth = (pageWidth - margin * 2 - 6) / 2; // ~90mm per column
+
+        // Left Column: 2x2 Grid Cards
+        const cardWidth = (colWidth - 4) / 2;
+        const cardHeight = 19;
+
+        const summary = profitLossData?.summary || { totalRevenue: 0, totalCost: 0, totalProfit: 0, margin: 0 };
+
+        const cardData = [
+            { label: 'TOTAL REVENUE', value: `Tk ${Math.round(summary.totalRevenue || 0).toLocaleString('en-IN')}`, color: [2, 132, 199], sub: selectedLc ? 'Sales + Stock' : 'All LCs' },
+            { label: 'COST OF GOODS (COGS)', value: `Tk ${Math.round(summary.totalCost || 0).toLocaleString('en-IN')}`, color: [217, 119, 6], sub: 'Product cost' },
+            { label: 'NET PROFIT / LOSS', value: `Tk ${Math.round(summary.totalProfit || 0).toLocaleString('en-IN')}`, color: (summary.totalProfit || 0) >= 0 ? [16, 185, 129] : [225, 29, 72], sub: 'Net before overheads' },
+            { label: 'NET MARGIN', value: `${(summary.margin || 0).toFixed(2)} %`, color: [99, 102, 241], sub: 'Revenue retained' }
+        ];
+
+        cardData.forEach((card, i) => {
+            const col = i % 2;
+            const row = Math.floor(i / 2);
+            const cx = margin + col * (cardWidth + 4);
+            const cy = sec1StartY + row * (cardHeight + 4);
+
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(cx, cy, cardWidth, cardHeight, 2, 2, 'FD');
+
+            doc.setFillColor(card.color[0], card.color[1], card.color[2]);
+            doc.rect(cx, cy, cardWidth, 1.5, 'F');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(6.5);
+            doc.setTextColor(100, 116, 139);
+            doc.text(card.label, cx + 3, cy + 5.5);
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9.5);
+            doc.setTextColor(15, 23, 42);
+            doc.text(card.value, cx + 3, cy + 11.5);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(6);
+            doc.setTextColor(148, 163, 184);
+            doc.text(card.sub, cx + 3, cy + 16);
+        });
+
+        // Right Column: Donut Infographic Chart
+        const rightStartX = margin + colWidth + 6;
+        const chartCenterX = rightStartX + colWidth / 2;
+        const chartCenterY = sec1StartY + 21;
+        const outerR = 18;
+        const innerR = 10;
+        const plateR = 20;
+
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.5);
+        doc.circle(chartCenterX, chartCenterY, plateR, 'FD');
+
+        const items = pieData?.items || [];
+        const pieTotal = pieData?.total || 0;
+
+        if (items.length > 0) {
+            // Collision solver for callouts
+            const callouts = (() => {
+                const raw = items.map((item, idx) => {
+                    const midA = (item.startAngle + item.endAngle) / 2;
+                    const isRight = Math.cos(midA) >= 0;
+                    const dotR = (innerR + outerR) / 2;
+                    const dotX = chartCenterX + dotR * Math.cos(midA);
+                    const dotY = chartCenterY + dotR * Math.sin(midA);
+                    const rgb = item.color && item.color.startsWith('#')
+                        ? [parseInt(item.color.slice(1, 3), 16), parseInt(item.color.slice(3, 5), 16), parseInt(item.color.slice(5, 7), 16)]
+                        : [2, 132, 199];
+
+                    return {
+                        ...item,
+                        idx,
+                        midA,
+                        isRight,
+                        dotX,
+                        dotY,
+                        naturalY: dotY,
+                        adjustedY: dotY,
+                        rgb
+                    };
+                });
+
+                const solveSide = (sideItems) => {
+                    if (sideItems.length <= 1) return sideItems;
+                    const sorted = [...sideItems].sort((a, b) => a.naturalY - b.naturalY);
+                    const minGap = 10;
+
+                    for (let i = 1; i < sorted.length; i++) {
+                        if (sorted[i].adjustedY - sorted[i - 1].adjustedY < minGap) {
+                            sorted[i].adjustedY = sorted[i - 1].adjustedY + minGap;
+                        }
+                    }
+
+                    const avgNat = sorted.reduce((sum, i) => sum + i.naturalY, 0) / sorted.length;
+                    const avgAdj = sorted.reduce((sum, i) => sum + i.adjustedY, 0) / sorted.length;
+                    const shift = avgNat - avgAdj;
+
+                    return sorted.map(item => ({
+                        ...item,
+                        adjustedY: Math.max(sec1StartY + 4, Math.min(sec1StartY + 38, item.adjustedY + shift))
+                    }));
+                };
+
+                const left = solveSide(raw.filter(c => !c.isRight));
+                const right = solveSide(raw.filter(c => c.isRight));
+
+                return [...left, ...right];
+            })();
+
+            // Draw Smooth Donut Ring Slices
+            items.forEach((item) => {
+                const startA = item.startAngle;
+                const endA = item.endAngle;
+                const rgb = item.color && item.color.startsWith('#')
+                    ? [parseInt(item.color.slice(1, 3), 16), parseInt(item.color.slice(3, 5), 16), parseInt(item.color.slice(5, 7), 16)]
+                    : [2, 132, 199];
+
+                doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+                doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
+                doc.setLineWidth(0.3);
+
+                const step = Math.PI / 36;
+                for (let a = startA; a < endA - 0.001; a += step) {
+                    const nextA = Math.min(a + step, endA);
+                    const r1 = innerR;
+                    const r2 = outerR;
+                    const p1OutX = chartCenterX + r2 * Math.cos(a);
+                    const p1OutY = chartCenterY + r2 * Math.sin(a);
+                    const p2OutX = chartCenterX + r2 * Math.cos(nextA);
+                    const p2OutY = chartCenterY + r2 * Math.sin(nextA);
+                    const p1InX = chartCenterX + r1 * Math.cos(nextA);
+                    const p1InY = chartCenterY + r1 * Math.sin(nextA);
+                    const p2InX = chartCenterX + r1 * Math.cos(a);
+                    const p2InY = chartCenterY + r1 * Math.sin(a);
+
+                    doc.triangle(p1OutX, p1OutY, p2OutX, p2OutY, p1InX, p1InY, 'FD');
+                    doc.triangle(p1OutX, p1OutY, p1InX, p1InY, p2InX, p2InY, 'FD');
+                }
+            });
+
+            // Draw Callouts with Zero Text Overlap & Increased Font Sizes
+            callouts.forEach((item) => {
+                const isRight = item.isRight;
+                const elbowX = isRight ? item.dotX + 6 : item.dotX - 6;
+                const elbowY = item.adjustedY;
+                const targetX = isRight ? rightStartX + colWidth - 2 : rightStartX + 2;
+
+                doc.setDrawColor(51, 65, 85);
+                doc.setLineWidth(0.3);
+                doc.line(item.dotX, item.dotY, elbowX, elbowY);
+                doc.line(elbowX, elbowY, targetX, elbowY);
+
+                doc.setFillColor(30, 41, 59);
+                doc.circle(item.dotX, item.dotY, 0.8, 'F');
+
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(8.5);
+                doc.setTextColor(item.rgb[0], item.rgb[1], item.rgb[2]);
+                doc.text(item.label, targetX, elbowY - 1.2, { align: isRight ? 'right' : 'left' });
+
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(8);
+                doc.setTextColor(30, 41, 59);
+                doc.text(`Tk ${Math.round(item.value).toLocaleString('en-IN')} (${item.pct.toFixed(1)}%)`, targetX, elbowY + 2.8, { align: isRight ? 'right' : 'left' });
+            });
+        }
+
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.4);
+        doc.circle(chartCenterX, chartCenterY, innerR - 0.5, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        doc.text('TOTAL VALUE', chartCenterX, chartCenterY - 1.8, { align: 'center' });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`Tk ${Math.round(pieTotal).toLocaleString('en-IN')}`, chartCenterX, chartCenterY + 2.5, { align: 'center' });
+
+        currentY = sec1StartY + cardHeight * 2 + 14;
+
+        const renderTableTag = (title, colorRgb) => {
+            if (currentY + 18 > pageHeight - margin) {
+                doc.addPage();
+                currentY = margin + 8;
+            }
+            doc.setFillColor(colorRgb[0], colorRgb[1], colorRgb[2]);
+            doc.roundedRect(margin, currentY - 3.5, 3, 5, 1, 1, 'F');
+
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(30, 41, 59);
+            doc.text(title, margin + 5, currentY);
+            currentY += 5;
+        };
+
+        // SECTION 2: LC Details
+        if (selectedLc) {
+            renderTableTag("LC DETAILS OVERVIEW", [30, 41, 59]);
+            const lcValUsd = parseFloat(selectedLc.totalDollar || selectedLc.lcValueUsd || selectedLc.lcValue || selectedLc.amountUsd || 0);
+            const exRateBdt = parseFloat(selectedLc.dollarRate || selectedLc.dollarRateBdt || selectedLc.exchangeRate || 0);
+            const totalLcValBdt = (lcValUsd * exRateBdt) || parseFloat(selectedLc.totalAmount || selectedLc.totalLcValueBdt || 0);
+            const bankStr = (typeof selectedLc.bankName === 'object' ? (selectedLc.bankName?.bankName || selectedLc.bankName?.name || selectedLc.bankName?.shortName) : selectedLc.bankName) || selectedLc.issuingBank || '-';
+
+            autoTable(doc, {
+                startY: currentY,
+                margin: { left: margin, right: margin },
+                head: [['LC Details Overview', 'Values']],
+                body: [
+                    ['LC Number', selectedLc.lcNo || '-'],
+                    ['Importer Name', selectedLc.importerName || '-'],
+                    ['Exporter Name', selectedLc.exporterName || '-'],
+                    ['Issuing Bank', bankStr],
+                    ['LC Value (USD)', `$ ${lcValUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+                    ['Exchange Rate (BDT)', `Tk ${exRateBdt.toFixed(2)}`],
+                    ['Total LC Value (BDT)', `Tk ${Math.round(totalLcValBdt).toLocaleString('en-IN')}`],
+                    ['Status', selectedLc.status || 'Opened']
+                ],
+                theme: 'grid',
+                headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } }
+            });
+            currentY = doc.lastAutoTable.finalY + 6;
+        }
+
+        // SECTION 3: LC Expenses
+        if (selectedLcExpenses.length > 0) {
+            renderTableTag("LC EXPENSES", [225, 29, 72]);
+            autoTable(doc, {
+                startY: currentY,
+                margin: { left: margin, right: margin },
+                head: [['Expense Head', 'Agent / Particulars', 'Amount (BDT)']],
+                body: [
+                    ...selectedLcExpenses.map(exp => [
+                        exp.expenseHead || '-',
+                        exp.cnfAgent || exp.bankName || exp.name || '-',
+                        `Tk ${Math.round(exp.amount || 0).toLocaleString('en-IN')}`
+                    ]),
+                    [{ content: 'Total LC Expenses', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } }, { content: `Tk ${Math.round(totalLcExpensesAmount).toLocaleString('en-IN')}`, styles: { fontStyle: 'bold' } }]
+                ],
+                theme: 'grid',
+                headStyles: { fillColor: [225, 29, 72], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+                columnStyles: { 2: { halign: 'right', fontStyle: 'bold' } }
+            });
+            currentY = doc.lastAutoTable.finalY + 6;
+        }
+
+        // SECTION 4: Product Details (Product Stock & Arrivals / Summary)
+        if (productSummary.length > 0) {
+            renderTableTag("PRODUCT STOCK & ARRIVALS SUMMARY", [79, 70, 229]);
+            autoTable(doc, {
+                startY: currentY,
+                margin: { left: margin, right: margin },
+                head: [['Product Name', 'Purchase Qty', 'In-house Qty', 'Short Qty', 'Damage Qty', 'Sold Qty', 'Current Stock Value']],
+                body: productSummary.map(p => [
+                    p.productName || '-',
+                    `${Math.round(p.purchaseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `${Math.round(p.inhouseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `${Math.round(p.shortQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `${Math.round(p.damageQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `${Math.round(p.saleQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `Tk ${Math.round((p.inhouseQty - (p.saleQty || 0) - (p.damageQty || 0)) * (p.purchaseQty > 0 ? (p.purchasePrice / p.purchaseQty) : 0)).toLocaleString('en-IN')}`
+                ]),
+                theme: 'grid',
+                headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+                columnStyles: { 6: { halign: 'right', fontStyle: 'bold' } }
+            });
+            currentY = doc.lastAutoTable.finalY + 6;
+        }
+
+        // SECTION 5: Cost of Goods (COG)
+        if (selectedLcCostOfGoods.length > 0) {
+            renderTableTag("COST OF GOODS (COG)", [2, 132, 199]);
+            autoTable(doc, {
+                startY: currentY,
+                margin: { left: margin, right: margin },
+                head: [['Date', 'Invoice / Truck', 'Product & Brand', 'Cost/KG', 'Quantity', 'Net Bill']],
+                body: [
+                    ...selectedLcCostOfGoods.map(rec => [
+                        formatDate(rec.date),
+                        `${rec.invoiceNo || '-'} / ${rec.truckNo || '-'}`,
+                        `${rec.product || '-'} (${rec.brand || '-'})`,
+                        `Tk ${parseFloat(rec.costingKg || 0).toFixed(2)}`,
+                        `${Math.round(parseFloat(rec.quantity || 0)).toLocaleString()} KG`,
+                        `Tk ${Math.round((parseFloat(rec.costingKg || 0)) * (parseFloat(rec.quantity || 0))).toLocaleString('en-IN')}`
+                    ]),
+                    [
+                        { content: 'Total Cost of Goods (COG)', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `${Math.round(totalLcCostOfGoodsQty).toLocaleString()} KG`, styles: { fontStyle: 'bold' } },
+                        { content: `Tk ${Math.round(totalLcCostOfGoodsAmount).toLocaleString('en-IN')}`, styles: { fontStyle: 'bold' } }
+                    ]
+                ],
+                theme: 'grid',
+                headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+                columnStyles: {
+                    0: { cellWidth: 22 },
+                    1: { cellWidth: 52 },
+                    2: { cellWidth: 50 },
+                    3: { cellWidth: 18, halign: 'right' },
+                    4: { cellWidth: 22, halign: 'right' },
+                    5: { cellWidth: 26, halign: 'right', fontStyle: 'bold' }
+                }
+            });
+            currentY = doc.lastAutoTable.finalY + 6;
+        }
+
+        // SECTION 6: LC Receive History
+        if (selectedLcStocks.length > 0) {
+            renderTableTag("LC RECEIVE HISTORY", [30, 41, 59]);
+            autoTable(doc, {
+                startY: currentY,
+                margin: { left: margin, right: margin },
+                head: [['Date', 'Product & Brand', 'Arrival Qty', 'Short Qty', 'Inhouse Qty', 'Total Value (BDT)']],
+                body: [
+                    ...selectedLcStocks.map(item => {
+                        const qty = parseFloat(item.quantity) || 0;
+                        const shortQty = parseFloat(item.sweepedQuantity) || 0;
+                        const inhouseQty = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null) ? (parseFloat(item.inHouseQuantity) || 0) : Math.max(0, qty - shortQty);
+                        const prodName = item.productName || item.product || '-';
+                        const brandName = item.brand || item.brandName || '-';
+                        const price = parseFloat(item.purchasedPrice) || 0;
+                        const totalVal = inhouseQty * price;
+                        return [
+                            formatDate(item.date || item.createdAt),
+                            `${prodName} (${brandName})`,
+                            `${Math.round(qty).toLocaleString()} KG`,
+                            `${Math.round(shortQty).toLocaleString()} KG`,
+                            `${Math.round(inhouseQty).toLocaleString()} KG`,
+                            `Tk ${Math.round(totalVal).toLocaleString('en-IN')}`
+                        ];
+                    }),
+                    [
+                        { content: 'Total Received', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `${Math.round(selectedLcStocks.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0)).toLocaleString()} KG`, styles: { fontStyle: 'bold' } },
+                        { content: `${Math.round(selectedLcStocks.reduce((s, i) => s + (parseFloat(i.sweepedQuantity) || 0), 0)).toLocaleString()} KG`, styles: { fontStyle: 'bold' } },
+                        { content: `${Math.round(selectedLcStocks.reduce((s, i) => s + Math.max(0, (parseFloat(i.quantity) || 0) - (parseFloat(i.sweepedQuantity) || 0)), 0)).toLocaleString()} KG`, styles: { fontStyle: 'bold' } },
+                        { content: `Tk ${Math.round(totalLcReceiveAmount).toLocaleString('en-IN')}`, styles: { fontStyle: 'bold' } }
+                    ]
+                ],
+                theme: 'grid',
+                headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+                columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } }
+            });
+            currentY = doc.lastAutoTable.finalY + 6;
+        }
+
+        // SECTION 7: Sales History
+        if (selectedLcSales.length > 0) {
+            renderTableTag("SALES HISTORY", [16, 185, 129]);
+            autoTable(doc, {
+                startY: currentY,
+                margin: { left: margin, right: margin },
+                head: [['Date', 'Invoice / Customer', 'Product & Brand', 'Quantity', 'Total Revenue (BDT)']],
+                body: [
+                    ...selectedLcSales.map(sale => [
+                        formatDate(sale.date),
+                        `${sale.invoiceNo || '-'} / ${sale.customerName || '-'}`,
+                        `${sale.productName || '-'} (${sale.brandName || '-'})`,
+                        `${Math.round(sale.quantity || 0).toLocaleString()}`,
+                        `Tk ${Math.round(sale.totalAmount || 0).toLocaleString('en-IN')}`
+                    ]),
+                    [
+                        { content: 'Total Sales Revenue', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `${Math.round(selectedLcSales.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0)).toLocaleString()}`, styles: { fontStyle: 'bold' } },
+                        { content: `Tk ${Math.round(totalLcSalesAmount).toLocaleString('en-IN')}`, styles: { fontStyle: 'bold' } }
+                    ]
+                ],
+                theme: 'grid',
+                headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
+                columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right', fontStyle: 'bold' } }
+            });
+            currentY = doc.lastAutoTable.finalY + 6;
+        }
+
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(148, 163, 184);
+            doc.text('M/S ANI ENTERPRISE - PROFIT & LOSS STATEMENT', margin, pageHeight - 6);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (err) {
+        console.error("Error generating Profit Loss PDF:", err);
+        alert(`Failed to generate Profit Loss PDF: ${err.message}`);
+    }
+};
+
 
