@@ -5127,6 +5127,9 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group whitespace-nowrap" onClick={() => handleSort('orderNo')}>
+                                            <div className="flex items-center justify-center">Order No {renderSortIcon('orderNo')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
                                             <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
                                         </th>
@@ -5181,6 +5184,9 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
+                                        <th className="sale-mgmt-th text-center cursor-pointer group whitespace-nowrap" onClick={() => handleSort('orderNo')}>
+                                            <div className="flex items-center justify-center">Order No {renderSortIcon('orderNo')}</div>
+                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
                                             <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
                                         </th>
@@ -5227,9 +5233,9 @@ const SaleManagement = ({
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan="18" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                    <tr><td colSpan="19" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
-                                    <tr><td colSpan="18" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan="19" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = !collapsedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -5295,6 +5301,7 @@ const SaleManagement = ({
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap text-center font-semibold text-gray-800">{sale.orderNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-center font-semibold text-gray-800">{sale.invoiceNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.lcNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.importer) || '-'}</td>
@@ -5402,6 +5409,9 @@ const SaleManagement = ({
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                <div className="text-[13px] font-semibold text-gray-800">{sale.orderNo || '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>
