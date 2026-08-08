@@ -5235,7 +5235,8 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             return;
         }
         setFormData(prev => {
-            const newState = { ...prev, [field]: value };
+            const cleanVal = typeof value === 'string' ? value : (value?.bankName || value?.name || value?.importerName || value?.exporterName || value?.companyName || '');
+            const newState = { ...prev, [field]: cleanVal };
 
             // Auto-fill logic when PI Number is selected
             if (field === 'piNo') {
@@ -5446,12 +5447,23 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             setMarginReturns(Array.isArray(marginReturnRes?.data) ? marginReturnRes.data : []);
             setCostOfGoodsRecords(Array.isArray(cogRes?.data) ? cogRes.data : []);
 
-            setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
-            setBanksRaw(Array.isArray(bankRes.data) ? bankRes.data : []);
-            setImporters(Array.isArray(impRes.data) ? impRes.data : []);
-            setExporters(Array.isArray(expRes.data) ? expRes.data : []);
-            setInsuranceCos(Array.isArray(insRes.data) ? insRes.data : []);
-            setInsuranceRecordsRaw(Array.isArray(insRes.data) ? insRes.data : []);
+            const rawBanks = Array.isArray(bankRes.data) ? bankRes.data : [];
+            setBanksRaw(rawBanks);
+            const bankNames = [...new Set(rawBanks.map(b => typeof b === 'string' ? b : (b.bankName || b.name || '')).filter(Boolean))];
+            setBanks(bankNames);
+
+            const rawImporters = Array.isArray(impRes.data) ? impRes.data : [];
+            const importerNames = [...new Set(rawImporters.map(i => typeof i === 'string' ? i : (i.name || i.importerName || '')).filter(Boolean))];
+            setImporters(importerNames);
+
+            const rawExporters = Array.isArray(expRes.data) ? expRes.data : [];
+            const exporterNames = [...new Set(rawExporters.map(e => typeof e === 'string' ? e : (e.name || e.exporterName || '')).filter(Boolean))];
+            setExporters(exporterNames);
+
+            const rawInsurance = Array.isArray(insRes.data) ? insRes.data : [];
+            setInsuranceRecordsRaw(rawInsurance);
+            const insuranceNames = [...new Set(rawInsurance.map(ins => typeof ins === 'string' ? ins : (ins.companyName || ins.name || ins.insuranceCo || '')).filter(Boolean))];
+            setInsuranceCos(insuranceNames);
 
             setIpRecordsRaw(Array.isArray(ipRes.data) ? ipRes.data : []);
             const validIps = (Array.isArray(ipRes.data) ? ipRes.data : [])
@@ -7542,7 +7554,11 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                     value={formData.importerName}
                                     onChange={handleInputChange}
                                     onFocus={() => { setActiveDropdown('importerName'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'importerName', 'importerName', importers.filter(i => !formData.importerName || i.toLowerCase().includes(formData.importerName.toLowerCase())))}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'importerName', 'importerName', importers.filter(i => {
+                                        const iName = typeof i === 'string' ? i : (i?.name || i?.importerName || '');
+                                        const searchVal = typeof formData.importerName === 'string' ? formData.importerName : (formData.importerName?.name || '');
+                                        return !searchVal || iName.toLowerCase().includes(searchVal.toLowerCase());
+                                    }))}
                                     placeholder="Select Importer"
                                     autoComplete="off"
                                     required
@@ -7559,17 +7575,25 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                             </div>
                             {activeDropdown === 'importerName' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                    {importers.filter(i => !formData.importerName || i.toLowerCase().includes(formData.importerName.toLowerCase())).map((imp, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('importerName', imp); }}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.importerName === imp ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                        >
-                                            {imp}
-                                        </button>
-                                    ))}
+                                    {importers.filter(i => {
+                                        const iName = typeof i === 'string' ? i : (i?.name || i?.importerName || '');
+                                        const searchVal = typeof formData.importerName === 'string' ? formData.importerName : (formData.importerName?.name || '');
+                                        return !searchVal || iName.toLowerCase().includes(searchVal.toLowerCase());
+                                    }).map((imp, idx) => {
+                                        const iName = typeof imp === 'string' ? imp : (imp?.name || imp?.importerName || '');
+                                        const searchVal = typeof formData.importerName === 'string' ? formData.importerName : (formData.importerName?.name || '');
+                                        return (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('importerName', iName); }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${searchVal === iName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {iName}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -7583,7 +7607,11 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                     value={formData.exporterName}
                                     onChange={handleInputChange}
                                     onFocus={() => { setActiveDropdown('exporterName'); setHighlightedIndex(-1); }}
-                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'exporterName', 'exporterName', exporters.filter(exp => !formData.exporterName || exp.toLowerCase().includes(formData.exporterName.toLowerCase())))}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'exporterName', 'exporterName', exporters.filter(exp => {
+                                        const expName = typeof exp === 'string' ? exp : (exp?.name || exp?.exporterName || '');
+                                        const searchVal = typeof formData.exporterName === 'string' ? formData.exporterName : (formData.exporterName?.name || '');
+                                        return !searchVal || expName.toLowerCase().includes(searchVal.toLowerCase());
+                                    }))}
                                     placeholder="Select Exporter"
                                     autoComplete="off"
                                     required
@@ -7600,17 +7628,25 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                             </div>
                             {activeDropdown === 'exporterName' && (
                                 <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                    {exporters.filter(exp => !formData.exporterName || exp.toLowerCase().includes(formData.exporterName.toLowerCase())).map((exp, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('exporterName', exp); }}
-                                            onMouseEnter={() => setHighlightedIndex(idx)}
-                                            className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.exporterName === exp ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                        >
-                                            {exp}
-                                        </button>
-                                    ))}
+                                    {exporters.filter(exp => {
+                                        const expName = typeof exp === 'string' ? exp : (exp?.name || exp?.exporterName || '');
+                                        const searchVal = typeof formData.exporterName === 'string' ? formData.exporterName : (formData.exporterName?.name || '');
+                                        return !searchVal || expName.toLowerCase().includes(searchVal.toLowerCase());
+                                    }).map((exp, idx) => {
+                                        const expName = typeof exp === 'string' ? exp : (exp?.name || exp?.exporterName || '');
+                                        const searchVal = typeof formData.exporterName === 'string' ? formData.exporterName : (formData.exporterName?.name || '');
+                                        return (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('exporterName', expName); }}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${searchVal === expName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                            >
+                                                {expName}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -7913,7 +7949,11 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         value={formData.bankName}
                                         onChange={handleInputChange}
                                         onFocus={() => { setActiveDropdown('bankName'); setHighlightedIndex(-1); }}
-                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'bankName', 'bankName', banks.filter(b => !formData.bankName || b.toLowerCase().includes(formData.bankName.toLowerCase())))}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'bankName', 'bankName', banks.filter(b => {
+                                            const bName = typeof b === 'string' ? b : (b?.bankName || '');
+                                            const searchVal = typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '');
+                                            return !searchVal || bName.toLowerCase().includes(searchVal.toLowerCase());
+                                        }))}
                                         placeholder="Select Bank"
                                         autoComplete="off"
                                         required
@@ -7930,17 +7970,25 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                 </div>
                                 {activeDropdown === 'bankName' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                        {banks.filter(b => !formData.bankName || b.toLowerCase().includes(formData.bankName.toLowerCase())).map((bank, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankName', bank); }}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.bankName === bank ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {bank}
-                                            </button>
-                                        ))}
+                                        {banks.filter(b => {
+                                            const bName = typeof b === 'string' ? b : (b?.bankName || '');
+                                            const searchVal = typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '');
+                                            return !searchVal || bName.toLowerCase().includes(searchVal.toLowerCase());
+                                        }).map((bank, idx) => {
+                                            const bName = typeof bank === 'string' ? bank : (bank?.bankName || '');
+                                            const searchVal = typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '');
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankName', bName); }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${searchVal === bName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {bName}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -8145,7 +8193,11 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         value={formData.insuranceCo}
                                         onChange={handleInputChange}
                                         onFocus={() => { setActiveDropdown('insuranceCo'); setHighlightedIndex(-1); }}
-                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'insuranceCo', 'insuranceCo', insuranceCos.filter(ins => !formData.insuranceCo || ins.toLowerCase().includes(formData.insuranceCo.toLowerCase())))}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'insuranceCo', 'insuranceCo', insuranceCos.filter(ins => {
+                                            const insName = typeof ins === 'string' ? ins : (ins?.companyName || ins?.name || '');
+                                            const searchVal = typeof formData.insuranceCo === 'string' ? formData.insuranceCo : (formData.insuranceCo?.companyName || '');
+                                            return !searchVal || insName.toLowerCase().includes(searchVal.toLowerCase());
+                                        }))}
                                         placeholder="Select Insurance"
                                         autoComplete="off"
                                         className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
@@ -8161,17 +8213,25 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                 </div>
                                 {activeDropdown === 'insuranceCo' && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                        {insuranceCos.filter(ins => !formData.insuranceCo || ins.toLowerCase().includes(formData.insuranceCo.toLowerCase())).map((ins, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('insuranceCo', ins); }}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.insuranceCo === ins ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                            >
-                                                {ins}
-                                            </button>
-                                        ))}
+                                        {insuranceCos.filter(ins => {
+                                            const insName = typeof ins === 'string' ? ins : (ins?.companyName || ins?.name || '');
+                                            const searchVal = typeof formData.insuranceCo === 'string' ? formData.insuranceCo : (formData.insuranceCo?.companyName || '');
+                                            return !searchVal || insName.toLowerCase().includes(searchVal.toLowerCase());
+                                        }).map((ins, idx) => {
+                                            const insName = typeof ins === 'string' ? ins : (ins?.companyName || ins?.name || '');
+                                            const searchVal = typeof formData.insuranceCo === 'string' ? formData.insuranceCo : (formData.insuranceCo?.companyName || '');
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('insuranceCo', insName); }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${searchVal === insName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {insName}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

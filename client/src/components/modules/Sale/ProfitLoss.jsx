@@ -106,6 +106,15 @@ export default function ProfitLoss({ salesRecords, products }) {
     return parseFloat(product.purchasedPrice) || 0;
   };
 
+  const getBankName = (val) => {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+      return val.bankName || val.name || val.shortName || '';
+    }
+    return String(val);
+  };
+
   // Selected LC Details
   const selectedLc = useMemo(() => {
     if (!selectedLcNo || selectedLcNo === 'All') return null;
@@ -159,12 +168,25 @@ export default function ProfitLoss({ salesRecords, products }) {
     return true; // 'all'
   };
 
-  // Process and Filter Sales Data
+  // Process and Filter Sales & Stock Data
   const profitLossData = useMemo(() => {
-    let totalRevenue = 0;
-    let totalCost = 0;
+    const hasLcFilter = selectedLcNo && selectedLcNo !== 'All' && selectedLcNo.trim() !== '';
 
-    const hasLcFilter = selectedLcNo && selectedLcNo !== 'All';
+    if (!hasLcFilter) {
+      return {
+        summary: {
+          salesRevenue: 0,
+          currentStockValue: 0,
+          totalRevenue: 0,
+          totalCost: 0,
+          totalProfit: 0,
+          margin: 0
+        }
+      };
+    }
+
+    let salesRevenue = 0;
+    let totalCost = 0;
 
     salesRecords.forEach(sale => {
       // Filter by date (bypass if a specific LC is selected)
@@ -211,24 +233,111 @@ export default function ProfitLoss({ salesRecords, products }) {
         const itemCost = entry.quantity * purchasePrice;
         const itemRevenue = entry.totalAmount;
 
-        totalRevenue += itemRevenue;
+        salesRevenue += itemRevenue;
         totalCost += itemCost;
       });
     });
 
+    // Calculate Current Stock Value (unsold stock in hand) matching active filters
+    const cleanLc = (val) => String(val || '').replace(/\D/g, '').toLowerCase();
+    const targetLcClean = hasLcFilter ? cleanLc(selectedLcNo) : '';
+
+    const productStockMap = {};
+
+    // 1. Aggregate stock arrivals
+    stockRecords.forEach(item => {
+      const status = (item.status || '').toLowerCase();
+      if (status.includes('requested') || status.includes('rejected') || status.includes('deleted')) return;
+
+      if (hasLcFilter && cleanLc(item.lcNo) !== targetLcClean) return;
+      if (!hasLcFilter && !isDateInRange(item.date || item.createdAt || item.receiveDate)) return;
+
+      const prodName = item.productName || item.product || 'Unknown Product';
+      if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
+
+      if (!productStockMap[prodName]) {
+        productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: 0 };
+      }
+
+      const qty = parseFloat(item.quantity) || 0;
+      const price = parseFloat(item.purchasedPrice) || getPurchasePrice(prodName, item.brand);
+      const shortQty = parseFloat(item.sweepedQuantity) || 0;
+      const inhouseQty = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null)
+        ? (parseFloat(item.inHouseQuantity) || 0)
+        : Math.max(0, qty - shortQty);
+
+      productStockMap[prodName].purchaseQty += qty;
+      productStockMap[prodName].purchasePrice += qty * price;
+      productStockMap[prodName].inhouseQty += inhouseQty;
+      if (price) productStockMap[prodName].fallbackPrice = price;
+    });
+
+    // 2. Aggregate sales quantities for matching stock products
+    salesRecords.forEach(sale => {
+      const sStatus = (sale.status || '').toLowerCase();
+      if (sStatus !== 'accepted' && sStatus !== 'pending') return;
+      if (!hasLcFilter && !isDateInRange(sale.date)) return;
+      if (saleTypeFilter !== 'All' && sale.saleType !== saleTypeFilter) return;
+
+      (sale.items || []).forEach(item => {
+        const itemLc = (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || '');
+        const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
+          ? item.brandEntries
+          : [{ brandName: item.brand || '-', quantity: item.quantity, lcNo: itemLc }];
+
+        brandEntries.forEach(entry => {
+          const entryLc = (entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : itemLc;
+          if (hasLcFilter && cleanLc(entryLc) !== targetLcClean) return;
+
+          const prodName = item.productName || item.product || 'Unknown Product';
+          if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
+
+          if (!productStockMap[prodName]) {
+            productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: getPurchasePrice(prodName) };
+          }
+          productStockMap[prodName].saleQty += parseFloat(entry.quantity) || 0;
+        });
+      });
+    });
+
+    // 3. Aggregate damage quantities
+    damages.forEach(d => {
+      if (hasLcFilter && cleanLc(d.lcNo) !== targetLcClean) return;
+      if (!hasLcFilter && !isDateInRange(d.date || d.createdAt)) return;
+
+      const prodName = d.productName || 'Unknown Product';
+      if (selectedProduct !== 'All' && prodName !== selectedProduct) return;
+
+      if (!productStockMap[prodName]) {
+        productStockMap[prodName] = { purchaseQty: 0, purchasePrice: 0, inhouseQty: 0, saleQty: 0, damageQty: 0, fallbackPrice: parseFloat(d.price) || getPurchasePrice(prodName) };
+      }
+      productStockMap[prodName].damageQty += parseFloat(d.quantity) || 0;
+    });
+
+    // 4. Calculate Current Stock Value (in hand)
+    let currentStockValue = 0;
+    Object.values(productStockMap).forEach(prod => {
+      const currentStockQty = Math.max(0, prod.inhouseQty - prod.saleQty - prod.damageQty);
+      const avgPurchasePrice = prod.purchaseQty > 0 ? (prod.purchasePrice / prod.purchaseQty) : (prod.fallbackPrice || 0);
+      currentStockValue += currentStockQty * avgPurchasePrice;
+    });
+
+    const finalRevenue = salesRevenue + currentStockValue;
     const finalCost = (useActualCog && selectedLc) ? totalLcCostOfGoodsAmount : totalCost;
-    const totalProfit = totalRevenue - finalCost;
-    const margin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    const totalProfit = finalRevenue - finalCost;
+    const margin = finalRevenue > 0 ? (totalProfit / finalRevenue) * 100 : 0;
 
     return {
       summary: {
-        totalRevenue,
+        salesRevenue,
+        currentStockValue,
+        totalRevenue: finalRevenue,
         totalCost: finalCost,
         totalProfit,
         margin
       }
     };
-  }, [salesRecords, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo, useActualCog, selectedLc, totalLcCostOfGoodsAmount]);
+  }, [salesRecords, stockRecords, damages, products, filterType, selectedMonth, selectedYear, startDate, endDate, saleTypeFilter, selectedProduct, selectedLcNo, useActualCog, selectedLc, totalLcCostOfGoodsAmount]);
 
   // Unique product names for filter dropdown
   const uniqueProducts = useMemo(() => {
@@ -290,7 +399,7 @@ export default function ProfitLoss({ salesRecords, products }) {
         _id: 'margin-paid-virtual',
         date: selectedLc.openingDate || selectedLc.createdAt,
         expenseHead: `Margin Paid (${selectedLc.bankMargin || 0}%)`,
-        bankName: selectedLc.bankName || 'Bank',
+        bankName: getBankName(selectedLc.bankName) || 'Bank',
         amount: marginPaidAmt,
         remarks: 'Paid Margin'
       });
@@ -310,7 +419,7 @@ export default function ProfitLoss({ salesRecords, products }) {
             _id: `amnd-margin-paid-virtual-${idx}`,
             date: amnd.amendmentDate || selectedLc.openingDate,
             expenseHead: `Margin Paid (${margin}%) (${amnd.amendmentNo || `Amend #${idx + 1}`})`,
-            bankName: selectedLc.bankName || 'Bank',
+            bankName: getBankName(selectedLc.bankName) || 'Bank',
             amount: amndMarginPaid,
             remarks: `Paid Margin for ${amnd.amendmentNo || `Amend #${idx + 1}`}`
           });
@@ -399,6 +508,20 @@ export default function ProfitLoss({ salesRecords, products }) {
   const totalLcSalesAmount = useMemo(() => {
     return selectedLcSales.reduce((sum, s) => sum + s.totalAmount, 0);
   }, [selectedLcSales]);
+
+  const totalLcReceiveAmount = useMemo(() => {
+    return selectedLcStocks.reduce((sum, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      const shortQty = parseFloat(item.sweepedQuantity) || 0;
+      const inhouseQty = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null)
+        ? (parseFloat(item.inHouseQuantity) || 0)
+        : Math.max(0, qty - shortQty);
+      const prodName = item.productName || item.product || '';
+      const brandName = item.brand || item.brandName || '';
+      const price = parseFloat(item.purchasedPrice) || getPurchasePrice(prodName, brandName);
+      return sum + (inhouseQty * price);
+    }, 0);
+  }, [selectedLcStocks, products]);
 
   // Financial Breakdown Pie Chart data for the selected LC
   const pieData = useMemo(() => {
@@ -824,7 +947,25 @@ export default function ProfitLoss({ salesRecords, products }) {
             </div>
             <div className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Total Revenue</div>
             <div className="text-xl sm:text-2xl font-black text-gray-900">৳ {Math.round(profitLossData.summary.totalRevenue).toLocaleString('en-IN')}</div>
-            <div className="text-[11px] text-gray-400 mt-2 font-medium">Accumulated invoice totals</div>
+            <div className="text-[11px] mt-2.5 flex items-center gap-1.5 flex-wrap font-semibold">
+              {selectedLc ? (
+                <>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-extrabold border border-blue-100/80 shadow-2xs">
+                    Sales: ৳ {Math.round(profitLossData.summary.salesRevenue || 0).toLocaleString('en-IN')}
+                  </span>
+                  {profitLossData.summary.currentStockValue > 0 && (
+                    <>
+                      <span className="text-gray-400 font-black">+</span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-100/80 shadow-2xs">
+                        Current Stock: ৳ {Math.round(profitLossData.summary.currentStockValue).toLocaleString('en-IN')}
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="text-gray-400 font-medium">Select an LC No to view revenue</span>
+              )}
+            </div>
           </div>
 
           {/* Metric 2: Total COGS */}
@@ -894,7 +1035,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                       </div>
                       <div>
                         <div className="text-[10px] text-gray-400 font-black uppercase">Bank & Branch</div>
-                        <div className="text-sm font-bold text-gray-800">{selectedLc.bankName || 'N/A'} {selectedLc.bankBranch ? `(${selectedLc.bankBranch})` : ''}</div>
+                        <div className="text-sm font-bold text-gray-800">{getBankName(selectedLc.bankName) || 'N/A'} {selectedLc.bankBranch ? `(${selectedLc.bankBranch})` : ''}</div>
                       </div>
                       <div>
                         <div className="text-[10px] text-gray-400 font-black uppercase">Insurance Name</div>
@@ -1093,10 +1234,10 @@ export default function ProfitLoss({ salesRecords, products }) {
                         </tr>
                       ) : (
                         selectedLcExpenses.map((exp, idx) => (
-                          <tr key={exp._id || idx} className="hover:bg-slate-50/30 transition-colors">
+                          <tr key={`exp-${exp._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
                             <td className="py-2.5 px-4">
                               <div className="font-bold text-gray-950 break-words">{exp.expenseHead || '-'}</div>
-                              <div className="text-[10px] text-gray-400 font-medium break-words">{exp.cnfAgent || exp.bankName || exp.name || formatDate(exp.date)}</div>
+                              <div className="text-[10px] text-gray-400 font-medium break-words">{getBankName(exp.cnfAgent) || getBankName(exp.bankName) || getBankName(exp.name) || formatDate(exp.date)}</div>
                             </td>
                             <td className="py-2.5 px-4 text-right font-black text-rose-600 whitespace-nowrap">৳ {Math.round(exp.amount).toLocaleString('en-IN')}</td>
                           </tr>
@@ -1178,13 +1319,15 @@ export default function ProfitLoss({ salesRecords, products }) {
           </div>
         </div>
 
-        {/* Row 2: COG (left 50%) | Sales History + Product Stock (right 50%) */}
+        {/* Row 2: COG & LC Receive History (Left 50%) | Sales History & Product Stock (Right 50%) */}
         <div className="flex flex-col lg:flex-row gap-4 mt-6">
 
-          {/* LEFT: Cost of Goods (COG) Card — 50% */}
-          <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col">
+          {/* LEFT 50%: Cost of Goods (COG) Card + LC Receive History Card (directly under COG) */}
+          <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col gap-4">
+
+            {/* Cost of Goods (COG) Card */}
             {selectedLc ? (
-              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col flex-1">
+              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col">
                 <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
                     <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Cost of Goods (COG)</h2>
@@ -1200,7 +1343,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                     />
                   </label>
                 </div>
-                <div className="overflow-x-auto min-h-[220px]">
+                <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
@@ -1237,7 +1380,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                             })();
 
                           return (
-                            <tr key={rec._id || idx} className="hover:bg-slate-50/30 transition-colors">
+                            <tr key={`cog-${rec._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
                               <td className="py-2.5 px-6 whitespace-nowrap text-gray-500">{formatDate(rec.date)}</td>
                               <td className="py-2.5 px-4">
                                 <div className="font-black text-gray-900">{rec.invoiceNo || '-'}</div>
@@ -1280,19 +1423,120 @@ export default function ProfitLoss({ salesRecords, products }) {
                 <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC Number from the header input to inspect all related Cost of Goods records, invoicing details, and actual costs.</p>
               </div>
             )}
+
+            {/* LC Receive History Card (Under COG) */}
+            {selectedLc ? (
+              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col">
+                <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
+                  <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">LC Receive History</h2>
+                  <p className="text-xs text-gray-500 font-medium">Stock receive records for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                        <th className="py-2.5 px-4">Date</th>
+                        <th className="py-2.5 px-4">Product & Brand</th>
+                        <th className="py-2.5 px-3 text-right">Arrival Qty</th>
+                        <th className="py-2.5 px-3 text-right">Short</th>
+                        <th className="py-2.5 px-3 text-right">Inhouse Qty</th>
+                        <th className="py-2.5 px-4 text-right font-black">Total Value</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-xs text-gray-700 font-medium">
+                      {selectedLcStocks.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-gray-400 font-semibold">No stock receive records found for this LC.</td>
+                        </tr>
+                      ) : (
+                        selectedLcStocks.map((item, idx) => {
+                          const qty = parseFloat(item.quantity) || 0;
+                          const shortQty = parseFloat(item.sweepedQuantity) || 0;
+                          const inhouseQty = (item.inHouseQuantity !== undefined && item.inHouseQuantity !== null)
+                            ? (parseFloat(item.inHouseQuantity) || 0)
+                            : Math.max(0, qty - shortQty);
+                          const prodName = item.productName || item.product || '-';
+                          const brandName = item.brand || item.brandName || '-';
+                          const price = parseFloat(item.purchasedPrice) || getPurchasePrice(prodName, brandName);
+                          const totalVal = inhouseQty * price;
+                          const dateStr = item.date || item.createdAt || item.receiveDate;
+
+                          return (
+                            <tr key={`stock-${item._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
+                              <td className="py-2.5 px-4">
+                                <div className="font-bold text-gray-950 whitespace-nowrap">{formatDate(dateStr)}</div>
+                                {item.truckNo && <div className="text-[10px] text-gray-400 font-medium break-words">Truck: {item.truckNo}</div>}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <div className="font-bold text-gray-950 break-words">{prodName}</div>
+                                <div className="text-[10px] text-gray-400 font-medium break-words">{brandName}</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-bold text-gray-900 whitespace-nowrap">
+                                {Math.round(qty).toLocaleString()} KG
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-semibold text-rose-600 whitespace-nowrap">
+                                {shortQty > 0 ? `${Math.round(shortQty).toLocaleString()} KG` : '-'}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-bold text-emerald-600 whitespace-nowrap">
+                                {Math.round(inhouseQty).toLocaleString()} KG
+                              </td>
+                              <td className="py-2.5 px-4 text-right font-black text-blue-600 whitespace-nowrap">
+                                ৳ {Math.round(totalVal).toLocaleString('en-IN')}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    {selectedLcStocks.length > 0 && (
+                      <tfoot className="bg-slate-50 border-t-2 border-gray-200">
+                        <tr className="text-xs">
+                          <td colSpan="2" className="py-3.5 px-4 font-black text-gray-500 uppercase tracking-wider text-[11px]">Total Received</td>
+                          <td className="py-3.5 px-3 text-right font-black text-gray-900 whitespace-nowrap">
+                            {Math.round(selectedLcStocks.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0)).toLocaleString()} KG
+                          </td>
+                          <td className="py-3.5 px-3 text-right font-black text-rose-600 whitespace-nowrap">
+                            {Math.round(selectedLcStocks.reduce((sum, i) => sum + (parseFloat(i.sweepedQuantity) || 0), 0)).toLocaleString()} KG
+                          </td>
+                          <td className="py-3.5 px-3 text-right font-black text-emerald-600 whitespace-nowrap">
+                            {Math.round(selectedLcStocks.reduce((sum, i) => {
+                              const q = parseFloat(i.quantity) || 0;
+                              const s = parseFloat(i.sweepedQuantity) || 0;
+                              const inh = (i.inHouseQuantity !== undefined && i.inHouseQuantity !== null) ? parseFloat(i.inHouseQuantity) || 0 : Math.max(0, q - s);
+                              return sum + inh;
+                            }, 0)).toLocaleString()} KG
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-black text-blue-600 whitespace-nowrap">
+                            ৳ {Math.round(totalLcReceiveAmount).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center min-h-[160px] flex-1 flex flex-col justify-center">
+                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-4 animate-pulse">
+                  <BoxIcon className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-black text-gray-900 mb-1">LC Receive History</h3>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto">Select an LC to view stock receive history.</p>
+              </div>
+            )}
           </div>
 
-          {/* RIGHT: Sales History (25%) + Product Stock & Arrivals (25%) — side by side */}
+          {/* RIGHT 50%: Sales History (25%) + Product Stock & Arrivals (25%) — side by side */}
           <div className="w-full lg:w-[calc(50%-0.5rem)] flex flex-col sm:flex-row gap-4">
 
             {/* Sales History Card */}
             {selectedLc ? (
-              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col flex-1">
+              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col">
                 <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
                   <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Sales History</h2>
                   <p className="text-xs text-gray-500 font-medium">Sales records for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
                 </div>
-                <div className="overflow-x-auto min-h-[160px]">
+                <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider">
@@ -1309,7 +1553,7 @@ export default function ProfitLoss({ salesRecords, products }) {
                         </tr>
                       ) : (
                         selectedLcSales.map((sale, idx) => (
-                          <tr key={sale._id || idx} className="hover:bg-slate-50/30 transition-colors">
+                          <tr key={`sale-${sale._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
                             <td className="py-2.5 px-4">
                               <div className="font-bold text-gray-950 break-words">{sale.invoiceNo}</div>
                               <div className="text-[10px] text-gray-400 font-medium break-words">{sale.customerName} • {formatDate(sale.date)}</div>
@@ -1347,7 +1591,7 @@ export default function ProfitLoss({ salesRecords, products }) {
 
             {/* Product Stock & Arrivals Card */}
             {selectedLc ? (
-              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex-1 flex flex-col">
+              <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200 flex flex-col">
                 <div className="px-6 py-5 border-b border-gray-200 bg-slate-50/50">
                   <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Product Stock & Arrivals</h2>
                   <p className="text-xs text-gray-500 font-medium">Arrival summaries, in-house inventory, short and damage records for LC No: <span className="text-blue-600 font-bold">{selectedLc.lcNo}</span></p>
@@ -1363,7 +1607,6 @@ export default function ProfitLoss({ salesRecords, products }) {
                           <h3 className="text-base font-black text-gray-950">{prod.productName}</h3>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {/* Purchase Arrival */}
                           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/10 transition-all">
                             <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider mb-1">Purchase (Total Arrival)</div>
                             <div className="text-sm font-black text-gray-900">{Math.round(prod.purchaseQty).toLocaleString()} {prod.unit}</div>
