@@ -4105,22 +4105,23 @@ function PI({
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50/80">
-                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Date</th>
-                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">PI Number</th>
-                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Importer</th>
-                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Exporter</th>
-                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Product</th>
-                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Qty</th>
-                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-blue-600">Grand T.</th>
-                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">Status</th>
-                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-center">Action</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Date</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">PI Number</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Importer</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Exporter</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Port</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Product</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Qty</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-blue-600 whitespace-nowrap">Grand T.</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Status</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-center whitespace-nowrap">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {isLoading ? (
                                         Array(3).fill(0).map((_, i) => (
                                             <tr key={i} className="animate-pulse">
-                                                <td colSpan="9" className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                                <td colSpan="10" className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                             </tr>
                                         ))
                                     ) : filteredRecords.length > 0 ? (
@@ -4133,36 +4134,74 @@ function PI({
                                                 ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
                                                 : (parseFloat(record.grandTotalQuantity || record.quantity) || 0);
 
+                                            const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
+                                            const hasMultipleProducts = record.productsList && record.productsList.length > 1;
+
                                             return (
                                                 <tr key={record._id} className={`hover:bg-gray-50/50 transition-colors ${highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (record.piNumber) rowRefs.current[record.piNumber] = el; }}
                                                     style={highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}>
-                                                    <td className="px-6 py-4 text-sm text-gray-600 font-medium">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
-                                                    <td className="px-6 py-4 text-sm font-bold text-blue-600">
+                                                    <td className="px-2 py-3.5 text-sm text-gray-600 font-medium whitespace-nowrap">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
+                                                    <td className="px-2 py-3.5 text-sm font-bold text-blue-600 whitespace-nowrap">
                                                         {record.piNumber}
                                                         {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
                                                     </td>
-                                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.partyName}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{record.exporterName}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600 max-w-[200px] truncate" title={displayProducts}>{displayProducts}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600 font-bold">{totalQty.toLocaleString('en-US')} kg</td>
-                                                    <td className="px-6 py-4 text-sm text-blue-700 font-bold">${parseFloat(record.grandTotal).toLocaleString()}</td>
-                                                    <td className="px-6 py-4">
-                                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                    <td className="px-2 py-3.5 text-sm text-gray-700 font-semibold whitespace-nowrap">{record.partyName}</td>
+                                                    <td className="px-2 py-3.5 text-sm text-gray-700 font-semibold whitespace-nowrap">{record.exporterName}</td>
+                                                    <td className="px-2 py-3.5 text-sm text-gray-600 font-medium max-w-[140px] truncate whitespace-nowrap" title={displayPort}>{displayPort}</td>
+                                                    <td className="px-2 py-3.5 text-sm text-gray-600">
+                                                        {hasMultipleProducts ? (
+                                                            <div className="flex flex-col gap-1">
+                                                                {record.productsList.map((p, idx) => (
+                                                                    <div key={idx} className="whitespace-nowrap font-medium text-gray-800 flex items-center gap-1.5" title={p.productName}>
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                                                                        <span>{p.productName}</span>
+                                                                    </div>
+                                                                ))}
+                                                                <div className="whitespace-nowrap font-extrabold text-blue-700 text-xs border-t border-gray-200/80 pt-0.5 mt-0.5">
+                                                                    Total:
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="whitespace-nowrap max-w-[180px] truncate" title={displayProducts}>{displayProducts}</div>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-2 py-3.5 text-sm text-gray-600 font-bold whitespace-nowrap">
+                                                        {hasMultipleProducts ? (
+                                                            <div className="flex flex-col gap-1">
+                                                                {record.productsList.map((p, idx) => {
+                                                                    const itemQty = parseFloat(p.quantity) || 0;
+                                                                    return (
+                                                                        <div key={idx} className="whitespace-nowrap font-medium text-gray-700">
+                                                                            {itemQty > 0 ? `${itemQty.toLocaleString('en-US')} kg` : '—'}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                                <div className="whitespace-nowrap font-extrabold text-blue-700 text-xs border-t border-gray-200/80 pt-0.5 mt-0.5">
+                                                                    {totalQty.toLocaleString('en-US')} kg
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span>{totalQty.toLocaleString('en-US')} kg</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-2 py-3.5 text-sm text-blue-700 font-bold whitespace-nowrap">${parseFloat(record.grandTotal).toLocaleString()}</td>
+                                                    <td className="px-2 py-3.5 whitespace-nowrap">
+                                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                             record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
                                                                 'bg-amber-50 text-amber-600 border-amber-100'
                                                             }`}>
                                                             {record.status}
                                                         </span>
                                                     </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center justify-center gap-3">
+                                                    <td className="px-2 py-3.5 whitespace-nowrap">
+                                                        <div className="flex items-center justify-center gap-1.5">
                                                             <button
                                                                 onClick={() => {
                                                                     setViewHistoryRecord(record);
                                                                     const tl = getHistoryTimeline(record);
                                                                     setActiveHistoryIndex(tl.length > 1 ? tl.length - 1 : 0);
                                                                 }}
-                                                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
+                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
                                                                 title="View History"
                                                             >
                                                                 <EyeIcon className="w-5 h-5" />
@@ -4198,7 +4237,7 @@ function PI({
                                                                         generatePIPDF(enriched);
                                                                     }
                                                                 }}
-                                                                className="p-2 text-gray-400 hover:text-blue-600 transition-all active:scale-90"
+                                                                className="p-1.5 text-gray-400 hover:text-blue-600 transition-all active:scale-90"
                                                                 title="Download PDF"
                                                             >
                                                                 <PDFIcon className="w-5 h-5" />
@@ -4206,7 +4245,7 @@ function PI({
                                                             {canDelete && (
                                                                 <button
                                                                     onClick={() => handleDelete(record._id)}
-                                                                    className="p-2 text-gray-400 hover:text-red-600 transition-all active:scale-90"
+                                                                    className="p-1.5 text-gray-400 hover:text-red-600 transition-all active:scale-90"
                                                                     title="Delete Record"
                                                                 >
                                                                     <TrashIcon className="w-5 h-5" />
@@ -4219,7 +4258,7 @@ function PI({
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan="9" className="px-6 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
+                                            <td colSpan="10" className="px-2 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -4247,6 +4286,9 @@ function PI({
                                 const totalQty = record.productsList && record.productsList.length > 0
                                     ? record.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
                                     : (parseFloat(record.grandTotalQuantity || record.quantity) || 0);
+
+                                const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
+                                const hasMultipleProducts = record.productsList && record.productsList.length > 1;
 
                                 return (
                                     <div
@@ -4297,9 +4339,30 @@ function PI({
                                                         <span className="text-sm font-bold text-gray-800 truncate">{record.exporterName}</span>
                                                     </div>
                                                     <div className="flex items-center">
-                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Product</span>
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Port</span>
                                                         <span className="text-gray-400 font-bold mx-2">-</span>
-                                                        <span className="text-sm font-bold text-gray-700 truncate" title={displayProducts}>{displayProducts}</span>
+                                                        <span className="text-sm font-bold text-gray-800 truncate">{displayPort}</span>
+                                                    </div>
+                                                    <div className="flex items-start">
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0 mt-0.5">Product</span>
+                                                        <span className="text-gray-400 font-bold mx-2 mt-0.5">-</span>
+                                                        <div className="flex-1 text-sm font-bold text-gray-700">
+                                                            {hasMultipleProducts ? (
+                                                                <div className="flex flex-col gap-1">
+                                                                    {record.productsList.map((p, idx) => {
+                                                                        const itemQty = parseFloat(p.quantity) || 0;
+                                                                        return (
+                                                                            <div key={idx} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded-lg text-xs">
+                                                                                <span>{p.productName}</span>
+                                                                                <span className="text-blue-600 font-extrabold">{itemQty > 0 ? `${itemQty.toLocaleString('en-US')} kg` : ''}</span>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="truncate block" title={displayProducts}>{displayProducts}</span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <div className="flex items-center">
                                                         <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Total Qty</span>

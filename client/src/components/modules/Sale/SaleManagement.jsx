@@ -5202,10 +5202,10 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group whitespace-nowrap" onClick={() => handleSort('warehouseName')}>
                                             <div className="flex items-center">W.HHOUSE {renderSortIcon('warehouseName')}</div>
                                         </th>
-                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('companyName')}>
+                                        <th className="sale-mgmt-th cursor-pointer group !px-1.5" onClick={() => handleSort('companyName')}>
                                             <div className="flex items-center">Company {renderSortIcon('companyName')}</div>
                                         </th>
-                                        <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('customerName')}>
+                                        <th className="sale-mgmt-th cursor-pointer group !px-1.5" onClick={() => handleSort('customerName')}>
                                             <div className="flex items-center">Customer {renderSortIcon('customerName')}</div>
                                         </th>
                                         <th className="sale-mgmt-th">Product</th>
@@ -5468,11 +5468,11 @@ const SaleManagement = ({
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{getSafeString(sale.companyName) || '-'}</div>
+                                            <td className="!px-1.5 py-4 max-w-[130px]">
+                                                <div className="text-[13px] font-semibold text-gray-800 break-words leading-tight">{getSafeString(sale.companyName) || '-'}</div>
                                             </td>
-                                            <td className="px-3 py-4 whitespace-nowrap">
-                                                <div className="text-[13px] font-semibold text-gray-800">{getSafeString(sale.customerName) || '-'}</div>
+                                            <td className="!px-1.5 py-4 max-w-[110px]">
+                                                <div className="text-[13px] font-semibold text-gray-800 break-words leading-tight">{getSafeString(sale.customerName) || '-'}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap">
                                                 {isMultiple && !isExpanded ? (

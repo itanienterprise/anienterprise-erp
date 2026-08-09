@@ -767,30 +767,30 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
         const filterText = filterParts.join('   |   ');
 
         // Center: Date Pill
-        doc.setFontSize(10);
+        doc.setFontSize(8.5);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(71, 85, 105);
         const filterTW = doc.getTextWidth(filterText);
-        const pillW = Math.min(filterTW + 16, pageWidth - margin * 2);
+        const pillW = Math.min(filterTW + 12, pageWidth - margin * 2);
         doc.setFillColor(241, 245, 249);
         doc.setDrawColor(203, 213, 225);
         doc.setLineWidth(0.3);
-        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 7.5, 2, 2, 'FD');
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 6, 1.5, 1.5, 'FD');
         doc.setTextColor(30, 41, 59);
-        doc.text(filterText, pageWidth / 2, y + 5.2, { align: 'center' });
+        doc.text(filterText, pageWidth / 2, y + 4.2, { align: 'center' });
 
         // Right Side: Printed on
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
+        doc.setFontSize(8.5);
         doc.setTextColor(100, 116, 139);
-        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 5.2, { align: 'right' });
+        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 4.2, { align: 'right' });
 
         // Left Side: Product Card (placed a little down on the left)
-        const prodNameStr = filters.productName 
+        const prodNameStr = filters.productName
             ? (Array.isArray(filters.productName) ? filters.productName.join(', ') : filters.productName)
             : '';
 
-        let yPos = y + 9.5;
+        let yPos = y + 8;
 
         if (prodNameStr) {
             const prodLabel = `Product: ${prodNameStr}`;
@@ -892,22 +892,20 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             }
 
             if (whItem.name && whItem.name.trim() !== '') {
-                // Modern warehouse badge (P&L style)
+                // Compact warehouse badge
                 const label = `WAREHOUSE: ${whItem.name.toUpperCase()}`;
-                doc.setFontSize(10.5);
+                doc.setFontSize(8.5);
                 doc.setFont('helvetica', 'bold');
                 const textWidth = doc.getTextWidth(label);
-                const pillW = textWidth + 14;
+                const pillW = textWidth + 12;
                 const boxX = (pageWidth - pillW) / 2;
 
-                doc.setFillColor(245, 245, 245);
-                doc.setDrawColor(200, 200, 200);
-                doc.setLineWidth(0.3);
-                doc.roundedRect(boxX, yPos, pillW, 7.5, 2, 2, 'FD');
-                doc.setTextColor(0, 0, 0);
-                doc.text(label, pageWidth / 2, yPos + 5.2, { align: 'center' });
+                doc.setFillColor(249, 115, 22);
+                doc.roundedRect(boxX, yPos, pillW, 6, 1.5, 1.5, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.text(label, pageWidth / 2, yPos + 4.2, { align: 'center' });
 
-                yPos += 9.5;
+                yPos += 8;
             }
 
             // --- Data Preparation ---
@@ -2862,7 +2860,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                         truck: entry.truck || sale.truck || '-',
                         price: prc,
                         total: tot,
-                        lcNo: (entry.lcNo !== undefined && entry.lcNo !== null) ? (entry.lcNo || '-') : (item.lcNo || sale.lcNo || '-'),
+                        lcNo: entry.lcNo || entry.lcNumber || item.lcNo || item.lcNumber || sale.lcNo || sale.lcNumber || '-',
                         uom: entry.uom || item.uom || 'QTY',
                         isFirstInProduct: subIdx === 0,
                         productSpan: entries.length
@@ -2882,7 +2880,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                     bag: sale.bag || 0,
                     price: prc,
                     total: tot,
-                    lcNo: sale.lcNo || '-',
+                    lcNo: sale.lcNo || sale.lcNumber || '-',
                     uom: sale.uom || 'QTY',
                     isFirstInProduct: true,
                     productSpan: 1
@@ -2919,11 +2917,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 }
 
                 if (item.isFirstInProduct) {
-                    if (saleType !== 'Border') {
-                        row.push({ content: (item.lcNo && item.lcNo !== '-' ? item.lcNo.slice(-4) : '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
-                    } else {
-                        row.push({ content: (item.lcNo || '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
-                    }
+                    row.push({ content: (item.lcNo || '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
                 }
 
                 if (saleType !== 'Border' && idx === 0) {
@@ -2933,7 +2927,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 
                 if (idx === 0) {
                     if (saleType !== 'Border') {
-                        row.push({ content: (sale.orderNo || sale.invoiceNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
+                        row.push({ content: (sale.invoiceNo || sale.orderNo || '-'), rowSpan: flatItems.length, styles: { halign: 'center' } });
                     }
 
                     if (saleType === 'Border') {
@@ -3078,7 +3072,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 4: { cellWidth: 22, overflow: 'linebreak' }, // Truck No (moved)
                 5: { cellWidth: 17, halign: 'center' },    // Invoice (moved)
                 6: { cellWidth: 31 },                       // Company (moved)
-                7: { cellWidth: 24, overflow: 'linebreak' }, // Product (moved)
+                7: { cellWidth: 24, overflow: 'hidden' }, // Product (moved)
                 8: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand (moved)
                 9: { cellWidth: 20, halign: 'right' },     // Qty
                 10: { cellWidth: 14, halign: 'right' },    // Price
@@ -3090,17 +3084,20 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         });
 
         // --- Signatures ---
-        let finalY = doc.lastAutoTable.finalY + 30;
-        if (finalY + 20 > pageHeight) {
+        let finalY = doc.lastAutoTable.finalY + 15;
+        if (finalY + 15 > pageHeight - margin) {
             doc.addPage();
-            finalY = 30;
+            finalY = margin + 15;
         }
 
         const sigWidth = 45;
         const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
 
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.3);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
         doc.line(margin, finalY, margin + sigWidth, finalY);
         doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
 
@@ -3681,17 +3678,20 @@ export const generateInsurancePaymentReportPDF = (payments, filters, dateStr, lc
         });
 
         // Signatures
-        let finalY = doc.lastAutoTable.finalY + 30;
-        if (finalY + 20 > pageHeight) {
+        let finalY = doc.lastAutoTable.finalY + 15;
+        if (finalY + 15 > pageHeight - margin) {
             doc.addPage();
-            finalY = 30;
+            finalY = margin + 15;
         }
 
         const sigWidth = 45;
         const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
 
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.3);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
         doc.line(margin, finalY, margin + sigWidth, finalY);
         doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
 
@@ -6802,16 +6802,19 @@ export const generateProfitLossPDF = async (params) => {
             autoTable(doc, {
                 startY: currentY,
                 margin: { left: margin, right: margin },
-                head: [['Product Name', 'Purchase Qty', 'In-house Qty', 'Short Qty', 'Damage Qty', 'Sold Qty', 'Current Stock Value']],
-                body: productSummary.map(p => [
-                    p.productName || '-',
-                    `${Math.round(p.purchaseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                    `${Math.round(p.inhouseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                    `${Math.round(p.shortQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                    `${Math.round(p.damageQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                    `${Math.round(p.saleQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                    `Tk ${Math.round((p.inhouseQty - (p.saleQty || 0) - (p.damageQty || 0)) * (p.purchaseQty > 0 ? (p.purchasePrice / p.purchaseQty) : 0)).toLocaleString('en-IN')}`
-                ]),
+                head: [['Product Name', 'Purchase Qty', 'In-house Qty', 'Short Qty', 'Damage Qty', 'Sold Qty', 'Current Stock Qty']],
+                body: productSummary.map(p => {
+                    const currentStockQty = Math.max(0, Math.round((p.inhouseQty || 0) - (p.saleQty || 0) - (p.damageQty || 0)));
+                    return [
+                        p.productName || '-',
+                        `${Math.round(p.purchaseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                        `${Math.round(p.inhouseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                        `${Math.round(p.shortQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                        `${Math.round(p.damageQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                        `${Math.round(p.saleQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                        `${currentStockQty.toLocaleString()} ${p.unit || 'KG'}`
+                    ];
+                }),
                 theme: 'grid',
                 headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
                 bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
