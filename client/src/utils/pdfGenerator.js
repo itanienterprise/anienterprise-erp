@@ -970,11 +970,19 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     if (bIdx === 0) {
                         const prodNameStr = (item.productName || '-').toUpperCase();
                         const hasStartQuality = qInfo && qInfo.isStart && qInfo.name;
-                        const cellContent = hasStartQuality ? `${prodNameStr}\n\n${qInfo.name}` : prodNameStr;
-                        row.push({
-                            content: cellContent,
-                            styles: { valign: 'top', fontStyle: 'bold', halign: 'left', textColor: hasStartQuality ? [29, 78, 216] : [0, 0, 0], lineWidth: 0 }
-                        });
+                        if (hasStartQuality) {
+                            row.push({
+                                content: `${prodNameStr}\n${qInfo.name}`,
+                                prodName: prodNameStr,
+                                qualityName: qInfo.name,
+                                styles: { valign: 'top', fontStyle: 'bold', halign: 'left', textColor: [0, 0, 0], lineWidth: 0 }
+                            });
+                        } else {
+                            row.push({
+                                content: prodNameStr,
+                                styles: { valign: 'top', fontStyle: 'bold', halign: 'left', textColor: [0, 0, 0], lineWidth: 0 }
+                            });
+                        }
                     } else if (qInfo && qInfo.isStart && qInfo.name) {
                         row.push({
                             content: qInfo.name,
@@ -1224,53 +1232,53 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             const getColumnStyles = () => {
                 if (reportType === 'detailed') {
                     const styles = {
-                        0: { cellWidth: 8, halign: 'center', lineWidth: 0 },
-                        1: { cellWidth: 32, lineWidth: 0 },
-                        2: { cellWidth: 40, lineWidth: 0 }
+                        0: { cellWidth: 7, halign: 'center', lineWidth: 0 },
+                        1: { cellWidth: 38, lineWidth: 0 },
+                        2: { cellWidth: 41, lineWidth: 0 }
                     };
                     let colIdx = 3;
-                    if (showBag) styles[colIdx++] = { cellWidth: 18, halign: 'right' };
-                    if (showQty) styles[colIdx++] = { cellWidth: 18, halign: 'right' };
-                    if (showBag) styles[colIdx++] = { cellWidth: 18, halign: 'right' };
-                    if (showQty) styles[colIdx++] = { cellWidth: 18, halign: 'right' };
-                    if (showBag) styles[colIdx++] = { cellWidth: 18, halign: 'right' };
-                    if (showQty) styles[colIdx++] = { cellWidth: 18, halign: 'right' };
+                    if (showBag) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
+                    if (showQty) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
+                    if (showBag) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
+                    if (showQty) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
+                    if (showBag) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
+                    if (showQty) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
                     return styles;
                 } else if (reportType === 'price') {
                     const styles = {
-                        0: { cellWidth: 8, halign: 'center', lineWidth: 0 },
-                        1: { cellWidth: 35, lineWidth: 0 },
-                        2: { cellWidth: 50, lineWidth: 0 },
-                        3: { cellWidth: 27 },
-                        4: { cellWidth: 22, halign: 'right' }
+                        0: { cellWidth: 7, halign: 'center', lineWidth: 0 },
+                        1: { cellWidth: 42, lineWidth: 0 },
+                        2: { cellWidth: 48, lineWidth: 0 },
+                        3: { cellWidth: 26 },
+                        4: { cellWidth: 21, halign: 'right' }
                     };
                     let colIdx = 5;
-                    if (showBag) styles[colIdx++] = { cellWidth: 29, halign: 'right' };
-                    if (showQty) styles[colIdx++] = { cellWidth: 29, halign: 'right' };
+                    if (showBag) styles[colIdx++] = { cellWidth: 28, halign: 'right' };
+                    if (showQty) styles[colIdx++] = { cellWidth: 28, halign: 'right' };
                     return styles;
                 } else {
                     // short report
                     const hasBothUnits = showBag && showQty;
                     if (hasBothUnits) {
                         return {
-                            0: { cellWidth: 8, halign: 'center', lineWidth: 0 },
-                            1: { cellWidth: 32, lineWidth: 0 },
-                            2: { cellWidth: 38, lineWidth: 0 },
-                            3: { cellWidth: 20, halign: 'right' },
-                            4: { cellWidth: 20, halign: 'right' },
-                            5: { cellWidth: 20, halign: 'right' },
-                            6: { cellWidth: 20, halign: 'right' },
-                            7: { cellWidth: 21, halign: 'right' },
-                            8: { cellWidth: 21, halign: 'right' }
+                            0: { cellWidth: 7, halign: 'center', lineWidth: 0 },
+                            1: { cellWidth: 41, lineWidth: 0 },
+                            2: { cellWidth: 40, lineWidth: 0 },
+                            3: { cellWidth: 18, halign: 'right' },
+                            4: { cellWidth: 19, halign: 'right' },
+                            5: { cellWidth: 18, halign: 'right' },
+                            6: { cellWidth: 19, halign: 'right' },
+                            7: { cellWidth: 19, halign: 'right' },
+                            8: { cellWidth: 19, halign: 'right' }
                         };
                     } else {
                         return {
-                            0: { cellWidth: 8, halign: 'center', lineWidth: 0 },
-                            1: { cellWidth: 42, lineWidth: 0 },
-                            2: { cellWidth: 50, lineWidth: 0 },
-                            3: { cellWidth: 33, halign: 'right' },
-                            4: { cellWidth: 33, halign: 'right' },
-                            5: { cellWidth: 34, halign: 'right' }
+                            0: { cellWidth: 7, halign: 'center', lineWidth: 0 },
+                            1: { cellWidth: 50, lineWidth: 0 },
+                            2: { cellWidth: 55, lineWidth: 0 },
+                            3: { cellWidth: 29, halign: 'right' },
+                            4: { cellWidth: 29, halign: 'right' },
+                            5: { cellWidth: 30, halign: 'right' }
                         };
                     }
                 }
@@ -1283,7 +1291,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 theme: 'plain',
                 rowPageBreak: 'auto',
                 styles: {
-                    fontSize: reportType === 'detailed' ? 8.5 : (reportType === 'price' ? 9.5 : 9.2),
+                    fontSize: reportType === 'detailed' ? 8 : (reportType === 'price' ? 9 : 8.8),
                     cellPadding: reportType === 'detailed' ? 1.2 : 1.3,
                     lineColor: [0, 0, 0],
                     lineWidth: 0.1,
@@ -1296,7 +1304,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     fontStyle: 'bold',
                     halign: 'center',
                     lineWidth: 0.1,
-                    fontSize: 9.5
+                    fontSize: 9
                 },
                 columnStyles: getColumnStyles(),
                 margin: { left: 5, right: 5 },
@@ -1326,6 +1334,24 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     const isLastRow = row.index === data.table.body.length - 1;
 
                     if (column.index === 0 || column.index === 1 || column.index === 2) {
+                        // Custom redrawing for product name cell if it contains both product name (black) and quality badge (blue)
+                        if (column.index === 1 && cell.raw && cell.raw.prodName && cell.raw.qualityName) {
+                            const bgFill = (cell.styles && cell.styles.fillColor) ? cell.styles.fillColor : [255, 255, 255];
+                            doc.setFillColor(bgFill[0], bgFill[1], bgFill[2]);
+                            doc.rect(cell.x + 0.1, cell.y + 0.1, cell.width - 0.2, cell.height - 0.2, 'F');
+
+                            doc.setFont('helvetica', 'bold');
+                            doc.setFontSize(cell.styles.fontSize || 8.8);
+
+                            // Line 1: Product Name in BLACK
+                            doc.setTextColor(0, 0, 0);
+                            doc.text(cell.raw.prodName, cell.x + cell.padding('left'), cell.y + cell.padding('top') + 2.8);
+
+                            // Line 2: Quality Badge in BLUE
+                            doc.setTextColor(29, 78, 216);
+                            doc.text(cell.raw.qualityName, cell.x + cell.padding('left'), cell.y + cell.padding('top') + 2.8 + 4.2);
+                        }
+
                         // Left vertical line for SL (outer table border)
                         if (column.index === 0) {
                             customLinesToDraw.push({
