@@ -903,9 +903,11 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 const pillW = textWidth + 14;
                 const boxX = (pageWidth - pillW) / 2;
 
-                doc.setFillColor(30, 41, 59);
-                doc.roundedRect(boxX, yPos - 3, pillW, 7, 2, 2, 'F');
-                doc.setTextColor(255, 255, 255);
+                doc.setFillColor(245, 245, 245);
+                doc.setDrawColor(200, 200, 200);
+                doc.setLineWidth(0.3);
+                doc.roundedRect(boxX, yPos - 3, pillW, 7, 2, 2, 'FD');
+                doc.setTextColor(0, 0, 0);
                 doc.text(label, pageWidth / 2, yPos + 1.5, { align: 'center' });
 
                 yPos += 8;
@@ -1292,8 +1294,8 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     valign: 'top'
                 },
                 headStyles: {
-                    fillColor: [30, 41, 59],
-                    textColor: [255, 255, 255],
+                    fillColor: [245, 245, 245],
+                    textColor: [0, 0, 0],
                     fontStyle: 'bold',
                     halign: 'center',
                     lineWidth: 0.1,
