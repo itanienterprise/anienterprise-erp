@@ -26,7 +26,8 @@ const OrderManagement = ({
     startLongPress,
     endLongPress,
     isLongPressTriggered,
-    highlightId
+    highlightId,
+    isRequestedNotif
 }) => {
     
     // --- State Management ---
@@ -92,6 +93,13 @@ const OrderManagement = ({
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [isEditRequestedOnly, setIsEditRequestedOnly] = useState(false);
+
+    useEffect(() => {
+        if (isRequestedNotif) {
+            setIsRequestedOnly(true);
+            setIsEditRequestedOnly(false);
+        }
+    }, [isRequestedNotif]);
 
     // Form & View States
     const [showForm, setShowForm] = useState(false);

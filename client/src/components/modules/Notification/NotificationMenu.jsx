@@ -10,7 +10,7 @@ const TITLE_TO_VIEW = [
     { pattern: /\bPTC-[0-9]+/i, view: 'pay-to-customer-section' },
     { pattern: /\bPL-[0-9]+/i, view: 'packing-list-section' },
     { pattern: /\bPI-[0-9]+/i, view: 'pi-section' },
-    { pattern: /\bORD-[0-9]+/i, view: 'order-sale-section' },
+    { pattern: /\bORD-?[0-9]+/i, view: 'order-sale-section' },
     { pattern: /\bPUR-[0-9]+/i, view: 'purchase-sale-section' },
     { pattern: /\bSAL-[0-9]+/i, view: 'general-sale-section' },
 
@@ -189,8 +189,10 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
         const view = resolveLink(notif);
         if (view && onNavigate) {
             const highlightId = extractHighlightId(notif);
-            const titleMsg = (notif.title || '') + ' ' + (notif.message || '');
-            const isRequested = /request/i.test(titleMsg);
+            const titleStr = typeof notif.title === 'string' ? notif.title : (notif.title?.title || notif.title?.message || '');
+            const msgStr = typeof notif.message === 'string' ? notif.message : (notif.message?.message || '');
+            const titleMsg = (titleStr + ' ' + msgStr).toLowerCase();
+            const isRequested = /request/i.test(titleMsg) || /created/i.test(titleMsg) || /new/i.test(titleMsg) || /pending/i.test(titleMsg) || /ord/i.test(titleMsg) || view === 'order-sale-section';
             onNavigate(view, highlightId, isRequested);
         }
     };
