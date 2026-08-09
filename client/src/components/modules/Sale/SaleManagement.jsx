@@ -2651,6 +2651,62 @@ const SaleManagement = ({
         setActiveDropdown(null);
     };
 
+    const handleCompanyNameSelect = (customer) => {
+        if (!customer) {
+            setFormData(prev => ({
+                ...prev,
+                customerId: '',
+                companyName: '',
+                customerName: '',
+                contact: '',
+                address: ''
+            }));
+            setCompanyNameSearch('');
+        } else {
+            const comp = typeof customer === 'object' ? (customer.companyName || customer.customerName || '') : customer;
+            const custName = typeof customer === 'object' ? (customer.customerName || customer.companyName || '') : customer;
+            const custId = typeof customer === 'object' ? (customer._id || '') : '';
+            const phone = typeof customer === 'object' ? (customer.phone || customer.contact || '') : '';
+            const addr = typeof customer === 'object' ? (customer.address || '') : '';
+
+            setFormData(prev => ({
+                ...prev,
+                customerId: custId,
+                companyName: comp,
+                customerName: custName,
+                contact: phone,
+                address: addr
+            }));
+            setCompanyNameSearch(comp);
+        }
+        setActiveDropdown(null);
+        setHighlightedIndex(-1);
+    };
+
+    const handleImporterSelect = (importer) => {
+        const value = typeof importer === 'object' ? (importer.name || '') : (importer || '');
+        setFormData(prev => ({ ...prev, importer: value }));
+        setImporterSearch('');
+        setActiveDropdown(null);
+        setHighlightedIndex(-1);
+    };
+
+    const handleExporterSelect = (exporter) => {
+        const value = typeof exporter === 'object' ? (exporter.name || '') : (exporter || '');
+        setFormData(prev => ({ ...prev, exporter: value }));
+        setExporterSearch('');
+        setActiveDropdown(null);
+        setHighlightedIndex(-1);
+    };
+
+    const handlePortSelect = (port) => {
+        const value = typeof port === 'object' ? (port.name || '') : (port || '');
+        setFormData(prev => ({ ...prev, port: value }));
+        setPortSearch('');
+        setActiveDropdown(null);
+        setHighlightedIndex(-1);
+    };
+
     const handleDropdownKeyDown = (e, type, filteredOptions, onSelect) => {
         if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -3852,6 +3908,7 @@ const SaleManagement = ({
                                                 <button
                                                     key={importer._id || `imp-${idx}`}
                                                     type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handleImporterSelect(importer.name); }}
                                                     onClick={() => handleImporterSelect(importer.name)}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.importer === importer.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
@@ -3913,6 +3970,7 @@ const SaleManagement = ({
                                                 <button
                                                     key={exp._id || `exp-${idx}`}
                                                     type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handleExporterSelect(exp.name); }}
                                                     onClick={() => handleExporterSelect(exp.name)}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.exporter === exp.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
@@ -3974,6 +4032,7 @@ const SaleManagement = ({
                                                 <button
                                                     key={cnf._id || `indcnf-${idx}`}
                                                     type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handleIndCnfSelect(cnf.name); }}
                                                     onClick={() => handleIndCnfSelect(cnf.name)}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.indianCnF === cnf.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
@@ -4035,6 +4094,7 @@ const SaleManagement = ({
                                                 <button
                                                     key={cnf._id || `bdcnf-${idx}`}
                                                     type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handleBdCnfSelect(cnf.name); }}
                                                     onClick={() => handleBdCnfSelect(cnf.name)}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.bdCnf === cnf.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
@@ -4096,6 +4156,7 @@ const SaleManagement = ({
                                                 <button
                                                     key={port._id || `port-${idx}`}
                                                     type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handlePortSelect(port.name); }}
                                                     onClick={() => handlePortSelect(port.name)}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.port === port.name ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
@@ -4117,7 +4178,7 @@ const SaleManagement = ({
                                             <input
                                                 type="text"
                                                 placeholder={formData.companyName || "Search company..."}
-                                                value={companyNameSearch}
+                                                value={activeDropdown === 'companyName' ? companyNameSearch : (formData.companyName || '')}
                                                 readOnly={isFieldReadOnly(originalData?.companyName)}
                                                 onChange={(e) => {
                                                     if (isFieldReadOnly(originalData?.companyName)) return;
@@ -4157,6 +4218,10 @@ const SaleManagement = ({
                                                     <button
                                                         key={c._id}
                                                         type="button"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            handleCompanyNameSelect(c);
+                                                        }}
                                                         onClick={() => handleCompanyNameSelect(c)}
                                                         onMouseEnter={() => setHighlightedIndex(idx)}
                                                         className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.customerId === c._id ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
@@ -4187,7 +4252,7 @@ const SaleManagement = ({
                                         <input
                                             type="text"
                                             placeholder={formData.companyName || "Search company..."}
-                                            value={companyNameSearch}
+                                            value={activeDropdown === 'companyName' ? companyNameSearch : (formData.companyName || '')}
                                             readOnly={isFieldReadOnly(originalData?.companyName)}
                                             onChange={(e) => {
                                                 if (isFieldReadOnly(originalData?.companyName)) return;
@@ -4227,6 +4292,10 @@ const SaleManagement = ({
                                                 <button
                                                     key={c._id}
                                                     type="button"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        handleCompanyNameSelect(c);
+                                                    }}
                                                     onClick={() => handleCompanyNameSelect(c)}
                                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                                     className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.customerId === c._id ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
