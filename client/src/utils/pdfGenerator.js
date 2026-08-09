@@ -2917,7 +2917,8 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 }
 
                 if (item.isFirstInProduct) {
-                    row.push({ content: (item.lcNo || '-'), rowSpan: item.productSpan, styles: { halign: 'center' } });
+                    const formattedLcNo = item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 5 ? item.lcNo.slice(-5) : item.lcNo) : '-';
+                    row.push({ content: formattedLcNo, rowSpan: item.productSpan, styles: { halign: 'center' } });
                 }
 
                 if (saleType !== 'Border' && idx === 0) {
@@ -3026,7 +3027,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 lineWidth: 0.1,
                 valign: 'middle',
                 textColor: [0, 0, 0],
-                overflow: 'ellipsize'
+                overflow: 'linebreak'
             },
             headStyles: {
                 fillColor: [240, 240, 240],
@@ -3041,7 +3042,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
                 0: { cellWidth: 8, halign: 'center' },     // SL
                 1: { cellWidth: 20, halign: 'center' },     // Date
                 2: { cellWidth: 20, halign: 'center' },     // Order No
-                3: { cellWidth: 36, overflow: 'hidden' },// Company
+                3: { cellWidth: 36, overflow: 'linebreak' },// Company
                 4: { cellWidth: 27, overflow: 'linebreak' },// Location
                 5: { cellWidth: 20, overflow: 'linebreak' },// Warehouse
                 6: { cellWidth: 25, overflow: 'linebreak' },// Product
@@ -3053,27 +3054,27 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             } : saleType === 'Border' ? {
                 0: { cellWidth: 10, halign: 'center' },     // SL
                 1: { cellWidth: 20, halign: 'center' },    // Date
-                2: { cellWidth: 25, halign: 'center' },    // LC No (Reduced)
-                3: { cellWidth: 30, noWrap: true },        // Importer
-                4: { cellWidth: 20, noWrap: true },        // Port
-                5: { cellWidth: 26, noWrap: true },        // IND C&F
-                6: { cellWidth: 26, noWrap: true },        // BD C&F
-                7: { cellWidth: 35, noWrap: true },        // Party Name
-                8: { cellWidth: 18, overflow: 'linebreak' }, // Product (Reduced)
+                2: { cellWidth: 25, halign: 'center' },    // LC No
+                3: { cellWidth: 30, overflow: 'linebreak' },// Importer
+                4: { cellWidth: 20, overflow: 'linebreak' },// Port
+                5: { cellWidth: 26, overflow: 'linebreak' },// IND C&F
+                6: { cellWidth: 26, overflow: 'linebreak' },// BD C&F
+                7: { cellWidth: 35, overflow: 'linebreak' },// Party Name
+                8: { cellWidth: 18, overflow: 'linebreak' },// Product
                 9: { cellWidth: 22, halign: 'right' },     // Qty
                 10: { cellWidth: 12, halign: 'center' },   // Truck
-                11: { cellWidth: 18, halign: 'right' },    // Price (Reduced)
+                11: { cellWidth: 18, halign: 'right' },    // Price
                 12: { cellWidth: 24, halign: 'right' }     // Total
             } : {
                 0: { cellWidth: 8, halign: 'center' },     // SL
                 1: { cellWidth: 18, halign: 'center' },    // Date
-                2: { cellWidth: 15, halign: 'center' },    // LC No
-                3: { cellWidth: 15, overflow: 'linebreak' }, // Challan No (moved)
-                4: { cellWidth: 22, overflow: 'linebreak' }, // Truck No (moved)
-                5: { cellWidth: 17, halign: 'center' },    // Invoice (moved)
-                6: { cellWidth: 31 },                       // Company (moved)
-                7: { cellWidth: 24, overflow: 'hidden' }, // Product (moved)
-                8: { cellWidth: 30, noWrap: false, overflow: 'linebreak' }, // Brand (moved)
+                2: { cellWidth: 14, halign: 'center' },    // LC No
+                3: { cellWidth: 15, halign: 'center', overflow: 'linebreak' }, // Challan No
+                4: { cellWidth: 23, halign: 'center', overflow: 'linebreak' }, // Truck No
+                5: { cellWidth: 17, halign: 'center' },    // Invoice
+                6: { cellWidth: 31, overflow: 'overflow' },// Company
+                7: { cellWidth: 24, overflow: 'overflow' },// Product
+                8: { cellWidth: 30, overflow: 'overflow' },// Brand
                 9: { cellWidth: 20, halign: 'right' },     // Qty
                 10: { cellWidth: 14, halign: 'right' },    // Price
                 11: { cellWidth: 24, halign: 'right' },    // Total

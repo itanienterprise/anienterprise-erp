@@ -167,16 +167,16 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
     const [expandedMobileCards, setExpandedMobileCards] = useState(null);
     const [rawCustomers, setRawCustomers] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [expandedRows, setExpandedRows] = useState(new Set());
+    const [collapsedRows, setCollapsedRows] = useState(new Set());
 
     const toggleRowExpansion = (groupKey) => {
-        const newExpanded = new Set(expandedRows);
-        if (newExpanded.has(groupKey)) {
-            newExpanded.delete(groupKey);
+        const newCollapsed = new Set(collapsedRows);
+        if (newCollapsed.has(groupKey)) {
+            newCollapsed.delete(groupKey);
         } else {
-            newExpanded.add(groupKey);
+            newCollapsed.add(groupKey);
         }
-        setExpandedRows(newExpanded);
+        setCollapsedRows(newCollapsed);
     };
     const [submitStatus, setSubmitStatus] = useState(null);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -1697,7 +1697,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                     ) : displayedGroups.length > 0 ? (
                                         displayedGroups.map((group) => {
                                             const isMultiple = group.items.length > 1;
-                                            const isExpanded = expandedRows.has(group.key);
+                                            const isExpanded = !collapsedRows.has(group.key);
                                             const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
                                             return (
