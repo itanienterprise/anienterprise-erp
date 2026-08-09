@@ -696,7 +696,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
         // --- Configuration ---
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
-        const margin = 10;
+        const margin = 5;
 
         // Load company logo (same as P&L)
         const logoImg = await new Promise((resolve) => {
@@ -716,23 +716,23 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
 
         // --- Header (identical to P&L) ---
         if (logoImg) {
-            doc.addImage(logoImg, 'PNG', margin, margin, 22, 22);
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
         } else {
             doc.setFillColor(249, 115, 22);
-            doc.roundedRect(margin, margin, 20, 20, 3, 3, 'F');
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
             doc.setTextColor(255, 255, 255);
-            doc.setFontSize(18);
+            doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
-            doc.text("A", margin + 10, margin + 13, { align: 'center' });
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
         }
 
         doc.setTextColor(20, 25, 35);
-        doc.setFontSize(26);
+        doc.setFontSize(24);
         doc.setFont('helvetica', 'bold');
-        doc.text("ANI ENTERPRISE", margin + 24, margin + 13);
+        doc.text("ANI ENTERPRISE", margin + 22, margin + 11);
 
         // Address (right aligned)
-        doc.setFontSize(9.5);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
         doc.text([
@@ -740,24 +740,24 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             "Borogola, Bogura, Bangladesh",
             "Tel: +8802588813057",
             "Email: anienterprise051@gmail.com"
-        ], pageWidth - margin, margin + 3, { align: 'right', lineHeightFactor: 1.15 });
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
 
         // Orange divider line
-        let y = margin + 26;
+        let y = margin + 20;
         doc.setDrawColor(249, 115, 22);
         doc.setLineWidth(0.6);
         doc.line(margin, y, pageWidth - margin, y);
 
         // Title badge
-        y += 3;
+        y += 2;
         doc.setFillColor(249, 115, 22);
-        doc.roundedRect((pageWidth / 2) - 40, y, 80, 8, 2, 2, 'F');
+        doc.roundedRect((pageWidth / 2) - 40, y, 80, 7, 2, 2, 'F');
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
-        doc.text("STOCK REPORT", pageWidth / 2, y + 5.5, { align: 'center' });
+        doc.text("STOCK REPORT", pageWidth / 2, y + 5, { align: 'center' });
 
-        y += 15;
+        y += 9;
 
         // Filter info pill
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
@@ -767,7 +767,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
         const filterText = filterParts.join('   |   ');
 
         // Center: Date Pill
-        doc.setFontSize(8.5);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(71, 85, 105);
         const filterTW = doc.getTextWidth(filterText);
@@ -775,37 +775,36 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
         doc.setFillColor(241, 245, 249);
         doc.setDrawColor(203, 213, 225);
         doc.setLineWidth(0.3);
-        doc.roundedRect((pageWidth / 2) - (pillW / 2), y - 3, pillW, 7, 2, 2, 'FD');
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 7.5, 2, 2, 'FD');
         doc.setTextColor(30, 41, 59);
-        doc.text(filterText, pageWidth / 2, y + 1.5, { align: 'center' });
+        doc.text(filterText, pageWidth / 2, y + 5.2, { align: 'center' });
 
         // Right Side: Printed on
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(9);
         doc.setTextColor(100, 116, 139);
-        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 1.5, { align: 'right' });
+        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 5.2, { align: 'right' });
 
         // Left Side: Product Card (placed a little down on the left)
         const prodNameStr = filters.productName 
             ? (Array.isArray(filters.productName) ? filters.productName.join(', ') : filters.productName)
             : '';
 
-        let yPos = y + 6;
+        let yPos = y + 9.5;
 
         if (prodNameStr) {
-            yPos += 3;
             const prodLabel = `Product: ${prodNameStr}`;
-            doc.setFontSize(8.5);
+            doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             const prodTW = doc.getTextWidth(prodLabel);
             const prodPillW = prodTW + 10;
             doc.setFillColor(241, 245, 249);
             doc.setDrawColor(203, 213, 225);
             doc.setLineWidth(0.3);
-            doc.roundedRect(margin, yPos - 3, prodPillW, 7, 2, 2, 'FD');
+            doc.roundedRect(margin, yPos, prodPillW, 7.5, 2, 2, 'FD');
             doc.setTextColor(30, 41, 59);
-            doc.text(prodLabel, margin + 5, yPos + 1.5);
-            yPos += 7;
+            doc.text(prodLabel, margin + 5, yPos + 5.2);
+            yPos += 9.5;
         }
 
         const warehousesToRender = (filters.warehouse === 'All Warehouses' && stockRecords)
@@ -873,8 +872,6 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             return `${totalWhole}${totalRem !== 0 ? ` - ${Math.abs(totalRem)} kg` : ''}`;
         })();
 
-        yPos += 5;
-
         if (warehousesToRender.length === 0) {
             doc.setFontSize(11);
             doc.setFont('helvetica', 'italic');
@@ -888,16 +885,16 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             if (whIdx > 0) {
                 if (yPos + 40 > pageHeight) {
                     doc.addPage();
-                    yPos = 20;
+                    yPos = 15;
                 } else {
-                    yPos += 8;
+                    yPos += 6;
                 }
             }
 
             if (whItem.name && whItem.name.trim() !== '') {
                 // Modern warehouse badge (P&L style)
                 const label = `WAREHOUSE: ${whItem.name.toUpperCase()}`;
-                doc.setFontSize(9);
+                doc.setFontSize(10.5);
                 doc.setFont('helvetica', 'bold');
                 const textWidth = doc.getTextWidth(label);
                 const pillW = textWidth + 14;
@@ -906,11 +903,11 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 doc.setFillColor(245, 245, 245);
                 doc.setDrawColor(200, 200, 200);
                 doc.setLineWidth(0.3);
-                doc.roundedRect(boxX, yPos - 3, pillW, 7, 2, 2, 'FD');
+                doc.roundedRect(boxX, yPos, pillW, 7.5, 2, 2, 'FD');
                 doc.setTextColor(0, 0, 0);
-                doc.text(label, pageWidth / 2, yPos + 1.5, { align: 'center' });
+                doc.text(label, pageWidth / 2, yPos + 5.2, { align: 'center' });
 
-                yPos += 8;
+                yPos += 9.5;
             }
 
             // --- Data Preparation ---
@@ -1286,7 +1283,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 theme: 'plain',
                 rowPageBreak: 'auto',
                 styles: {
-                    fontSize: reportType === 'detailed' ? 8 : (reportType === 'price' ? 9 : 8.7),
+                    fontSize: reportType === 'detailed' ? 8.5 : (reportType === 'price' ? 9.5 : 9.2),
                     cellPadding: reportType === 'detailed' ? 1.2 : 1.3,
                     lineColor: [0, 0, 0],
                     lineWidth: 0.1,
@@ -1299,7 +1296,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     fontStyle: 'bold',
                     halign: 'center',
                     lineWidth: 0.1,
-                    fontSize: 9
+                    fontSize: 9.5
                 },
                 columnStyles: getColumnStyles(),
                 margin: { left: 5, right: 5 },
