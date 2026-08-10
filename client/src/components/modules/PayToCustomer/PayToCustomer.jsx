@@ -34,6 +34,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
     const canApproveEditRequest = hasPermission(currentUser, 'payToCustomer', 'approveEditRequest') || isAdmin;
     const canViewEditRequest = hasPermission(currentUser, 'payToCustomer', 'editRequest') || hasPermission(currentUser, 'payToCustomer', 'approveEditRequest') || canApprove;
     const canViewPaymentRequest = hasPermission(currentUser, 'payToCustomer', 'paymentRequest') || hasPermission(currentUser, 'payToCustomer', 'paymentApprovalRequest') || canApprove;
+    const canShowEntryBy = isAdmin || (currentUser?.role || '').toLowerCase() === 'incharge' || hasPermission(currentUser, 'payToCustomer', 'showEntryBy');
 
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
@@ -202,10 +203,70 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
         discount: ''
     });
 
+    const [employeesMap, setEmployeesMap] = useState({});
+
     useEffect(() => {
         fetchPayments();
         fetchBanks();
+        fetchEmployees();
     }, []);
+
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                const empName = (d.name || d.nameEn || d.employeeName || d.username || '').trim();
+                if (d.employeeId) map[d.employeeId] = empName;
+                if (d.username) map[d.username] = empName;
+                if (d._id) map[d._id] = empName;
+            });
+            setEmployeesMap(map);
+        } catch (error) {
+            console.error('Error fetching employees map:', error);
+        }
+    };
+
+    const getEntryByName = (entryByCode, entryByName) => {
+        if (entryByName && !entryByName.startsWith('E-') && !entryByName.startsWith('A-') && entryByName !== entryByCode) {
+            return entryByName;
+        }
+        if (entryByCode && employeesMap[entryByCode]) {
+            return employeesMap[entryByCode];
+        }
+        if (entryByName && employeesMap[entryByName]) {
+            return employeesMap[entryByName];
+        }
+        if (entryByName && entryByName !== entryByCode) {
+            return entryByName;
+        }
+        return entryByCode || '—';
+    };
+
+    const getEditedByName = (editedByCode, editedByName) => {
+        if (editedByName && !editedByName.startsWith('E-') && !editedByName.startsWith('A-') && editedByName !== editedByCode) {
+            return editedByName;
+        }
+        if (editedByCode && employeesMap[editedByCode]) {
+            return employeesMap[editedByCode];
+        }
+        if (editedByName && employeesMap[editedByName]) {
+            return employeesMap[editedByName];
+        }
+        if (editedByName && editedByName !== editedByCode) {
+            return editedByName;
+        }
+        return editedByCode || '';
+    };
 
     useEffect(() => {
         if (showAddModal) {
@@ -912,6 +973,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                     reference: newPayment.reference,
                     status: initialStatus,
                     isEdited: false,
+                    entryBy: currentUser?.employeeId || currentUser?.username || currentUser?.id || 'admin',
+                    entryByName: currentUser?.name || currentUser?.nameEn || currentUser?.username || 'Admin',
                     discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
                     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                 }));
@@ -1430,6 +1493,9 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                     <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
                                         <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
                                     </th>
+                                    {canShowEntryBy && (
+                                        <th className="sale-mgmt-th text-center">Entry By</th>
+                                    )}
                                     <th className="sale-mgmt-th text-center">Actions</th>
                                 </tr>
                             </thead>
@@ -1437,7 +1503,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                 {isLoading ? (
                                     Array(5).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11} className="px-6 py-12 text-center">
+                                            <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
                                                         <DollarSignIcon className="w-6 h-6 text-blue-500" />
@@ -1593,6 +1659,20 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                         </span>
                                                     )}
                                                 </td>
+                                                {canShowEntryBy && (
+                                                    <td className="px-3 py-4 text-center whitespace-nowrap">
+                                                        <div className="flex flex-col items-center gap-0.5">
+                                                            <span className="text-xs font-semibold text-gray-700">
+                                                                {getEntryByName(group.entryBy, group.entryByName)}
+                                                            </span>
+                                                            {(group.editedBy || group.editedByName) && (
+                                                                <span className="text-[10px] text-amber-600 font-medium">
+                                                                    ✎ {getEditedByName(group.editedBy, group.editedByName)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                )}
                                                 <td className="px-3 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-center gap-1.5">
                                                         <button

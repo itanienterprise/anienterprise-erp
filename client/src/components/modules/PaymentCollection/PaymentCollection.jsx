@@ -209,10 +209,70 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         discount: ''
     });
 
+    const [employeesMap, setEmployeesMap] = useState({});
+
     useEffect(() => {
         fetchPayments();
         fetchBanks();
+        fetchEmployees();
     }, []);
+
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                const empName = (d.name || d.nameEn || d.employeeName || d.username || '').trim();
+                if (d.employeeId) map[d.employeeId] = empName;
+                if (d.username) map[d.username] = empName;
+                if (d._id) map[d._id] = empName;
+            });
+            setEmployeesMap(map);
+        } catch (error) {
+            console.error('Error fetching employees map:', error);
+        }
+    };
+
+    const getEntryByName = (entryByCode, entryByName) => {
+        if (entryByName && !entryByName.startsWith('E-') && !entryByName.startsWith('A-') && entryByName !== entryByCode) {
+            return entryByName;
+        }
+        if (entryByCode && employeesMap[entryByCode]) {
+            return employeesMap[entryByCode];
+        }
+        if (entryByName && employeesMap[entryByName]) {
+            return employeesMap[entryByName];
+        }
+        if (entryByName && entryByName !== entryByCode) {
+            return entryByName;
+        }
+        return entryByCode || '—';
+    };
+
+    const getEditedByName = (editedByCode, editedByName) => {
+        if (editedByName && !editedByName.startsWith('E-') && !editedByName.startsWith('A-') && editedByName !== editedByCode) {
+            return editedByName;
+        }
+        if (editedByCode && employeesMap[editedByCode]) {
+            return employeesMap[editedByCode];
+        }
+        if (editedByName && employeesMap[editedByName]) {
+            return employeesMap[editedByName];
+        }
+        if (editedByName && editedByName !== editedByCode) {
+            return editedByName;
+        }
+        return editedByCode || '';
+    };
 
     const fetchBanks = async () => {
         try {
@@ -1865,11 +1925,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                         <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center whitespace-nowrap`}>
                                                             <div className="flex flex-col items-center gap-0.5">
                                                                 <span className="text-xs font-semibold text-gray-700">
-                                                                    {group.entryBy || group.entryByName || '—'}
+                                                                    {getEntryByName(group.entryBy, group.entryByName)}
                                                                 </span>
                                                                 {(group.editedBy || group.editedByName) && (
                                                                     <span className="text-[10px] text-amber-600 font-medium">
-                                                                        ✎ {group.editedBy || group.editedByName}
+                                                                        ✎ {getEditedByName(group.editedBy, group.editedByName)}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -2056,11 +2116,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                         <span className="mobile-card-label">Entry By:</span>
                                                                         <div className="flex flex-col items-end">
                                                                             <span className="mobile-card-value font-semibold text-gray-700">
-                                                                                {group.entryBy || group.entryByName || '—'}
+                                                                                {getEntryByName(group.entryBy, group.entryByName)}
                                                                             </span>
                                                                             {(group.editedBy || group.editedByName) && (
                                                                                 <span className="text-[10px] text-amber-600 font-medium">
-                                                                                    ✎ {group.editedBy || group.editedByName}
+                                                                                    ✎ {getEditedByName(group.editedBy, group.editedByName)}
                                                                                 </span>
                                                                             )}
                                                                         </div>
