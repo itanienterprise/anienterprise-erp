@@ -64,6 +64,7 @@ const Warehouse = require('./models/Warehouse');
 const Damage = require('./models/Damage');
 const Sale = require('./models/Sale');
 const Purchase = require('./models/Purchase');
+const PurchaseReceive = require('./models/PurchaseReceive');
 const Return = require('./models/Return');
 const User = require('./models/User');
 const Employee = require('./models/Employee');
@@ -162,7 +163,7 @@ const getDefaultPermissionsForRole = (role) => {
 
   const modules = [
     'employees', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup',
-    'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'borderSale', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank',
+    'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'borderSale', 'purchase', 'purchaseReceive', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank',
     'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore'
   ];
 
@@ -181,23 +182,23 @@ const getDefaultPermissionsForRole = (role) => {
       }
     });
   } else if (roleLower === 'lc manager') {
-    const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods'];
+    const lcModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'costOfGoods', 'purchase', 'purchaseReceive'];
     lcModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
   } else if (roleLower === 'sales manager') {
-    const salesModules = ['product', 'customer', 'sales', 'borderSale', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
+    const salesModules = ['product', 'customer', 'sales', 'borderSale', 'purchase', 'purchaseReceive', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct'];
     salesModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
   } else if (roleLower === 'accounts manager') {
-    const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods'];
+    const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods', 'purchase', 'purchaseReceive'];
     accModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
     defaults['employees'] = { view: true, add: false, edit: true, delete: false, special: false, showRate: false };
   } else if (roleLower === 'border manager') {
-    const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'borderSale'];
+    const borderModules = ['port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'lcReceive', 'warehouse', 'lcManagement', 'lcGp', 'lcExpense', 'purchase', 'purchaseReceive', 'borderSale'];
     borderModules.forEach(m => {
       defaults[m] = { view: true, add: true, edit: true, delete: true, special: true, showRate: false };
     });
@@ -1599,6 +1600,62 @@ apiRouter.delete('/api/purchases/:id', async (req, res) => {
 apiRouter.get('/api/purchases', async (req, res) => {
   try {
     const records = await Purchase.find().sort({ createdAt: -1 });
+    const decrypted = records.map(r => {
+      let d = decryptData(r.data);
+      if (d && d.data && typeof d.data === 'string') {
+        try { d = decryptData(d.data); } catch (e) { }
+      }
+      return { ...d, _id: r._id, createdAt: r.createdAt };
+    });
+    res.json(decrypted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Purchase Receive APIs
+apiRouter.post('/api/purchase-receives', async (req, res) => {
+  try {
+    if (!req.body.purchaseReceiveNo && !req.body.purchaseNo) {
+      const count = await PurchaseReceive.countDocuments();
+      req.body.purchaseReceiveNo = `PR-REC-${String(count + 1).padStart(4, '0')}`;
+    } else if (req.body.purchaseNo && !req.body.purchaseReceiveNo) {
+      req.body.purchaseReceiveNo = req.body.purchaseNo;
+    }
+    const encryptedData = encryptData(req.body);
+    const newPurchaseReceive = new PurchaseReceive({ data: encryptedData });
+    await newPurchaseReceive.save();
+    res.status(201).json({ ...req.body, _id: newPurchaseReceive._id, createdAt: newPurchaseReceive.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.put('/api/purchase-receives/:id', async (req, res) => {
+  try {
+    const encryptedData = encryptData(req.body);
+    const updatedPurchaseReceive = await PurchaseReceive.findByIdAndUpdate(req.params.id, {
+      data: encryptedData
+    }, { returnDocument: 'after' });
+    if (!updatedPurchaseReceive) return res.status(404).json({ message: 'Purchase Receive record not found' });
+    res.json({ ...req.body, _id: updatedPurchaseReceive._id, createdAt: updatedPurchaseReceive.createdAt });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+apiRouter.delete('/api/purchase-receives/:id', async (req, res) => {
+  try {
+    await PurchaseReceive.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Purchase Receive deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/purchase-receives', async (req, res) => {
+  try {
+    const records = await PurchaseReceive.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       let d = decryptData(r.data);
       if (d && d.data && typeof d.data === 'string') {

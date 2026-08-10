@@ -64,6 +64,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [purchaseReceivesList, setPurchaseReceivesList] = useState([]);
     useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
 
     // Form Modal States
@@ -100,15 +101,16 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
     const canApproveEditRequest = hasPermission(currentUser, 'purchase', 'approveEditRequest') || canApprove || currentUser?.role === 'admin';
 
     const syncPurchaseStock = async (purchasesList) => {
+        // Stock is managed solely by Purchase Receive module when received
+    };
+
+    const fetchPR = async () => {
         try {
-            for (const p of purchasesList) {
-                if ((p.status || 'Accepted') === 'Accepted') {
-                    await updateWarehouseStockForPurchase(p);
-                }
+            const res = await axios.get(`${API_BASE_URL}/api/purchase-receives`);
+            if (Array.isArray(res.data)) {
+                setPurchaseReceivesList(res.data);
             }
-        } catch (e) {
-            console.error('Error syncing purchase stock:', e);
-        }
+        } catch (e) { }
     };
 
     const fetchPurchases = async () => {
@@ -117,6 +119,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
             const res = await axios.get(`${API_BASE_URL}/api/purchases`);
             const data = res.data || [];
             setPurchases(data);
+            fetchPR();
             if (data.length > 0) {
                 syncPurchaseStock(data);
             }
@@ -157,6 +160,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         fetchWH();
         fetchCustomers();
         fetchProducts();
+        fetchPR();
     }, []);
 
     const requestedCount = useMemo(() => {
@@ -202,22 +206,57 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
 
     const getPurchaseBrandEntries = (purchase) => {
         const results = [];
+        const pNo = (purchase.purchaseNo || purchase.purchaseReceiveNo || '').trim().toLowerCase();
+
         (purchase.items || []).forEach(item => {
             const pName = item.productName || item.product || '';
+            const normPName = pName.trim().toLowerCase();
             const bEntries = item.brandEntries && item.brandEntries.length > 0
                 ? item.brandEntries
                 : [{ brand: item.brand || '', qty: item.qty || 0, rate: item.rate || item.purchasedPrice || 0 }];
 
             bEntries.forEach(be => {
+                const bName = be.brand || '—';
+                const normBName = (be.brand || '').trim().toLowerCase();
+                const purchasedQty = parseFloat(be.qty) || 0;
+
+                let inHouseQty = 0;
+                if (pNo) {
+                    (purchaseReceivesList || []).forEach(pr => {
+                        const prNo = (pr.purchaseNo || pr.purchaseReceiveNo || '').trim().toLowerCase();
+                        const prStatus = (pr.status || 'accepted').toLowerCase();
+                        if (prNo === pNo && (prStatus === 'accepted' || prStatus === 'approved')) {
+                            (pr.items || []).forEach(prItem => {
+                                const prPName = (prItem.productName || prItem.product || '').trim().toLowerCase();
+                                if (prPName === normPName) {
+                                    (prItem.brandEntries || []).forEach(prBe => {
+                                        const prBName = (prBe.brand || '').trim().toLowerCase();
+                                        if (!normBName || !prBName || prBName === normBName) {
+                                            const ih = prBe.inHouseQuantity !== undefined && prBe.inHouseQuantity !== '' 
+                                                ? parseFloat(prBe.inHouseQuantity) 
+                                                : (parseFloat(prBe.qty) || 0);
+                                            inHouseQty += (parseFloat(ih) || 0);
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+
+                const remainingQty = Math.max(0, purchasedQty - inHouseQty);
+
                 results.push({
                     productName: pName,
-                    brand: be.brand || '—',
-                    qty: parseFloat(be.qty) || 0,
+                    brand: bName,
+                    qty: purchasedQty,
+                    inHouseQty: inHouseQty,
+                    remainingQty: remainingQty,
                     rate: parseFloat(be.rate) || 0
                 });
             });
         });
-        return results.length > 0 ? results : [{ productName: '—', brand: '—', qty: 0, rate: 0 }];
+        return results.length > 0 ? results : [{ productName: '—', brand: '—', qty: 0, inHouseQty: 0, remainingQty: 0, rate: 0 }];
     };
 
     const availableProducts = useMemo(() => {
@@ -583,9 +622,6 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
 
             if (editingId) {
                 await axios.put(`${API_BASE_URL}/api/purchases/${editingId}`, payload);
-                if (payload.status === 'Accepted' || payload.status === 'Approved') {
-                    await updateWarehouseStockForPurchase(payload);
-                }
                 if (addNotification) {
                     await addNotification(
                         'Purchase Request Updated',
@@ -596,9 +632,6 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                 }
             } else {
                 await axios.post(`${API_BASE_URL}/api/purchases`, payload);
-                if (payload.status === 'Accepted' || payload.status === 'Approved') {
-                    await updateWarehouseStockForPurchase(payload);
-                }
                 if (addNotification) {
                     await addNotification(
                         payload.status === 'Accepted'
@@ -627,12 +660,6 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
         try {
             const updated = { ...purchase, status: newStatus };
             await axios.put(`${API_BASE_URL}/api/purchases/${purchase._id}`, updated);
-            const statusLower = (newStatus || '').toLowerCase();
-            if (statusLower === 'approved' || statusLower === 'accepted') {
-                await updateWarehouseStockForPurchase(updated);
-            } else if (statusLower === 'rejected' || statusLower === 'deleted') {
-                await reverseWarehouseStockForPurchase(purchase);
-            }
             if (addNotification) {
                 const now = new Date();
                 const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
@@ -771,6 +798,8 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                                 <th className="sale-mgmt-th">Product</th>
                                 <th className="sale-mgmt-th">Brand</th>
                                 <th className="sale-mgmt-th text-center">Qty (KG)</th>
+                                <th className="sale-mgmt-th text-center">InHouse Qty</th>
+                                <th className="sale-mgmt-th text-center">Remaining Qty</th>
                                 <th className="sale-mgmt-th text-center">Price</th>
                                 <th className="sale-mgmt-th text-center">Total Amount</th>
                                 <th className="sale-mgmt-th text-center">Paid</th>
@@ -782,7 +811,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                         <tbody className="divide-y divide-gray-100">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={13} className="px-6 py-12 text-center text-gray-500 font-medium">
+                                    <td colSpan={15} className="px-6 py-12 text-center text-gray-500 font-medium">
                                         Loading purchase records...
                                     </td>
                                 </tr>
@@ -812,6 +841,20 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                                             <div className="space-y-1">
                                                 {getPurchaseBrandEntries(p).map((e, idx) => (
                                                     <div key={idx}>{e.qty > 0 ? `${Number(e.qty).toLocaleString('en-US')} kg` : '—'}</div>
+                                                ))}
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-4 text-sm text-center font-bold text-emerald-600 align-top">
+                                            <div className="space-y-1">
+                                                {getPurchaseBrandEntries(p).map((e, idx) => (
+                                                    <div key={idx}>{`${Number(e.inHouseQty || 0).toLocaleString('en-US')} kg`}</div>
+                                                ))}
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-4 text-sm text-center font-bold text-orange-600 align-top">
+                                            <div className="space-y-1">
+                                                {getPurchaseBrandEntries(p).map((e, idx) => (
+                                                    <div key={idx}>{`${Number(e.remainingQty || 0).toLocaleString('en-US')} kg`}</div>
                                                 ))}
                                             </div>
                                         </td>
@@ -858,7 +901,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={13} className="px-6 py-12 text-center text-gray-400">
+                                    <td colSpan={15} className="px-6 py-12 text-center text-gray-400">
                                         No purchase records found.
                                     </td>
                                 </tr>

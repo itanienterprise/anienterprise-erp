@@ -11,6 +11,7 @@ const TITLE_TO_VIEW = [
     { pattern: /\bPL-[0-9]+/i, view: 'packing-list-section' },
     { pattern: /\bPI-[0-9]+/i, view: 'pi-section' },
     { pattern: /\bORD-?[0-9]+/i, view: 'order-sale-section' },
+    { pattern: /\bPR-REC-?[0-9]+/i, view: 'purchase-receive-sale-section' },
     { pattern: /\bPUR-[0-9]+/i, view: 'purchase-sale-section' },
     { pattern: /\bSAL-[0-9]+/i, view: 'general-sale-section' },
 
@@ -40,6 +41,9 @@ const TITLE_TO_VIEW = [
 
     // Payment Collection & Receipt
     { pattern: /\b(?:payment|receipt|collection)\b/i, view: 'payment-collection-section' },
+
+    // Purchase Receive
+    { pattern: /\bpurchase\s+receive\b/i, view: 'purchase-receive-sale-section' },
 
     // Purchase
     { pattern: /\bpurchase\b/i, view: 'purchase-sale-section' },

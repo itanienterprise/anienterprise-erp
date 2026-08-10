@@ -37,6 +37,8 @@ const Customer = ({
     const [gatePasses, setGatePasses] = useState([]);
     const [lcRecords, setLcRecords] = useState([]);
     const [purchasesList, setPurchasesList] = useState([]);
+    const [stockList, setStockList] = useState([]);
+    const [purchaseReceivesList, setPurchaseReceivesList] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewData, setViewData] = useState(null);
@@ -273,16 +275,20 @@ const Customer = ({
     const fetchCustomers = async () => {
         setIsLoading(true);
         try {
-            const [decryptedCustomers, gpRecords, lcData, purchasesData] = await Promise.all([
+            const [decryptedCustomers, gpRecords, lcData, purchasesData, stockData, prData] = await Promise.all([
                 api.get('/api/customers'),
                 api.get('/api/lc-gp'),
                 api.get('/api/lc-management'),
-                api.get('/api/purchases').catch(() => [])
+                api.get('/api/purchases').catch(() => []),
+                api.get('/api/stock').catch(() => []),
+                api.get('/api/purchase-receives').catch(() => [])
             ]);
             setCustomers(decryptedCustomers);
             setGatePasses(gpRecords);
             setLcRecords(Array.isArray(lcData) ? lcData : []);
             setPurchasesList(Array.isArray(purchasesData) ? purchasesData : []);
+            setStockList(Array.isArray(stockData) ? stockData : []);
+            setPurchaseReceivesList(Array.isArray(prData) ? prData : []);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -545,14 +551,13 @@ const Customer = ({
             sortDate: new Date(pc.date || 0)
         }));
 
-        const directPurchases = (c.purchaseHistory || []).filter(pu => (pu.status || '').toLowerCase() !== 'requested').map(pu => ({
-            ...pu,
-            type: 'purchase',
-            sortDate: new Date(pu.date || 0)
-        }));
+        const { prEntries, coveredPurchaseNos } = getPRHistoryEntries(c);
 
         const matchedPurchases = (purchasesList || []).filter(p => {
             if ((p.status || '').toLowerCase() === 'requested') return false;
+            const pNo = (p.purchaseNo || p.invoiceNo || '').trim().toUpperCase();
+            if (pNo && coveredPurchaseNos.has(pNo)) return false;
+
             return (
                 p.customerId === c?._id ||
                 p.customerId === c?.customerId ||
@@ -593,7 +598,7 @@ const Customer = ({
             }];
         });
 
-        const purchases = [...directPurchases, ...matchedPurchases];
+        const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
         const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
 
         let currentBalance = 0;
@@ -760,11 +765,133 @@ const Customer = ({
         });
     }, [viewData, salesRecords, historySearchQuery, historyFilters, historySortConfig]);
 
+    const resolveInHousePurchaseItem = (p, item, b) => {
+        const pNo = (p?.purchaseNo || p?.invoiceNo || 'PUR-0000').trim().toUpperCase();
+        const pName = (item?.productName || item?.product || p?.productName || p?.product || '').trim().toLowerCase();
+        const bName = (b?.brand || p?.brand || '').trim().toLowerCase();
+
+        const matchedStock = (stockList || []).find(s =>
+            (s.status || '').toLowerCase() === 'accepted' &&
+            ((s.lcNo || '').trim().toUpperCase() === pNo || (s.purchaseNo || '').trim().toUpperCase() === pNo) &&
+            (!pName || (s.productName || s.product || '').trim().toLowerCase() === pName) &&
+            (!bName || (s.brand || '').trim().toLowerCase() === bName)
+        );
+
+        const matchedPR = (purchaseReceivesList || []).find(pr =>
+            (pr.status || '').toLowerCase() === 'accepted' &&
+            ((pr.purchaseNo || pr.purchaseReceiveNo || '').trim().toUpperCase() === pNo)
+        );
+
+        let prQty = 0;
+        if (matchedPR && matchedPR.items) {
+            matchedPR.items.forEach(prItem => {
+                if (!pName || (prItem.productName || prItem.product || '').trim().toLowerCase() === pName) {
+                    (prItem.brandEntries || []).forEach(be => {
+                        if (!bName || (be.brand || '').trim().toLowerCase() === bName) {
+                            prQty += parseFloat((be.inHouseQuantity ?? be.inHouseQty ?? be.inhouseQty ?? be.qty) || 0);
+                        }
+                    });
+                }
+            });
+        }
+
+        const finalInHouseQty = matchedStock
+            ? parseFloat((matchedStock.inHouseQuantity ?? matchedStock.quantity) || 0)
+            : (prQty > 0
+                ? prQty
+                : parseFloat((b?.inHouseQuantity ?? b?.inHouseQty ?? b?.inhouseQty ?? b?.qty ?? item?.qty ?? item?.quantity ?? p?.quantity ?? p?.qty) || 0));
+
+        const rate = parseFloat((b?.rate ?? item?.rate ?? p?.rate) || 0);
+        const origTotal = parseFloat((b?.total ?? item?.total ?? item?.amount ?? p?.totalAmount ?? p?.amount) || 0);
+        const origQty = parseFloat((b?.qty ?? b?.quantity ?? item?.qty ?? item?.quantity ?? p?.quantity ?? p?.qty) || 0);
+        const amount = (rate > 0 && finalInHouseQty > 0) ? (finalInHouseQty * rate) : (origQty > 0 ? (origTotal * (finalInHouseQty / origQty)) : origTotal);
+
+        return { quantity: finalInHouseQty, rate, amount };
+    };
+
+    const getPRHistoryEntries = (viewData) => {
+        if (!viewData) return { prEntries: [], coveredPurchaseNos: new Set() };
+
+        const matchedPRs = (purchaseReceivesList || []).filter(pr => {
+            if ((pr.status || '').toLowerCase() === 'requested') return false;
+            const sName = (pr.supplierName || pr.companyName || '').trim().toLowerCase();
+            const cComp = (viewData?.companyName || '').trim().toLowerCase();
+            const cCust = (viewData?.customerName || '').trim().toLowerCase();
+            return (
+                pr.customerId === viewData?._id ||
+                pr.customerId === viewData?.customerId ||
+                (cComp && (sName === cComp || sName.includes(cComp) || cComp.includes(sName))) ||
+                (cCust && (sName === cCust || sName.includes(cCust) || cCust.includes(sName)))
+            );
+        });
+
+        const prEntries = matchedPRs.flatMap(pr => {
+            const pNo = pr.purchaseNo || pr.purchaseReceiveNo || 'PUR-0000';
+            if (pr.items && Array.isArray(pr.items)) {
+                return pr.items.flatMap(item => {
+                    if (item.brandEntries && Array.isArray(item.brandEntries)) {
+                        return item.brandEntries.map(b => {
+                            const q = parseFloat((b.inHouseQuantity ?? b.inHouseQty ?? b.inhouseQty ?? b.qty) || 0);
+                            const r = parseFloat(b.rate || 0);
+                            const amt = b.total ? parseFloat(b.total) : (q * r);
+                            return {
+                                _id: `${pr._id}-${item.productName}-${b.brand}`,
+                                purchaseNo: pNo,
+                                invoiceNo: pNo,
+                                date: pr.date,
+                                product: item.productName || item.product,
+                                brand: b.brand,
+                                quantity: q,
+                                rate: r,
+                                amount: amt,
+                                discount: pr.discount || 0,
+                                paid: pr.paid || pr.paidAmount || 0,
+                                warehouse: pr.warehouse || item.warehouse || '-',
+                                status: pr.status || 'Accepted',
+                                type: 'purchase',
+                                sortDate: new Date(pr.date || 0)
+                            };
+                        });
+                    }
+                    const q = parseFloat((item.inHouseQuantity ?? item.inHouseQty ?? item.qty) || 0);
+                    const r = parseFloat(item.rate || 0);
+                    const amt = item.total ? parseFloat(item.total) : (q * r);
+                    return [{
+                        _id: `${pr._id}-${item.productName}`,
+                        purchaseNo: pNo,
+                        invoiceNo: pNo,
+                        date: pr.date,
+                        product: item.productName || item.product,
+                        brand: item.brand || '-',
+                        quantity: q,
+                        rate: r,
+                        amount: amt,
+                        discount: pr.discount || 0,
+                        paid: pr.paid || pr.paidAmount || 0,
+                        warehouse: pr.warehouse || item.warehouse || '-',
+                        status: pr.status || 'Accepted',
+                        type: 'purchase',
+                        sortDate: new Date(pr.date || 0)
+                    }];
+                });
+            }
+            return [];
+        });
+
+        const coveredPurchaseNos = new Set(prEntries.map(e => e.purchaseNo.trim().toUpperCase()));
+        return { prEntries, coveredPurchaseNos };
+    };
+
     // Calculate Filtered Purchase History Data
     const filteredPurchaseHistory = useMemo(() => {
         const directHistory = viewData?.purchaseHistory || [];
+        const { prEntries, coveredPurchaseNos } = getPRHistoryEntries(viewData);
+
         const matchedPurchases = (purchasesList || []).filter(p => {
             if ((p.status || '').toLowerCase() === 'requested') return false;
+            const pNo = (p.purchaseNo || p.invoiceNo || '').trim().toUpperCase();
+            if (pNo && coveredPurchaseNos.has(pNo)) return false;
+
             return (
                 p.customerId === viewData?._id ||
                 p.customerId === viewData?.customerId ||
@@ -779,30 +906,34 @@ const Customer = ({
             if (p.items && Array.isArray(p.items)) {
                 return p.items.flatMap(item => {
                     if (item.brandEntries && Array.isArray(item.brandEntries)) {
-                        return item.brandEntries.map(b => ({
-                            _id: `${p._id}-${item.productName}-${b.brand}`,
-                            purchaseNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
-                            date: p.date,
-                            product: item.productName || item.product,
-                            brand: b.brand,
-                            quantity: b.qty || 0,
-                            rate: b.rate || 0,
-                            amount: b.total || (parseFloat(b.qty || 0) * parseFloat(b.rate || 0)),
-                            discount: p.discount || 0,
-                            paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
-                            warehouse: p.warehouse || '-',
-                            status: p.status || 'Completed'
-                        }));
+                        return item.brandEntries.map(b => {
+                            const res = resolveInHousePurchaseItem(p, item, b);
+                            return {
+                                _id: `${p._id}-${item.productName}-${b.brand}`,
+                                purchaseNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
+                                date: p.date,
+                                product: item.productName || item.product,
+                                brand: b.brand,
+                                quantity: res.quantity,
+                                rate: res.rate,
+                                amount: res.amount,
+                                discount: p.discount || 0,
+                                paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
+                                warehouse: p.warehouse || '-',
+                                status: p.status || 'Completed'
+                            };
+                        });
                     }
+                    const res = resolveInHousePurchaseItem(p, item, null);
                     return [{
                         _id: `${p._id}-${item.productName}`,
                         purchaseNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
                         date: p.date,
                         product: item.productName || item.product,
                         brand: item.brand || '-',
-                        quantity: item.qty || item.quantity || 0,
-                        rate: item.rate || 0,
-                        amount: item.total || item.amount || 0,
+                        quantity: res.quantity,
+                        rate: res.rate,
+                        amount: res.amount,
                         discount: p.discount || 0,
                         paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
                         warehouse: p.warehouse || '-',
@@ -810,15 +941,16 @@ const Customer = ({
                     }];
                 });
             }
+            const res = resolveInHousePurchaseItem(p, null, null);
             return [{
                 _id: p._id,
                 purchaseNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
                 date: p.date,
                 product: p.product || p.productName || '-',
                 brand: p.brand || '-',
-                quantity: p.quantity || p.qty || 0,
-                rate: p.rate || 0,
-                amount: p.totalAmount || p.amount || 0,
+                quantity: res.quantity,
+                rate: res.rate,
+                amount: res.amount,
                 discount: p.discount || 0,
                 paid: p.paid || p.paidAmount || 0,
                 warehouse: p.warehouse || '-',
@@ -826,7 +958,7 @@ const Customer = ({
             }];
         });
 
-        const combined = [...directHistory, ...matchedPurchases];
+        const combined = prEntries.length > 0 ? prEntries : matchedPurchases;
 
         const filtered = combined.filter(item => {
             const matchesSearch = !historySearchQuery ||
@@ -862,7 +994,7 @@ const Customer = ({
             if (aVal > bVal) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [viewData, purchasesList, historySearchQuery, historyFilters, historySortConfig]);
+    }, [viewData, purchasesList, stockList, purchaseReceivesList, historySearchQuery, historyFilters, historySortConfig]);
 
     const filteredPaymentHistory = useMemo(() => {
         const filtered = (viewData?.paymentHistory || []).filter(item => {
@@ -983,8 +1115,13 @@ const Customer = ({
             sortDate: new Date(pu.date)
         }));
 
+        const { prEntries, coveredPurchaseNos } = getPRHistoryEntries(viewData);
+
         const matchedPurchases = (purchasesList || []).filter(p => {
             if ((p.status || '').toLowerCase() === 'requested') return false;
+            const pNo = (p.purchaseNo || p.invoiceNo || '').trim().toUpperCase();
+            if (pNo && coveredPurchaseNos.has(pNo)) return false;
+
             return (
                 p.customerId === viewData?._id ||
                 p.customerId === viewData?.customerId ||
@@ -999,30 +1136,34 @@ const Customer = ({
             if (p.items && Array.isArray(p.items)) {
                 return p.items.flatMap(item => {
                     if (item.brandEntries && Array.isArray(item.brandEntries)) {
-                        return item.brandEntries.map(b => ({
-                            _id: `${p._id}-${item.productName}-${b.brand}`,
-                            invoiceNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
-                            date: p.date,
-                            product: item.productName || item.product,
-                            brand: b.brand,
-                            quantity: b.qty || 0,
-                            rate: b.rate || 0,
-                            amount: b.total || (parseFloat(b.qty || 0) * parseFloat(b.rate || 0)),
-                            discount: p.discount || 0,
-                            paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
-                            type: 'purchase',
-                            sortDate: new Date(p.date)
-                        }));
+                        return item.brandEntries.map(b => {
+                            const res = resolveInHousePurchaseItem(p, item, b);
+                            return {
+                                _id: `${p._id}-${item.productName}-${b.brand}`,
+                                invoiceNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
+                                date: p.date,
+                                product: item.productName || item.product,
+                                brand: b.brand,
+                                quantity: res.quantity,
+                                rate: res.rate,
+                                amount: res.amount,
+                                discount: p.discount || 0,
+                                paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
+                                type: 'purchase',
+                                sortDate: new Date(p.date)
+                            };
+                        });
                     }
+                    const res = resolveInHousePurchaseItem(p, item, null);
                     return [{
                         _id: `${p._id}-${item.productName}`,
                         invoiceNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
                         date: p.date,
                         product: item.productName || item.product,
                         brand: item.brand || '-',
-                        quantity: item.qty || item.quantity || 0,
-                        rate: item.rate || 0,
-                        amount: item.total || item.amount || 0,
+                        quantity: res.quantity,
+                        rate: res.rate,
+                        amount: res.amount,
                         discount: p.discount || 0,
                         paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
                         type: 'purchase',
@@ -1030,15 +1171,16 @@ const Customer = ({
                     }];
                 });
             }
+            const res = resolveInHousePurchaseItem(p, null, null);
             return [{
                 _id: p._id,
                 invoiceNo: p.purchaseNo || p.invoiceNo || 'PUR-0000',
                 date: p.date,
                 product: p.product || p.productName || '-',
                 brand: p.brand || '-',
-                quantity: p.quantity || p.qty || 0,
-                rate: p.rate || 0,
-                amount: p.totalAmount || p.amount || 0,
+                quantity: res.quantity,
+                rate: res.rate,
+                amount: res.amount,
                 discount: p.discount || 0,
                 paid: p.paid || p.paidAmount || 0,
                 type: 'purchase',
@@ -1046,7 +1188,7 @@ const Customer = ({
             }];
         });
 
-        const purchases = [...directPurchases, ...matchedPurchases];
+        const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
 
         // Combine and sort chronologically (earliest first for absolute balance calculation)
         const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
@@ -1078,23 +1220,29 @@ const Customer = ({
         // Now filter the records with balance info
         const filteredAll = historyWithBalance.filter(item => {
             const matchesSearch = !historySearchQuery ||
-                ((item.invoiceNo || item.lcNo || item.receiptNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
-                ((item.product || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.invoiceNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.reference || item.referenceNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
                 ((item.method || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
-                ((item.reference || item.remarks || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
+                ((item.bankName || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.product || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                ((item.brand || '').toLowerCase().includes(historySearchQuery.toLowerCase()));
 
             const matchesFilters =
                 (!historyFilters.startDate || new Date(item.date) >= new Date(historyFilters.startDate)) &&
                 (!historyFilters.endDate || new Date(item.date) <= new Date(historyFilters.endDate)) &&
-                (!historyFilters.lcNo || (item.invoiceNo === historyFilters.lcNo || item.lcNo === historyFilters.lcNo)) &&
+                (!historyFilters.lcNo || item.lcNo === historyFilters.lcNo) &&
                 (!historyFilters.product || item.product === historyFilters.product) &&
-                (!historyFilters.method || item.method === historyFilters.method);
+                (!historyFilters.method || item.method === historyFilters.method) &&
+                (!historyFilters.bankName || item.bankName === historyFilters.bankName) &&
+                (!historyFilters.mobileType || item.mobileType === historyFilters.mobileType);
 
             return matchesSearch && matchesFilters;
         });
 
-        const { key, direction } = historySortConfig;
+        if (!historySortConfig.key) return filteredAll;
+
         return [...filteredAll].sort((a, b) => {
+            const { key, direction } = historySortConfig;
             let aVal = a[key];
             let bVal = b[key];
 

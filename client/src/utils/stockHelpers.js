@@ -13,16 +13,10 @@ export const isLcMatch = (targetLc, filterLc) => {
     if (!rawTarget || !rawFilter) return false;
     if (rawTarget === rawFilter) return true;
 
-    if (rawTarget.endsWith(rawFilter) || rawFilter.endsWith(rawTarget)) return true;
-    if (rawTarget.includes(rawFilter) || rawFilter.includes(rawTarget)) return true;
+    const cleanTarget = rawTarget.replace(/^(lc|pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
+    const cleanFilter = rawFilter.replace(/^(lc|pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
 
-    const normTarget = rawTarget.replace(/^0+/, '');
-    const normFilter = rawFilter.replace(/^0+/, '');
-    if (normTarget && normFilter) {
-        if (normTarget === normFilter) return true;
-        if (normTarget.endsWith(normFilter) || normFilter.endsWith(normTarget)) return true;
-        if (normTarget.includes(normFilter) || normFilter.includes(normTarget)) return true;
-    }
+    if (cleanTarget && cleanFilter && cleanTarget === cleanFilter) return true;
     return false;
 };
 
@@ -35,8 +29,9 @@ export const getGroupedBrandList = (brandList) => {
         const cleanQuality = (b.quality || '-').trim();
         const key = `${cleanQuality.toLowerCase()}_${cleanBrand.toLowerCase()}`;
         if (!groups[key]) {
+            const { openingQuantity, openingPacket, periodArrivalQuantity, periodArrivalPacket, saleQuantity, salePacket, orderQuantity, orderPacket, saleableQuantity, saleablePacket, sweepedQuantity, sweepedPacket, damageQuantity, damagePacket, inHouseQuantity, inHousePacket, totalInHouseQuantity, totalInHousePacket, closingQuantity, closingPacket, ...rest } = b;
             groups[key] = {
-                ...b,
+                ...rest,
                 brand: cleanBrand,
                 quality: cleanQuality,
                 openingQuantity: 0,
@@ -73,20 +68,25 @@ export const getGroupedBrandList = (brandList) => {
         groups[key].sweepedPacket += b.sweepedPacket || 0;
         groups[key].damageQuantity += b.damageQuantity || 0;
         groups[key].damagePacket += b.damagePacket || 0;
-        groups[key].inHouseQuantity += b.inHouseQuantity || 0;
-        groups[key].inHousePacket += b.inHousePacket || 0;
+        groups[key].inHouseQuantity += (b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0));
+        groups[key].inHousePacket += (b.closingPacket !== undefined ? b.closingPacket : (b.inHousePacket || 0));
         groups[key].totalInHouseQuantity += b.totalInHouseQuantity || 0;
         groups[key].totalInHousePacket += b.totalInHousePacket || 0;
-        groups[key].closingQuantity += b.closingQuantity || 0;
-        groups[key].closingPacket += b.closingPacket || 0;
-        groups[key].saleableQuantity = Math.max(0, groups[key].inHouseQuantity - groups[key].orderQuantity);
-        groups[key].saleablePacket = Math.max(0, groups[key].inHousePacket - groups[key].orderPacket);
+        groups[key].closingQuantity += (b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0));
+        groups[key].closingPacket += (b.closingPacket !== undefined ? b.closingPacket : (b.inHousePacket || 0));
+        groups[key].saleableQuantity += b.saleableQuantity || 0;
+        groups[key].saleablePacket += b.saleablePacket || 0;
     });
-    // Ensure final saleable quantities match aggregated inHouse minus order quantities
+
     Object.values(groups).forEach(g => {
-        g.saleableQuantity = Math.max(0, g.inHouseQuantity - g.orderQuantity);
-        g.saleablePacket = Math.max(0, g.inHousePacket - g.orderPacket);
+        g.closingQuantity = Math.max(0, g.closingQuantity);
+        g.closingPacket = Math.max(0, g.closingPacket);
+        g.inHouseQuantity = g.closingQuantity;
+        g.inHousePacket = g.closingPacket;
+        g.saleableQuantity = Math.max(0, g.closingQuantity - g.orderQuantity);
+        g.saleablePacket = Math.max(0, g.closingPacket - g.orderPacket);
     });
+
     return Object.values(groups).sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
 };
 
@@ -270,6 +270,21 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         }
         if (targetP.quality && targetP.quality.trim() !== '') return targetP.quality.trim();
         return '-';
+    };
+
+    const resolvePacketSize = (pName, bName, directSize) => {
+        const direct = safeParse(directSize);
+        if (direct > 0) return direct;
+        if (!products || !Array.isArray(products)) return 30;
+        const targetP = products.find(p => (p.name || p.productName || '').trim().toLowerCase() === (pName || '').trim().toLowerCase());
+        if (!targetP) return 30;
+        if (bName) {
+            const targetB = (targetP.brands || []).find(b => (b.brand || '').trim().toLowerCase() === (bName || '').trim().toLowerCase());
+            if (targetB && targetB.packetSize && safeParse(targetB.packetSize) > 0) return safeParse(targetB.packetSize);
+        }
+        if (targetP.packetSize && safeParse(targetP.packetSize) > 0) return safeParse(targetP.packetSize);
+        if (targetP.size && safeParse(targetP.size) > 0) return safeParse(targetP.size);
+        return 30;
     };
 
     const rawExpanded = [];
@@ -557,7 +572,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 sweepedPacket: 0, sweepedQuantity: 0,
                 damagePacket: 0, damageQuantity: 0,
                 inHousePacket: 0, inHouseQuantity: 0,
-                packetSize: safeParse(item.packetSize),
+                packetSize: resolvePacketSize(key, item.brand, item.packetSize),
                 _salesResolved: false,
                 _damagesResolved: false,
                 lcNos: item.lcNo ? [item.lcNo] : [],
@@ -610,6 +625,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             if (beBrand === normBrand && (beQuality === '-' || normQuality === '-' || beQuality === normQuality)) {
                                 const saleLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim();
                                 const stockLc = (item.lcNo || '').trim();
+
+                                const isStockPurchase = (item.requestedBy === 'PurchaseReceive' || (stockLc || '').toUpperCase().startsWith('PUR-'));
+                                const isSalePurchase = (saleLc.toUpperCase().startsWith('PUR-'));
+
+                                // Strictly keep LC Receive and Purchase Receive stock separate
+                                if (isStockPurchase && !isSalePurchase) return;
+                                if (!isStockPurchase && isSalePurchase) return;
+
                                 if (!isOrderSale && saleLc && stockLc && !isLcMatch(saleLc, stockLc) && !isLcMatch(stockLc, saleLc)) return;
                                 if (stockFilters.lcNo && !isLcMatch(saleLc, stockFilters.lcNo)) return;
                                 if (stockSearchQuery) {
@@ -1039,8 +1062,15 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             if (qCmp !== 0) return qCmp;
             return a.brand.localeCompare(b.brand);
         }).filter(b => {
-            // Include brands with non-zero opening, closing, pre-sold, sale, or order quantity
-            return Math.abs(b.inHouseQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001 || Math.abs(b.openingQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
+            const closing = Math.abs(b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0));
+            const order = Math.abs(b.orderQuantity || 0);
+            const saleable = Math.abs(b.saleableQuantity || 0);
+
+            // If closing, order, and saleable are 0, do not show
+            if (closing <= 0.001 && order <= 0.001 && saleable <= 0.001) {
+                return false;
+            }
+            return true;
         });
 
         if (brandList.length === 0) return null;

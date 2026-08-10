@@ -54,6 +54,7 @@ import ProductHistoryReport from './components/modules/StockManagement/ProductHi
 import SalesReport from './components/modules/Sale/SalesReport';
 import SaleManagement from './components/modules/Sale/SaleManagement';
 import PurchaseManagement from './components/modules/Purchase/PurchaseManagement';
+import PurchaseReceiveManagement from './components/modules/PurchaseReceive/PurchaseReceiveManagement';
 import OrderManagement from './components/modules/Order/OrderManagement';
 import ProfitLoss from './components/modules/Sale/ProfitLoss';
 import EmployeeManagement from './components/modules/Employee/EmployeeManagement';
@@ -310,6 +311,7 @@ function App() {
     generalSale: false,
     borderSale: false,
     purchase: false,
+    purchaseReceive: false,
     order: false,
     insurancePayment: false,
     insurance: false
@@ -318,10 +320,11 @@ function App() {
   const fetchPendingEntries = async () => {
     if (!isAuthenticated) return;
     try {
-      const [stockRes, salesRes, purchasesRes, customersRes, whRes, insPaymentsRes] = await Promise.all([
+      const [stockRes, salesRes, purchasesRes, purchaseReceivesRes, customersRes, whRes, insPaymentsRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/stock`),
         axios.get(`${API_BASE_URL}/api/sales`),
         axios.get(`${API_BASE_URL}/api/purchases`),
+        axios.get(`${API_BASE_URL}/api/purchase-receives`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/customers`),
         axios.get(`${API_BASE_URL}/api/warehouses`),
         axios.get(`${API_BASE_URL}/api/insurance-payments`)
@@ -329,6 +332,7 @@ function App() {
       const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
       const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
       const purchasesData = Array.isArray(purchasesRes.data) ? purchasesRes.data : [];
+      const purchaseReceivesData = Array.isArray(purchaseReceivesRes.data) ? purchaseReceivesRes.data : [];
       const customersData = Array.isArray(customersRes.data) ? customersRes.data : [];
       const whData = Array.isArray(whRes.data) ? whRes.data : [];
 
@@ -341,6 +345,13 @@ function App() {
       });
 
       const hasRequestedPurchase = purchasesData.some(item => {
+        const status = (item.status || '').toLowerCase();
+        const isReq = status === 'requested' || status === 'pending';
+        const isEditReq = item.isEdited === true && !isReq;
+        return isReq || isEditReq;
+      });
+
+      const hasRequestedPurchaseReceive = purchaseReceivesData.some(item => {
         const status = (item.status || '').toLowerCase();
         const isReq = status === 'requested' || status === 'pending';
         const isEditReq = item.isEdited === true && !isReq;
@@ -401,7 +412,7 @@ function App() {
         lc: hasRequestedLC,
         stock: hasRequestedStockMgmt || hasRequestedTransfer,
         transfer: hasRequestedTransfer,
-        sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder || hasRequestedPurchase,
+        sale: hasRequestedGeneralSale || hasRequestedBorderSale || hasRequestedOrder || hasRequestedPurchase || hasRequestedPurchaseReceive,
         crm: false,
         paymentCollection: hasRequestedPaymentCollection,
         payToCustomer: hasRequestedPayToCustomer,
@@ -411,6 +422,7 @@ function App() {
         generalSale: hasRequestedGeneralSale,
         borderSale: hasRequestedBorderSale,
         purchase: hasRequestedPurchase,
+        purchaseReceive: hasRequestedPurchaseReceive,
         insurancePayment: hasRequestedInsurancePayment,
         insurance: hasRequestedInsurancePayment
       });
@@ -1407,74 +1419,9 @@ function App() {
   const fetchStockRecords = async () => {
     setIsLoading(true);
     try {
-      const [stockRes, purchaseRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/stock`),
-        axios.get(`${API_BASE_URL}/api/purchases`).catch(() => ({ data: [] }))
-      ]);
-
+      const stockRes = await axios.get(`${API_BASE_URL}/api/stock`);
       const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
-      const rawPurchases = Array.isArray(purchaseRes.data) ? purchaseRes.data : [];
-
-      const existingLcSet = new Set(
-        rawStock.map(s => (s.lcNo || '').trim()).filter(Boolean)
-      );
-
-      const purchaseStockRecords = [];
-      rawPurchases.forEach(p => {
-        const pStatus = (p.status || '').toLowerCase();
-        if (pStatus.includes('requested') || pStatus.includes('rejected')) return;
-
-        const purchaseNo = (p.purchaseNo || p.invoiceNo || 'PUR-0001').trim();
-        const items = Array.isArray(p.items) && p.items.length > 0 ? p.items : [p];
-
-        items.forEach((item, itemIdx) => {
-          const pName = (item.productName || item.product || '').trim();
-          const bEntries = Array.isArray(item.brandEntries) && item.brandEntries.length > 0
-            ? item.brandEntries
-            : [{ brand: item.brand || '', bag: item.bag || item.packet || 0, qty: item.qty || item.quantity || 0, rate: item.rate || item.purchasedPrice || 0 }];
-
-          bEntries.forEach((be, bIdx) => {
-            const bName = (be.brand || '').trim();
-            const qty = parseFloat(be.qty) || parseFloat(be.quantity) || 0;
-            const pkt = parseFloat(be.bag) || parseFloat(be.packet) || 0;
-            const rate = parseFloat(be.rate) || parseFloat(be.purchasedPrice) || 0;
-
-            if (!pName || !bName) return;
-
-            const hasPhysicalRecord = rawStock.some(s =>
-              (s.lcNo || '').trim() === purchaseNo &&
-              (s.productName || s.product || '').trim().toLowerCase() === pName.toLowerCase() &&
-              (s.brand || '').trim().toLowerCase() === bName.toLowerCase()
-            );
-
-            if (!hasPhysicalRecord) {
-              purchaseStockRecords.push({
-                _id: `purchase_${p._id}_${itemIdx}_${bIdx}`,
-                lcNo: purchaseNo,
-                purchaseNo: purchaseNo,
-                date: p.date || p.createdAt,
-                supplier: p.companyName || p.supplierName || '',
-                companyName: p.companyName || p.supplierName || '',
-                warehouse: p.warehouse || item.warehouse || 'HILI',
-                whName: p.warehouse || item.warehouse || 'HILI',
-                brand: bName,
-                productName: pName,
-                quantity: qty,
-                inHouseQuantity: qty,
-                totalInHouseQuantity: qty,
-                packet: pkt,
-                inHousePacket: pkt,
-                totalInHousePacket: pkt,
-                purchasedPrice: rate,
-                status: p.status || 'Accepted',
-                recordType: 'purchase'
-              });
-            }
-          });
-        });
-      });
-
-      setAllStockRecords([...rawStock, ...purchaseStockRecords]);
+      setAllStockRecords(rawStock);
     } catch (error) {
       console.error('Error fetching stock:', error);
     } finally {
@@ -2010,6 +1957,17 @@ function App() {
       case 'purchase-sale-section':
         return (
           <PurchaseManagement
+            highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
+            key={refreshKey}
+            currentUser={currentUser}
+            addNotification={addNotification}
+            fetchStockRecords={fetchStockRecords}
+            refreshPendingIndicators={fetchPendingEntries}
+          />
+        );
+      case 'purchase-receive-sale-section':
+        return (
+          <PurchaseReceiveManagement
             highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             key={refreshKey}
             currentUser={currentUser}
@@ -2752,6 +2710,18 @@ function App() {
                         <span>Purchase</span>
                       </div>
                       {pendingModules?.purchase && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                    </button>
+                  )}
+                  {(hasPermission(currentUser, 'purchaseReceive', 'view') || hasPermission(currentUser, 'purchase', 'view')) && (
+                    <button
+                      onClick={() => { handleViewChange('purchase-receive-sale-section'); }}
+                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-receive-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    >
+                      <div className="flex items-center">
+                        <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Purchase Receive</span>
+                      </div>
+                      {pendingModules?.purchaseReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
                     </button>
                   )}
                   {hasPermission(currentUser, 'order', 'view') && (
