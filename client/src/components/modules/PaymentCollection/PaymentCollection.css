@@ -15,7 +15,7 @@
     margin-bottom: 2.5rem;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     animation: slideDown 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
+    overflow: visible !important;
 }
 
 .payment-form-bg-orb { display: none !important;

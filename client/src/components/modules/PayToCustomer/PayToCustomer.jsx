@@ -207,20 +207,55 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
         fetchBanks();
     }, []);
 
+    useEffect(() => {
+        if (showAddModal) {
+            fetchBanks();
+        }
+    }, [showAddModal]);
+
     const fetchBanks = async () => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/banks`);
             const rawData = Array.isArray(response.data) ? response.data : [];
             const decryptedBanks = rawData.map(bank => {
-                const branches = bank.branches || [{
-                    branch: bank.branch,
-                    accountName: bank.accountName,
-                    accountNo: bank.accountNo
+                let d = bank;
+                if (bank && bank.data) {
+                    if (typeof bank.data === 'string') {
+                        try { d = { ...decryptData(bank.data), _id: bank._id }; } catch(e){}
+                    } else if (typeof bank.data === 'object') {
+                        d = { ...bank.data, _id: bank._id };
+                    }
+                }
+                const branches = d.branches || [{
+                    branch: d.branch,
+                    accountName: d.accountName,
+                    accountNo: d.accountNo
                 }];
-                return { ...bank, branches };
+                return { ...d, branches };
             });
             const filteredBanks = decryptedBanks.filter(bank => !bank.isIndian);
-            setBanks(filteredBanks);
+
+            const bankMap = new Map();
+            filteredBanks.forEach(b => {
+                const name = (b.bankName || '').trim();
+                if (!name) return;
+                if (!bankMap.has(name)) {
+                    bankMap.set(name, {
+                        ...b,
+                        bankName: name,
+                        branches: Array.isArray(b.branches) ? [...b.branches] : []
+                    });
+                } else {
+                    const existing = bankMap.get(name);
+                    (b.branches || []).forEach(br => {
+                        if (br && br.branch && !existing.branches.some(e => (e.branch || '').trim() === (br.branch || '').trim())) {
+                            existing.branches.push(br);
+                        }
+                    });
+                }
+            });
+
+            setBanks(Array.from(bankMap.values()));
         } catch (error) {
             console.error('Error fetching banks:', error);
         }
@@ -1915,76 +1950,50 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                     {item.method === 'Mobile Banking' ? (
                                                         <input
                                                             type="text"
-                                                            placeholder="bKash etc."
-                                                            value={item.bankName}
+                                                            placeholder="bKash, Nagad, etc."
+                                                            value={item.bankName || ''}
                                                             onChange={(e) => updatePaymentItem(item.id, { bankName: e.target.value })}
-                                                            className="payment-form-input border-blue-200/50 bg-white/50 text-sm"
+                                                            className="payment-form-input border-blue-200/50 bg-white/50 text-sm py-2"
                                                         />
                                                     ) : (
                                                         <div className="relative group/bank">
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
-                                                                    placeholder="Search or Select Bank"
-                                                                    value={activeDropdown === `bank-${item.id}` ? bankSearchQuery : (item.bankName || '')}
+                                                                    placeholder="Type or Select Bank..."
+                                                                    value={item.bankName || ''}
                                                                     onChange={(e) => {
-                                                                        setBankSearchQuery(e.target.value);
+                                                                        updatePaymentItem(item.id, { bankName: e.target.value });
                                                                         setActiveDropdown(`bank-${item.id}`);
                                                                     }}
-                                                                    onFocus={() => {
-                                                                        setBankSearchQuery(item.bankName || '');
-                                                                        setActiveDropdown(`bank-${item.id}`);
-                                                                    }}
-                                                                    onKeyDown={(e) => {
-                                                                        if (e.key === 'Enter') {
-                                                                            e.preventDefault();
-                                                                            const filtered = banks.filter(b => b.bankName.toLowerCase().includes(bankSearchQuery.toLowerCase()));
-                                                                            if (filtered.length > 0) {
-                                                                                updatePaymentItem(item.id, { bankName: filtered[0].bankName, branch: '', accountNo: '' });
-                                                                                setBankSearchQuery('');
-                                                                                setActiveDropdown(null);
-                                                                            }
-                                                                        }
-                                                                    }}
-                                                                    className="payment-form-input pr-10 text-sm py-2 bg-white/50 border-blue-200/50"
+                                                                    onFocus={() => setActiveDropdown(`bank-${item.id}`)}
+                                                                    className="payment-form-input pr-8 text-sm py-2 bg-white/50 border-blue-200/50"
                                                                     autoComplete="off"
                                                                 />
-                                                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center gap-1.5">
-                                                                    {item.bankName ? (
-                                                                        <span
-                                                                            role="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                updatePaymentItem(item.id, { bankName: '', branch: '', accountNo: '' });
-                                                                                setBankSearchQuery('');
-                                                                                setActiveDropdown(null);
-                                                                            }}
-                                                                            className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer text-lg leading-none"
-                                                                        >×</span>
-                                                                    ) : (
-                                                                        <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${activeDropdown === `bank-${item.id}` ? 'rotate-180' : ''}`} />
-                                                                    )}
+                                                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                                    <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${activeDropdown === `bank-${item.id}` ? 'rotate-180' : ''}`} />
                                                                 </div>
                                                             </div>
                                                             {activeDropdown === `bank-${item.id}` && (
-                                                                <div className="absolute z-[130] left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 max-h-52 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
-                                                                    {banks.filter(b => b.bankName.toLowerCase().includes(bankSearchQuery.toLowerCase())).length > 0 ? (
-                                                                        banks.filter(b => b.bankName.toLowerCase().includes(bankSearchQuery.toLowerCase())).map(bank => (
+                                                                <div className="absolute z-[140] left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-52 overflow-y-auto py-1 animate-in slide-in-from-top-2 duration-200">
+                                                                    {banks.filter(b => (b.bankName || '').toLowerCase().includes((item.bankName || '').toLowerCase())).length > 0 ? (
+                                                                        banks.filter(b => (b.bankName || '').toLowerCase().includes((item.bankName || '').toLowerCase())).map(bank => (
                                                                             <button
-                                                                                key={bank._id}
+                                                                                key={bank._id || bank.bankName}
                                                                                 type="button"
-                                                                                onClick={() => {
-                                                                                    updatePaymentItem(item.id, { bankName: bank.bankName, branch: '', accountNo: '' });
-                                                                                    setBankSearchQuery('');
+                                                                                onMouseDown={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    updatePaymentItem(item.id, { bankName: bank.bankName });
                                                                                     setActiveDropdown(null);
                                                                                 }}
-                                                                                className="w-full px-5 py-2.5 text-left hover:bg-blue-50 text-xs font-semibold text-gray-700 transition-colors"
+                                                                                className={`w-full px-4 py-2 text-left text-xs font-semibold hover:bg-blue-50 transition-colors flex items-center justify-between cursor-pointer ${item.bankName === bank.bankName ? 'bg-blue-50/70 text-blue-700' : 'text-gray-700'}`}
                                                                             >
-                                                                                {bank.bankName}
+                                                                                <span>{bank.bankName}</span>
+                                                                                {item.bankName === bank.bankName && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
                                                                             </button>
                                                                         ))
                                                                     ) : (
-                                                                        <div className="px-5 py-3 text-left text-xs text-gray-400 font-medium">No banks found</div>
+                                                                        <div className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium">Type custom bank name</div>
                                                                     )}
                                                                 </div>
                                                             )}
@@ -1995,38 +2004,43 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                 {item.method !== 'Mobile Banking' && (
                                                     <div className="space-y-2 relative" data-dropdown-id={`branch-${item.id}`}>
                                                         <label className="text-sm font-medium text-blue-700/70 ml-1 text-[11px] uppercase tracking-tighter">Branch</label>
-                                                        <button
-                                                            type="button"
-                                                            disabled={!item.bankName}
-                                                            onClick={() => setActiveDropdown(activeDropdown === `branch-${item.id}` ? null : `branch-${item.id}`)}
-                                                            className={`payment-form-input w-full flex items-center justify-between border-blue-200/50 group bg-white/50 text-sm py-2 ${!item.bankName ? 'opacity-50' : ''}`}
-                                                        >
-                                                            <span className="truncate">{item.branch || 'Select'}</span>
-                                                            {item.branch ? (
-                                                                <span
-                                                                    role="button"
-                                                                    onClick={(e) => { e.stopPropagation(); updatePaymentItem(item.id, { branch: '', accountNo: '' }); setActiveDropdown(null); }}
-                                                                    className="ml-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer leading-none"
-                                                                >×</span>
-                                                            ) : (
-                                                                <ChevronDownIcon className="w-3 h-3 text-gray-400" />
-                                                            )}
-                                                        </button>
-                                                        {activeDropdown === `branch-${item.id}` && item.bankName && (
-                                                            <div className="absolute z-[130] left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 animate-in slide-in-from-top-2 duration-200 max-h-52 overflow-y-auto">
-                                                                {banks.find(b => b.bankName === item.bankName)?.branches.map((br, bi) => (
-                                                                    <button
-                                                                        key={bi}
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            updatePaymentItem(item.id, { branch: br.branch, accountNo: br.accountNo });
-                                                                            setActiveDropdown(null);
-                                                                        }}
-                                                                        className="w-full px-4 py-2 text-left hover:bg-blue-50 text-xs"
-                                                                    >
-                                                                        {br.branch}
-                                                                    </button>
-                                                                ))}
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Type or Select Branch..."
+                                                                value={item.branch || ''}
+                                                                onChange={(e) => updatePaymentItem(item.id, { branch: e.target.value })}
+                                                                onFocus={() => setActiveDropdown(`branch-${item.id}`)}
+                                                                className="payment-form-input pr-8 text-sm py-2 bg-white/50 border-blue-200/50"
+                                                                autoComplete="off"
+                                                            />
+                                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                                <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${activeDropdown === `branch-${item.id}` ? 'rotate-180' : ''}`} />
+                                                            </div>
+                                                        </div>
+                                                        {activeDropdown === `branch-${item.id}` && (
+                                                            <div className="absolute z-[140] left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-52 overflow-y-auto py-1 animate-in slide-in-from-top-2 duration-200">
+                                                                {(() => {
+                                                                    const foundBank = banks.find(b => (b.bankName || '').trim().toLowerCase() === (item.bankName || '').trim().toLowerCase());
+                                                                    const availableBranches = (foundBank?.branches || []).filter(br => (br.branch || '').toLowerCase().includes((item.branch || '').toLowerCase()));
+                                                                    if (availableBranches.length === 0) {
+                                                                        return <div className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium">Type custom branch name</div>;
+                                                                    }
+                                                                    return availableBranches.map((br, bi) => (
+                                                                        <button
+                                                                            key={bi}
+                                                                            type="button"
+                                                                            onMouseDown={(e) => {
+                                                                                e.preventDefault();
+                                                                                updatePaymentItem(item.id, { branch: br.branch, accountNo: br.accountNo || item.accountNo });
+                                                                                setActiveDropdown(null);
+                                                                            }}
+                                                                            className={`w-full px-4 py-2 text-left text-xs font-semibold hover:bg-blue-50 transition-colors cursor-pointer ${item.branch === br.branch ? 'bg-blue-50/70 text-blue-700' : 'text-gray-700'}`}
+                                                                        >
+                                                                            {br.branch}
+                                                                        </button>
+                                                                    ));
+                                                                })()}
                                                             </div>
                                                         )}
                                                     </div>
@@ -2039,7 +2053,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                     <input
                                                         type="text"
                                                         placeholder="Number..."
-                                                        value={item.accountNo}
+                                                        value={item.accountNo || ''}
                                                         onChange={(e) => updatePaymentItem(item.id, { accountNo: e.target.value })}
                                                         className="payment-form-input border-blue-200/50 bg-white/50 text-sm py-2"
                                                     />
