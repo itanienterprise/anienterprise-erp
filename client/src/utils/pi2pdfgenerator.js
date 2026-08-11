@@ -419,23 +419,29 @@ export const generatePI2PDF = (record) => {
         descParts.push(`CERTIFICATION ${otherCerts.join(', ').toUpperCase()}`);
     }
 
-    if (record.descriptionGoods) {
-        const descExtra = record.descriptionGoods
-            .split('\n')
-            .filter(line => {
-                const trimmed = line.trim().toLowerCase();
-                return !trimmed.startsWith('advising bank')
-                    && !trimmed.includes('must be through')
-                    && !trimmed.startsWith('country of origin')
-                    && !trimmed.includes('export standard packing')
-                    && !trimmed.startsWith('validity of proforma')
-                    && !(trimmed.includes('value') && trimmed.includes('quantity'));
-            })
-            .join('\n')
-            .trim();
-        if (descExtra) {
-            descParts.push(`\n${descExtra}`);
-        }
+    let mainDesc = (record.descriptionGoods || "").trim();
+    if (!mainDesc.toUpperCase().includes("TRANSHIPMENT")) {
+        mainDesc += (mainDesc ? "\n" : "") + "TRANSHIPMENT: ALLOWED";
+    }
+    if (!mainDesc.toUpperCase().includes("PARTIAL SHIPMENT")) {
+        mainDesc += (mainDesc ? "\n" : "") + "PARTIAL SHIPMENT: ALLOWED";
+    }
+
+    const descExtra = mainDesc
+        .split('\n')
+        .filter(line => {
+            const trimmed = line.trim().toLowerCase();
+            return !trimmed.startsWith('advising bank')
+                && !trimmed.includes('must be through')
+                && !trimmed.startsWith('country of origin')
+                && !trimmed.includes('export standard packing')
+                && !trimmed.startsWith('validity of proforma')
+                && !(trimmed.includes('value') && trimmed.includes('quantity'));
+        })
+        .join('\n')
+        .trim();
+    if (descExtra) {
+        descParts.push(`\n${descExtra}`);
     }
 
     // Extra newlines for spacing: more for single-product (signature overlay), small gap for multi-product

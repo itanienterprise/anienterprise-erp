@@ -1074,7 +1074,7 @@ function PI({
 
             if (field === 'invoiceStyle') {
                 if (value === 'Style 2 AAS') {
-                    updated.descriptionGoods = "";
+                    updated.descriptionGoods = "TRANSHIPMENT: ALLOWED\nPARTIAL SHIPMENT: ALLOWED";
                     updated.declaration = STYLE2_DECLARATION;
                 } else {
                     updated.descriptionGoods = DEFAULT_DESC_GOODS;

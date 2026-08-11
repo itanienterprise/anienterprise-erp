@@ -454,7 +454,14 @@ export const generatePIPDF = (record) => {
     if (showPacking) {
         extraDescParts.push("Export Standard Packing");
     }
-    const extraDescText = (extraDescParts.join("\n") + "\n" + (record.descriptionGoods || defaultDescLines)).trim();
+    let mainDesc = (record.descriptionGoods || defaultDescLines).trim();
+    if (!mainDesc.toUpperCase().includes("TRANSHIPMENT")) {
+        mainDesc += (mainDesc ? "\n" : "") + "TRANSHIPMENT: ALLOWED";
+    }
+    if (!mainDesc.toUpperCase().includes("PARTIAL SHIPMENT")) {
+        mainDesc += (mainDesc ? "\n" : "") + "PARTIAL SHIPMENT: ALLOWED";
+    }
+    const extraDescText = (extraDescParts.join("\n") + "\n" + mainDesc).trim();
 
     // Build the table body dynamically for each product
     productsList.forEach((prod, pIdx) => {
