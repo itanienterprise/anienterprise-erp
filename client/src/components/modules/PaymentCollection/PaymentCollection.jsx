@@ -36,6 +36,60 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
     const canViewPaymentRequest = hasPermission(currentUser, 'paymentCollection', 'paymentRequest') || hasPermission(currentUser, 'paymentCollection', 'paymentApprovalRequest') || canApprove;
     const canShowEntryBy = isAdmin || (currentUser?.role || '').toLowerCase() === 'incharge' || hasPermission(currentUser, 'paymentCollection', 'showEntryBy');
 
+    const showRequestedApprovalButtons = (group) => {
+        if (!canApprove) return false;
+        if (isAdmin) return true;
+        
+        const entryRole = (group.items?.[0]?.entryByRole || '').toLowerCase();
+        const smApproved = group.items?.[0]?.smApproved === true;
+        const currentUserRole = (currentUser?.role || '').toLowerCase();
+
+        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+        const isCreatorSalesManager = entryRole === 'sales manager';
+
+        if (isCreatorAccountsOrDataEntry) {
+            if (!smApproved) {
+                return currentUserRole === 'sales manager';
+            } else {
+                return currentUserRole !== 'sales manager';
+            }
+        } else if (isCreatorSalesManager) {
+            return currentUserRole !== 'sales manager';
+        } else {
+            return true;
+        }
+    };
+
+    // Creator can edit their own entry while it's still pending the 1st (SM) approval
+    const canEditBeforeApproval = (group) => {
+        const entryRole = (group.items?.[0]?.entryByRole || '').toLowerCase();
+        const smApproved = group.items?.[0]?.smApproved === true;
+        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+        if (!isCreatorAccountsOrDataEntry || smApproved) return false;
+        // Must be the original creator
+        const entryBy = group.items?.[0]?.entryBy;
+        const entryByName = group.items?.[0]?.entryByName;
+        const me = currentUser?.username || currentUser?.employeeId || currentUser?.id;
+        return (me && (me === entryBy || me === entryByName));
+    };
+
+    const getStatusBadgeText = (group) => {
+        if (group.status === 'Requested') {
+            const entryRole = (group.items?.[0]?.entryByRole || '').toLowerCase();
+            const smApproved = group.items?.[0]?.smApproved === true;
+            const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+            
+            if (isCreatorAccountsOrDataEntry) {
+                return smApproved ? 'Pending 2nd Approval' : 'Pending 1st Approval';
+            }
+            if (entryRole === 'sales manager') {
+                return 'Pending Approval';
+            }
+            return 'Requested';
+        }
+        return group.status || 'Accepted';
+    };
+
     // Requested & Edit Request Toggle Filters
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
@@ -867,15 +921,25 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     // Revert edit request back to original data before edit
                     const updatedHistory = (customer.paymentHistory || []).map(p => {
                         if (isItemMatch(p)) {
-                            if (p.originalData) {
-                                const { originalData, ...rest } = p;
+                            const { originalData, editedBy, editedByName, editedByRole, ...rest } = p;
+                            if (originalData) {
+                                const { editedBy: origEditedBy, editedByName: origEditedByName, editedByRole: origEditedByRole, ...origRest } = originalData;
                                 return {
                                     ...rest,
-                                    ...originalData,
-                                    isEdited: false
+                                    ...origRest,
+                                    isEdited: false,
+                                    editedBy: origEditedBy || '',
+                                    editedByName: origEditedByName || '',
+                                    editedByRole: origEditedByRole || ''
                                 };
                             }
-                            return { ...p, isEdited: false };
+                            return {
+                                ...rest,
+                                isEdited: false,
+                                editedBy: '',
+                                editedByName: '',
+                                editedByRole: ''
+                            };
                         }
                         return p;
                     });
@@ -887,10 +951,30 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 }
             } else {
                 // Accept
+                const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
+                const smApproved = paymentGroup.items?.[0]?.smApproved === true;
+                const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+                const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+
                 const updatedHistory = (customer.paymentHistory || []).map(p => {
                     if (isItemMatch(p)) {
                         const { originalData, ...rest } = p;
-                        return { ...rest, status: 'Accepted', isEdited: false };
+                        if (isSMApprovalStep) {
+                            return {
+                                ...rest,
+                                smApproved: true,
+                                smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                                smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            };
+                        } else {
+                            return {
+                                ...rest,
+                                status: 'Accepted',
+                                isEdited: false,
+                                approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            };
+                        }
                     }
                     return p;
                 });
@@ -915,9 +999,16 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         ? `${dateStr} | ${timeStr} | ${actorName} accepted the edit request for payment (${receiptNo}) from ${partyName}`
                         : `${dateStr} | ${timeStr} | ${actorName} rejected the edit request for payment (${receiptNo}) from ${partyName} — reverted to original`;
                 } else {
-                    title = newStatus === 'Accepted' ? 'Payment Request Accepted' : 'Payment Request Rejected';
+                    const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
+                    const smApproved = paymentGroup.items?.[0]?.smApproved === true;
+                    const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+                    const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+
+                    title = newStatus === 'Accepted' 
+                        ? (isSMApprovalStep ? 'Payment SM Approval Accepted' : 'Payment Request Accepted')
+                        : 'Payment Request Rejected';
                     msg = newStatus === 'Accepted'
-                        ? `${dateStr} | ${timeStr} | ${actorName} accepted the payment request (${receiptNo}) of ৳${paymentGroup.items?.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toLocaleString('en-IN')} from ${partyName}`
+                        ? `${dateStr} | ${timeStr} | ${actorName} ${isSMApprovalStep ? 'approved (SM Approval)' : 'accepted'} the payment request (${receiptNo}) of ৳${paymentGroup.items?.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toLocaleString('en-IN')} from ${partyName}`
                         : `${dateStr} | ${timeStr} | ${actorName} rejected the payment request (${receiptNo}) from ${partyName}`;
                 }
                 if (addNotification) await addNotification(title, msg, ['admin', 'incharge', 'sales manager'], ['admin']);
@@ -1001,7 +1092,27 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     const matchesReceipt = p.receiptNo && targetReceiptNos.has(p.receiptNo);
                     if (matchesId || matchesReceipt) {
                         const { originalData, ...rest } = p;
-                        return { ...rest, status: 'Accepted', isEdited: false };
+                        const entryRole = (p.entryByRole || '').toLowerCase();
+                        const smApproved = p.smApproved === true;
+                        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+                        const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+
+                        if (isSMApprovalStep) {
+                            return {
+                                ...rest,
+                                smApproved: true,
+                                smApprovedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                                smApprovedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            };
+                        } else {
+                            return {
+                                ...rest,
+                                status: 'Accepted',
+                                isEdited: false,
+                                approvedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
+                                approvedByName: currentUser?.name || currentUser?.username || 'Admin'
+                            };
+                        }
                     }
                     return p;
                 });
@@ -1114,11 +1225,25 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     .filter(p => !((p.id && newRequestIds.has(p.id)) || (p.receiptNo && newRequestReceipts.has(p.receiptNo))))
                     .map(p => {
                         if ((p.id && editRequestIds.has(p.id)) || (p.receiptNo && editRequestReceipts.has(p.receiptNo))) {
-                            if (p.originalData) {
-                                const { originalData, ...rest } = p;
-                                return { ...rest, ...originalData, isEdited: false };
+                            const { originalData, editedBy, editedByName, editedByRole, ...rest } = p;
+                            if (originalData) {
+                                const { editedBy: origEditedBy, editedByName: origEditedByName, editedByRole: origEditedByRole, ...origRest } = originalData;
+                                return {
+                                    ...rest,
+                                    ...origRest,
+                                    isEdited: false,
+                                    editedBy: origEditedBy || '',
+                                    editedByName: origEditedByName || '',
+                                    editedByRole: origEditedByRole || ''
+                                };
                             }
-                            return { ...p, isEdited: false };
+                            return {
+                                ...rest,
+                                isEdited: false,
+                                editedBy: '',
+                                editedByName: '',
+                                editedByRole: ''
+                            };
                         }
                         return p;
                     });
@@ -1224,7 +1349,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     discount: idx === 0 ? (parseFloat(newPayment.discount) || 0) : 0,
                     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     entryBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                    entryByName: currentUser?.name || currentUser?.username || 'Admin'
+                    entryByName: currentUser?.name || currentUser?.username || 'Admin',
+                    entryByRole: currentUser?.role || 'admin',
+                    smApproved: false
                 }));
 
             const updatedCustomer = {
@@ -1268,7 +1395,18 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
     const handleUpdateCollection = async (e) => {
         e.preventDefault();
-        if (!canEdit) {
+        // Allow creator to edit their own entry before the 1st SM approval directly
+        const editingEntryRole = (editingPayment?.entryByRole || '').toLowerCase();
+        const editingSmApproved = editingPayment?.smApproved === true;
+        const editingIsAccountsOrDataEntry = editingEntryRole === 'accounts manager' || editingEntryRole === 'account manager' || editingEntryRole === 'data entry';
+        const editingEntryBy = editingPayment?.entryBy;
+        const editingEntryByName = editingPayment?.entryByName;
+        const meUser = currentUser?.username || currentUser?.employeeId || currentUser?.id;
+        const isCreatorEditingBeforeApproval = editingIsAccountsOrDataEntry && !editingSmApproved &&
+            editingPayment?.status?.toLowerCase() === 'requested' &&
+            meUser && (meUser === editingEntryBy || meUser === editingEntryByName);
+
+        if (!canEdit && !isCreatorEditingBeforeApproval) {
             alert('Forbidden: You do not have permission to edit payment collections');
             return;
         }
@@ -1288,7 +1426,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             const existingEntries = (customer.paymentHistory || []).filter(p => p.receiptNo === editingPayment.receiptNo);
             const remainingHistory = (customer.paymentHistory || []).filter(p => p.receiptNo !== editingPayment.receiptNo);
 
-            const isEditReq = (!isAdmin && !canApproveEditRequest) || editingPayment?.isEdited === true;
+            const isEditReq = !isCreatorEditingBeforeApproval && ((!isAdmin && !canApproveEditRequest) || editingPayment?.isEdited === true);
             // Map all items currently in the form to reconstructed payment history entries
             const updatedPaymentEntries = activeItems.map((item, idx) => {
                 const existingItem = existingEntries.find(p => p.id === item.id) || existingEntries[0];
@@ -1332,8 +1470,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     id: item.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     entryBy: existingItem?.entryBy || existingItem?.entryByName || currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
                     entryByName: existingItem?.entryByName || existingItem?.entryBy || currentUser?.name || currentUser?.username || 'Admin',
-                    editedBy: currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin',
-                    editedByName: currentUser?.name || currentUser?.username || 'Admin'
+                    entryByRole: existingItem?.entryByRole || (existingItem?.entryBy === currentUser?.username ? currentUser?.role : '') || 'admin',
+                    smApproved: existingItem?.smApproved !== undefined ? existingItem?.smApproved : false,
+                    editedBy: isAdmin ? '' : (currentUser?.username || currentUser?.employeeId || currentUser?.id || 'admin'),
+                    editedByName: isAdmin ? '' : (currentUser?.name || currentUser?.username || 'Admin'),
+                    editedByRole: isAdmin ? '' : (currentUser?.role || 'admin')
                 };
             });
 
@@ -2201,7 +2342,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                             </span>
                                                         ) : (
                                                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${group.status === 'Requested' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'}`}>
-                                                                {group.status === 'Requested' ? 'Requested' : (group.status || 'Accepted')}
+                                                                {getStatusBadgeText(group)}
                                                             </span>
                                                         )}
                                                     </td>
@@ -2211,9 +2352,23 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                 <span className="text-xs font-semibold text-gray-700">
                                                                     {getEntryByName(group.entryBy, group.entryByName)}
                                                                 </span>
-                                                                {(group.editedBy || group.editedByName) && (
+                                                                {(group.editedBy || group.editedByName) &&
+                                                                 (group.editedBy || '').toLowerCase() !== 'admin' &&
+                                                                 (group.editedByName || '').toLowerCase() !== 'admin' &&
+                                                                 (group.items?.[0]?.editedByRole || '').toLowerCase() !== 'admin' &&
+                                                                 (group.isEdited || !group.items?.[0]?.originalData) && (
                                                                     <span className="text-[10px] text-amber-600 font-medium">
                                                                         ✎ {getEditedByName(group.editedBy, group.editedByName)}
+                                                                    </span>
+                                                                )}
+                                                                {group.items?.[0]?.smApprovedByName && (
+                                                                    <span className="text-[10px] text-blue-600 font-medium" title="1st Approval (SM)">
+                                                                        ✓ {group.items[0].smApprovedByName}
+                                                                    </span>
+                                                                )}
+                                                                {group.items?.[0]?.approvedByName && (
+                                                                    <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
+                                                                        ✓✓ {group.items[0].approvedByName}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -2228,7 +2383,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                             >
                                                                 <FileTextIcon className="w-5 h-5" />
                                                             </button>
-                                                            {canEdit && (
+                                                            {(canEdit || (group.status === 'Requested' && canEditBeforeApproval(group))) && (
                                                                 <button
                                                                     onClick={() => handleEditInitiation(group.items[0])}
                                                                     className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"
@@ -2237,7 +2392,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                     <EditIcon className="w-5 h-5" />
                                                                 </button>
                                                             )}
-                                                            {(group.status === 'Requested' ? canApprove : (group.isEdited === true && (canApproveEditRequest || canApprove))) && (
+                                                            {((group.status === 'Requested' ? showRequestedApprovalButtons(group) : (group.isEdited === true && (canApproveEditRequest || canApprove)))) && (
                                                                 <>
                                                                     <button
                                                                         onClick={() => handleStatusUpdate(group, 'Accepted')}
@@ -2402,7 +2557,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                             <span className="mobile-card-value font-semibold text-gray-700">
                                                                                 {getEntryByName(group.entryBy, group.entryByName)}
                                                                             </span>
-                                                                            {(group.editedBy || group.editedByName) && (
+                                                                            {(group.editedBy || group.editedByName) &&
+                                                                             (group.editedBy || '').toLowerCase() !== 'admin' &&
+                                                                             (group.editedByName || '').toLowerCase() !== 'admin' &&
+                                                                             (group.items?.[0]?.editedByRole || '').toLowerCase() !== 'admin' &&
+                                                                             (group.isEdited || !group.items?.[0]?.originalData) && (
                                                                                 <span className="text-[10px] text-amber-600 font-medium">
                                                                                     ✎ {getEditedByName(group.editedBy, group.editedByName)}
                                                                                 </span>
@@ -2413,7 +2572,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
                                                                 {canManage && (
                                                                     <div className="mobile-card-actions pt-2">
-                                                                        {canEdit && (
+                                                                        {(canEdit || (group.status === 'Requested' && canEditBeforeApproval(group))) && (
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); handleEditInitiation(item); }}
                                                                                 className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1 hover:bg-blue-100 transition-colors"
