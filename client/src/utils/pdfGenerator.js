@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { calculateStockData, getGroupedBrandList } from './stockHelpers';
+import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -726,10 +727,32 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             doc.text("A", margin + 9, margin + 11, { align: 'center' });
         }
 
-        doc.setTextColor(20, 25, 35);
-        doc.setFontSize(24);
-        doc.setFont('helvetica', 'bold');
-        doc.text("ANI ENTERPRISE", margin + 22, margin + 11);
+        await preloadFrauncesFont().catch(() => {});
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill (no black border)
+        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
 
         // Address (right aligned)
         doc.setFontSize(9);

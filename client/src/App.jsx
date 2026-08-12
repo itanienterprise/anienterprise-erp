@@ -2822,7 +2822,7 @@ function App() {
             </button>
             {/* App title — desktop only */}
             {windowWidth >= 768 && (
-              <h1 className="text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight ml-1">
+              <h1 className="text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight ml-1" style={{ fontFamily: "'Fraunces', serif" }}>
                 ANI Enterprise ERP
               </h1>
             )}
@@ -2830,7 +2830,7 @@ function App() {
 
           {/* Center — mobile title only */}
           {windowWidth < 768 && (
-            <h1 className="absolute left-0 right-0 text-center text-xl font-black tracking-tight pointer-events-none" style={{ color: '#2563eb' }}>
+            <h1 className="absolute left-0 right-0 text-center text-xl font-black tracking-tight pointer-events-none" style={{ color: '#2563eb', fontFamily: "'Fraunces', serif" }}>
               ANI Enterprise ERP
             </h1>
           )}

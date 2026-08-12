@@ -385,96 +385,96 @@ const StockReport = ({
                             {records.length > 0 ? (
                                 records.map((item, index) => {
                                     const brands = item.brandList;
-                                    
-                                     // Pre-calculate quality spans
-                                     const qualitySpans = [];
-                                     let lastQ = null;
-                                     let lastIdx = -1;
-                                     brands.forEach((b, i) => {
-                                         const q = (b.quality && b.quality !== '-') ? b.quality : 'NO QUALITY';
-                                         if (q !== lastQ) {
-                                             lastQ = q;
-                                             lastIdx = i;
-                                             qualitySpans[i] = { name: q, span: 1 };
-                                         } else {
-                                             qualitySpans[lastIdx].span++;
-                                             qualitySpans[i] = { name: q, span: 0 };
-                                         }
-                                     });
 
-                                     // Pre-calculate brand spans within consecutive matching brand names and quality groups
-                                     const brandSpans = [];
-                                     let lastBrand = null;
-                                     let lastBrandIdx = -1;
-                                     brands.forEach((b, i) => {
-                                         const q = (b.quality && b.quality !== '-') ? b.quality : 'NO QUALITY';
-                                         const brandName = (b.brand || 'No Brand').trim().toUpperCase();
-                                         const brandKey = `${q}_${brandName}`;
-                                         if (brandKey !== lastBrand) {
-                                             lastBrand = brandKey;
-                                             lastBrandIdx = i;
-                                             brandSpans[i] = { name: b.brand, span: 1 };
-                                         } else {
-                                             brandSpans[lastBrandIdx].span++;
-                                             brandSpans[i] = { name: b.brand, span: 0 };
-                                         }
-                                     });
+                                    // Pre-calculate quality spans
+                                    const qualitySpans = [];
+                                    let lastQ = null;
+                                    let lastIdx = -1;
+                                    brands.forEach((b, i) => {
+                                        const q = (b.quality && b.quality !== '-') ? b.quality : 'NO QUALITY';
+                                        if (q !== lastQ) {
+                                            lastQ = q;
+                                            lastIdx = i;
+                                            qualitySpans[i] = { name: q, span: 1 };
+                                        } else {
+                                            qualitySpans[lastIdx].span++;
+                                            qualitySpans[i] = { name: q, span: 0 };
+                                        }
+                                    });
 
-                                     let totalRows = brands.length + 1; // +1 for Sub Total row
-                                     if (reportType === 'price') {
-                                         brandSpans.forEach((bSpan, bIdx) => {
-                                             if (bSpan && bSpan.span > 1) {
-                                                 totalRows++;
-                                                 // Find which quality group this brand belongs to and adjust its span
-                                                 let qIdx = bIdx;
-                                                 while (qIdx > 0 && qualitySpans[qIdx].span === 0) {
-                                                     qIdx--;
-                                                 }
-                                                 qualitySpans[qIdx].span++;
-                                             }
-                                         });
-                                     }
-                                     return (
-                                         <React.Fragment key={index}>
-                                             {brands.map((ent, i) => {
-                                                 const { whole: openWhole, remainder: openRem } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
-                                                 const { whole: closeWhole, remainder: closeRem } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
-                                                 const sPkt = parseFloat(ent.salePacket) || 0;
-                                                 const qInfo = qualitySpans[i];
-                                                 const bInfo = brandSpans[i];
+                                    // Pre-calculate brand spans within consecutive matching brand names and quality groups
+                                    const brandSpans = [];
+                                    let lastBrand = null;
+                                    let lastBrandIdx = -1;
+                                    brands.forEach((b, i) => {
+                                        const q = (b.quality && b.quality !== '-') ? b.quality : 'NO QUALITY';
+                                        const brandName = (b.brand || 'No Brand').trim().toUpperCase();
+                                        const brandKey = `${q}_${brandName}`;
+                                        if (brandKey !== lastBrand) {
+                                            lastBrand = brandKey;
+                                            lastBrandIdx = i;
+                                            brandSpans[i] = { name: b.brand, span: 1 };
+                                        } else {
+                                            brandSpans[lastBrandIdx].span++;
+                                            brandSpans[i] = { name: b.brand, span: 0 };
+                                        }
+                                    });
 
-                                                 // Find the start index of this brand group to check if it's the last of the group and has multiple LCs
-                                                 let startIdx = i;
-                                                 while (startIdx > 0 && brandSpans[startIdx].span === 0) {
-                                                     startIdx--;
-                                                 }
-                                                 const spanInfo = brandSpans[startIdx];
-                                                 const isLastOfBrandGroup = i === startIdx + spanInfo.span - 1;
-                                                 const hasMultipleLcs = spanInfo.span > 1;
+                                    let totalRows = brands.length + 1; // +1 for Sub Total row
+                                    if (reportType === 'price') {
+                                        brandSpans.forEach((bSpan, bIdx) => {
+                                            if (bSpan && bSpan.span > 1) {
+                                                totalRows++;
+                                                // Find which quality group this brand belongs to and adjust its span
+                                                let qIdx = bIdx;
+                                                while (qIdx > 0 && qualitySpans[qIdx].span === 0) {
+                                                    qIdx--;
+                                                }
+                                                qualitySpans[qIdx].span++;
+                                            }
+                                        });
+                                    }
+                                    return (
+                                        <React.Fragment key={index}>
+                                            {brands.map((ent, i) => {
+                                                const { whole: openWhole, remainder: openRem } = calculatePktRemainder(ent.totalInHouseQuantity, ent.packetSize);
+                                                const { whole: closeWhole, remainder: closeRem } = calculatePktRemainder(ent.inHouseQuantity, ent.packetSize || 30);
+                                                const sPkt = parseFloat(ent.salePacket) || 0;
+                                                const qInfo = qualitySpans[i];
+                                                const bInfo = brandSpans[i];
 
-                                                 return (
-                                                     <React.Fragment key={`${index}-${i}`}>
-                                                         <tr className="hover:bg-gray-50 transition-colors border-b border-gray-900 last:border-b-0">
-                                                             {i === 0 && (
-                                                                 <td rowSpan={totalRows} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 text-center align-top font-bold">
-                                                                     {index + 1}
-                                                                 </td>
-                                                             )}
-                                                             {qInfo.span > 0 && (
-                                                                 <td rowSpan={qInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
-                                                                     {i === 0 && <div className="font-black uppercase mb-1 underline decoration-gray-400">{item.productName}</div>}
-                                                                     {qInfo.name !== 'NO QUALITY' && (
-                                                                         <div className="font-bold uppercase text-blue-700 bg-blue-50/50 px-1 py-0.5 rounded text-[12px] inline-block mt-1">
-                                                                             {qInfo.name}
-                                                                         </div>
-                                                                     )}
-                                                                 </td>
-                                                             )}
-                                                             {bInfo.span > 0 && (
-                                                                  <td rowSpan={bInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
-                                                                      <div className="leading-tight uppercase font-medium">{(ent.brand || 'No Brand').trim()}</div>
-                                                                  </td>
-                                                              )}
+                                                // Find the start index of this brand group to check if it's the last of the group and has multiple LCs
+                                                let startIdx = i;
+                                                while (startIdx > 0 && brandSpans[startIdx].span === 0) {
+                                                    startIdx--;
+                                                }
+                                                const spanInfo = brandSpans[startIdx];
+                                                const isLastOfBrandGroup = i === startIdx + spanInfo.span - 1;
+                                                const hasMultipleLcs = spanInfo.span > 1;
+
+                                                return (
+                                                    <React.Fragment key={`${index}-${i}`}>
+                                                        <tr className="hover:bg-gray-50 transition-colors border-b border-gray-900 last:border-b-0">
+                                                            {i === 0 && (
+                                                                <td rowSpan={totalRows} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 text-center align-top font-bold">
+                                                                    {index + 1}
+                                                                </td>
+                                                            )}
+                                                            {qInfo.span > 0 && (
+                                                                <td rowSpan={qInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
+                                                                    {i === 0 && <div className="font-black uppercase mb-1 underline decoration-gray-400">{item.productName}</div>}
+                                                                    {qInfo.name !== 'NO QUALITY' && (
+                                                                        <div className="font-bold uppercase text-blue-700 bg-blue-50/50 px-1 py-0.5 rounded text-[12px] inline-block mt-1">
+                                                                            {qInfo.name}
+                                                                        </div>
+                                                                    )}
+                                                                </td>
+                                                            )}
+                                                            {bInfo.span > 0 && (
+                                                                <td rowSpan={bInfo.span} className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top">
+                                                                    <div className="leading-tight uppercase font-medium">{(ent.brand || 'No Brand').trim()}</div>
+                                                                </td>
+                                                            )}
                                                             {reportType === 'price' && (
                                                                 <>
                                                                     <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-gray-900 align-top uppercase">
@@ -549,33 +549,33 @@ const StockReport = ({
                                                                     )}
                                                                 </>
                                                             )}
-                                                         </tr>
-                                                         {reportType === 'price' && hasMultipleLcs && isLastOfBrandGroup && (() => {
-                                                             const brandGroup = brands.slice(startIdx, startIdx + spanInfo.span);
-                                                             const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
-                                                             const pktSize = ent.packetSize || 30;
-                                                             const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
-                                                             return (
-                                                                 <tr className="bg-gray-100/50 font-bold border-b border-gray-900 last:border-b-0">
-                                                                     <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold uppercase" colSpan={3}>
-                                                                         {(ent.brand || 'No Brand').trim()} Total
-                                                                     </td>
-                                                                     {showBag && (
-                                                                         <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold whitespace-nowrap">
-                                                                             {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
-                                                                         </td>
-                                                                     )}
-                                                                     {showQty && (
-                                                                         <td className="px-2 py-1 text-[13px] text-right text-gray-900 font-black whitespace-nowrap">
-                                                                             {Math.round(totalQty).toLocaleString('en-US')}
-                                                                         </td>
-                                                                     )}
-                                                                 </tr>
-                                                             );
-                                                         })()}
-                                                     </React.Fragment>
-                                                 );
-                                             })}
+                                                        </tr>
+                                                        {reportType === 'price' && hasMultipleLcs && isLastOfBrandGroup && (() => {
+                                                            const brandGroup = brands.slice(startIdx, startIdx + spanInfo.span);
+                                                            const totalQty = brandGroup.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
+                                                            const pktSize = ent.packetSize || 30;
+                                                            const { whole, remainder } = calculatePktRemainder(totalQty, pktSize);
+                                                            return (
+                                                                <tr className="bg-gray-100/50 font-bold border-b border-gray-900 last:border-b-0">
+                                                                    <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold uppercase" colSpan={3}>
+                                                                        {(ent.brand || 'No Brand').trim()} Total
+                                                                    </td>
+                                                                    {showBag && (
+                                                                        <td className="border-r border-gray-900 px-2 py-1 text-[13px] text-right text-gray-900 font-extrabold whitespace-nowrap">
+                                                                            {whole}{remainder !== 0 ? ` - ${Math.abs(remainder)} kg` : ''}
+                                                                        </td>
+                                                                    )}
+                                                                    {showQty && (
+                                                                        <td className="px-2 py-1 text-[13px] text-right text-gray-900 font-black whitespace-nowrap">
+                                                                            {Math.round(totalQty).toLocaleString('en-US')}
+                                                                        </td>
+                                                                    )}
+                                                                </tr>
+                                                            );
+                                                        })()}
+                                                    </React.Fragment>
+                                                );
+                                            })}
                                             {/* Sub Total Row */}
                                             <tr className="bg-gray-100/50 border-b-2 border-gray-900 font-bold">
                                                 <td className="border-r border-gray-900 px-2 py-1.5 text-[11px] font-black text-gray-400 align-top uppercase" colSpan={reportType === 'price' ? 4 : 2}>
@@ -1260,15 +1260,32 @@ const StockReport = ({
                 {/* Printable Content */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-12 print:p-4 print:overflow-visible bg-white">
                     <div className="max-w-[1000px] mx-auto space-y-6 sm:space-y-8">
-                        <div className="text-center space-y-1">
-                            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
-                            <p className="text-[12px] sm:text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[12px] sm:text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                        {/* Header matching PDF layout */}
+                        <div className="flex justify-between items-center pb-1">
+                            {/* Left: Logo & Company Name */}
+                            <div className="flex items-center gap-3">
+                                <img src="/logo.png" alt="ANI Enterprise Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
+                                <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
+                                    ANI ENTERPRISE
+                                </h1>
+                            </div>
+
+                            {/* Right: Address Info */}
+                            <div className="text-right text-[11px] sm:text-[12px] text-gray-700 leading-tight">
+                                <p className="font-semibold text-gray-800">766, H.M Tower, Level-06</p>
+                                <p>Borogola, Bogura, Bangladesh</p>
+                                <p>Tel: +8802588813057</p>
+                                <p>Email: anienterprise051@gmail.com</p>
+                            </div>
                         </div>
-                        <div className="border-t-2 border-gray-900 w-full mt-4"></div>
-                        <div className="flex justify-center -mt-6">
-                            <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
-                                <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">Stock Report</h2>
+
+                        {/* Orange Divider Line */}
+                        <div className="border-t-2 border-[#f97316] w-full mt-3"></div>
+
+                        {/* Centered Title Badge */}
+                        <div className="flex justify-center -mt-5">
+                            <div className="bg-[#f97316] text-white px-8 py-1 rounded shadow-sm">
+                                <h2 className="text-xs sm:text-sm font-bold tracking-wider uppercase">STOCK REPORT</h2>
                             </div>
                         </div>
                         <div className="flex justify-between items-end text-[14px] text-gray-800 pt-6 px-2">
