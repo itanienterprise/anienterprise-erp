@@ -36,9 +36,26 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
     const canViewPaymentRequest = hasPermission(currentUser, 'payToCustomer', 'paymentRequest') || hasPermission(currentUser, 'payToCustomer', 'paymentApprovalRequest') || canApprove;
     const canShowEntryBy = isAdmin || (currentUser?.role || '').toLowerCase() === 'incharge' || hasPermission(currentUser, 'payToCustomer', 'showEntryBy');
 
+    const canApproveFirst = hasPermission(currentUser, 'payToCustomer', 'firstApprove');
+    const canApproveSecond = hasPermission(currentUser, 'payToCustomer', 'secondApprove');
+
     const showRequestedApprovalButtons = (group) => {
-        if (!canApprove) return false;
         if (isAdmin) return true;
+
+        // Only Admin can approve self entry; non-admin users cannot approve their own entry
+        const item = group.items?.[0] || group;
+        const entryBy = String(item.entryBy || '').toLowerCase().trim();
+        const entryByName = String(item.entryByName || '').toLowerCase().trim();
+        const myIdentifiers = [
+            currentUser?.username,
+            currentUser?.employeeId,
+            currentUser?.id,
+            currentUser?.name,
+            currentUser?.nameEn
+        ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+        const isSelfEntry = myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName);
+        if (isSelfEntry) return false;
         
         const entryRole = (group.items?.[0]?.entryByRole || '').toLowerCase();
         const smApproved = group.items?.[0]?.smApproved === true;
@@ -47,29 +64,66 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
         const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
         const isCreatorSalesManager = entryRole === 'sales manager';
 
-        if (isCreatorAccountsOrDataEntry) {
-            if (!smApproved) {
-                return currentUserRole === 'sales manager';
-            } else {
-                return currentUserRole !== 'sales manager';
+        const userModulePerms = currentUser?.permissions?.payToCustomer;
+
+        if (smApproved) {
+            // Check if current user is the one who did 1st approval
+            const smApprovedBy = String(item.smApprovedBy || '').toLowerCase().trim();
+            const smApprovedByName = String(item.smApprovedByName || '').toLowerCase().trim();
+            const isFirstApprover = (smApprovedBy || smApprovedByName) &&
+                (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
+
+            if (isFirstApprover) return false;
+        }
+
+        // CASE A: Entry created by Sales Manager (Status: Pending Approval)
+        // Requires 2nd/Final approval (Head of Sales / Incharge / Admin / secondApprove)
+        if (isCreatorSalesManager && !smApproved) {
+            if (userModulePerms && typeof userModulePerms.secondApprove === 'boolean') {
+                return userModulePerms.secondApprove === true;
             }
-        } else if (isCreatorSalesManager) {
-            return currentUserRole !== 'sales manager';
-        } else {
-            return true;
+            if (currentUserRole === 'sales manager') return false;
+            return currentUserRole === 'head of sales' || currentUserRole === 'incharge' || canApproveSecond;
+        }
+
+        // CASE B: 1st Approval Step for Data Entry / Account Manager entries (Status: Pending 1st Approval)
+        if (!smApproved) {
+            if (userModulePerms && typeof userModulePerms.firstApprove === 'boolean') {
+                return userModulePerms.firstApprove === true;
+            }
+            if (currentUserRole === 'sales manager') return true;
+            return canApproveFirst;
+        }
+
+        // CASE C: 2nd Approval Step for Data Entry / Account Manager entries (Status: Pending 2nd Approval)
+        if (smApproved) {
+            if (userModulePerms && typeof userModulePerms.secondApprove === 'boolean') {
+                return userModulePerms.secondApprove === true;
+            }
+            if (currentUserRole === 'sales manager') return false;
+            return currentUserRole === 'incharge' || currentUserRole === 'head of sales' || currentUserRole === 'accounts manager' || currentUserRole === 'account manager' || canApproveSecond;
         }
     };
 
-    // Creator can edit their own entry while it's still pending the 1st (SM) approval
+    // Creator can edit their own entry while it's still pending approval (before 1st SM approval)
     const canEditBeforeApproval = (group) => {
-        const entryRole = (group.items?.[0]?.entryByRole || '').toLowerCase();
-        const smApproved = group.items?.[0]?.smApproved === true;
-        const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-        if (!isCreatorAccountsOrDataEntry || smApproved) return false;
-        const entryBy = group.items?.[0]?.entryBy;
-        const entryByName = group.items?.[0]?.entryByName;
-        const me = currentUser?.username || currentUser?.employeeId || currentUser?.id;
-        return (me && (me === entryBy || me === entryByName));
+        const item = group.items?.[0] || group;
+        const status = (item.status || group.status || '').toLowerCase();
+        const smApproved = item.smApproved === true;
+        if (status !== 'requested' || smApproved) return false;
+
+        const entryBy = String(item.entryBy || '').toLowerCase().trim();
+        const entryByName = String(item.entryByName || '').toLowerCase().trim();
+
+        const myIdentifiers = [
+            currentUser?.username,
+            currentUser?.employeeId,
+            currentUser?.id,
+            currentUser?.name,
+            currentUser?.nameEn
+        ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+        return (myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName));
     };
 
     const getStatusBadgeText = (group) => {
@@ -869,10 +923,12 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 const deleterName = currentUser?.name || currentUser?.username || 'An employee';
                 const partyName = paymentToDelete?.companyName || paymentToDelete?.customerName || 'Customer';
                 if (addNotification) await addNotification(
-                    'Payout Deleted',
+                    'Pay To Customer Deleted',
                     `${dateStr} | ${timeStr} | ${deleterName} deleted payout (${paymentToDelete?.receiptNo}) to ${partyName}`,
-                    ['admin', 'incharge', 'sales manager'],
-                    ['admin']
+                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
+                    [],
+                    true,
+                    'pay-to-customer-section'
                 );
             } catch (notifErr) { console.error('Notification error:', notifErr); }
         } catch (error) {
@@ -884,6 +940,34 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
     };
 
     const handleStatusUpdate = async (paymentGroup, newStatus) => {
+        const item = paymentGroup.items?.[0] || paymentGroup;
+        const entryBy = String(item.entryBy || '').toLowerCase().trim();
+        const entryByName = String(item.entryByName || '').toLowerCase().trim();
+        const myIdentifiers = [
+            currentUser?.username,
+            currentUser?.employeeId,
+            currentUser?.id,
+            currentUser?.name,
+            currentUser?.nameEn
+        ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+        const isSelfEntry = myIdentifiers.includes(entryBy) || myIdentifiers.includes(entryByName);
+
+        if (isSelfEntry && !isAdmin) {
+            alert('Forbidden: Only Admin can approve or reject self-created entries.');
+            return;
+        }
+
+        const smApproved = item.smApproved === true;
+        const smApprovedBy = String(item.smApprovedBy || '').toLowerCase().trim();
+        const smApprovedByName = String(item.smApprovedByName || '').toLowerCase().trim();
+        const isFirstApprover = smApproved && (smApprovedBy || smApprovedByName) &&
+            (myIdentifiers.includes(smApprovedBy) || myIdentifiers.includes(smApprovedByName));
+
+        if (isFirstApprover && !isAdmin) {
+            alert('Forbidden: You cannot perform 2nd approval on an entry you already approved for 1st approval.');
+            return;
+        }
+
         try {
             setIsSubmitting(true);
             const custRes = await axios.get(`${API_BASE_URL}/api/customers/${paymentGroup.customerId}`);
@@ -970,6 +1054,11 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 const receiptNo = paymentGroup.receiptNo || '';
                 const isEditRequest = paymentGroup.isEdited === true && (paymentGroup.status || '').toLowerCase() !== 'requested';
 
+                const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
+                const smApproved = paymentGroup.items?.[0]?.smApproved === true;
+                const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
+                const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
+
                 let title, msg;
                 if (isEditRequest) {
                     title = newStatus === 'Accepted' ? 'Payout Edit Request Accepted' : 'Payout Edit Request Rejected';
@@ -977,19 +1066,23 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                         ? `${dateStr} | ${timeStr} | ${actorName} accepted edit request for payout (${receiptNo}) to ${partyName}`
                         : `${dateStr} | ${timeStr} | ${actorName} rejected edit request for payout (${receiptNo}) to ${partyName} — reverted to original`;
                 } else {
-                    const entryRole = (paymentGroup.items?.[0]?.entryByRole || '').toLowerCase();
-                    const smApproved = paymentGroup.items?.[0]?.smApproved === true;
-                    const isCreatorAccountsOrDataEntry = entryRole === 'accounts manager' || entryRole === 'account manager' || entryRole === 'data entry';
-                    const isSMApprovalStep = isCreatorAccountsOrDataEntry && !smApproved && !isAdmin;
-
                     title = newStatus === 'Accepted' 
-                        ? (isSMApprovalStep ? 'Payout SM Approval Accepted' : 'Payout Request Accepted')
-                        : 'Payout Request Rejected';
+                        ? (isSMApprovalStep ? '1st Approve Done - Pay To Customer' : 'Pay To Customer Accepted')
+                        : 'Pay To Customer Rejected';
                     msg = newStatus === 'Accepted'
-                        ? `${dateStr} | ${timeStr} | ${actorName} ${isSMApprovalStep ? 'approved (SM Approval)' : 'accepted'} payout request (${receiptNo}) of ৳${paymentGroup.items?.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toLocaleString('en-IN')} to ${partyName}`
+                        ? `${dateStr} | ${timeStr} | ${actorName} ${isSMApprovalStep ? 'approved (1st Approval)' : 'accepted'} payout request (${receiptNo}) of ৳${paymentGroup.items?.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toLocaleString('en-IN')} to ${partyName}`
                         : `${dateStr} | ${timeStr} | ${actorName} rejected payout request (${receiptNo}) to ${partyName}`;
                 }
-                if (addNotification) await addNotification(title, msg, ['admin', 'incharge', 'sales manager'], ['admin']);
+                const creatorUser = paymentGroup.items?.[0]?.entryBy || '';
+                const targetUsers = creatorUser ? [creatorUser] : [];
+                if (addNotification) await addNotification(
+                    title, 
+                    msg, 
+                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'], 
+                    targetUsers, 
+                    true, 
+                    'pay-to-customer-section'
+                );
             } catch (notifErr) { console.error('Notification error:', notifErr); }
         } catch (error) {
             console.error('Error updating payout status:', error);
@@ -1100,10 +1193,12 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
 
             if (addNotification) {
                 await addNotification(
-                    'Bulk Payout Requests Accepted',
+                    'Bulk Pay To Customer Accepted',
                     `${dateStr} | ${timeStr} | ${actorName} bulk accepted ${groupsToAccept.length} payout request(s)`,
-                    ['admin', 'incharge', 'sales manager'],
-                    ['admin']
+                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
+                    [],
+                    true,
+                    'pay-to-customer-section'
                 );
             }
 
@@ -1231,10 +1326,12 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
 
             if (addNotification) {
                 await addNotification(
-                    'Bulk Payout Requests Rejected',
+                    'Bulk Pay To Customer Rejected',
                     `${dateStr} | ${timeStr} | ${actorName} bulk rejected ${groupsToReject.length} payout request(s)`,
-                    ['admin', 'incharge', 'sales manager'],
-                    ['admin']
+                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
+                    [],
+                    true,
+                    'pay-to-customer-section'
                 );
             }
 
@@ -1345,10 +1442,12 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                     rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
                 const totalAmt = newPayment.items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
                 if (addNotification) await addNotification(
-                    'New Payout Requested',
+                    'New Pay To Customer Requested',
                     `${dateStr} | ${timeStr} | ${employeeName} requested a payout of ৳${totalAmt.toLocaleString('en-IN')} to ${partyName} (${nextReceiptNo})`,
-                    ['admin', 'incharge', 'sales manager'],
-                    ['admin']
+                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'],
+                    [],
+                    true,
+                    'pay-to-customer-section'
                 );
             } catch (notifErr) { console.error('Notification error:', notifErr); }
 
@@ -1369,15 +1468,21 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
     const handleUpdateCollection = async (e) => {
         e.preventDefault();
         // Allow creator to edit their own entry before the 1st SM approval directly
-        const editingEntryRole = (editingPayment?.entryByRole || '').toLowerCase();
         const editingSmApproved = editingPayment?.smApproved === true;
-        const editingIsAccountsOrDataEntry = editingEntryRole === 'accounts manager' || editingEntryRole === 'account manager' || editingEntryRole === 'data entry';
-        const editingEntryBy = editingPayment?.entryBy;
-        const editingEntryByName = editingPayment?.entryByName;
-        const meUser = currentUser?.username || currentUser?.employeeId || currentUser?.id;
-        const isCreatorEditingBeforeApproval = editingIsAccountsOrDataEntry && !editingSmApproved &&
-            editingPayment?.status?.toLowerCase() === 'requested' &&
-            meUser && (meUser === editingEntryBy || meUser === editingEntryByName);
+        const editingStatus = (editingPayment?.status || '').toLowerCase();
+        const editingEntryBy = String(editingPayment?.entryBy || '').toLowerCase().trim();
+        const editingEntryByName = String(editingPayment?.entryByName || '').toLowerCase().trim();
+        const myIdentifiers = [
+            currentUser?.username,
+            currentUser?.employeeId,
+            currentUser?.id,
+            currentUser?.name,
+            currentUser?.nameEn
+        ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+        const isCreatorEditingBeforeApproval = !editingSmApproved &&
+            editingStatus === 'requested' &&
+            (myIdentifiers.includes(editingEntryBy) || myIdentifiers.includes(editingEntryByName));
 
         if (!canEdit && !isCreatorEditingBeforeApproval) {
             alert('Forbidden: You do not have permission to edit pay to customer records');
@@ -1465,7 +1570,14 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                 const msg = isEditReq
                     ? `${dateStr} | ${timeStr} | ${editorName} requested an edit on payout (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} to ${partyName}`
                     : `${dateStr} | ${timeStr} | ${editorName} updated payout (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} to ${partyName}`;
-                if (addNotification) await addNotification(title, msg, ['admin', 'incharge', 'sales manager'], ['admin']);
+                if (addNotification) await addNotification(
+                    title, 
+                    msg, 
+                    ['admin', 'incharge', 'sales manager', 'head of sales', 'accounts manager', 'account manager', 'data entry', 'sales executive'], 
+                    [], 
+                    true, 
+                    'pay-to-customer-section'
+                );
             } catch (notifErr) { console.error('Notification error:', notifErr); }
 
             fetchPayments();

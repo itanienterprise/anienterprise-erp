@@ -113,12 +113,19 @@ function App() {
       }).filter(Boolean);
 
       // Filter based on user role
-      // admin user, admin role, incharge, sales manager
+      // admin user, admin role, incharge, sales manager, head of sales
       const roleFiltered = decrypted.filter(n => {
         const userRole = (currentUser?.role || '').toLowerCase();
-        const isAdminUser = currentUser?.username === 'admin';
+        const isAdminUser = currentUser?.username === 'admin' || userRole === 'admin';
 
-        const isTargetRole = n.targetRoles ? n.targetRoles.some(r => r.toLowerCase() === userRole || (isAdminUser && r.toLowerCase() === 'admin')) : false;
+        const isTargetRole = n.targetRoles ? n.targetRoles.some(r => {
+          const rLow = (r || '').toLowerCase();
+          if (rLow === userRole) return true;
+          if (isAdminUser && rLow === 'admin') return true;
+          if (userRole === 'head of sales' && (rLow === 'head of sales' || rLow === 'sales manager' || rLow === 'incharge')) return true;
+          if (userRole === 'incharge' && (rLow === 'incharge' || rLow === 'admin')) return true;
+          return false;
+        }) : false;
         const isTargetUser = n.targetUsers ? n.targetUsers.includes(currentUser?.username) : false;
 
         return isTargetRole || isTargetUser;
@@ -273,7 +280,7 @@ function App() {
     }
   };
 
-  const addNotification = async (title, message, targetRoles = ['admin', 'incharge', 'sales manager'], targetUsers = [], isSystemic = false, link = '') => {
+  const addNotification = async (title, message, targetRoles = ['admin', 'incharge', 'sales manager', 'head of sales'], targetUsers = [], isSystemic = false, link = '') => {
     try {
       const newNotif = {
         title,

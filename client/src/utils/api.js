@@ -48,15 +48,21 @@ axios.interceptors.request.use((config) => {
  * Response Interceptor: Automatically decrypts the payload.
  */
 axios.interceptors.response.use((response) => {
+    if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
+        return Promise.reject(new Error('Server returned an invalid HTML response instead of JSON. Please check backend server status.'));
+    }
     if (response.data && response.data.payload) {
         const decrypted = decryptData(response.data.payload);
         response.data = decrypted;
     }
     return response;
 }, (error) => {
-    // If it's a security error (403), we might want to handle it globally
+    // If response body is HTML string (e.g. 404 fallback)
+    if (error.response && typeof error.response.data === 'string' && error.response.data.trim().startsWith('<')) {
+        error.message = 'Server returned an invalid HTML response instead of JSON. Please check backend server status.';
+    }
     if (error.response && error.response.status === 403) {
-        console.error('Security verification failed:', error.response.data.message);
+        console.error('Security verification failed:', error.response.data?.message || error.response.data);
     }
     return Promise.reject(error);
 });
@@ -100,11 +106,15 @@ const secureFetch = async (url, options = {}) => {
     
     // Override json() to automatically decrypt if a payload is present
     response.json = async () => {
-        const data = await originalJson();
-        if (data && data.payload) {
-            return decryptData(data.payload);
+        try {
+            const data = await originalJson();
+            if (data && data.payload) {
+                return decryptData(data.payload);
+            }
+            return data;
+        } catch (err) {
+            throw new Error('Server returned invalid non-JSON response. Please check backend server status.');
         }
-        return data;
     };
 
     return response;

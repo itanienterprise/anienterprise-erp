@@ -24,6 +24,8 @@ export const MODULES_LIST = [
         key: 'order',
         label: 'Order',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
             { key: 'special', label: 'Approve Order' },
             { key: 'orderRequest', label: 'Order Request' },
             { key: 'editRequest', label: 'Edit Request' },
@@ -34,6 +36,8 @@ export const MODULES_LIST = [
         key: 'purchase',
         label: 'Purchase Management',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
             { key: 'special', label: 'Approve Purchase' },
             { key: 'purchaseRequest', label: 'Purchase Request' },
             { key: 'editRequest', label: 'Edit Request' },
@@ -44,6 +48,8 @@ export const MODULES_LIST = [
         key: 'purchaseReceive',
         label: 'Purchase Receive Management',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
             { key: 'special', label: 'Approve Purchase Receive' },
             { key: 'purchaseReceiveRequest', label: 'Purchase Receive Request' },
             { key: 'editRequest', label: 'Edit Request' },
@@ -73,6 +79,8 @@ export const MODULES_LIST = [
         key: 'sales',
         label: 'General Sale',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
             { key: 'special', label: 'Approve Sale' },
             { key: 'saleRequest', label: 'Sale Request' },
             { key: 'editRequest', label: 'Edit Request' },
@@ -83,6 +91,8 @@ export const MODULES_LIST = [
         key: 'borderSale',
         label: 'Border Sale',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
             { key: 'special', label: 'Approve Sale' },
             { key: 'saleRequest', label: 'Sale Request' },
             { key: 'editRequest', label: 'Edit Request' },
@@ -95,6 +105,8 @@ export const MODULES_LIST = [
         key: 'paymentCollection',
         label: 'Payment Collection',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
             { key: 'special', label: 'Approve Payment' },
             { key: 'paymentRequest', label: 'Payment Request' },
             { key: 'editRequest', label: 'Edit Request' },
@@ -106,6 +118,8 @@ export const MODULES_LIST = [
         key: 'payToCustomer',
         label: 'Pay To Customer',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
             { key: 'special', label: 'Approve Payment' },
             { key: 'paymentRequest', label: 'Payment Request' },
             { key: 'editRequest', label: 'Edit Request' },
@@ -119,6 +133,8 @@ export const MODULES_LIST = [
         key: 'insurancePayment',
         label: 'Insurance Payment',
         specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
             { key: 'special', label: 'Approve Payment' },
             { key: 'paymentRequest', label: 'Payment Request' },
             { key: 'editRequest', label: 'Edit Request' },
@@ -212,10 +228,25 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
+                    if (sItem.key === 'firstApprove') permsObj[sItem.key] = true;
+                    else if (sItem.key === 'secondApprove') permsObj[sItem.key] = false;
+                    else permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
                 });
             }
             defaults[key] = permsObj;
+        });
+    } else if (roleLower === 'head of sales') {
+        // Head of Sales has approval rights for sales and payment operations
+        MODULES_LIST.forEach(mod => {
+            if (mod.key !== 'backupRestore') {
+                const permsObj = { view: true, add: true, edit: true, delete: false, special: true };
+                if (mod.specialLabels) {
+                    mod.specialLabels.forEach(sItem => {
+                        permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
+                    });
+                }
+                defaults[mod.key] = permsObj;
+            }
         });
     } else if (roleLower === 'accounts manager') {
         // Accounts Manager can access paymentCollection, payToCustomer, bank, insurance, insurancePayment, returnProduct, purchase
@@ -225,7 +256,9 @@ export const getDefaultPermissionsForRole = (role) => {
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };
             if (mod && mod.specialLabels) {
                 mod.specialLabels.forEach(sItem => {
-                    permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
+                    if (sItem.key === 'firstApprove') permsObj[sItem.key] = false;
+                    else if (sItem.key === 'secondApprove') permsObj[sItem.key] = true;
+                    else permsObj[sItem.key] = !(sItem.key === 'editLcReceive' || sItem.key === 'editDollarRate');
                 });
             }
             defaults[key] = permsObj;
