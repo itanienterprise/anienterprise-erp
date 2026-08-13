@@ -4385,15 +4385,31 @@ const getRemIpQtyTon = (ipNo, ipRecordsRaw, lcRecords, editingId) => {
     return (parseFloat(selectedIp.quantity || 0) / 1000) - totalLcQtyOnThisIp;
 };
 
+// Standalone helper to compute LC qty in kg from stored record fields (no stock/sales data needed)
+const _getLcBaseQtyKg = (lc) => {
+    if (lc.productsList && lc.productsList.length > 0) {
+        const total = lc.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+        if (total > 0) return total < 50000 ? total * 1000 : total;
+    }
+    const q = parseFloat(lc.quantity || lc.totalQuantity || lc.lcQuantity || 0);
+    return q < 50000 ? q * 1000 : q;
+};
+
 const getIpContributionBreakdown = (lcRecord, ips, ipRecordsRaw = [], lcRecords = []) => {
     if (!ips || ips.length === 0 || !lcRecord) return [];
-    const adj = getAdjustedLcValues(lcRecord);
-    const totalLcQtyKg = adj.adjustedQtyKg || (parseFloat(lcRecord.quantity || 0) * 1000);
-    const actualAdjustmentQtyKg = adj.actualAdjustmentQtyKg || 0;
-    const isToleranceEnabled = !!lcRecord.enableValueQtyAdjustment && actualAdjustmentQtyKg > 0;
+
+    // Use stored adjustedQuantity if available, otherwise fall back to base qty
+    const baseQtyKg = _getLcBaseQtyKg(lcRecord);
+    const isToleranceEnabled = !!lcRecord.enableValueQtyAdjustment;
+    const storedAdjQtyRaw = parseFloat(lcRecord.adjustedQuantity || 0);
+    const storedAdjQtyKg = storedAdjQtyRaw < 50000 ? storedAdjQtyRaw * 1000 : storedAdjQtyRaw;
+    const actualAdjustmentQtyKg = isToleranceEnabled && storedAdjQtyKg > baseQtyKg
+        ? storedAdjQtyKg - baseQtyKg
+        : 0;
+    const totalLcQtyKg = baseQtyKg + actualAdjustmentQtyKg;
     const toleranceTargetIp = String(lcRecord.toleranceIpNo || ips[0] || '').trim();
 
-    const baseLcQtyKg = Math.max(0, totalLcQtyKg - (isToleranceEnabled ? actualAdjustmentQtyKg : 0));
+    const baseLcQtyKg = baseQtyKg;
     let remainingBaseToDeduct = baseLcQtyKg;
 
     return ips.map((ipNo) => {
@@ -4412,8 +4428,7 @@ const getIpContributionBreakdown = (lcRecord, ips, ipRecordsRaw = [], lcRecords 
                 if (String(otherLc._id) === String(lcRecord._id) || otherLc.lcNo === lcRecord.lcNo) {
                     break;
                 }
-                const otherAdj = getAdjustedLcValues(otherLc);
-                const otherQtyKg = otherAdj.adjustedQtyKg || ((parseFloat(otherLc.quantity || 0) || 0) * 1000);
+                const otherQtyKg = _getLcBaseQtyKg(otherLc);
                 capacityBeforeThisLc = Math.max(0, capacityBeforeThisLc - otherQtyKg);
             }
             ipContribKg = Math.min(capacityBeforeThisLc, remainingBaseToDeduct);
@@ -4422,7 +4437,7 @@ const getIpContributionBreakdown = (lcRecord, ips, ipRecordsRaw = [], lcRecords 
         }
         remainingBaseToDeduct = Math.max(0, remainingBaseToDeduct - ipContribKg);
 
-        if (isToleranceEnabled && cleanIpNo === toleranceTargetIp) {
+        if (isToleranceEnabled && actualAdjustmentQtyKg > 0 && cleanIpNo === toleranceTargetIp) {
             ipContribKg += actualAdjustmentQtyKg;
         }
 
