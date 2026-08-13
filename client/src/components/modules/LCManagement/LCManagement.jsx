@@ -3137,11 +3137,16 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
                                             <div className="flex flex-col gap-1.5 mt-0.5">
                                                 {(() => {
-                                                    const ips = data.ipNumbers?.length
-                                                        ? data.ipNumbers
-                                                        : (data.ipNo ? data.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
-                                                    if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
-                                                    const breakdown = getIpContributionBreakdown(data, ips, ipRecordsRaw, lcRecords);
+                                                     const isLastState = activeMilestoneIndex === timeline.length - 1;
+                                                     const milestoneState = {
+                                                         ...data,
+                                                         ...activeMilestone,
+                                                         enableValueQtyAdjustment: isLastState ? data.enableValueQtyAdjustment : false,
+                                                         adjustedQuantity: isLastState ? data.adjustedQuantity : null,
+                                                     };
+                                                     const ips = milestoneState.ipNumbers || [];
+                                                     if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
+                                                     const breakdown = getIpContributionBreakdown(milestoneState, ips, ipRecordsRaw, lcRecords);
                                                     return ips.map((ip, idx) => {
                                                         const item = breakdown.find(b => b.ipNo === ip);
                                                         return (
@@ -5603,8 +5608,17 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 .map(i => i.ipNo);
             setIpList([...new Set(validIps)]);
 
-            setPiRecordsRaw(Array.isArray(piRes.data) ? piRes.data : []);
-            const validPis = (Array.isArray(piRes.data) ? piRes.data : [])
+            const rawPi = Array.isArray(piRes.data) ? piRes.data : [];
+            const decryptedPi = rawPi.map(item => {
+                try {
+                    let d = item.data ? decryptData(item.data) : item;
+                    if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                    else if (d && d.data && typeof d.data === 'string' && !d.piNumber) { try { d = decryptData(d.data); } catch (e) { } }
+                    return { ...d, _id: item._id };
+                } catch { return item; }
+            });
+            setPiRecordsRaw(decryptedPi);
+            const validPis = decryptedPi
                 .filter(p => p.piNumber && !p.status?.toLowerCase().includes('rejected'))
                 .map(p => p.piNumber);
             setPiList([...new Set(validPis)]);

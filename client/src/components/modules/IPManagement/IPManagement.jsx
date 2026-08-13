@@ -11,7 +11,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { generateIPManagementReportPDF } from '../../../utils/pdfGenerator';
 
 // Modal to show all LCs using a specific IP
-const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords = [], allSalesRecords = [], onClose }) => {
+const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords = [], allSalesRecords = [], piRecords = [], onClose }) => {
     if (!ipRecord) return null;
 
     const cleanLc = (val) => String(val || '').replace(/\D/g, '');
@@ -21,7 +21,16 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
         return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
     };
 
-    const getLcQtyForIpInKg = (lc, ip) => {
+    const getLcQtyForIpInKg = (lc, ip, includeTolerance = true) => {
+        const targetIpNo = String(ip.ipNumber || '').trim();
+        const lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+            ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+            : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+        if (targetIpNo && !lcIpNos.includes(targetIpNo)) {
+            return 0;
+        }
+
         const targetProductName = (ip.productName || '').toLowerCase().trim();
         let baseQtyKg = 0;
 
@@ -58,7 +67,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
         }
 
         // Add tolerance extra qty if tolerance is enabled and this IP is the designated one
-        if (baseQtyKg > 0 && lc.enableValueQtyAdjustment && lc.adjustedQuantity) {
+        if (includeTolerance && baseQtyKg > 0 && lc.enableValueQtyAdjustment && lc.adjustedQuantity) {
             const ipNo = String(ip.ipNumber || '').trim();
             const lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
                 ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
@@ -79,19 +88,35 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
     const getLcStates = (lc) => {
         if (!lc) return [];
         const amendments = lc.amendments || [];
-        // Tolerance fields to propagate from parent LC to every state
-        const toleranceFields = {
-            enableValueQtyAdjustment: lc.enableValueQtyAdjustment,
-            toleranceIpNo: lc.toleranceIpNo,
-            adjustedQuantity: lc.adjustedQuantity,
-            ipNumbers: lc.ipNumbers,
-            ipNo: lc.ipNo,
-        };
         const hasOriginal = amendments.some(a => a.amendmentNo === 'Original LC');
+
+        const getIpFieldsForState = (amnd) => {
+            const statePiNo = amnd.piNo || lc.piNo || '';
+            let ipNumbers = [];
+            if (statePiNo) {
+                const clean = cleanLc(statePiNo);
+                const matchingPi = (piRecords || []).find(p => p.piNumber === statePiNo || cleanLc(p.piNumber) === clean);
+                if (matchingPi) {
+                    if (Array.isArray(matchingPi.ipNumbers) && matchingPi.ipNumbers.length > 0) {
+                        ipNumbers = matchingPi.ipNumbers;
+                    } else if (matchingPi.ipNumber) {
+                        ipNumbers = matchingPi.ipNumber.split(',').map(s => s.trim()).filter(Boolean);
+                    }
+                }
+            }
+            if (ipNumbers.length === 0) {
+                ipNumbers = lc.ipNumbers || (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+            }
+            return {
+                ipNumbers,
+                ipNo: ipNumbers.join(','),
+            };
+        };
 
         if (hasOriginal) {
             const states = amendments.map((amnd, idx) => {
                 const isLast = idx === amendments.length - 1;
+                const ipFields = getIpFieldsForState(amnd);
                 return {
                     ...amnd,
                     isOriginal: amnd.amendmentNo === 'Original LC',
@@ -100,14 +125,20 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                     enableValueQtyAdjustment: isLast ? lc.enableValueQtyAdjustment : false,
                     toleranceIpNo: lc.toleranceIpNo,
                     adjustedQuantity: isLast ? lc.adjustedQuantity : null,
-                    ipNumbers: lc.ipNumbers,
-                    ipNo: lc.ipNo,
+                    ...ipFields,
                 };
             });
             return states;
         }
 
+        const toleranceFields = {
+            enableValueQtyAdjustment: amendments.length === 0 ? lc.enableValueQtyAdjustment : false,
+            toleranceIpNo: lc.toleranceIpNo,
+            adjustedQuantity: amendments.length === 0 ? lc.adjustedQuantity : null,
+        };
+
         if (amendments.length === 0) {
+            const ipFields = getIpFieldsForState(lc);
             return [{
                 amendmentNo: 'Original LC',
                 amendmentDate: lc.openingDate,
@@ -122,10 +153,12 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                 isOriginal: true,
                 _isLastState: true,
                 ...toleranceFields,
+                ...ipFields,
             }];
         }
 
         // Synthesize "Original LC" for older records that have amendments but lack 'Original LC'
+        const origIpFields = getIpFieldsForState({ piNo: amendments[0]?.piNo || lc.piNo });
         const states = [{
             amendmentNo: 'Original LC',
             amendmentDate: lc.openingDate,
@@ -138,17 +171,16 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
             remarks: 'Original LC Details',
             productsList: amendments[0]?.productsList || lc.productsList || [],
             isOriginal: true,
-            _isLastState: amendments.length === 0,
-            // Original state does NOT get tolerance — tolerance applies only to final adjusted state
+            _isLastState: false,
             enableValueQtyAdjustment: false,
             toleranceIpNo: lc.toleranceIpNo,
             adjustedQuantity: null,
-            ipNumbers: lc.ipNumbers,
-            ipNo: lc.ipNo,
+            ...origIpFields,
         }];
 
         amendments.forEach((amnd, idx) => {
             const isLast = idx === amendments.length - 1;
+            const ipFields = getIpFieldsForState(amnd);
             states.push({
                 ...amnd,
                 isOriginal: false,
@@ -157,8 +189,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                 enableValueQtyAdjustment: isLast ? lc.enableValueQtyAdjustment : false,
                 toleranceIpNo: lc.toleranceIpNo,
                 adjustedQuantity: isLast ? lc.adjustedQuantity : null,
-                ipNumbers: lc.ipNumbers,
-                ipNo: lc.ipNo,
+                ...ipFields,
             });
         });
 
@@ -204,7 +235,12 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
     // Compute remaining quantity for each LC (same logic as LCManagement table)
     const computeLcRemQty = (lc) => {
         const lcNoClean = cleanLc(lc.lcNo);
-        const qtyKg = getLcQtyForIpInKg(lc, ipRecord);
+        const lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+            ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+            : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+        const targetIpNo = String(ipRecord.ipNumber || '').trim();
+        if (!lcIpNos.includes(targetIpNo)) return 0;
 
         const receiptsMapForBalance = {};
         allStockRecords
@@ -218,7 +254,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                 const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
                 const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
                 const key = `${dateStr}_${groupVal}`;
-                
+
                 if (!receiptsMapForBalance[key]) {
                     const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
                     receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
@@ -254,18 +290,45 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                 return sum + qty;
             }, 0);
 
-        return qtyKg - (receivedQtyKg + borderSaleQtyKg);
+        let totalConsumption = receivedQtyKg + borderSaleQtyKg;
+
+        let remQtyOnTargetIp = 0;
+        for (const ipNo of lcIpNos) {
+            const ipRecordForNo = (ipRecords || []).find(ip => String(ip.ipNumber || '').trim() === ipNo) || ipRecord;
+            const allocatedQtyForIp = getLcConsumptionFromIp(lc, lc, true, ipRecordForNo);
+            const consumedFromIp = Math.min(allocatedQtyForIp, totalConsumption);
+            totalConsumption = Math.max(0, totalConsumption - consumedFromIp);
+
+            if (ipNo === targetIpNo) {
+                remQtyOnTargetIp = Math.max(0, allocatedQtyForIp - consumedFromIp);
+                break;
+            }
+        }
+        return remQtyOnTargetIp;
     };
 
-    const getLcConsumptionFromIp = (stateOrLc, parentLc) => {
+    const getLcConsumptionFromIp = (stateOrLc, parentLc, includeTolerance = true, targetIp = null) => {
         const parent = parentLc || stateOrLc;
-        const targetIpNo = String(ipRecord.ipNumber || '').trim();
+        const currentIp = targetIp || ipRecord;
+        const targetIpNo = String(currentIp.ipNumber || '').trim();
 
         const ips = Array.isArray(parent.ipNumbers) && parent.ipNumbers.length > 0
             ? parent.ipNumbers.map(s => String(s).trim()).filter(Boolean)
             : (parent.ipNo ? parent.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
 
-        const totalQtyKg = getLcQtyForIpInKg(stateOrLc, ipRecord);
+        const stateIps = Array.isArray(stateOrLc.ipNumbers) && stateOrLc.ipNumbers.length > 0
+            ? stateOrLc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+            : (stateOrLc.ipNo ? stateOrLc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+        if (!stateIps.includes(targetIpNo)) return 0;
+
+        const lcIpNos = Array.isArray(parent.ipNumbers) && parent.ipNumbers.length > 0
+            ? parent.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+            : (parent.ipNo ? parent.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+        const toleranceIpNo = String(parent.toleranceIpNo || lcIpNos[0] || '').trim();
+        const toleranceIp = (ipRecords || []).find(ip => String(ip.ipNumber || '').trim() === toleranceIpNo) || currentIp;
+
+        const totalQtyKg = getLcQtyForIpInKg(stateOrLc, toleranceIp, includeTolerance);
         if (ips.length <= 1) return totalQtyKg;
         if (!ips.includes(targetIpNo)) return totalQtyKg;
 
@@ -278,7 +341,11 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
         });
 
         for (const lc of sortedLcs) {
-            const lcQty = getLcQtyForIpInKg(lc, ipRecord);
+            const isCurrentLc = String(lc._id) === String(parent._id) || lc.lcNo === parent.lcNo;
+            const currentLcToleranceIpNo = String(lc.toleranceIpNo || (lc.ipNumbers && lc.ipNumbers[0]) || (lc.ipNo && lc.ipNo.split(',')[0]) || '').trim();
+            const currentLcToleranceIp = (ipRecords || []).find(ip => String(ip.ipNumber || '').trim() === currentLcToleranceIpNo) || ipRecord;
+
+            const lcQty = getLcQtyForIpInKg(lc, currentLcToleranceIp);
             if (lcQty <= 0) continue;
 
             let linkedIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
@@ -289,19 +356,34 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                 linkedIpNos = (ipRecords || []).filter(ip => isLcLinkedToIpModal(lc, ip)).map(ip => String(ip.ipNumber || '').trim()).filter(Boolean);
             }
 
-            const isCurrentLc = String(lc._id) === String(parent._id) || lc.lcNo === parent.lcNo;
-
-            let remLc = lcQty;
+            let remLc = isCurrentLc ? totalQtyKg : lcQty;
             for (const ipNo of linkedIpNos) {
                 if (remLc <= 0) break;
-                const cap = tempCaps[ipNo] ?? remLc;
+
+                // Calculate tolerance extra quantity for this LC on this IP
+                let toleranceQtyKg = 0;
+                if (includeTolerance && lc.enableValueQtyAdjustment && lc.adjustedQuantity) {
+                    const lcIpNosList = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                        ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+                        : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                    const tIpNo = String(lc.toleranceIpNo || lcIpNosList[0] || '').trim();
+                    if (ipNo === tIpNo) {
+                        const baseQty = getLcQtyForIpInKg(lc, ipRecord, false);
+                        const adjQtyRaw = parseNum(lc.adjustedQuantity);
+                        const adjQtyKg = adjQtyRaw < 50000 ? adjQtyRaw * 1000 : adjQtyRaw;
+                        toleranceQtyKg = Math.max(0, adjQtyKg - baseQty);
+                    }
+                }
+
+                const cap = (tempCaps[ipNo] ?? remLc) + toleranceQtyKg;
                 const take = Math.min(cap, remLc);
 
                 if (isCurrentLc && ipNo === targetIpNo) {
                     return take;
                 }
 
-                tempCaps[ipNo] = Math.max(0, cap - take);
+                const baseTake = Math.max(0, take - toleranceQtyKg);
+                tempCaps[ipNo] = Math.max(0, (tempCaps[ipNo] ?? baseTake) - baseTake);
                 remLc -= take;
             }
         }
@@ -414,15 +496,19 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                         const productConsumptionKg = latestQtyKg - productRemQtyKg;
 
                                         return states.map((state, sIdx) => {
-                                            const stateQtyKg = getLcQtyForIpInKg(state, ipRecord);
+                                            const stateQtyKg = getLcConsumptionFromIp(state, lc, false);
                                             const stateIpQtyUsedKg = getLcConsumptionFromIp(state, lc);
                                             const stateRemQtyKg = Math.max(0, stateQtyKg - productConsumptionKg);
                                             const isLastState = sIdx === states.length - 1;
                                             const isOriginalState = state.amendmentNo === 'Original LC';
-                                            
+
                                             // Calculate diff for quantity
-                                            const prevQtyKg = sIdx > 0 ? getLcQtyForIpInKg(states[sIdx - 1], ipRecord) : 0;
+                                            const prevQtyKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc, false) : 0;
                                             const diffQtyKg = stateQtyKg - prevQtyKg;
+
+                                            // Calculate diff for IP quantity
+                                            const prevStateIpQtyUsedKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc) : 0;
+                                            const diffIpQtyUsedKg = stateIpQtyUsedKg - prevStateIpQtyUsedKg;
 
                                             return (
                                                 <tr key={`${lc._id || lcIdx}_${sIdx}`} className={`${isLastState ? 'hover:bg-gray-50/50' : 'bg-gray-50/20 text-gray-500'} transition-colors`}>
@@ -440,18 +526,23 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                                     </td>
                                                     <td className="px-5 py-3.5 text-sm font-medium uppercase">{lc.bankName || '-'}</td>
                                                     <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
-                                                         <span className={
-                                                             sIdx > 0
-                                                                 ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
-                                                                 : (isLastState ? 'text-gray-900 font-bold' : '')
-                                                         }>
-                                                             {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
-                                                             {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
-                                                         </span>
+                                                        <span className={
+                                                            sIdx > 0
+                                                                ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
+                                                                : (isLastState ? 'text-gray-900 font-bold' : '')
+                                                        }>
+                                                            {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
+                                                            {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
+                                                        </span>
                                                     </td>
                                                     <td className="px-5 py-3.5 text-sm font-bold text-right whitespace-nowrap bg-blue-50/20">
-                                                        <span className="text-blue-700 font-black">
-                                                            {stateIpQtyUsedKg.toLocaleString('en-US')}
+                                                        <span className={
+                                                            sIdx > 0
+                                                                ? (diffIpQtyUsedKg > 0 ? 'text-green-600 font-black' : diffIpQtyUsedKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
+                                                                : 'text-blue-700 font-black'
+                                                        }>
+                                                            {sIdx > 0 && diffIpQtyUsedKg > 0 ? '+' : ''}
+                                                            {(sIdx > 0 ? diffIpQtyUsedKg : stateIpQtyUsedKg).toLocaleString('en-US')}
                                                         </span> <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
                                                     </td>
                                                     <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
@@ -507,7 +598,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                     <tr className="bg-gray-100/80 border-t-2 border-gray-200 font-black text-gray-900">
                                         <td colSpan="4" className="px-5 py-3 text-sm text-right uppercase tracking-wider text-gray-700">Grand Total:</td>
                                         <td className="px-5 py-3 text-sm text-right whitespace-nowrap">
-                                            {relatedLCs.reduce((sum, lc) => sum + getLcQtyForIpInKg(lc, ipRecord), 0).toLocaleString('en-US')} kg
+                                            {relatedLCs.reduce((sum, lc) => sum + getLcConsumptionFromIp(lc, lc, false), 0).toLocaleString('en-US')} kg
                                         </td>
                                         <td className="px-5 py-3 text-sm text-right whitespace-nowrap bg-blue-100/50 text-blue-900">
                                             {totalLcQtyKg.toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-600">kg</span>
@@ -537,13 +628,17 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                 const productConsumptionKg = latestQtyKg - productRemQtyKg;
 
                                 return states.map((state, sIdx) => {
-                                    const stateQtyKg = getLcQtyForIpInKg(state, ipRecord);
+                                    const stateQtyKg = getLcConsumptionFromIp(state, lc, false);
                                     const stateRemQtyKg = Math.max(0, stateQtyKg - productConsumptionKg);
                                     const isLastState = sIdx === states.length - 1;
                                     const isOriginalState = state.amendmentNo === 'Original LC';
-                                    
-                                    const prevQtyKg = sIdx > 0 ? getLcQtyForIpInKg(states[sIdx - 1], ipRecord) : 0;
+
+                                    const prevQtyKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc, false) : 0;
                                     const diffQtyKg = stateQtyKg - prevQtyKg;
+
+                                    const stateIpQtyUsedKg = getLcConsumptionFromIp(state, lc);
+                                    const prevStateIpQtyUsedKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc) : 0;
+                                    const diffIpQtyUsedKg = stateIpQtyUsedKg - prevStateIpQtyUsedKg;
 
                                     const today = new Date();
                                     today.setHours(0, 0, 0, 0);
@@ -605,24 +700,27 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                                     <span className={`text-sm font-bold uppercase truncate ${isLastState ? 'text-gray-800' : 'text-gray-500'}`}>{lc.bankName || '-'}</span>
                                                 </div>
                                                 <div className="flex items-center">
-                                                     <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Quantity</span>
-                                                     <span className="text-gray-400 font-bold mx-2">-</span>
-                                                     <span className={`text-sm ${
-                                                         sIdx > 0
-                                                             ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
-                                                             : (isLastState ? 'text-gray-900 font-bold' : 'text-gray-700 font-medium')
-                                                     }`}>
-                                                         {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
-                                                         {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
-                                                     </span>
+                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Quantity</span>
+                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                    <span className={`text-sm ${sIdx > 0
+                                                        ? (diffQtyKg > 0 ? 'text-green-600 font-black' : diffQtyKg < 0 ? 'text-red-500 font-black' : 'text-gray-400')
+                                                        : (isLastState ? 'text-gray-900 font-bold' : 'text-gray-700 font-medium')
+                                                        }`}>
+                                                        {sIdx > 0 && diffQtyKg > 0 ? '+' : ''}
+                                                        {(sIdx > 0 ? diffQtyKg : stateQtyKg).toLocaleString('en-US')} kg
+                                                    </span>
                                                 </div>
                                                 <div className="flex items-center">
-                                                     <span className="w-[100px] text-[11px] font-black text-blue-600 uppercase tracking-widest shrink-0">IP Qty</span>
-                                                     <span className="text-blue-500 font-bold mx-2">-</span>
-                                                     <span className="text-sm font-black text-blue-700">
-                                                         {getLcConsumptionFromIp(state, lc).toLocaleString('en-US')} kg
-                                                     </span>
-                                                 </div>
+                                                    <span className="w-[100px] text-[11px] font-black text-blue-600 uppercase tracking-widest shrink-0">IP Qty</span>
+                                                    <span className="text-blue-500 font-bold mx-2">-</span>
+                                                    <span className={`text-sm font-black ${sIdx > 0
+                                                        ? (diffIpQtyUsedKg > 0 ? 'text-green-600' : diffIpQtyUsedKg < 0 ? 'text-red-500' : 'text-gray-400')
+                                                        : 'text-blue-700'
+                                                        }`}>
+                                                        {sIdx > 0 && diffIpQtyUsedKg > 0 ? '+' : ''}
+                                                        {(sIdx > 0 ? diffIpQtyUsedKg : stateIpQtyUsedKg).toLocaleString('en-US')} kg
+                                                    </span>
+                                                </div>
                                                 <div className="flex items-center">
                                                     <span className={`w-[100px] text-[11px] font-black uppercase tracking-widest shrink-0 ${isLastState ? 'text-blue-500' : 'text-gray-400'}`}>Rem. LC Qty</span>
                                                     <span className={`font-bold mx-2 ${isLastState ? 'text-blue-500' : 'text-gray-400'}`}>-</span>
@@ -725,7 +823,7 @@ function IPManagement({
     currentUser,
     highlightId
 }) {
-    
+
     const [showIpForm, setShowIpForm] = useState(false);
     const [ipRecords, setIpRecords] = useState([]);
     const [lcRecords, setLcRecords] = useState([]);
@@ -866,7 +964,16 @@ function IPManagement({
                 axios.get(`${API_BASE_URL}/api/pi`)
             ]);
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
-            setPiRecords(Array.isArray(piRes.data) ? piRes.data : []);
+            const rawPi = Array.isArray(piRes.data) ? piRes.data : [];
+            const decryptedPi = rawPi.map(item => {
+                try {
+                    let d = item.data ? decryptData(item.data) : item;
+                    if (typeof d === 'string') { try { d = decryptData(d); } catch (e) { } }
+                    else if (d && d.data && typeof d.data === 'string' && !d.piNumber) { try { d = decryptData(d.data); } catch (e) { } }
+                    return { ...d, _id: item._id };
+                } catch { return item; }
+            });
+            setPiRecords(decryptedPi);
 
             const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
             const decryptedStock = rawStock.map(item => {
@@ -912,7 +1019,7 @@ function IPManagement({
             const cleanB = (nameB || '').toLowerCase().trim();
             if (!cleanA || !cleanB) return false;
             if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) return true;
-            
+
             const prod = products.find(p => {
                 const pName = (p.name || '').toLowerCase().trim();
                 const pIpName = (p.ipName || '').toLowerCase().trim();
@@ -1085,7 +1192,7 @@ function IPManagement({
                 const currentAvail = lcRemMap[ip.ipNumber] || 0;
                 const toDeduct = Math.min(currentAvail, totalForThisIp);
                 lcRemMap[ip.ipNumber] = Math.max(0, currentAvail - toDeduct);
-                remainingLcQtyToDeduct -= Math.min(remainingLcQtyToDeduct, toDeduct);
+                remainingLcQtyToDeduct -= Math.max(0, toDeduct - extraForThisIp);
 
                 const key = `${lcId}_${ip.ipNumber}`;
                 lcIpAllocatedMap[key] = toDeduct;
@@ -1100,19 +1207,21 @@ function IPManagement({
             // Total IP Qty consumed by all LCs linked to this IP (including tolerance)
             const totalLcQtyKg = relatedLcs.reduce((sum, lc) => sum + getLcProductQtyInKg(lc, ip.productName, ip.ipNumber), 0);
 
-            // LC REM = IP Quantity - IP QTY (total LC quantity opened on this IP)
-            const calculatedRemQty = lcRemMap[ip.ipNumber] ?? Math.max(0, ipQty - totalLcQtyKg);
+            // LC REM = Remaining capacity for opening LCs on this IP (FIFO allocated)
+            const calculatedRemQty = lcRemMap[ip.ipNumber] !== undefined ? lcRemMap[ip.ipNumber] : Math.max(0, ipQty - totalLcQtyKg);
 
-            // Total remaining unreceived stock across all LCs linked to this IP
-            const totalUnreceivedLcQty = relatedLcs.reduce((sum, lc) => {
+            // Total LC Receive Quantity across all LCs linked to this IP
+            const totalLcReceiveQty = relatedLcs.reduce((sum, lc) => {
                 const lcNoClean = cleanLc(lc.lcNo);
-                const lcQtyKg = getLcProductQtyInKg(lc, ip.productName, ip.ipNumber);
+                if (!lcNoClean) return sum;
 
-                const lcId = lc.lcNo || String(lc._id);
-                const allocatedForThisIp = lcIpAllocatedMap[`${lcId}_${ip.ipNumber}`] ?? lcQtyKg;
+                const hasCustomReceive = lc.updatedLcReceive !== undefined && lc.updatedLcReceive !== null && lc.updatedLcReceive !== '';
+                if (hasCustomReceive) {
+                    return sum + parseNum(lc.updatedLcReceive);
+                }
 
                 const receiptsMapForBalance = {};
-                allStockRecords
+                (allStockRecords || [])
                     .filter(s => {
                         const recordLcNoClean = cleanLc(s.lcNo);
                         const status = (s.status || '').toLowerCase();
@@ -1123,18 +1232,17 @@ function IPManagement({
                         const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
                         const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
                         const key = `${dateStr}_${groupVal}`;
+                        const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                        const receiptQty = itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
                         if (!receiptsMapForBalance[key]) {
-                            const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                            receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                            receiptsMapForBalance[key] = receiptQty;
                         } else {
-                            if (!s.totalLcQuantity) {
-                                receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                            }
+                            receiptsMapForBalance[key] += receiptQty;
                         }
                     });
-                const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
+                const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((rSum, qty) => rSum + qty, 0);
 
-                const borderSaleQtyKg = allSalesRecords
+                const borderSaleQtyKg = (allSalesRecords || [])
                     .filter(s => {
                         const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
                             cleanLc(s.lcNumber) === lcNoClean ||
@@ -1149,21 +1257,20 @@ function IPManagement({
                         const isValidStatus = !status.includes('rejected') && status !== 'requested';
                         return matchesLc && isValidStatus && isBorder;
                     })
-                    .reduce((sum, s) => {
+                    .reduce((bSum, s) => {
                         const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                            const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                            const brandSubtotal = (item.brandEntries || []).reduce((bSum2, b) => bSum2 + parseNum(b.quantity), 0);
                             return iSum + (brandSubtotal || parseNum(item.quantity));
                         }, 0);
                         const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
-                        return sum + qty;
+                        return bSum + qty;
                     }, 0);
 
-                const lcRemStock = Math.max(0, lcQtyKg - (receivedQtyKg + borderSaleQtyKg));
-                return sum + Math.min(allocatedForThisIp, lcRemStock);
+                return sum + (receivedQtyKg + borderSaleQtyKg);
             }, 0);
 
-            // IP Balance = Remaining Unreceived LC Stock Qty + Unallocated IP Capacity (calculatedRemQty)
-            const calculatedIpBalance = calculatedRemQty + totalUnreceivedLcQty;
+            // IP Balance = IP Quantity - LC Receive Qty
+            const calculatedIpBalance = Math.max(0, ipQty - totalLcReceiveQty);
 
             let computedStatus = "Active";
             if (ip.closeDate) {
@@ -1636,8 +1743,8 @@ function IPManagement({
                                                         onChange={(e) => setFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
                                                         className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
                                                     >
-                                                        {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
-                                                            <option key={i+1} value={i+1}>{m}</option>
+                                                        {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => (
+                                                            <option key={i + 1} value={i + 1}>{m}</option>
                                                         ))}
                                                     </select>
                                                     <select
@@ -2174,12 +2281,12 @@ function IPManagement({
                                     Cancel
                                 </button>
                                 {canDelete && (
-                                <button
-                                    onClick={() => onDeleteConfirm({ show: true, type: 'ip', id: null, isBulk: true })}
-                                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors flex items-center"
-                                >
-                                    <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
-                                </button>
+                                    <button
+                                        onClick={() => onDeleteConfirm({ show: true, type: 'ip', id: null, isBulk: true })}
+                                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors flex items-center"
+                                    >
+                                        <TrashIcon className="w-3.5 h-3.5 mr-1" /> Delete Bulk
+                                    </button>
                                 )}
                             </div>
                         </div>
@@ -2262,8 +2369,8 @@ function IPManagement({
                                             <tr
                                                 key={record._id}
                                                 className={`${selectedItems.has(record._id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} transition-colors cursor-pointer select-none ${highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
-                                                 ref={el => { if (record.ipNumber) rowRefs.current[record.ipNumber] = el; }}
-                                                    style={highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                                ref={el => { if (record.ipNumber) rowRefs.current[record.ipNumber] = el; }}
+                                                style={highlightId && (String(record._id) === String(highlightId) || (record.ipNumber && String(record.ipNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                                 onMouseDown={() => startLongPress(record._id)}
                                                 onMouseUp={endLongPress}
                                                 onMouseLeave={endLongPress}
@@ -2289,12 +2396,11 @@ function IPManagement({
                                                 )}
                                                 <td className="px-3 py-3 text-sm font-semibold text-gray-500 whitespace-nowrap">{idx + 1}</td>
                                                 <td className="px-3 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDate(record.openingDate)}</td>
-                                                <td className={`px-3 py-3 text-sm font-semibold whitespace-nowrap ${
-                                                    record.computedStatus === 'Active' ? 'text-green-700' :
+                                                <td className={`px-3 py-3 text-sm font-semibold whitespace-nowrap ${record.computedStatus === 'Active' ? 'text-green-700' :
                                                     record.computedStatus === 'Expired' ? 'text-red-600' :
-                                                    record.computedStatus === 'Extended' ? 'text-blue-700' :
-                                                    'text-amber-700'
-                                                }`}>{formatDate(record.closeDate)}</td>
+                                                        record.computedStatus === 'Extended' ? 'text-blue-700' :
+                                                            'text-amber-700'
+                                                    }`}>{formatDate(record.closeDate)}</td>
                                                 <td className="px-3 py-3 text-sm font-medium text-black whitespace-nowrap">{record.ipNumber}</td>
                                                 <td className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">{record.referenceNo || '-'}</td>
                                                 <td className="px-3 py-3 text-sm text-gray-900 whitespace-nowrap">{record.ipParty}</td>
@@ -2308,7 +2414,7 @@ function IPManagement({
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                         record.computedStatus === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' :
                                                             record.computedStatus === 'Extended' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                            'bg-amber-50 text-amber-700 border-amber-100'
+                                                                'bg-amber-50 text-amber-700 border-amber-100'
                                                         }`}>
                                                         {record.computedStatus}
                                                     </span>
@@ -2400,7 +2506,7 @@ function IPManagement({
                                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
                                                         record.computedStatus === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' :
                                                             record.computedStatus === 'Extended' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                            'bg-amber-50 text-amber-700 border-amber-100'
+                                                                'bg-amber-50 text-amber-700 border-amber-100'
                                                         }`}>
                                                         {record.computedStatus}
                                                     </span>
@@ -2530,6 +2636,7 @@ function IPManagement({
                     ipRecords={ipRecords}
                     allStockRecords={allStockRecords}
                     allSalesRecords={allSalesRecords}
+                    piRecords={piRecords}
                     onClose={() => setViewIpLcData(null)}
                 />
             )}
