@@ -42,6 +42,7 @@ const Supplier = ({
     const [formData, setFormData] = useState({
         name: '',
         exporter: '',
+        exporters: [],
         address: '',
         contactPerson: '',
         email: '',
@@ -90,6 +91,39 @@ const Supplier = ({
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    const toggleExporterSelection = (exporterName) => {
+        setFormData(prev => {
+            const currentList = Array.isArray(prev.exporters) && prev.exporters.length > 0
+                ? prev.exporters
+                : (prev.exporter ? prev.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
+            let newList;
+            if (currentList.includes(exporterName)) {
+                newList = currentList.filter(name => name !== exporterName);
+            } else {
+                newList = [...currentList, exporterName];
+            }
+            return {
+                ...prev,
+                exporters: newList,
+                exporter: newList.join(', ')
+            };
+        });
+    };
+
+    const removeExporterTag = (exporterName) => {
+        setFormData(prev => {
+            const currentList = Array.isArray(prev.exporters) && prev.exporters.length > 0
+                ? prev.exporters
+                : (prev.exporter ? prev.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
+            const newList = currentList.filter(name => name !== exporterName);
+            return {
+                ...prev,
+                exporters: newList,
+                exporter: newList.join(', ')
+            };
+        });
+    };
+
     const handleExporterKeyDown = (e) => {
         const filtered = exporters.filter(exp =>
             exp.name.toLowerCase().includes(exporterSearchQuery.toLowerCase())
@@ -104,16 +138,11 @@ const Supplier = ({
             e.preventDefault();
             if (highlightedExporterIndex >= 0 && filtered[highlightedExporterIndex]) {
                 const selected = filtered[highlightedExporterIndex];
-                setFormData(prev => ({ ...prev, exporter: selected.name }));
-                setExporterDropdownOpen(false);
+                toggleExporterSelection(selected.name);
                 setExporterSearchQuery('');
-                setHighlightedExporterIndex(-1);
             } else if (filtered.length === 1) {
-                // Auto-select if only one result
-                setFormData(prev => ({ ...prev, exporter: filtered[0].name }));
-                setExporterDropdownOpen(false);
+                toggleExporterSelection(filtered[0].name);
                 setExporterSearchQuery('');
-                setHighlightedExporterIndex(-1);
             }
         } else if (e.key === 'Escape') {
             setExporterDropdownOpen(false);
@@ -124,14 +153,29 @@ const Supplier = ({
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        const selectedExporters = Array.isArray(formData.exporters) && formData.exporters.length > 0
+            ? formData.exporters
+            : (formData.exporter ? formData.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+        if (selectedExporters.length === 0) {
+            alert('Please select at least one exporter.');
+            return;
+        }
+
+        const payload = {
+            ...formData,
+            exporters: selectedExporters,
+            exporter: selectedExporters.join(', ')
+        };
+
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
             const url = editingId
                 ? `${API_BASE_URL}/api/suppliers/${editingId}`
                 : `${API_BASE_URL}/api/suppliers`;
-            if (editingId) await axios.put(url, formData);
-            else await axios.post(url, formData);
+            if (editingId) await axios.put(url, payload);
+            else await axios.post(url, payload);
             setSubmitStatus('success');
             fetchSuppliers();
             setTimeout(() => { setShowForm(false); setEditingId(null); resetForm(); setSubmitStatus(null); }, 2000);
@@ -144,15 +188,20 @@ const Supplier = ({
     };
 
     const resetForm = () => {
-        setFormData({ name: '', exporter: '', address: '', contactPerson: '', email: '', phone: '', status: 'Active' });
+        setFormData({ name: '', exporter: '', exporters: [], address: '', contactPerson: '', email: '', phone: '', status: 'Active' });
         setEditingId(null);
         setSubmitStatus(null);
+        setExporterSearchQuery('');
     };
 
     const handleEdit = (supplier) => {
+        const selectedExporters = Array.isArray(supplier.exporters) && supplier.exporters.length > 0
+            ? supplier.exporters
+            : (supplier.exporter ? supplier.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
         setFormData({
             name: supplier.name || '',
-            exporter: supplier.exporter || '',
+            exporter: selectedExporters.join(', '),
+            exporters: selectedExporters,
             address: supplier.address || '',
             contactPerson: supplier.contactPerson || '',
             email: supplier.email || '',
@@ -251,11 +300,27 @@ const Supplier = ({
                         <div className="supplier-form-field">
                             <label className="supplier-form-label">Exporter</label>
                             <div ref={exporterDropdownRef} className="relative">
+                                {Array.isArray(formData.exporters) && formData.exporters.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mb-2">
+                                        {formData.exporters.map(expName => (
+                                            <span key={expName} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold shadow-sm">
+                                                <span>{expName}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); removeExporterTag(expName); }}
+                                                    className="hover:bg-blue-200/60 p-0.5 rounded-full text-blue-600 hover:text-blue-900 transition-colors"
+                                                >
+                                                    <XIcon className="w-3 h-3" />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                                 <div className="relative">
                                     <input
                                         type="text"
-                                        placeholder="Search Exporter..."
-                                        value={exporterDropdownOpen ? exporterSearchQuery : (formData.exporter || '')}
+                                        placeholder={formData.exporters && formData.exporters.length > 0 ? "Add more exporters..." : "Search Exporter..."}
+                                        value={exporterSearchQuery}
                                         onChange={(e) => {
                                             setExporterSearchQuery(e.target.value);
                                             setHighlightedExporterIndex(-1);
@@ -263,12 +328,10 @@ const Supplier = ({
                                         }}
                                         onFocus={() => {
                                             setExporterDropdownOpen(true);
-                                            setExporterSearchQuery('');
                                             setHighlightedExporterIndex(-1);
                                         }}
                                         onKeyDown={handleExporterKeyDown}
                                         autoComplete="off"
-                                        required={!formData.exporter}
                                         className="supplier-form-input pr-10"
                                     />
                                     <SearchIcon className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${exporterDropdownOpen ? 'text-blue-500' : 'text-gray-400'}`} />
@@ -276,29 +339,37 @@ const Supplier = ({
                                 {exporterDropdownOpen && (
                                     <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] max-h-56 overflow-y-auto py-1">
                                         {exporters.filter(exp => exp.name.toLowerCase().includes(exporterSearchQuery.toLowerCase())).length > 0 ? (
-                                            exporters.filter(exp => exp.name.toLowerCase().includes(exporterSearchQuery.toLowerCase())).map((exp, idx) => (
-                                                <button
-                                                    key={exp._id}
-                                                    type="button"
-                                                    onMouseEnter={() => setHighlightedExporterIndex(idx)}
-                                                    onClick={() => {
-                                                        setFormData(prev => ({ ...prev, exporter: exp.name }));
-                                                        setExporterDropdownOpen(false);
-                                                        setExporterSearchQuery('');
-                                                        setHighlightedExporterIndex(-1);
-                                                    }}
-                                                    className={`w-full px-5 py-3 text-left text-sm transition-colors group ${
-                                                        highlightedExporterIndex === idx
-                                                            ? 'bg-blue-50'
-                                                            : formData.exporter === exp.name
-                                                            ? 'bg-blue-50/60'
-                                                            : 'hover:bg-blue-50'
-                                                    }`}
-                                                >
-                                                    <div className="font-bold text-blue-600 group-hover:text-blue-700">{exp.name}</div>
-                                                    {exp.exporterId && <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">{exp.exporterId}</div>}
-                                                </button>
-                                            ))
+                                            exporters.filter(exp => exp.name.toLowerCase().includes(exporterSearchQuery.toLowerCase())).map((exp, idx) => {
+                                                const isSelected = (formData.exporters || []).includes(exp.name);
+                                                return (
+                                                    <button
+                                                        key={exp._id}
+                                                        type="button"
+                                                        onMouseEnter={() => setHighlightedExporterIndex(idx)}
+                                                        onClick={() => {
+                                                            toggleExporterSelection(exp.name);
+                                                            setExporterSearchQuery('');
+                                                        }}
+                                                        className={`w-full px-5 py-3 text-left text-sm transition-colors flex items-center justify-between group ${
+                                                            isSelected
+                                                                ? 'bg-blue-50/80 font-bold text-blue-700'
+                                                                : highlightedExporterIndex === idx
+                                                                ? 'bg-blue-50'
+                                                                : 'hover:bg-blue-50'
+                                                        }`}
+                                                    >
+                                                        <div>
+                                                            <div className={`font-bold ${isSelected ? 'text-blue-700' : 'text-gray-900 group-hover:text-blue-700'}`}>{exp.name}</div>
+                                                            {exp.exporterId && <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">{exp.exporterId}</div>}
+                                                        </div>
+                                                        {isSelected && (
+                                                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">
+                                                                ✓
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })
                                         ) : (
                                             <div className="px-5 py-6 text-center text-gray-400">
                                                 <BoxIcon className="w-7 h-7 mb-2 mx-auto opacity-20" />
@@ -364,14 +435,19 @@ const Supplier = ({
             )}
 
             {!showForm && (() => {
-                const filteredSuppliers = suppliers.filter(supplier => 
-                    (supplier.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    (supplier.bin || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    (supplier.tin || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    (supplier.irc || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    (supplier.phone || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    (supplier.contactPerson || '').toLowerCase().includes(searchQuery.toLowerCase())
-                );
+                const filteredSuppliers = suppliers.filter(supplier => {
+                    const searchLower = searchQuery.toLowerCase();
+                    const expList = Array.isArray(supplier.exporters) && supplier.exporters.length > 0
+                        ? supplier.exporters
+                        : (supplier.exporter ? supplier.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
+                    return (
+                        (supplier.name || '').toLowerCase().includes(searchLower) ||
+                        (supplier.phone || '').toLowerCase().includes(searchLower) ||
+                        (supplier.contactPerson || '').toLowerCase().includes(searchLower) ||
+                        (supplier.exporter || '').toLowerCase().includes(searchLower) ||
+                        expList.some(expName => expName.toLowerCase().includes(searchLower))
+                    );
+                });
 
                 const sortedSuppliers = sortData(filteredSuppliers);
 
@@ -446,6 +522,9 @@ const Supplier = ({
                                     <tbody className="supplier-table-body">
                                         {sortedSuppliers.map((supplier) => {
                                             const isSelected = selectedItems.has(supplier._id);
+                                            const expList = Array.isArray(supplier.exporters) && supplier.exporters.length > 0
+                                                ? supplier.exporters
+                                                : (supplier.exporter ? supplier.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
                                             return (
                                                 <tr 
                                                     key={supplier._id}
@@ -477,7 +556,19 @@ const Supplier = ({
                                                     <td className="supplier-table-cell supplier-table-cell-name">{supplier.name}</td>
                                                     <td className="supplier-table-cell">{supplier.contactPerson}</td>
                                                     <td className="supplier-table-cell">{supplier.phone}</td>
-                                                    <td className="supplier-table-cell">{supplier.exporter || '—'}</td>
+                                                    <td className="supplier-table-cell">
+                                                        {expList.length === 0 ? (
+                                                            '—'
+                                                        ) : (
+                                                            <div className="flex flex-wrap gap-1 max-w-xs">
+                                                                {expList.map((expName, idx) => (
+                                                                    <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100/80">
+                                                                        {expName}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
                                                     <td className="supplier-table-cell">
                                                         <span className={`supplier-status-badge ${supplier.status === 'Active' ? 'active' : 'inactive'}`}>
                                                             {supplier.status}
@@ -511,6 +602,9 @@ const Supplier = ({
                             <div className="block md:hidden space-y-4 px-2">
                                 {sortedSuppliers.map((supplier) => {
                                     const isSelected = selectedItems.has(supplier._id);
+                                    const expList = Array.isArray(supplier.exporters) && supplier.exporters.length > 0
+                                        ? supplier.exporters
+                                        : (supplier.exporter ? supplier.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
                                     return (
                                         <div 
                                             key={supplier._id}
@@ -534,7 +628,18 @@ const Supplier = ({
                                                     <h4 className="font-bold text-gray-900 truncate text-left">{supplier.name}</h4>
                                                     <p className="text-xs text-gray-500 mt-1 text-left">Contact: {supplier.contactPerson}</p>
                                                     <p className="text-xs text-gray-500 mt-0.5 text-left">Phone: {supplier.phone}</p>
-                                                    <p className="text-xs text-gray-500 mt-0.5 text-left">Exporter: {supplier.exporter || '—'}</p>
+                                                    <div className="text-xs text-gray-500 mt-1 text-left flex items-start gap-1 flex-wrap">
+                                                        <span className="font-semibold">Exporter:</span>
+                                                        {expList.length === 0 ? '—' : (
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {expList.map((expName, idx) => (
+                                                                    <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                                                                        {expName}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div className="flex flex-col items-end gap-2.5 shrink-0">
                                                     <span className={`supplier-status-badge ${supplier.status === 'Active' ? 'active' : 'inactive'}`}>
@@ -606,9 +711,21 @@ const Supplier = ({
 
                             <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4">
 
-                                <div>
-                                    <span className="text-xs font-bold text-gray-400 uppercase">Exporter</span>
-                                    <p className="font-semibold text-gray-800 mt-0.5">{viewData.exporter || '-'}</p>
+                                <div className="col-span-2">
+                                    <span className="text-xs font-bold text-gray-400 uppercase">Exporters</span>
+                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                        {(() => {
+                                            const expList = Array.isArray(viewData.exporters) && viewData.exporters.length > 0
+                                                ? viewData.exporters
+                                                : (viewData.exporter ? viewData.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
+                                            if (expList.length === 0) return <p className="font-semibold text-gray-800">-</p>;
+                                            return expList.map((expName, idx) => (
+                                                <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                                                    {expName}
+                                                </span>
+                                            ));
+                                        })()}
+                                    </div>
                                 </div>
                                 <div>
                                     <span className="text-xs font-bold text-gray-400 uppercase">Phone</span>

@@ -299,11 +299,27 @@ const CostOfGoods = ({
         }
     }, [formData.product, products, editingId]);
 
-    // Filter suppliers where supplier.exporter matches selected exporter string
-    const filteredSuppliersForExporter = suppliers.filter(s =>
-        formData.exporter &&
-        (s.exporter || '').trim().toLowerCase() === (formData.exporter || '').trim().toLowerCase()
-    );
+    // Filter suppliers where supplier.exporter or supplier.exporters includes selected exporter
+    const filteredSuppliersForExporter = suppliers.filter(s => {
+        if (!formData.exporter) return false;
+        const targetExp = (formData.exporter || '').trim().toLowerCase();
+        if (!targetExp) return false;
+
+        if (Array.isArray(s.exporters) && s.exporters.length > 0) {
+            if (s.exporters.some(exp => (exp || '').trim().toLowerCase() === targetExp)) {
+                return true;
+            }
+        }
+
+        if (s.exporter) {
+            const list = s.exporter.split(',').map(str => str.trim().toLowerCase()).filter(Boolean);
+            if (list.includes(targetExp)) {
+                return true;
+            }
+        }
+
+        return false;
+    });
 
     // Get products for the currently selected LC
     const getSelectedLcProducts = () => {
@@ -1295,9 +1311,6 @@ const CostOfGoods = ({
                                                         }`}
                                                 >
                                                     <div className="font-bold text-blue-600 group-hover:text-blue-700">{sup.name}</div>
-                                                    <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">
-                                                        Exporter: {sup.exporter || '—'}
-                                                    </div>
                                                 </button>
                                             ))
                                         ) : (
