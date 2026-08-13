@@ -1970,7 +1970,8 @@ const SaleManagement = ({
             result = displayedSales.filter(s => {
                 if (saleType === 'Border') {
                     const date = (s.date || '').toLowerCase();
-                    const lcNo = (s.lcNo || '').toLowerCase();
+                    const lcNo = (s.lcNo || s.lcNumber || s.lc_no || s.lcNoClean || '').toLowerCase();
+                    const invNo = (s.invoiceNo || s.orderNo || s.challanNo || '').toLowerCase();
                     const importer = (s.importer || '').toLowerCase();
                     const port = (s.port || '').toLowerCase();
                     const indCnf = (s.indianCnF || '').toLowerCase();
@@ -1982,13 +1983,16 @@ const SaleManagement = ({
                     const itemsMatch = (s.items || []).some(item => {
                         const pName = (item.productName || item.product || '').toLowerCase();
                         const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
-                        return pName.includes(query) || resolvedPName.includes(query) || (item.brandEntries || []).some(e =>
+                        const itemLcNo = (item.lcNo || item.lcNumber || item.lc_no || '').toLowerCase();
+                        const brandLcMatch = (item.brandEntries || []).some(e =>
+                            (e.lcNo || e.lcNumber || e.lc_no || '').toLowerCase().includes(query) ||
                             String(e.quantity || '').includes(query) || String(e.truck || '').includes(query) ||
                             String(e.unitPrice || '').includes(query) || String(e.totalAmount || '').includes(query)
                         );
+                        return pName.includes(query) || resolvedPName.includes(query) || itemLcNo.includes(query) || brandLcMatch;
                     });
 
-                    return date.includes(query) || lcNo.includes(query) || importer.includes(query) ||
+                    return date.includes(query) || lcNo.includes(query) || invNo.includes(query) || importer.includes(query) ||
                         port.includes(query) || indCnf.includes(query) || bdCnf.includes(query) ||
                         party.includes(query) || truck.includes(query) || total.includes(query) || itemsMatch;
                 }
@@ -2903,7 +2907,8 @@ const SaleManagement = ({
             if (saleType === 'Border') {
                 // Gather searchable flat-text fields
                 const date = (sale.date || '').toLowerCase();
-                const lcNo = (sale.lcNo || '').toLowerCase();
+                const lcNo = (sale.lcNo || sale.lcNumber || sale.lc_no || sale.lcNoClean || '').toLowerCase();
+                const invNo = (sale.invoiceNo || sale.orderNo || sale.challanNo || '').toLowerCase();
                 const importer = (sale.importer || '').toLowerCase();
                 const port = (sale.port || '').toLowerCase();
                 const indCnf = (sale.indianCnF || '').toLowerCase();
@@ -2912,16 +2917,20 @@ const SaleManagement = ({
                 const truck = String(sale.truck || '').toLowerCase();
                 const total = String(sale.totalAmount || '').toLowerCase();
 
-                // Search inside product names and quantities across items
+                // Search inside product names, LC numbers, and quantities across items
                 const itemsMatch = (sale.items || []).some(item => {
                     const pName = (item.productName || item.product || '').toLowerCase();
-                    return pName.includes(q) || (item.brandEntries || []).some(e =>
+                    const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
+                    const itemLcNo = (item.lcNo || item.lcNumber || item.lc_no || '').toLowerCase();
+                    const brandLcMatch = (item.brandEntries || []).some(e =>
+                        (e.lcNo || e.lcNumber || e.lc_no || '').toLowerCase().includes(q) ||
                         String(e.quantity || '').includes(q) || String(e.truck || '').includes(q) ||
                         String(e.unitPrice || '').includes(q) || String(e.totalAmount || '').includes(q)
                     );
+                    return pName.includes(q) || resolvedPName.includes(q) || itemLcNo.includes(q) || brandLcMatch;
                 });
 
-                const matches = date.includes(q) || lcNo.includes(q) || importer.includes(q) ||
+                const matches = date.includes(q) || lcNo.includes(q) || invNo.includes(q) || importer.includes(q) ||
                     port.includes(q) || indCnf.includes(q) || bdCnf.includes(q) ||
                     party.includes(q) || truck.includes(q) || total.includes(q) || itemsMatch;
 
@@ -3057,7 +3066,7 @@ const SaleManagement = ({
                             </div>
                             <input autoComplete="off"
                                 type="text"
-                                placeholder="Search invoice, customer..."
+                                placeholder={saleType === 'Border' ? "Search invoice, customer, LC no..." : "Search invoice, customer..."}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="sale-mgmt-search-input"

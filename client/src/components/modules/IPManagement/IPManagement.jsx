@@ -24,15 +24,33 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
     const getLcQtyForIpInKg = (lc, ip) => {
         const targetProductName = (ip.productName || '').toLowerCase().trim();
         if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
-            const matchedProducts = lc.productsList.filter(p => 
-                (p.productName || '').toLowerCase().trim() === targetProductName
-            );
+            const matchedProducts = lc.productsList.filter(p => {
+                const name = (p.productName || '').toLowerCase().trim();
+                return !targetProductName || name === targetProductName || name.includes(targetProductName) || targetProductName.includes(name);
+            });
             if (matchedProducts.length > 0) {
-                return matchedProducts.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
+                return matchedProducts.reduce((sum, p) => {
+                    const q = parseNum(p.quantity);
+                    return sum + (q < 50000 ? q * 1000 : q);
+                }, 0);
             }
         }
-        if ((lc.productName || '').toLowerCase().trim() === targetProductName) {
-            return parseNum(lc.quantity) * 1000;
+        if (Array.isArray(lc.items) && lc.items.length > 0) {
+            const matchedProducts = lc.items.filter(i => {
+                const name = (i.productName || i.name || '').toLowerCase().trim();
+                return !targetProductName || name === targetProductName || name.includes(targetProductName) || targetProductName.includes(name);
+            });
+            if (matchedProducts.length > 0) {
+                return matchedProducts.reduce((sum, i) => {
+                    const q = parseNum(i.quantity || i.qty);
+                    return sum + (q < 50000 ? q * 1000 : q);
+                }, 0);
+            }
+        }
+        const lcProd = (lc.productName || '').toLowerCase().trim();
+        if (!targetProductName || lcProd === targetProductName || lcProd.includes(targetProductName) || targetProductName.includes(lcProd)) {
+            const q = parseNum(lc.quantity || lc.totalQuantity || lc.lcQuantity);
+            if (q > 0) return q < 50000 ? q * 1000 : q;
         }
         return 0;
     };
@@ -90,13 +108,40 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, allStockRecords = [], allSalesRec
         return states;
     };
 
-    const ipNoClean = cleanLc(ipRecord.ipNumber);
-    const relatedLCs = lcRecords.filter(lc => {
-        const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
-            ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
-            : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
-        return lcIps.includes(ipNoClean);
-    });
+    const isLcLinkedToIpModal = (lc, ip) => {
+        if (!lc || !ip) return false;
+        const ipNo = String(ip.ipNumber || '').trim();
+        const ipNoClean = cleanLc(ipNo);
+        const ipIdStr = String(ip._id || '');
+
+        if (Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0) {
+            if (lc.ipNumbers.some(n => {
+                const str = String(n).trim();
+                return str === ipNo || (cleanLc(str) && cleanLc(str) === ipNoClean);
+            })) return true;
+        }
+
+        const singleIp = String(lc.ipNo || lc.ipNumber || lc.ip_number || lc.ipRef || '').trim();
+        if (singleIp) {
+            const parts = singleIp.split(',').map(s => s.trim()).filter(Boolean);
+            if (parts.some(n => n === ipNo || (cleanLc(n) && cleanLc(n) === ipNoClean))) return true;
+        }
+
+        const lcIpId = String(lc.ipId || lc.ipRecordId || lc.ip_id || '');
+        if (lcIpId && ipIdStr && lcIpId === ipIdStr) return true;
+
+        if (Array.isArray(lc.ipDetails) && lc.ipDetails.length > 0) {
+            if (lc.ipDetails.some(d => {
+                const dNo = String(d.ipNo || d.ipNumber || '').trim();
+                const dId = String(d.ipId || d._id || '');
+                return dNo === ipNo || (cleanLc(dNo) && cleanLc(dNo) === ipNoClean) || (dId && dId === ipIdStr);
+            })) return true;
+        }
+
+        return false;
+    };
+
+    const relatedLCs = lcRecords.filter(lc => isLcLinkedToIpModal(lc, ipRecord));
 
     // Compute remaining quantity for each LC (same logic as LCManagement table)
     const computeLcRemQty = (lc) => {
@@ -713,7 +758,7 @@ function IPManagement({
             const cleanA = (nameA || '').toLowerCase().trim();
             const cleanB = (nameB || '').toLowerCase().trim();
             if (!cleanA || !cleanB) return false;
-            if (cleanA === cleanB) return true;
+            if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) return true;
             
             const prod = products.find(p => {
                 const pName = (p.name || '').toLowerCase().trim();
@@ -723,46 +768,119 @@ function IPManagement({
             return !!prod;
         };
 
-        const getLcProductQtyInKg = (lc, productKey) => {
-            if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
-                const matched = lc.productsList.filter(p =>
-                    matchProduct(p.productName, productKey)
-                );
-                if (matched.length > 0) {
-                    return matched.reduce((sum, p) => sum + (parseNum(p.quantity) * 1000), 0);
+        const isLcLinkedToIp = (lc, ip) => {
+            if (!lc || !ip) return false;
+            const ipNo = String(ip.ipNumber || '').trim();
+            const ipNoClean = cleanLc(ipNo);
+            const ipIdStr = String(ip._id || '');
+
+            // 1. Direct ipNumbers array
+            if (Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0) {
+                if (lc.ipNumbers.some(n => {
+                    const str = String(n).trim();
+                    return str === ipNo || (cleanLc(str) && cleanLc(str) === ipNoClean);
+                })) return true;
+            }
+
+            // 2. Direct string fields: ipNo, ipNumber, ip_number, ipRef
+            const singleIp = String(lc.ipNo || lc.ipNumber || lc.ip_number || lc.ipRef || '').trim();
+            if (singleIp) {
+                const parts = singleIp.split(',').map(s => s.trim()).filter(Boolean);
+                if (parts.some(n => n === ipNo || (cleanLc(n) && cleanLc(n) === ipNoClean))) return true;
+            }
+
+            // 3. Mongo ID match
+            const lcIpId = String(lc.ipId || lc.ipRecordId || lc.ip_id || '');
+            if (lcIpId && ipIdStr && lcIpId === ipIdStr) return true;
+
+            // 4. ipDetails array
+            if (Array.isArray(lc.ipDetails) && lc.ipDetails.length > 0) {
+                if (lc.ipDetails.some(d => {
+                    const dNo = String(d.ipNo || d.ipNumber || '').trim();
+                    const dId = String(d.ipId || d._id || '');
+                    return dNo === ipNo || (cleanLc(dNo) && cleanLc(dNo) === ipNoClean) || (dId && dId === ipIdStr);
+                })) return true;
+            }
+
+            // 5. Linked via PI (Proforma Invoice)
+            if (Array.isArray(piRecords) && piRecords.length > 0) {
+                const lcPiNo = String(lc.piNo || lc.piNumber || '').trim();
+                const lcPiId = String(lc.piId || lc.pi_id || '');
+                if (lcPiNo || lcPiId) {
+                    const matchingPi = piRecords.find(pi => {
+                        if (lcPiId && String(pi._id || '') === lcPiId) return true;
+                        if (lcPiNo && String(pi.piNo || pi.piNumber || '').trim() === lcPiNo) return true;
+                        return false;
+                    });
+                    if (matchingPi) {
+                        const piIps = Array.isArray(matchingPi.ipNumbers) && matchingPi.ipNumbers.length > 0
+                            ? matchingPi.ipNumbers.map(s => String(s).trim())
+                            : String(matchingPi.ipNo || matchingPi.ipNumber || '').split(',').map(s => s.trim()).filter(Boolean);
+                        if (piIps.some(n => n === ipNo || (cleanLc(n) && cleanLc(n) === ipNoClean))) return true;
+                    }
                 }
             }
-            if (matchProduct(lc.productName, productKey)) {
-                return parseNum(lc.quantity) * 1000;
+
+            return false;
+        };
+
+        const getLcProductQtyInKg = (lc, productKey) => {
+            if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+                let matched = lc.productsList;
+                if (productKey) {
+                    matched = lc.productsList.filter(p => matchProduct(p.productName, productKey));
+                }
+                if (matched.length > 0) {
+                    return matched.reduce((sum, p) => {
+                        const q = parseNum(p.quantity);
+                        return sum + (q < 50000 ? q * 1000 : q);
+                    }, 0);
+                }
+            }
+            if (Array.isArray(lc.items) && lc.items.length > 0) {
+                let matched = lc.items;
+                if (productKey) {
+                    matched = lc.items.filter(i => matchProduct(i.productName || i.name, productKey));
+                }
+                if (matched.length > 0) {
+                    return matched.reduce((sum, i) => {
+                        const q = parseNum(i.quantity || i.qty);
+                        return sum + (q < 50000 ? q * 1000 : q);
+                    }, 0);
+                }
+            }
+            if (!productKey || matchProduct(lc.productName, productKey)) {
+                const q = parseNum(lc.quantity || lc.totalQuantity || lc.lcQuantity);
+                if (q > 0) return q < 50000 ? q * 1000 : q;
             }
             return 0;
         };
 
-        // --- Step 1: Compute LC REM per IP using sequential group consumption restricted to linked IPs ---
+        // --- Step 1: Compute LC REM per IP ---
         const lcRemMap = {}; // ipNumber -> LC REM value
+        ipRecords.forEach(ip => {
+            const ipQty = parseNum(ip.quantity) || 0;
+            const relatedLcs = lcRecords.filter(lc => isLcLinkedToIp(lc, ip));
+            const totalLcQtyKg = relatedLcs.reduce((sum, lc) => sum + getLcProductQtyInKg(lc, ip.productName), 0);
+            lcRemMap[ip.ipNumber] = Math.max(0, ipQty - totalLcQtyKg);
+        });
 
-        // Initialize lcRemainingQtyMap for each LC
-        const lcRemainingQtyMap = {};
-        // Group IPs by product name
+        // --- Step 1b: Compute IP Balance per IP using sequential group consumption restricted to linked IPs ---
+        const ipBalanceMap = {}; // ipNumber -> IP Balance value
+        const lcRemainingConsumptionMap = {};
         const ipsByProduct = {};
+
         ipRecords.forEach(ip => {
             const productKey = (ip.productName || '').toLowerCase().trim();
             if (!productKey) {
-                lcRemMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+                ipBalanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
                 return;
             }
             if (!ipsByProduct[productKey]) ipsByProduct[productKey] = [];
             ipsByProduct[productKey].push(ip);
         });
 
-        // Initialize LC remaining quantities for each product key
-        lcRecords.forEach(lc => {
-            const lcId = lc.lcNo || String(lc._id);
-            lcRemainingQtyMap[lcId] = {};
-        });
-
         Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
-            // Sort IPs ascending by numeric IP number: lowest consumed first
             const sortedIps = [...ipsGroup].sort((a, b) => {
                 const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
                 const bNum = parseFloat(cleanLc(b.ipNumber)) || 0;
@@ -770,57 +888,6 @@ function IPManagement({
                 return (a.ipNumber || '').localeCompare(b.ipNumber || '');
             });
 
-            // Populate initial LC remaining quantities for this product key
-            lcRecords.forEach(lc => {
-                const lcId = lc.lcNo || String(lc._id);
-                lcRemainingQtyMap[lcId][productKey] = getLcProductQtyInKg(lc, productKey);
-            });
-
-            // Distribute sequentially, but ONLY from LCs that are linked to the specific IP
-            sortedIps.forEach(ip => {
-                const ipQty = parseNum(ip.quantity) || 0;
-                const ipNoClean = cleanLc(ip.ipNumber);
-                
-                // Find LCs linked to this IP
-                const relatedLcsForIp = lcRecords.filter(lc => {
-                    const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
-                        ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
-                        : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
-                    return lcIps.includes(ipNoClean);
-                });
-
-                let consumed = 0;
-                relatedLcsForIp.forEach(lc => {
-                    const lcId = lc.lcNo || String(lc._id);
-                    const available = lcRemainingQtyMap[lcId]?.[productKey] || 0;
-                    const toConsume = Math.min(available, ipQty - consumed);
-                    consumed += toConsume;
-                    if (lcRemainingQtyMap[lcId]) {
-                        lcRemainingQtyMap[lcId][productKey] = Math.max(0, available - toConsume);
-                    }
-                });
-
-                lcRemMap[ip.ipNumber] = ipQty - consumed;
-            });
-        });
-
-        // --- Step 1b: Compute IP Balance per IP using sequential group consumption restricted to linked IPs ---
-        // IP Balance = IP Qty - actual receipts (LC Receive) - border sales, distributed sequentially.
-        const ipBalanceMap = {}; // ipNumber -> IP Balance value
-
-        // Initialize lcRemainingConsumptionMap for each LC
-        const lcRemainingConsumptionMap = {};
-
-        Object.entries(ipsByProduct).forEach(([productKey, ipsGroup]) => {
-            // Sort IPs ascending by numeric IP number: lowest consumed first
-            const sortedIps = [...ipsGroup].sort((a, b) => {
-                const aNum = parseFloat(cleanLc(a.ipNumber)) || 0;
-                const bNum = parseFloat(cleanLc(b.ipNumber)) || 0;
-                if (aNum !== bNum) return aNum - bNum;
-                return (a.ipNumber || '').localeCompare(b.ipNumber || '');
-            });
-
-            // Initialize total consumption for each LC under this product key
             lcRecords.forEach(lc => {
                 const lcId = lc.lcNo || String(lc._id);
                 if (!lcRemainingConsumptionMap[lcId]) lcRemainingConsumptionMap[lcId] = {};
@@ -831,7 +898,6 @@ function IPManagement({
                     return;
                 }
 
-                // Sum unique stock receipts for this LC matching the product name
                 const groupReceiptsMap = {};
                 allStockRecords.forEach(s => {
                     const sLcClean = cleanLc(s.lcNo);
@@ -842,7 +908,6 @@ function IPManagement({
                         const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
                         const key = `${sLcClean}_${dateStr}_${groupVal}`;
                         
-                        // Filter entries matching the product name
                         let productQty = 0;
                         if (s.entries && s.entries.length > 0) {
                             productQty = s.entries
@@ -863,7 +928,6 @@ function IPManagement({
                 });
                 let totalConsumption = Object.values(groupReceiptsMap).reduce((sum, qty) => sum + qty, 0);
 
-                // Sum unique border sales for this LC matching the product name
                 allSalesRecords.forEach(s => {
                     const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
                         cleanLc(s.lcNumber) === lcNoClean ||
@@ -895,18 +959,9 @@ function IPManagement({
                 lcRemainingConsumptionMap[lcId][productKey] = totalConsumption;
             });
 
-            // Distribute sequentially: fill first IP balance, then next... but ONLY from LCs linked to the specific IP
             sortedIps.forEach(ip => {
                 const ipQty = parseNum(ip.quantity) || 0;
-                const ipNoClean = cleanLc(ip.ipNumber);
-
-                // Find LCs linked to this IP
-                const relatedLcsForIp = lcRecords.filter(lc => {
-                    const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
-                        ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
-                        : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
-                    return lcIps.includes(ipNoClean);
-                });
+                const relatedLcsForIp = lcRecords.filter(lc => isLcLinkedToIp(lc, ip));
 
                 let consumed = 0;
                 relatedLcsForIp.forEach(lc => {
@@ -923,7 +978,6 @@ function IPManagement({
             });
         });
 
-        // For IPs with no product key, compute independently
         ipRecords.forEach(ip => {
             if (!(ip.ipNumber in ipBalanceMap)) {
                 ipBalanceMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
@@ -932,19 +986,13 @@ function IPManagement({
 
         // --- Step 2: Enrich each IP record with computed values ---
         return ipRecords.map(ip => {
-            const ipNoClean = cleanLc(ip.ipNumber);
-            const relatedLcs = lcRecords.filter(lc => {
-                const lcIps = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
-                    ? lc.ipNumbers.map(s => cleanLc(s)).filter(Boolean)
-                    : (lc.ipNo || '').split(',').map(s => cleanLc(s.trim())).filter(Boolean);
-                return lcIps.includes(ipNoClean);
-            });
+            const relatedLcs = lcRecords.filter(lc => isLcLinkedToIp(lc, ip));
 
-            // LC REM and IP Balance from sequential group calculations above
-            const calculatedRemQty = lcRemMap[ip.ipNumber] ?? (parseNum(ip.quantity) || 0);
-            const calculatedIpBalance = ipBalanceMap[ip.ipNumber] ?? (parseNum(ip.quantity) || 0);
+            const ipQty = parseNum(ip.quantity) || 0;
+            const totalLcQtyKg = relatedLcs.reduce((sum, lc) => sum + getLcProductQtyInKg(lc, ip.productName), 0);
+            const calculatedRemQty = lcRemMap[ip.ipNumber] ?? Math.max(0, ipQty - totalLcQtyKg);
+            const calculatedIpBalance = ipBalanceMap[ip.ipNumber] ?? Math.max(0, ipQty - totalLcQtyKg);
 
-            // Calculate automated status based on closeDate
             let computedStatus = "Active";
             if (ip.closeDate) {
                 const today = new Date();
