@@ -64,7 +64,7 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     }
 };
 
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], onEdit, onEditAmendment, onUpdateDollarRate, canManage, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [] }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onUpdateDollarRate, canManage, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [] }) => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
@@ -3133,19 +3133,28 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                 })()}
                                             </p>
                                         </div>
-                                        <div className="space-y-1">
+                                        <div className="space-y-1 col-span-2 sm:col-span-1">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
-                                            <div className="flex flex-col gap-0.5">
+                                            <div className="flex flex-col gap-1.5 mt-0.5">
                                                 {(() => {
                                                     const ips = data.ipNumbers?.length
                                                         ? data.ipNumbers
                                                         : (data.ipNo ? data.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
                                                     if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
-                                                    return ips.map((ip, idx) => (
-                                                        <span key={idx} className="block text-sm font-bold text-gray-800">
-                                                            {ip}
-                                                        </span>
-                                                    ));
+                                                    const breakdown = getIpContributionBreakdown(data, ips, ipRecordsRaw, lcRecords);
+                                                    return ips.map((ip, idx) => {
+                                                        const item = breakdown.find(b => b.ipNo === ip);
+                                                        return (
+                                                            <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-sm font-bold text-gray-800 bg-gray-50/80 p-1.5 px-2 rounded-lg border border-gray-100">
+                                                                <span>{ip}</span>
+                                                                {item && (
+                                                                    <span className="text-xs font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60 shadow-xs">
+                                                                        {item.qtyKg.toLocaleString('en-IN')} kg ({item.qtyTon.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 3 })} Ton)
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    });
                                                 })()}
                                             </div>
                                         </div>
@@ -4376,6 +4385,56 @@ const getRemIpQtyTon = (ipNo, ipRecordsRaw, lcRecords, editingId) => {
     return (parseFloat(selectedIp.quantity || 0) / 1000) - totalLcQtyOnThisIp;
 };
 
+const getIpContributionBreakdown = (lcRecord, ips, ipRecordsRaw = [], lcRecords = []) => {
+    if (!ips || ips.length === 0 || !lcRecord) return [];
+    const adj = getAdjustedLcValues(lcRecord);
+    const totalLcQtyKg = adj.adjustedQtyKg || (parseFloat(lcRecord.quantity || 0) * 1000);
+    const actualAdjustmentQtyKg = adj.actualAdjustmentQtyKg || 0;
+    const isToleranceEnabled = !!lcRecord.enableValueQtyAdjustment && actualAdjustmentQtyKg > 0;
+    const toleranceTargetIp = String(lcRecord.toleranceIpNo || ips[0] || '').trim();
+
+    const baseLcQtyKg = Math.max(0, totalLcQtyKg - (isToleranceEnabled ? actualAdjustmentQtyKg : 0));
+    let remainingBaseToDeduct = baseLcQtyKg;
+
+    return ips.map((ipNo) => {
+        const cleanIpNo = String(ipNo || '').trim();
+        const selectedIp = (ipRecordsRaw || []).find(ip => String(ip.ipNumber || '').trim() === cleanIpNo);
+        let ipContribKg = 0;
+        if (selectedIp) {
+            const rawIpQtyKg = parseFloat(String(selectedIp.quantity || 0).replace(/[^0-9.]/g, '')) || 0;
+            const linkedLcs = (lcRecords || []).filter(lc => {
+                const lcIps = lc.ipNumbers?.length ? lc.ipNumbers : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                return lcIps.includes(cleanIpNo);
+            }).sort((a, b) => new Date(a.openingDate || a.createdAt || 0) - new Date(b.openingDate || b.createdAt || 0));
+
+            let capacityBeforeThisLc = rawIpQtyKg;
+            for (const otherLc of linkedLcs) {
+                if (String(otherLc._id) === String(lcRecord._id) || otherLc.lcNo === lcRecord.lcNo) {
+                    break;
+                }
+                const otherAdj = getAdjustedLcValues(otherLc);
+                const otherQtyKg = otherAdj.adjustedQtyKg || ((parseFloat(otherLc.quantity || 0) || 0) * 1000);
+                capacityBeforeThisLc = Math.max(0, capacityBeforeThisLc - otherQtyKg);
+            }
+            ipContribKg = Math.min(capacityBeforeThisLc, remainingBaseToDeduct);
+        } else {
+            ipContribKg = remainingBaseToDeduct;
+        }
+        remainingBaseToDeduct = Math.max(0, remainingBaseToDeduct - ipContribKg);
+
+        if (isToleranceEnabled && cleanIpNo === toleranceTargetIp) {
+            ipContribKg += actualAdjustmentQtyKg;
+        }
+
+        const ipContribTon = ipContribKg / 1000;
+        return {
+            ipNo: cleanIpNo,
+            qtyKg: ipContribKg,
+            qtyTon: ipContribTon
+        };
+    });
+};
+
 const mapPiProductsToLc = (pi) => {
     const piProducts = (pi.productsList?.length > 0)
         ? pi.productsList
@@ -4934,6 +4993,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const amendmentPiRef = useRef(null);
     const portRef = useRef(null);
     const amendmentPortRef = useRef(null);
+    const ipContainerRef = useRef(null);
 
     // Advanced Filter Refs
     const lcFilterPanelRef = useRef(null);
@@ -5049,15 +5109,38 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
         const ipNumbers = formData.ipNumbers?.length
             ? formData.ipNumbers
-            : (formData.ipNo ? [formData.ipNo] : []);
+            : (formData.ipNo ? formData.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
 
-        const ipEntries = ipNumbers.map(ipNo => ({
-            ipNo,
-            remIpQtyTon: getRemIpQtyTon(ipNo, ipRecordsRaw, lcRecords, editingId),
-        }));
+        const currentFormLcQtyTon = parseFloat(formData.quantity || 0) || 0;
+        let remainingFormQtyToDeduct = currentFormLcQtyTon;
+
+        const ipEntries = ipNumbers.map(ipNo => {
+            const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === ipNo);
+            if (!selectedIp) return { ipNo, remIpQtyTon: 0 };
+
+            // Find all OTHER LCs linked to this IP (excluding current editingId)
+            const otherLcsOnThisIp = lcRecords.filter(lc => {
+                const lcIps = lc.ipNumbers?.length ? lc.ipNumbers : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                return lcIps.includes(ipNo) && lc._id !== editingId;
+            });
+
+            // Sum of quantity consumed from this IP by OTHER LCs
+            const totalOtherLcQtyOnThisIp = otherLcsOnThisIp.reduce((sum, lc) => sum + (parseFloat(lc.quantity) || 0), 0);
+
+            // Available IP balance before applying current form LC
+            const initialIpCapacityTon = (parseFloat(selectedIp.quantity || 0) / 1000);
+            const availableBeforeCurrentForm = Math.max(0, initialIpCapacityTon - totalOtherLcQtyOnThisIp);
+
+            // Deduct sequentially from current form LC
+            const formDeductionFromThisIp = Math.min(availableBeforeCurrentForm, remainingFormQtyToDeduct);
+            remainingFormQtyToDeduct = Math.max(0, remainingFormQtyToDeduct - formDeductionFromThisIp);
+
+            const remIpQtyTon = Math.max(0, availableBeforeCurrentForm - formDeductionFromThisIp);
+            return { ipNo, remIpQtyTon, consumedTon: formDeductionFromThisIp };
+        });
 
         return { piQtyTon, ipEntries };
-    }, [formData.ipNo, formData.ipNumbers, formData.piNo, ipRecordsRaw, piRecordsRaw, lcRecords, editingId]);
+    }, [formData.ipNo, formData.ipNumbers, formData.piNo, formData.quantity, ipRecordsRaw, piRecordsRaw, lcRecords, editingId]);
 
     const getExpandedDropdownOptions = (currentInputVal) => {
         const rawOptions = [];
@@ -5082,7 +5165,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
     useEffect(() => {
         const handleClickOutside = (e) => {
-            const refs = [piRef, bankRef, branchRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef, amendmentPiRef, portRef, amendmentPortRef];
+            const refs = [piRef, bankRef, branchRef, importerRef, exporterRef, productRef, insuranceRef, statusRef, amendmentLcRef, amendmentPiRef, portRef, amendmentPortRef, ipContainerRef];
             const isClickInside = refs.some(ref => ref.current && ref.current.contains(e.target));
             if (!isClickInside) {
                 setActiveDropdown(null);
@@ -5183,6 +5266,40 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         }
 
         return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+    };
+
+    const currentIpList = Array.isArray(formData.ipNumbers) && formData.ipNumbers.length > 0
+        ? formData.ipNumbers
+        : (formData.ipNo ? formData.ipNo.split(',').map(s => s.trim()).filter(Boolean) : ['']);
+
+    const handleIpChange = (idx, newIpVal) => {
+        const updated = [...currentIpList];
+        updated[idx] = newIpVal;
+        setFormData(prev => ({
+            ...prev,
+            ipNumbers: updated,
+            ipNo: updated.filter(Boolean).join(',')
+        }));
+    };
+
+    const handleAddIp = () => {
+        const updated = [...currentIpList, ''];
+        setFormData(prev => ({
+            ...prev,
+            ipNumbers: updated,
+            ipNo: updated.filter(Boolean).join(',')
+        }));
+        setActiveDropdown(`ipNo_${updated.length - 1}`);
+    };
+
+    const handleRemoveIp = (idx) => {
+        let updated = currentIpList.filter((_, i) => i !== idx);
+        if (updated.length === 0) updated = [''];
+        setFormData(prev => ({
+            ...prev,
+            ipNumbers: updated,
+            ipNo: updated.filter(Boolean).join(',')
+        }));
     };
 
     const handleDropdownSelect = (field, value) => {
@@ -6705,9 +6822,11 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const handleToggleValueQtyAdjustment = async (record, isEnabled) => {
         try {
             const adj = getAdjustedLcValues({ ...record, enableValueQtyAdjustment: isEnabled });
+            const defaultIpNo = record.toleranceIpNo || (record.ipNumbers && record.ipNumbers[0]) || (record.ipNo ? record.ipNo.split(',')[0].trim() : '');
             const updatedRecord = {
                 ...record,
                 enableValueQtyAdjustment: isEnabled,
+                toleranceIpNo: isEnabled ? defaultIpNo : record.toleranceIpNo,
                 adjustedQuantity: adj.adjustedQtyTons,
                 adjustedTotalAmount: adj.adjustedTotalAmount
             };
@@ -6733,6 +6852,26 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         } catch (error) {
             console.error("Failed to toggle adjustment:", error);
             addNotification?.('Failed to update adjustment setting.', 'error');
+            await fetchInitialData();
+        }
+    };
+
+    const handleToleranceIpChange = async (record, selectedIpNo) => {
+        try {
+            const updatedRecord = {
+                ...record,
+                toleranceIpNo: selectedIpNo
+            };
+            setLcRecords(prev => prev.map(r => r._id === record._id ? updatedRecord : r));
+
+            const response = await axios.put(`${API_BASE_URL}/api/lc-management/${record._id}`, updatedRecord);
+            if (response.data) {
+                addNotification?.('Tolerance IP allocation updated successfully', 'success');
+                await fetchLcRecordsOnly();
+            }
+        } catch (error) {
+            console.error("Failed to update tolerance IP allocation:", error);
+            addNotification?.('Failed to update tolerance IP setting.', 'error');
             await fetchInitialData();
         }
     };
@@ -7518,32 +7657,147 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                             )}
                         </div>
 
-                        {informativeQuantities.ipEntries.map((entry, idx) => (
-                            <React.Fragment key={entry.ipNo || idx}>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-semibold text-gray-600 ml-1">
-                                        IP Number{informativeQuantities.ipEntries.length > 1 ? ` (${idx + 1})` : ''}
-                                    </label>
-                                    <input
-                                        type="text"
-                                        readOnly
-                                        value={entry.ipNo}
-                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-700 font-bold"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-semibold text-gray-600 ml-1">
-                                        Remaining IP Qty (Ton){informativeQuantities.ipEntries.length > 1 ? ` (${idx + 1})` : ''}
-                                    </label>
-                                    <input
-                                        type="text"
-                                        readOnly
-                                        value={entry.remIpQtyTon.toLocaleString('en-IN', { minimumFractionDigits: 3 })}
-                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-500 font-bold"
-                                    />
-                                </div>
-                            </React.Fragment>
-                        ))}
+                        <div className="col-span-full border-t border-b border-gray-100/80 py-4 my-1 relative" ref={ipContainerRef}>
+                            <div className="flex items-center justify-between mb-3">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                                    <span>IP Allocation (Import Permits)</span>
+                                    <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 rounded-full font-bold">
+                                        {currentIpList.filter(Boolean).length} Selected
+                                    </span>
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={handleAddIp}
+                                    className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
+                                >
+                                    <PlusIcon className="w-3.5 h-3.5" />
+                                    <span>Add IP Number</span>
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {currentIpList.map((ipVal, idx) => {
+                                    const entry = informativeQuantities.ipEntries[idx];
+                                    const remQtyTon = entry ? entry.remIpQtyTon : (
+                                        getRemIpQtyTon(ipVal, ipRecordsRaw, lcRecords, editingId)
+                                    );
+                                    const dropdownKey = `ipNo_${idx}`;
+                                    const isDropdownOpen = activeDropdown === dropdownKey;
+
+                                    const filteredIps = ipRecordsRaw.filter(ip => {
+                                        const ipNoStr = String(ip.ipNumber || '').trim();
+                                        if (!ipNoStr) return false;
+                                        const isSelectedOnOtherSlot = currentIpList.some((val, i) => i !== idx && val === ipNoStr);
+                                        if (isSelectedOnOtherSlot) return false;
+                                        if (!ipVal) return true;
+                                        return ipNoStr.toLowerCase().includes(ipVal.toLowerCase()) || (ip.ipParty && ip.ipParty.toLowerCase().includes(ipVal.toLowerCase()));
+                                    });
+
+                                    return (
+                                        <React.Fragment key={idx}>
+                                            <div className="space-y-1.5 text-left relative">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-sm font-semibold text-gray-600 ml-1">
+                                                        IP Number {currentIpList.length > 1 ? `(#${idx + 1})` : ''}
+                                                    </label>
+                                                    {currentIpList.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveIp(idx)}
+                                                            className="text-xs text-rose-500 hover:text-rose-700 font-semibold hover:underline flex items-center gap-1"
+                                                            title="Remove IP"
+                                                        >
+                                                            <XIcon className="w-3.5 h-3.5" />
+                                                            <span>Remove</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={ipVal}
+                                                        onChange={(e) => {
+                                                            handleIpChange(idx, e.target.value);
+                                                            setActiveDropdown(dropdownKey);
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        onFocus={() => {
+                                                            setActiveDropdown(dropdownKey);
+                                                            setHighlightedIndex(-1);
+                                                        }}
+                                                        placeholder="Select or type IP Number"
+                                                        autoComplete="off"
+                                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                                    />
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                        {ipVal && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleIpChange(idx, '')}
+                                                                className="text-gray-400 hover:text-gray-600"
+                                                            >
+                                                                <XIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                                    </div>
+                                                </div>
+
+                                                {isDropdownOpen && (
+                                                    <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 overflow-y-auto py-1">
+                                                        {filteredIps.length === 0 ? (
+                                                            <div className="px-4 py-2.5 text-xs text-gray-400 font-medium text-center">
+                                                                No matching IP numbers found
+                                                            </div>
+                                                        ) : (
+                                                            filteredIps.map((ip, optionIdx) => (
+                                                                <button
+                                                                    key={ip._id || optionIdx}
+                                                                    type="button"
+                                                                    onMouseDown={(e) => {
+                                                                        e.preventDefault();
+                                                                        handleIpChange(idx, ip.ipNumber);
+                                                                        setActiveDropdown(null);
+                                                                    }}
+                                                                    onMouseEnter={() => setHighlightedIndex(optionIdx)}
+                                                                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors font-medium border-b border-gray-50 last:border-0 ${
+                                                                        ipVal === ip.ipNumber ? 'bg-blue-50 text-blue-700 font-bold' : highlightedIndex === optionIdx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'
+                                                                    }`}
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="font-semibold text-gray-900">{ip.ipNumber}</span>
+                                                                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                                                                            {((parseFloat(ip.quantity) || 0) / 1000).toLocaleString('en-IN')} Ton
+                                                                        </span>
+                                                                    </div>
+                                                                    {ip.ipParty && (
+                                                                        <div className="text-[11px] text-gray-400 mt-0.5 truncate">
+                                                                            {ip.ipParty} {ip.productName ? `• ${ip.productName}` : ''}
+                                                                        </div>
+                                                                    )}
+                                                                </button>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-1.5 text-left">
+                                                <label className="text-sm font-semibold text-gray-600 ml-1">
+                                                    Remaining IP Qty (Ton) {currentIpList.length > 1 ? `(#${idx + 1})` : ''}
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={ipVal ? remQtyTon.toLocaleString('en-IN', { minimumFractionDigits: 3 }) : '0.000'}
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl outline-none text-gray-500 font-bold"
+                                                />
+                                            </div>
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </div>
+                        </div>
 
                         <div className="space-y-1.5 text-left relative" ref={importerRef}>
                             <label className="text-sm font-semibold text-gray-600 ml-1">Importer</label>
@@ -8523,17 +8777,26 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                             </div>
                                             <div className="border-b border-gray-200/50 pb-2">
                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IP Number</span>
-                                                <div className="flex flex-col gap-0.5">
+                                                <div className="flex flex-col gap-1.5 mt-0.5">
                                                     {(() => {
                                                         const ips = selectedLcForAmendment.ipNumbers?.length
                                                             ? selectedLcForAmendment.ipNumbers
                                                             : (selectedLcForAmendment.ipNo ? selectedLcForAmendment.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
                                                         if (ips.length === 0) return <span className="text-sm font-bold text-gray-800">N/A</span>;
-                                                        return ips.map((ip, idx) => (
-                                                            <span key={idx} className="block text-sm font-bold text-gray-800">
-                                                                {ip}
-                                                            </span>
-                                                        ));
+                                                        const breakdown = getIpContributionBreakdown(selectedLcForAmendment, ips, ipRecordsRaw, lcRecords);
+                                                        return ips.map((ip, idx) => {
+                                                            const item = breakdown.find(b => b.ipNo === ip);
+                                                            return (
+                                                                <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-sm font-bold text-gray-800 bg-gray-50/80 p-1.5 px-2 rounded-lg border border-gray-100">
+                                                                    <span>{ip}</span>
+                                                                    {item && (
+                                                                        <span className="text-xs font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60 shadow-xs">
+                                                                            {item.qtyKg.toLocaleString('en-IN')} kg ({item.qtyTon.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 3 })} Ton)
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        });
                                                     })()}
                                                 </div>
                                             </div>
@@ -9625,13 +9888,63 @@ style={
                                                                             Disable
                                                                         </label>
                                                                         {record.enableValueQtyAdjustment && (
-                                                                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                                                {(() => {
-                                                                                    const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
-                                                                                    return `${addedPercent.toFixed(2)}% added`;
-                                                                                })()}
-                                                                            </span>
+                                                                            <div className="flex items-center gap-2 border-l border-blue-200/60 pl-3 ml-1">
+                                                                                <span className="text-[11px] font-bold text-blue-800 uppercase tracking-tight">Assign IP:</span>
+                                                                                <select
+                                                                                    value={record.toleranceIpNo || (record.ipNumbers && record.ipNumbers[0]) || (record.ipNo ? record.ipNo.split(',')[0].trim() : '')}
+                                                                                    onChange={(e) => handleToleranceIpChange(record, e.target.value)}
+                                                                                    className="bg-white border border-blue-200 text-blue-900 font-bold text-xs rounded-lg px-2.5 py-1 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm cursor-pointer"
+                                                                                >
+                                                                                    <option value="" disabled>-- Select IP --</option>
+                                                                                    {(() => {
+                                                                                        const lcIps = record.ipNumbers?.length ? record.ipNumbers : (record.ipNo ? record.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                                                                                        return lcIps.map(ipNo => (
+                                                                                            <option key={ipNo} value={ipNo}>
+                                                                                                {ipNo}
+                                                                                            </option>
+                                                                                        ));
+                                                                                    })()}
+                                                                                </select>
+                                                                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-black uppercase tracking-wide">
+                                                                                    {(() => {
+                                                                                        const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                                        return `+${(adj.actualAdjustmentQtyKg / 1000).toLocaleString('en-IN', { minimumFractionDigits: 3 })} Ton (${addedPercent.toFixed(2)}%)`;
+                                                                                    })()}
+                                                                                </span>
+                                                                            </div>
                                                                         )}
+                                                                        {/* IP Rem — always visible */}
+                                                                        {(() => {
+                                                                            const selectedIpNo = record.toleranceIpNo || (record.ipNumbers && record.ipNumbers[0]) || (record.ipNo ? record.ipNo.split(',')[0].trim() : '');
+                                                                            const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === selectedIpNo);
+                                                                            if (!selectedIp) return null;
+                                                                            const ipQtyKg = parseFloat(String(selectedIp.quantity || 0).replace(/[^0-9.]/g, '')) || 0;
+                                                                            const totalUsedKg = lcRecords
+                                                                                .filter(lc => {
+                                                                                    const lcIps = lc.ipNumbers?.length ? lc.ipNumbers : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                                                                                    return lcIps.includes(selectedIpNo);
+                                                                                })
+                                                                                .reduce((sum, lc) => {
+                                                                                    const adjLc = getAdjustedLcValues(lc);
+                                                                                    return sum + (adjLc.adjustedQtyKg || (parseFloat(lc.quantity || 0) * 1000));
+                                                                                }, 0);
+                                                                            const ipRemKg = ipQtyKg - totalUsedKg;
+                                                                            const ipRemTon = ipRemKg / 1000;
+                                                                            return (
+                                                                                <span className="flex items-center gap-1 border-l border-blue-200/60 pl-3 ml-1">
+                                                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-tight">IP Rem:</span>
+                                                                                    <span className={`px-2 py-0.5 rounded text-xs font-black uppercase tracking-wide ${
+                                                                                        ipRemKg > 0
+                                                                                            ? 'bg-emerald-50 text-emerald-700'
+                                                                                            : ipRemKg < 0
+                                                                                                ? 'bg-red-50 text-red-600'
+                                                                                                : 'bg-gray-100 text-gray-400'
+                                                                                    }`}>
+                                                                                        {ipRemTon.toLocaleString('en-IN', { minimumFractionDigits: 3 })} Ton
+                                                                                    </span>
+                                                                                </span>
+                                                                            );
+                                                                        })()}
                                                                     </div>
 
                                                                     <div className="flex items-center gap-4 py-1.5 px-3 bg-blue-50/50 rounded-xl border border-blue-100/30 ml-auto">
@@ -10355,13 +10668,63 @@ style={
                                                                     Disable
                                                                 </label>
                                                                 {record.enableValueQtyAdjustment && (
-                                                                    <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-200/50 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                                                        {(() => {
-                                                                            const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
-                                                                            return `${addedPercent.toFixed(2)}% added`;
-                                                                        })()}
-                                                                    </span>
+                                                                    <div className="flex items-center gap-2 border-l border-blue-200/60 pl-2 ml-1 flex-wrap">
+                                                                        <span className="text-[10px] font-bold text-blue-800 uppercase tracking-tight">Assign IP:</span>
+                                                                        <select
+                                                                            value={record.toleranceIpNo || (record.ipNumbers && record.ipNumbers[0]) || (record.ipNo ? record.ipNo.split(',')[0].trim() : '')}
+                                                                            onChange={(e) => handleToleranceIpChange(record, e.target.value)}
+                                                                            className="bg-white border border-blue-200 text-blue-900 font-bold text-[11px] rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm cursor-pointer"
+                                                                        >
+                                                                            <option value="" disabled>-- Select IP --</option>
+                                                                            {(() => {
+                                                                                const lcIps = record.ipNumbers?.length ? record.ipNumbers : (record.ipNo ? record.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                                                                                return lcIps.map(ipNo => (
+                                                                                    <option key={ipNo} value={ipNo}>
+                                                                                        {ipNo}
+                                                                                    </option>
+                                                                                ));
+                                                                            })()}
+                                                                        </select>
+                                                                        <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-black uppercase tracking-wide">
+                                                                            {(() => {
+                                                                                const addedPercent = adj.openingQtyKg > 0 ? (adj.actualAdjustmentQtyKg / adj.openingQtyKg) * 100 : 0;
+                                                                                return `+${(adj.actualAdjustmentQtyKg / 1000).toLocaleString('en-IN', { minimumFractionDigits: 3 })} Ton (${addedPercent.toFixed(2)}%)`;
+                                                                            })()}
+                                                                        </span>
+                                                                    </div>
                                                                 )}
+                                                                {/* IP Rem — always visible */}
+                                                                {(() => {
+                                                                    const selectedIpNo = record.toleranceIpNo || (record.ipNumbers && record.ipNumbers[0]) || (record.ipNo ? record.ipNo.split(',')[0].trim() : '');
+                                                                    const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === selectedIpNo);
+                                                                    if (!selectedIp) return null;
+                                                                    const ipQtyKg = parseFloat(String(selectedIp.quantity || 0).replace(/[^0-9.]/g, '')) || 0;
+                                                                    const totalUsedKg = lcRecords
+                                                                        .filter(lc => {
+                                                                            const lcIps = lc.ipNumbers?.length ? lc.ipNumbers : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                                                                            return lcIps.includes(selectedIpNo);
+                                                                        })
+                                                                        .reduce((sum, lc) => {
+                                                                            const adjLc = getAdjustedLcValues(lc);
+                                                                            return sum + (adjLc.adjustedQtyKg || (parseFloat(lc.quantity || 0) * 1000));
+                                                                        }, 0);
+                                                                    const ipRemKg = ipQtyKg - totalUsedKg;
+                                                                    const ipRemTon = ipRemKg / 1000;
+                                                                    return (
+                                                                        <span className="flex items-center gap-1 border-l border-blue-200/60 pl-2 ml-1">
+                                                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">IP Rem:</span>
+                                                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide ${
+                                                                                ipRemKg > 0
+                                                                                    ? 'bg-emerald-50 text-emerald-700'
+                                                                                    : ipRemKg < 0
+                                                                                        ? 'bg-red-50 text-red-600'
+                                                                                        : 'bg-gray-100 text-gray-400'
+                                                                            }`}>
+                                                                                {ipRemTon.toLocaleString('en-IN', { minimumFractionDigits: 3 })} Ton
+                                                                            </span>
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                             <div className="flex items-center gap-3 py-1 px-2.5 bg-blue-50/50 rounded-xl border border-blue-100/30 flex-wrap">
                                                                 <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">LC Status:</span>
@@ -10667,6 +11030,8 @@ style={
                     gpRecords={gpRecords}
                     lcExpenses={lcExpenses}
                     piRecordsRaw={piRecordsRaw}
+                    ipRecordsRaw={ipRecordsRaw}
+                    lcRecords={lcRecords}
                     onEdit={handleEdit}
                     onEditAmendment={handleEditAmendment}
                     onUpdateDollarRate={(rec) => setDollarRateModalRecord(rec)}
