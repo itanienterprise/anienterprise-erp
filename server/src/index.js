@@ -140,12 +140,7 @@ const adminOnly = (req, res, next) => {
 };
 
 const adminOrLcManager = (req, res, next) => {
-  const user = req.session.user;
-  const isAuthorized = user && (user.username === 'admin' || user.role === 'admin' || (user.role || '').toLowerCase() === 'lc manager');
-  if (!isAuthorized) {
-    return res.status(403).json({ message: 'Forbidden: Admin or LC Manager access required' });
-  }
-  next();
+  return verifyPermission('importerExporter', 'edit')(req, res, next);
 };
 
 const adminOrSalesManager = (req, res, next) => {
@@ -391,7 +386,7 @@ apiRouter.delete('/api/importers/:id', adminOnly, async (req, res) => {
 });
 
 // Update Importer
-apiRouter.put('/api/importers/:id', adminOrLcManager, async (req, res) => {
+apiRouter.put('/api/importers/:id', verifyPermission('importerExporter', 'edit'), async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedImporter = await Importer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
@@ -439,7 +434,7 @@ apiRouter.delete('/api/exporters/:id', adminOnly, async (req, res) => {
 });
 
 // Update Exporter
-apiRouter.put('/api/exporters/:id', adminOrLcManager, async (req, res) => {
+apiRouter.put('/api/exporters/:id', verifyPermission('importerExporter', 'edit'), async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedExporter = await Exporter.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
@@ -487,7 +482,7 @@ apiRouter.delete('/api/suppliers/:id', adminOnly, async (req, res) => {
 });
 
 // Update Supplier
-apiRouter.put('/api/suppliers/:id', adminOrLcManager, async (req, res) => {
+apiRouter.put('/api/suppliers/:id', verifyPermission('importerExporter', 'edit'), async (req, res) => {
   try {
     const encryptedData = encryptData(req.body);
     const updatedSupplier = await Supplier.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });

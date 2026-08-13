@@ -7,7 +7,7 @@
 export const MODULES_LIST = [
     { key: 'employees', label: 'HRMS / Employee', specialLabel: 'Reset Password' },
     { key: 'port', label: 'Port Management' },
-    { key: 'importerExporter', label: 'Importer / Exporter' },
+    { key: 'importerExporter', label: 'Importer / Exporter / Supplier' },
     { key: 'cnf', label: 'C&F Management' },
     { key: 'cnfPayment', label: 'C&F Payment' },
     {
