@@ -170,6 +170,7 @@ function PI({
     });
 
     const ipNumberRef = useRef(null);
+    const piNumberRef = useRef(null);
     const partyRef = useRef(null);
     const exporterRef = useRef(null);
     const productRef = useRef(null);
@@ -195,6 +196,9 @@ function PI({
     };
 
     const initialPiFilterState = {
+        quickRange: 'weekly',
+        selectedMonth: new Date().getMonth() + 1,
+        selectedYear: new Date().getFullYear(),
         startDate: '',
         endDate: '',
         port: '',
@@ -222,12 +226,14 @@ function PI({
 
     useEffect(() => {
         fetchRecords();
-        fetchMetaData('preCarriage', setPreCarriages);
-        fetchMetaData('receiptPlace', setReceiptPlaces);
-        fetchMetaData('vessel', setVessels);
-        fetchMetaData('country', setCountries);
-        fetchMetaData('certification', setCertifications);
-        fetchMetaData('packingType', setPackingTypes);
+        Promise.all([
+            fetchMetaData('preCarriage', setPreCarriages),
+            fetchMetaData('receiptPlace', setReceiptPlaces),
+            fetchMetaData('vessel', setVessels),
+            fetchMetaData('country', setCountries),
+            fetchMetaData('certification', setCertifications),
+            fetchMetaData('packingType', setPackingTypes)
+        ]);
     }, []);
 
     useEffect(() => {
@@ -331,18 +337,22 @@ function PI({
         }
     };
 
-    const fetchRecords = async () => {
-        setIsLoading(true);
+    const fetchRecords = async (showFullLoading = true) => {
+        if (showFullLoading) setIsLoading(true);
         try {
-            const [piRes, bankRes, ipRes, lcRes, stockRes, saleRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/pi`),
+            // 1. Fetch PI records first and render list table immediately!
+            const piRes = await axios.get(`${API_BASE_URL}/api/pi`);
+            setRecords(Array.isArray(piRes.data) ? piRes.data : []);
+            if (showFullLoading) setIsLoading(false);
+
+            // 2. Fetch supporting data asynchronously in background
+            const [bankRes, ipRes, lcRes, stockRes, saleRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/ip-records`),
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/stock`),
                 axios.get(`${API_BASE_URL}/api/sales`)
             ]);
-            setRecords(Array.isArray(piRes.data) ? piRes.data : []);
             setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
             setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
@@ -371,7 +381,7 @@ function PI({
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
-            setIsLoading(false);
+            if (showFullLoading) setIsLoading(false);
         }
     };
 
@@ -1477,6 +1487,60 @@ function PI({
         }];
     }
 
+    const existingPiNumbers = useMemo(() => {
+        const exp = (formData.exporterName || '').trim().toLowerCase();
+        const imp = (formData.partyName || '').trim().toLowerCase();
+
+        // Sort records by date/createdAt descending to get the most recent (last used) first
+        const sorted = [...(records || [])].sort((a, b) => {
+            const dateA = new Date(a.date || a.createdAt || 0);
+            const dateB = new Date(b.date || b.createdAt || 0);
+            return dateB - dateA;
+        });
+
+        // Filter by selected Exporter and Importer
+        let matching = sorted;
+        if (exp && imp) {
+            matching = sorted.filter(r =>
+                (r.exporterName || '').trim().toLowerCase() === exp &&
+                (r.partyName || '').trim().toLowerCase() === imp
+            );
+        } else if (exp) {
+            matching = sorted.filter(r =>
+                (r.exporterName || '').trim().toLowerCase() === exp
+            );
+        } else if (imp) {
+            matching = sorted.filter(r =>
+                (r.partyName || '').trim().toLowerCase() === imp
+            );
+        }
+
+        const list = matching
+            .map(r => r.piNumber)
+            .filter(Boolean)
+            .map(s => s.trim());
+
+        return Array.from(new Set(list));
+    }, [records, formData.exporterName, formData.partyName]);
+
+    const filteredPiSuggestions = useMemo(() => {
+        const q = (formData.piNumber || '').trim().toLowerCase();
+        if (!q) return existingPiNumbers;
+        return existingPiNumbers.filter(piNum =>
+            piNum.toLowerCase().includes(q)
+        );
+    }, [formData.piNumber, existingPiNumbers]);
+
+    const isDuplicatePiNumber = useMemo(() => {
+        if (!formData.piNumber || !formData.piNumber.trim()) return false;
+        const cleanNum = formData.piNumber.trim().toLowerCase();
+        return (records || []).some(r =>
+            r.piNumber &&
+            r.piNumber.trim().toLowerCase() === cleanNum &&
+            r._id !== editingId
+        );
+    }, [formData.piNumber, records, editingId]);
+
     const filteredPiRecordsForRevise = useMemo(() => {
         const q = (reviseSearchQuery || '').trim().toLowerCase();
         if (!q) return records;
@@ -1880,6 +1944,32 @@ function PI({
         if (piFilters.startDate && record.date && record.date < piFilters.startDate) return false;
         if (piFilters.endDate && record.date && record.date > piFilters.endDate) return false;
         
+        // Quick range filtering
+        if (piFilters.quickRange && piFilters.quickRange !== 'all' && piFilters.quickRange !== 'custom') {
+            const now = new Date();
+            const recordDate = new Date(record.date || record.piDate || record.createdAt);
+            if (piFilters.quickRange === 'weekly') {
+                const dayOfWeek = now.getDay();
+                const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() + diffToMonday);
+                weekStart.setHours(0, 0, 0, 0);
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                weekEnd.setHours(23, 59, 59, 999);
+                if (recordDate < weekStart || recordDate > weekEnd) return false;
+            }
+            if (piFilters.quickRange === 'monthly') {
+                const month = piFilters.selectedMonth || (now.getMonth() + 1);
+                const year = piFilters.selectedYear || now.getFullYear();
+                if (recordDate.getMonth() + 1 !== month || recordDate.getFullYear() !== year) return false;
+            }
+            if (piFilters.quickRange === 'yearly') {
+                const year = piFilters.selectedYear || now.getFullYear();
+                if (recordDate.getFullYear() !== year) return false;
+            }
+        }
+        
         if (piFilters.port) {
             const filterPort = piFilters.port.trim().toLowerCase();
             const recordPort = (record.port || '').trim().toLowerCase();
@@ -1991,9 +2081,9 @@ function PI({
                             <button
                                 ref={piFilterButtonRef}
                                 onClick={() => setShowPiFilterPanel(!showPiFilterPanel)}
-                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPiFilterPanel || Object.values(piFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPiFilterPanel || Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'weekly' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')) ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                             >
-                                <FunnelIcon className={`w-4 h-4 ${(showPiFilterPanel || (piFilters && Object.values(piFilters).some(v => v !== ''))) ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 ${(showPiFilterPanel || (piFilters && Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'weekly' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')))) ? 'text-white' : 'text-gray-400'}`} />
                                 <span className="text-sm font-medium">Filter</span>
                             </button>
 
@@ -2022,18 +2112,72 @@ function PI({
                                     </div>
 
                                     <div className="space-y-5">
+                                        {/* Quick Range */}
+                                        <div className="space-y-2 text-center">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
+                                            <div className="flex flex-wrap justify-center gap-2">
+                                                {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                    <button
+                                                        key={range}
+                                                        type="button"
+                                                        onClick={() => setPiFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${piFilters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                    >
+                                                        {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {/* Month dropdown for monthly */}
+                                            {piFilters.quickRange === 'monthly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={piFilters.selectedMonth || new Date().getMonth() + 1}
+                                                        onChange={(e) => setPiFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => (
+                                                            <option key={i + 1} value={i + 1}>{m}</option>
+                                                        ))}
+                                                    </select>
+                                                    <select
+                                                        value={piFilters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setPiFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                            {/* Year dropdown for yearly */}
+                                            {piFilters.quickRange === 'yearly' && (
+                                                <div className="flex items-center justify-center gap-2 mt-1">
+                                                    <select
+                                                        value={piFilters.selectedYear || new Date().getFullYear()}
+                                                        onChange={(e) => setPiFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                    >
+                                                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                            <option key={y} value={y}>{y}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {/* Date Range Row */}
                                         <div className="grid grid-cols-2 gap-4">
                                             <CustomDatePicker
                                                 label="From Date"
                                                 value={piFilters.startDate}
-                                                onChange={(e) => setPiFilters({ ...piFilters, startDate: e.target.value })}
+                                                onChange={(e) => setPiFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
                                                 compact={true}
                                             />
                                             <CustomDatePicker
                                                 label="To Date"
                                                 value={piFilters.endDate}
-                                                onChange={(e) => setPiFilters({ ...piFilters, endDate: e.target.value })}
+                                                onChange={(e) => setPiFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
                                                 compact={true}
                                                 rightAlign={true}
                                             />
@@ -2367,18 +2511,58 @@ function PI({
                             compact={true}
                         />
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">PI Number</label>
-                            <input
-                                type="text"
-                                name="piNumber"
-                                value={formData.piNumber}
-                                onChange={handleInputChange}
-                                required
-                                autoComplete="off"
-                                placeholder="Enter PI Number"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                            />
+                        {/* --- PI Number Section with Auto-Suggest --- */}
+                        <div className="space-y-2 relative dropdown-container" ref={piNumberRef}>
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-gray-700">PI Number</label>
+                                {isDuplicatePiNumber && (
+                                    <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                                        ⚠️ Duplicate PI No
+                                    </span>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="piNumber"
+                                    value={formData.piNumber}
+                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('piNumber'); setHighlightedIndex(-1); }}
+                                    onFocus={() => { setActiveDropdown('piNumber'); setHighlightedIndex(-1); }}
+                                    onKeyDown={(e) => handleDropdownKeyDown(e, 'piNumber', filteredPiSuggestions, 'piNumber')}
+                                    required
+                                    autoComplete="off"
+                                    placeholder="Enter PI Number"
+                                    className={`w-full px-4 py-2 bg-white/50 border rounded-lg focus:ring-2 outline-none transition-all ${isDuplicatePiNumber ? 'border-red-500 bg-red-50/30 text-red-900 focus:ring-red-500 focus:border-red-500' : 'border-gray-200/60 focus:ring-blue-500'}`}
+                                />
+                                {activeDropdown === 'piNumber' && filteredPiSuggestions.length > 0 && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar p-1">
+                                        {filteredPiSuggestions.map((piNum, idx) => (
+                                            <button
+                                                key={piNum || idx}
+                                                type="button"
+                                                onMouseDown={() => handleDropdownSelect('piNumber', piNum)}
+                                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                                className={`w-full px-3.5 py-2.5 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${highlightedIndex === idx || formData.piNumber === piNum ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                                            >
+                                                <span className="font-mono text-sm">{piNum}</span>
+                                                {idx === 0 && (
+                                                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                                                        Last Used
+                                                    </span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            {isDuplicatePiNumber && (
+                                <p className="text-xs text-red-600 font-semibold flex items-center gap-1 mt-1 animate-in fade-in duration-200">
+                                    <svg className="w-3.5 h-3.5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <span>Duplicate PI Number detected! This PI Number already exists and cannot be saved.</span>
+                                </p>
+                            )}
                         </div>
 
                         {/* --- Exporter Section --- */}
@@ -3459,8 +3643,8 @@ function PI({
                             {submitStatus === 'error' && <span className="text-red-600 font-medium flex items-center">Error saving</span>}
                             <button
                                 type="submit"
-                                disabled={isSubmitting}
-                                className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                disabled={isSubmitting || isDuplicatePiNumber}
+                                className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm ${(isSubmitting || isDuplicatePiNumber) ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
                             >
                                 {isSubmitting ? 'Saving...' : editingId ? 'Update PI' : 'Save PI'}
                             </button>

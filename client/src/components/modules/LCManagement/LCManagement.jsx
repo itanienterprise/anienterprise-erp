@@ -5013,6 +5013,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const amendmentPiRef = useRef(null);
     const portRef = useRef(null);
     const amendmentPortRef = useRef(null);
+    const marineCoverNoteRef = useRef(null);
     const ipContainerRef = useRef(null);
 
     // Advanced Filter Refs
@@ -5122,6 +5123,56 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
         return Math.max(0, total - returnMarginAmt);
     };
+
+    const existingCoverNotes = useMemo(() => {
+        const insCo = (typeof formData.insuranceCo === 'string' ? formData.insuranceCo : (formData.insuranceCo?.companyName || '')).trim().toLowerCase();
+
+        // Sort LC records newest first
+        const sortedLcs = [...(lcRecords || [])].sort((a, b) => {
+            const dateA = new Date(a.openingDate || a.marineCNDate || a.createdAt || 0);
+            const dateB = new Date(b.openingDate || b.marineCNDate || b.createdAt || 0);
+            return dateB - dateA;
+        });
+
+        let matchingLcs = sortedLcs;
+        if (insCo) {
+            matchingLcs = sortedLcs.filter(r =>
+                (r.insuranceCo || '').trim().toLowerCase() === insCo
+            );
+        }
+
+        const fromLcs = matchingLcs.map(r => r.marineCoverNote);
+
+        // Also check insuranceRecordsRaw if matching
+        let matchingIns = insuranceRecordsRaw || [];
+        if (insCo) {
+            matchingIns = (insuranceRecordsRaw || []).filter(ins => {
+                const name = (ins.companyName || ins.name || ins.insuranceCo || '').trim().toLowerCase();
+                return name === insCo;
+            });
+        }
+        const fromIns = matchingIns.map(r => r.coverNoteNo || r.marineCoverNote);
+
+        const combined = [...fromLcs, ...fromIns].filter(Boolean).map(s => s.trim());
+        return Array.from(new Set(combined));
+    }, [lcRecords, insuranceRecordsRaw, formData.insuranceCo]);
+
+    const filteredCoverNoteSuggestions = useMemo(() => {
+        const q = (formData.marineCoverNote || '').trim().toLowerCase();
+        if (!q) return existingCoverNotes;
+        return existingCoverNotes.filter(cn =>
+            cn.toLowerCase().includes(q)
+        );
+    }, [formData.marineCoverNote, existingCoverNotes]);
+
+    const isDuplicateCoverNote = useMemo(() => {
+        if (!formData.marineCoverNote || !formData.marineCoverNote.trim()) return false;
+        const cleanNum = formData.marineCoverNote.trim().toLowerCase();
+        return (lcRecords || []).some(r => {
+            const num = (r.marineCoverNote || '').trim().toLowerCase();
+            return num && num === cleanNum && r._id !== editingId;
+        });
+    }, [formData.marineCoverNote, lcRecords, editingId]);
 
     const informativeQuantities = useMemo(() => {
         const selectedPi = piRecordsRaw.find(pi => pi.piNumber === formData.piNo);
@@ -5760,6 +5811,12 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (isDuplicateCoverNote) {
+            showToast('Duplicate Marine Cover Note detected! Each LC must have a unique Cover Note No.', 'error');
+            return;
+        }
+
         setIsSaving(true);
         try {
             if (editingId) {
@@ -8654,16 +8711,56 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                         </div>
 
                         <div className="col-span-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4 relative z-10 items-end">
-                            <div className="space-y-1.5 text-left">
-                                <label className="text-sm font-semibold text-gray-600 ml-1">Marine Cover Note</label>
-                                <input
-                                    type="text"
-                                    name="marineCoverNote"
-                                    value={formData.marineCoverNote}
-                                    onChange={handleInputChange}
-                                    placeholder="Enter Cover Note No"
-                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-                                />
+                            <div className="space-y-1.5 text-left relative dropdown-container" ref={marineCoverNoteRef}>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-semibold text-gray-600 ml-1">Marine Cover Note</label>
+                                    {isDuplicateCoverNote && (
+                                        <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                                            ⚠️ Duplicate Cover Note
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="marineCoverNote"
+                                        value={formData.marineCoverNote}
+                                        onChange={(e) => { handleInputChange(e); setActiveDropdown('marineCoverNote'); setHighlightedIndex(-1); }}
+                                        onFocus={() => { setActiveDropdown('marineCoverNote'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'marineCoverNote', 'marineCoverNote', filteredCoverNoteSuggestions)}
+                                        autoComplete="off"
+                                        placeholder="Enter Cover Note No"
+                                        className={`w-full px-4 py-2.5 bg-white/50 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all font-medium ${isDuplicateCoverNote ? 'border-red-500 bg-red-50/30 text-red-900 focus:ring-red-500' : 'border-gray-200/60 focus:ring-blue-500'}`}
+                                    />
+                                    {activeDropdown === 'marineCoverNote' && filteredCoverNoteSuggestions.length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar p-1">
+                                            {filteredCoverNoteSuggestions.map((cn, idx) => (
+                                                <button
+                                                    key={cn || idx}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('marineCoverNote', cn)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-3.5 py-2.5 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${highlightedIndex === idx || formData.marineCoverNote === cn ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                                                >
+                                                    <span className="font-mono text-sm">{cn}</span>
+                                                    {idx === 0 && (
+                                                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                                                            Last Used
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                {isDuplicateCoverNote && (
+                                    <p className="text-xs text-red-600 font-semibold flex items-center gap-1 mt-1 animate-in fade-in duration-200">
+                                        <svg className="w-3.5 h-3.5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <span>Duplicate Marine Cover Note detected! This Cover Note already exists and cannot be saved.</span>
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-1.5">
@@ -8679,10 +8776,10 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                             <div className="lg:col-span-2 flex justify-end">
                                 <button
                                     type="submit"
-                                    disabled={isSaving}
-                                    className="w-full md:w-auto px-10 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wider"
+                                    disabled={isSaving || isDuplicateCoverNote}
+                                    className={`w-full md:w-auto px-10 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wider ${(isSaving || isDuplicateCoverNote) ? 'grayscale opacity-50 cursor-not-allowed' : ''}`}
                                 >
-                                    {isSaving ? 'Saving...' : editingId ? 'Update LC Record' : 'Save '}
+                                    {isSaving ? 'Saving...' : editingId ? 'Update LC Record' : 'Save'}
                                 </button>
                             </div>
                         </div>

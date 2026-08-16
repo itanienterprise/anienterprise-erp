@@ -27,13 +27,59 @@ input[type="number"] {
     appearance: textfield;
 }
 
-/* Hide scrollbar utility */
+/* ═══════════════════════════════════════════════════════════
+   Universal Scrollbar Suppression (Hide scrollbars everywhere)
+   ═══════════════════════════════════════════════════════════ */
+*,
+html,
+body,
+div,
+main,
+section,
+article,
+aside,
+nav,
+table,
+tbody,
+thead,
+.custom-scrollbar,
 .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    -ms-overflow-style: none !important;  /* IE and Edge */
+    scrollbar-width: none !important;     /* Firefox */
 }
+
+*::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+div::-webkit-scrollbar,
+main::-webkit-scrollbar,
+section::-webkit-scrollbar,
+article::-webkit-scrollbar,
+aside::-webkit-scrollbar,
+nav::-webkit-scrollbar,
+table::-webkit-scrollbar,
+tbody::-webkit-scrollbar,
+thead::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar,
 .hide-scrollbar::-webkit-scrollbar {
-    display: none;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+}
+
+*::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.hide-scrollbar::-webkit-scrollbar-thumb {
+    display: none !important;
+    background: transparent !important;
+}
+
+*::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track,
+.hide-scrollbar::-webkit-scrollbar-track {
+    display: none !important;
+    background: transparent !important;
 }
 
 /* =====================================================
@@ -321,13 +367,20 @@ input[type="number"] {
 }
 
 main:has(.app-modal-overlay),
-body.app-modal-open-active main {
+body.app-modal-open-active main,
+body.app-modal-open-active .flex-1 {
     position: relative !important;
     z-index: 2000 !important;
 }
 
 body.app-modal-open-active header {
     z-index: 10 !important;
+}
+
+body.app-modal-open-active aside {
+    position: relative !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
 }
 
 .app-modal-overlay {
@@ -383,4 +436,50 @@ body.app-modal-open-active header {
 .notif-row-highlight > td:first-child,
 .notif-row-highlight > th:first-child {
     border-left: 5px solid #f59e0b !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Universal Sticky Table Headers & Independent Row Scrolling
+   ═══════════════════════════════════════════════════════════ */
+
+/* Target table wrappers across all modules (excluding print/reports) */
+.overflow-x-auto:has(> table):not(.is-printing-report):not(.print-report-preview),
+main .overflow-x-auto:not(.is-printing-report):not(.print-report-preview) {
+    max-height: calc(100vh - 210px);
+    overflow-y: auto !important;
+}
+
+/* Ensure all table headers stick to the top */
+body:not(.is-printing-report) table thead {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+    background-color: #f9fafb !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+body:not(.is-printing-report) table thead tr {
+    background-color: #f9fafb !important;
+}
+
+body:not(.is-printing-report) table thead th {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+    background-color: #f9fafb !important;
+    border-bottom: 1px solid #e5e7eb !important;
+}
+
+/* Print override: do not clip or stick during print */
+@media print {
+    .overflow-x-auto,
+    .overflow-x-auto:has(> table) {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    table thead,
+    table thead th {
+        position: static !important;
+        box-shadow: none !important;
+    }
 }

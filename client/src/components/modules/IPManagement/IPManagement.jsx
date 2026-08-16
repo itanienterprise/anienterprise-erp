@@ -473,18 +473,18 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                     </div>
 
                     {/* LC Table / Card List */}
-                    <div className="hidden md:block border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="hidden md:block border border-gray-100 rounded-2xl shadow-sm overflow-x-auto overflow-y-auto max-h-[50vh] custom-scrollbar">
                         <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-gray-50/50 border-b border-gray-100">
-                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Expire Date</th>
-                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider">LC No</th>
-                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Bank</th>
-                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Quantity</th>
-                                    <th className="px-5 py-3.5 text-xs font-bold text-blue-600 uppercase tracking-wider text-right bg-blue-50/50">IP Qty</th>
-                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Remaining LC Qty</th>
-                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
+                            <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
+                                <tr className="bg-gray-50 border-b border-gray-100">
+                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Date</th>
+                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Expire Date</th>
+                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">LC No</th>
+                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Bank</th>
+                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">Quantity</th>
+                                    <th className="px-5 py-3.5 text-xs font-bold text-blue-600 uppercase tracking-wider text-right bg-blue-50/50 sticky top-0 bg-blue-50 z-10">IP Qty</th>
+                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">Remaining LC Qty</th>
+                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center sticky top-0 bg-gray-50 z-10">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -2298,11 +2298,11 @@ function IPManagement({
                     ) : filteredIpRecords.length > 0 ? (
                         <>
                             {/* Desktop Table View */}
-                            <div className="hidden md:block overflow-x-auto text-sm lg:text-base">
-                                <table className="w-full text-left">
-                                    <thead>
+                            <div className="hidden md:block overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] custom-scrollbar text-sm lg:text-base">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
                                         <tr
-                                            className="bg-gray-50 border-b border-gray-100 select-none cursor-pointer"
+                                            className="bg-gray-50 border-b border-gray-200 select-none cursor-pointer"
                                             onMouseDown={() => startLongPress(null)}
                                             onMouseUp={endLongPress}
                                             onMouseLeave={endLongPress}
@@ -2310,7 +2310,7 @@ function IPManagement({
                                             onTouchEnd={endLongPress}
                                         >
                                             {isSelectionMode && (
-                                                <th className="px-6 py-4 w-10">
+                                                <th className="px-6 py-3.5 w-10 sticky top-0 bg-gray-50 z-10">
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedItems.size === filteredIpRecords.length && filteredIpRecords.length > 0}
@@ -2319,49 +2319,49 @@ function IPManagement({
                                                     />
                                                 </th>
                                             )}
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">SL</th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('openingDate')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap sticky top-0 bg-gray-50 z-10">SL</th>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('openingDate')}>
                                                 <div className="flex items-center">Date <SortIcon config={sortConfig.ip} columnKey="openingDate" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('closeDate')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('closeDate')}>
                                                 <div className="flex items-center">Close Date <SortIcon config={sortConfig.ip} columnKey="closeDate" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('ipNumber')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('ipNumber')}>
                                                 <div className="flex items-center">IP Number <SortIcon config={sortConfig.ip} columnKey="ipNumber" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('referenceNo')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('referenceNo')}>
                                                 <div className="flex items-center">Reference No <SortIcon config={sortConfig.ip} columnKey="referenceNo" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('ipParty')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('ipParty')}>
                                                 <div className="flex items-center">Importer <SortIcon config={sortConfig.ip} columnKey="ipParty" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('port')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('port')}>
                                                 <div className="flex items-center">Port <SortIcon config={sortConfig.ip} columnKey="port" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('productName')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('productName')}>
                                                 <div className="flex items-center">IP Product Name <SortIcon config={sortConfig.ip} columnKey="productName" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('quantity')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('quantity')}>
                                                 <div className="flex items-center">Quantity (kg) <SortIcon config={sortConfig.ip} columnKey="quantity" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('remainingQuantity')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('remainingQuantity')}>
                                                 <div className="flex items-center">LC Rem (kg) <SortIcon config={sortConfig.ip} columnKey="remainingQuantity" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('ipBalance')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('ipBalance')}>
                                                 <div className="flex items-center">IP Balance <SortIcon config={sortConfig.ip} columnKey="ipBalance" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('totalLcCount')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('totalLcCount')}>
                                                 <div className="flex items-center">Total LC <SortIcon config={sortConfig.ip} columnKey="totalLcCount" /></div>
                                             </th>
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('computedStatus')}>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('computedStatus')}>
                                                 <div className="flex items-center">Status <SortIcon config={sortConfig.ip} columnKey="computedStatus" /></div>
                                             </th>
                                             {canShowEntryBy && (
-                                                <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap" onClick={() => requestSort('entryBy')}>
+                                                <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap sticky top-0 bg-gray-50 z-10" onClick={() => requestSort('entryBy')}>
                                                     <div className="flex items-center">Entry By <SortIcon config={sortConfig.ip} columnKey="entryBy" /></div>
                                                 </th>
                                             )}
-                                            <th className="px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                                            <th className="px-3 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap sticky top-0 bg-gray-50 z-10">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">

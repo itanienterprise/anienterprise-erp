@@ -145,6 +145,7 @@ function PackingList({
     const exporterFilterRef = useRef(null);
 
     const toastTimerRef = useRef(null);
+    const invoiceRef = useRef(null);
     const piDropdownRef = useRef(null);
     const importerRef = useRef(null);
     const exporterRef = useRef(null);
@@ -651,6 +652,11 @@ function PackingList({
             return;
         }
 
+        if (isDuplicateInvoiceNumber) {
+            showToast('Duplicate Invoice No detected! Each Packing List must have a unique invoice number.', 'error');
+            return;
+        }
+
         setIsSubmitting(true);
         setSubmitStatus({ type: 'loading', message: editingId ? 'Updating...' : 'Creating...' });
 
@@ -859,6 +865,59 @@ function PackingList({
 
         return true;
     });
+
+    const existingInvoiceNumbers = useMemo(() => {
+        const exp = (formData.exporterName || '').trim().toLowerCase();
+        const imp = (formData.partyName || '').trim().toLowerCase();
+
+        // Sort records by date/createdAt descending to get the most recent (last used) first
+        const sorted = [...(records || [])].sort((a, b) => {
+            const dateA = new Date(a.date || a.createdAt || 0);
+            const dateB = new Date(b.date || b.createdAt || 0);
+            return dateB - dateA;
+        });
+
+        // Filter by selected Exporter and Importer
+        let matching = sorted;
+        if (exp && imp) {
+            matching = sorted.filter(r =>
+                (r.exporterName || '').trim().toLowerCase() === exp &&
+                (r.partyName || '').trim().toLowerCase() === imp
+            );
+        } else if (exp) {
+            matching = sorted.filter(r =>
+                (r.exporterName || '').trim().toLowerCase() === exp
+            );
+        } else if (imp) {
+            matching = sorted.filter(r =>
+                (r.partyName || '').trim().toLowerCase() === imp
+            );
+        }
+
+        const list = matching
+            .map(r => r.packingListNumber || r.invoiceNo)
+            .filter(Boolean)
+            .map(s => s.trim());
+
+        return Array.from(new Set(list));
+    }, [records, formData.exporterName, formData.partyName]);
+
+    const filteredInvoiceSuggestions = useMemo(() => {
+        const q = (formData.packingListNumber || '').trim().toLowerCase();
+        if (!q) return existingInvoiceNumbers;
+        return existingInvoiceNumbers.filter(invNum =>
+            invNum.toLowerCase().includes(q)
+        );
+    }, [formData.packingListNumber, existingInvoiceNumbers]);
+
+    const isDuplicateInvoiceNumber = useMemo(() => {
+        if (!formData.packingListNumber || !formData.packingListNumber.trim()) return false;
+        const cleanNum = formData.packingListNumber.trim().toLowerCase();
+        return (records || []).some(r => {
+            const num = (r.packingListNumber || r.invoiceNo || '').trim().toLowerCase();
+            return num && num === cleanNum && r._id !== editingId;
+        });
+    }, [formData.packingListNumber, records, editingId]);
 
     const filteredTrSetups = useMemo(() => {
         const query = (formData.trName || '').trim().toLowerCase();
@@ -1282,17 +1341,58 @@ function PackingList({
                     <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
                         {/* --- Main Grid --- */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Invoice No*</label>
-                                <input
-                                    type="text"
-                                    name="packingListNumber"
-                                    value={formData.packingListNumber}
-                                    onChange={handleInputChange}
-                                    required
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    placeholder="Invoice No"
-                                />
+                            {/* --- Invoice No Section with Auto-Suggest --- */}
+                            <div className="space-y-2 relative dropdown-container" ref={invoiceRef}>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-gray-700">Invoice No*</label>
+                                    {isDuplicateInvoiceNumber && (
+                                        <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                                            ⚠️ Duplicate Invoice No
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="packingListNumber"
+                                        value={formData.packingListNumber}
+                                        onChange={(e) => { handleInputChange(e); setActiveDropdown('invoiceNo'); setHighlightedIndex(-1); }}
+                                        onFocus={() => { setActiveDropdown('invoiceNo'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'invoiceNo', filteredInvoiceSuggestions, 'packingListNumber')}
+                                        required
+                                        autoComplete="off"
+                                        placeholder="Invoice No"
+                                        className={`w-full px-4 py-2 bg-white/50 border rounded-lg focus:ring-2 outline-none transition-all ${isDuplicateInvoiceNumber ? 'border-red-500 bg-red-50/30 text-red-900 focus:ring-red-500 focus:border-red-500' : 'border-gray-200 focus:ring-blue-500'}`}
+                                    />
+                                    {activeDropdown === 'invoiceNo' && filteredInvoiceSuggestions.length > 0 && (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar p-1">
+                                            {filteredInvoiceSuggestions.map((invNum, idx) => (
+                                                <button
+                                                    key={invNum || idx}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('packingListNumber', invNum)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-3.5 py-2.5 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${highlightedIndex === idx || formData.packingListNumber === invNum ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                                                >
+                                                    <span className="font-mono text-sm">{invNum}</span>
+                                                    {idx === 0 && (
+                                                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                                                            Last Used
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                {isDuplicateInvoiceNumber && (
+                                    <p className="text-xs text-red-600 font-semibold flex items-center gap-1 mt-1 animate-in fade-in duration-200">
+                                        <svg className="w-3.5 h-3.5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <span>Duplicate Invoice No detected! This Invoice No already exists and cannot be saved.</span>
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-2">
@@ -1386,30 +1486,6 @@ function PackingList({
                                 />
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Buyer's Order No (Alternate)</label>
-                                <input
-                                    type="text"
-                                    name="buyerOrderNo"
-                                    value={formData.buyerOrderNo}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    placeholder="Alternate Buyer's Order No"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Buyer's Order Date (Alternate)</label>
-                                <CustomDatePicker
-                                    name="buyerOrderDate"
-                                    value={formData.buyerOrderDate}
-                                    onChange={handleInputChange}
-                                    placeholder="Alternate Order Date"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                            </div>
 
                             <div className="space-y-2 relative dropdown-container" ref={bankRef}>
                                 <label className="text-sm font-medium text-gray-700">LC Bank Name</label>
@@ -1763,19 +1839,6 @@ function PackingList({
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Marks & No.</label>
-                                <input
-                                    type="text"
-                                    name="marksNo"
-                                    value={formData.marksNo}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    placeholder="Marks & No."
-                                />
-                            </div>
-                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="space-y-2">
@@ -2069,8 +2132,8 @@ function PackingList({
                             </button>
                             <button
                                 type="submit"
-                                disabled={isSubmitting}
-                                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:scale-100 disabled:opacity-50"
+                                disabled={isSubmitting || isDuplicateInvoiceNumber}
+                                className={`px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 disabled:scale-100 disabled:opacity-50 ${(isSubmitting || isDuplicateInvoiceNumber) ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
                             >
                                 {editingId ? 'Update Record' : 'Save Packing List'}
                             </button>

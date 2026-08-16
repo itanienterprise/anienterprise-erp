@@ -3,7 +3,7 @@ import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, Ch
 import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
-// import { encryptData, decryptData } from '../../../utils/encryption';
+import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 import { calculateStockData } from '../../../utils/stockHelpers';
@@ -42,6 +42,45 @@ const SaleManagement = ({
     const [sales, setSales] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [customers, setCustomers] = useState([]);
+    const [employeesMap, setEmployeesMap] = useState({});
+
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                const empName = (d.name || d.nameEn || d.employeeName || d.username || '').trim();
+                if (d.employeeId) map[d.employeeId] = empName;
+                if (d.username) map[d.username] = empName;
+                if (d._id) map[d._id] = empName;
+            });
+            setEmployeesMap(map);
+        } catch (error) {
+            console.error('Error fetching employees map:', error);
+        }
+    };
+
+    const getDisplayName = (code, name) => {
+        if (name && !name.startsWith('E-') && !name.startsWith('A-') && name !== code) {
+            return name;
+        }
+        if (code && employeesMap[code]) {
+            return employeesMap[code];
+        }
+        if (name && employeesMap[name]) {
+            return employeesMap[name];
+        }
+        return name || code || '';
+    };
 
     const rowRefs = useRef({});
     useEffect(() => {
@@ -288,11 +327,20 @@ const SaleManagement = ({
                     ? 'Complete'
                     : 'Pending';
 
+                const isEditAcceptance = sale.isEdited === true || (sale.status || '').toLowerCase() === 'edit_requested';
                 const updatedData = {
                     ...rest,
                     status: finalStatus,
                     isEdited: false,
-                    acceptedBy: actionBy,
+                    acceptedBy: sale.acceptedBy || actionBy,
+                    acceptedByUsername: sale.acceptedByUsername || (currentUser?.username || ''),
+                    approvedBy: sale.approvedBy || actionBy,
+                    approvedByName: sale.approvedByName || actionBy,
+                    ...(isEditAcceptance ? {
+                        editApprovedBy: actionBy,
+                        editApprovedByName: actionBy,
+                        editApprovedByUsername: (currentUser?.username || '')
+                    } : {})
                 };
 
                 await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
@@ -764,17 +812,31 @@ const SaleManagement = ({
         try {
             setIsSubmitting(true);
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
+            const actionUsername = currentUser ? (currentUser.username || '') : '';
             const { _id, createdAt: _createdAt, ...rest } = sale;
 
             const finalStatus = newStatus === 'accepted'
                 ? ((parseFloat(sale.paidAmount || 0) >= parseFloat(sale.totalAmount || 0) && parseFloat(sale.totalAmount || 0) > 0) ? 'Complete' : 'Pending')
                 : newStatus;
 
+            const isEditAcceptance = sale.isEdited === true || (sale.status || '').toLowerCase() === 'edit_requested';
+
             const updatedData = {
                 ...rest,
                 status: finalStatus,
                 isEdited: false,
-                ...(newStatus === 'Pending' || newStatus === 'accepted' ? { acceptedBy: actionBy } : {}),
+                ...(newStatus === 'Pending' || newStatus === 'accepted' ? {
+                    acceptedBy: sale.acceptedBy || actionBy,
+                    acceptedByUsername: sale.acceptedByUsername || actionUsername,
+                    approvedBy: sale.approvedBy || actionBy,
+                    approvedByName: sale.approvedByName || actionBy,
+                    approvedByUsername: sale.approvedByUsername || actionUsername,
+                    ...(isEditAcceptance ? {
+                        editApprovedBy: actionBy,
+                        editApprovedByName: actionBy,
+                        editApprovedByUsername: actionUsername
+                    } : {})
+                } : {}),
                 ...(newStatus === 'Rejected' ? { rejectedBy: actionBy } : {}),
             };
 
@@ -997,6 +1059,7 @@ const SaleManagement = ({
         fetchPortsList();
         fetchCnfsList();
         fetchLCRecords();
+        fetchEmployees();
     }, [saleType]); // Refetch if saleType changes
 
     async function fetchLCRecords() {
@@ -1644,9 +1707,18 @@ const SaleManagement = ({
                 const origStatus = (originalData?.status || '').toLowerCase();
                 const isAcceptedEdit = origStatus !== 'requested';
                 const isAdminUser = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+                const editorName = currentUser ? (currentUser.name || currentUser.username || '') : '';
+                const editorUsername = currentUser ? (currentUser.username || '') : '';
                 const payload = {
                     ...formData,
-                    isEdited: isAdminUser ? false : (isAcceptedEdit ? true : false)
+                    isEdited: isAdminUser ? false : (isAcceptedEdit ? true : false),
+                    editedBy: editorUsername || editorName,
+                    editedByName: editorName || editorUsername,
+                    editedByUsername: editorUsername,
+                    ...(isAcceptedEdit ? {
+                        editRequestedBy: editorName || editorUsername,
+                        editRequestedByUsername: editorUsername
+                    } : {})
                 };
                 response = await axios.put(url, payload);
             } else {
@@ -2772,8 +2844,19 @@ const SaleManagement = ({
                                 <div className="text-sm font-bold text-gray-900">{getSafeString(viewData.customerName) || '-'}</div>
                             </div>
                             <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Requested By</span>
-                                <div className="text-sm font-bold text-gray-900">{viewData.requestedBy || 'N/A'}</div>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Entry / Audit</span>
+                                <div className="text-xs space-y-0.5">
+                                    <div className="font-bold text-gray-900"><span className="text-gray-500 font-normal">Entry:</span> {getDisplayName(viewData.requestedByUsername || viewData.createdByUsername, viewData.requestedBy || viewData.createdByName || 'N/A')}</div>
+                                    {(viewData.acceptedBy || viewData.approvedByName || viewData.approvedBy) && (
+                                        <div className="text-emerald-600 font-semibold"><span className="text-emerald-500 font-normal">Approved:</span> ✓ {getDisplayName(viewData.acceptedByUsername || viewData.approvedByUsername, viewData.acceptedBy || viewData.approvedByName || viewData.approvedBy)}</div>
+                                    )}
+                                    {(viewData.editedByName || viewData.editedBy || viewData.editRequestedBy) && (
+                                        <div className="text-amber-600 font-medium"><span className="text-amber-500 font-normal">Edited:</span> ✎ {getDisplayName(viewData.editedByUsername || viewData.editRequestedByUsername, viewData.editedByName || viewData.editedBy || viewData.editRequestedBy)}</div>
+                                    )}
+                                    {(viewData.editApprovedByName || viewData.editApprovedBy) && !viewData.isEdited && (
+                                        <div className="text-purple-600 font-medium"><span className="text-purple-500 font-normal">Edit Approved:</span> ✓✎ {getDisplayName(viewData.editApprovedByUsername, viewData.editApprovedByName || viewData.editApprovedBy)}</div>
+                                    )}
+                                </div>
                             </div>
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / Payment</span>
@@ -5288,6 +5371,7 @@ const SaleManagement = ({
                                         </th>
                                         <th className="sale-mgmt-th">Product</th>
                                         <th className="sale-mgmt-th">Brand</th>
+                                        <th className="sale-mgmt-th text-center font-bold">Bag</th>
                                         <th className="sale-mgmt-th text-center font-bold">Quantity</th>
                                         <th className="sale-mgmt-th text-center font-bold">Rate</th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('discount')} style={{ display: 'none' }}>
@@ -5305,15 +5389,16 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')} style={{ display: 'none' }}>
                                             <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
                                         </th>
+                                        <th className="sale-mgmt-th text-center whitespace-nowrap font-bold">Entry By</th>
                                         <th className="sale-mgmt-th text-center">Actions</th>
                                     </tr>
                                 )}
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan="19" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
+                                    <tr><td colSpan="21" className="px-3 py-20 text-center text-gray-400 font-medium">Loading sales records...</td></tr>
                                 ) : getFilteredData().length === 0 ? (
-                                    <tr><td colSpan="19" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
+                                    <tr><td colSpan="21" className="px-3 py-20 text-center text-gray-400 font-medium">No sales records found</td></tr>
                                 ) : getFilteredData().map((sale, index) => {
                                     const isExpanded = !collapsedRows.includes(sale._id);
                                     const isMultiple = (sale.items && sale.items.length > 0)
@@ -5323,15 +5408,32 @@ const SaleManagement = ({
                                     let items = sale.items && sale.items.length > 0
                                         ? sale.items.flatMap(item =>
                                             (item.brandEntries || []).length > 0
-                                                ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: (be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (item.lcNo || sale.lcNo || ''), uom: be.uom || item.uom || 'QTY' }))
-                                                : [{ ...item, productName: item.productName, lcNo: (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || ''), uom: item.uom || 'QTY' }]
+                                                ? item.brandEntries.map(be => ({
+                                                    ...be,
+                                                    productName: item.productName,
+                                                    lcNo: (be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (item.lcNo || sale.lcNo || ''),
+                                                    bag: (be.bag !== undefined && be.bag !== null && be.bag !== '') ? be.bag : (item.bag !== undefined && item.bag !== null && item.bag !== '') ? item.bag : (sale.bag || ''),
+                                                    warehouseName: be.warehouseName || item.warehouseName || sale.warehouseName || '',
+                                                    uom: be.uom || item.uom || 'QTY'
+                                                }))
+                                                : [{
+                                                    ...item,
+                                                    productName: item.productName,
+                                                    bag: (item.bag !== undefined && item.bag !== null && item.bag !== '') ? item.bag : (sale.bag || ''),
+                                                    lcNo: (item.lcNo !== undefined && item.lcNo !== null) ? item.lcNo : (sale.lcNo || ''),
+                                                    warehouseName: item.warehouseName || sale.warehouseName || '',
+                                                    uom: item.uom || 'QTY'
+                                                }]
                                         )
                                         : [{
                                             productName: sale.productName,
                                             brand: sale.brand,
+                                            bag: sale.bag || '',
                                             quantity: sale.quantity,
                                             unitPrice: sale.unitPrice,
-                                            lcNo: sale.lcNo || ''
+                                            lcNo: sale.lcNo || '',
+                                            warehouseName: sale.warehouseName || '',
+                                            uom: sale.uom || 'QTY'
                                         }];
 
 
@@ -5580,30 +5682,32 @@ const SaleManagement = ({
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 {isMultiple && !isExpanded ? (
+                                                    <div className="inline-block px-2 py-0.5 bg-gray-50 text-gray-700 rounded border border-gray-200 text-[12px] font-bold">
+                                                        {items.reduce((sum, it) => sum + (parseFloat(it.bag) || 0), 0).toLocaleString('en-US')}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col gap-2">
+                                                        {items.map((it, idx) => (
+                                                            <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                {it.bag !== undefined && it.bag !== null && it.bag !== '' ? parseFloat(it.bag || 0).toLocaleString('en-US') : '-'}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                {isMultiple && !isExpanded ? (
                                                     <div className="inline-block px-3 py-1 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-[13px] font-black">
                                                         {(() => {
-                                                            const hasBag = items.some(it => it.uom === 'BAG');
-                                                            const hasQty = items.some(it => it.uom !== 'BAG');
-                                                            if (hasBag && !hasQty) {
-                                                                const sumBags = items.reduce((sum, it) => sum + (parseFloat(it.bag) || 0), 0);
-                                                                return `${sumBags.toLocaleString('en-US')} Bag`;
-                                                            } else if (!hasBag && hasQty) {
-                                                                const sumQty = items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0);
-                                                                return `${sumQty.toLocaleString('en-US')} kg`;
-                                                            } else {
-                                                                const sumBags = items.reduce((sum, it) => sum + (parseFloat(it.bag) || 0), 0);
-                                                                const sumQty = items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0);
-                                                                return `${sumBags.toLocaleString('en-US')} Bag / ${sumQty.toLocaleString('en-US')} kg`;
-                                                            }
+                                                            const sumQty = items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0);
+                                                            return `${sumQty.toLocaleString('en-US')} kg`;
                                                         })()}
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-col gap-2">
                                                         {items.map((it, idx) => (
                                                             <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                {it.uom === 'BAG'
-                                                                    ? `${parseFloat(it.bag || 0).toLocaleString('en-US')} Bag`
-                                                                    : `${parseFloat(it.quantity || 0).toLocaleString('en-US')} kg`}
+                                                                {parseFloat(it.quantity || 0).toLocaleString('en-US')} kg
                                                             </div>
                                                         ))}
                                                     </div>
@@ -5708,6 +5812,50 @@ const SaleManagement = ({
                                                     );
                                                 })()}
                                             </td>
+                                            <td className="px-3 py-4 text-center whitespace-nowrap">
+                                                {(() => {
+                                                    const rawEntryUser = sale.requestedBy || sale.requestedByUsername || sale.createdByName || sale.createdByUsername || sale.createdBy || sale.entryBy || sale.entryByName || '-';
+                                                    const entryUser = getDisplayName(sale.requestedByUsername || sale.createdByUsername || sale.entryBy, rawEntryUser);
+
+                                                    const isReq = (sale.status || '').toLowerCase() === 'requested';
+                                                    const isEditReq = sale.isEdited === true || (sale.status || '').toLowerCase() === 'edit_requested';
+
+                                                    const rawApproved = sale.acceptedBy || sale.approvedByName || sale.approvedBy;
+                                                    const approvedUser = !isReq && rawApproved ? getDisplayName(sale.acceptedByUsername || sale.approvedByUsername || sale.approvedBy, rawApproved) : null;
+
+                                                    const rawEdited = sale.editedByName || sale.editedBy || sale.editRequestedBy;
+                                                    const editedUser = rawEdited && rawEdited.toLowerCase() !== 'admin' ? getDisplayName(sale.editedByUsername || sale.editRequestedByUsername || sale.editedBy, rawEdited) : (rawEdited && rawEdited.toLowerCase() === 'admin' ? 'Admin' : null);
+
+                                                    const rawEditApproved = sale.editApprovedByName || sale.editApprovedBy;
+                                                    const editApprovedUser = !isEditReq && rawEditApproved ? getDisplayName(sale.editApprovedByUsername || sale.editApprovedBy, rawEditApproved) : null;
+
+                                                    return (
+                                                        <div className="flex flex-col items-center justify-center gap-0.5">
+                                                            <span className="text-xs font-bold text-gray-800" title="Entry By">
+                                                                {entryUser}
+                                                            </span>
+
+                                                            {approvedUser && (
+                                                                <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5" title={`Approved by: ${approvedUser}`}>
+                                                                    <span>✓</span> {approvedUser}
+                                                                </span>
+                                                            )}
+
+                                                            {editedUser && (
+                                                                <span className="text-[10px] text-amber-600 font-medium flex items-center gap-0.5" title={`Edited by: ${editedUser}`}>
+                                                                    <span>✎</span> {editedUser}
+                                                                </span>
+                                                            )}
+
+                                                            {editApprovedUser && (
+                                                                <span className="text-[10px] text-purple-600 font-medium flex items-center gap-0.5" title={`Edit Approved by: ${editApprovedUser}`}>
+                                                                    <span>✓✎</span> {editApprovedUser}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </td>
                                             <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center justify-center gap-1.5">
                                                     {(sale.status === 'Requested' || sale.status === 'Edit_Requested' || sale.isEdited === true) ? (
@@ -5761,15 +5909,31 @@ const SaleManagement = ({
                             let items = sale.items && sale.items.length > 0
                                 ? sale.items.flatMap(item =>
                                     (item.brandEntries || []).length > 0
-                                        ? item.brandEntries.map(be => ({ ...be, productName: item.productName, lcNo: be.lcNo || item.lcNo || sale.lcNo || '', uom: be.uom || item.uom || 'QTY' }))
-                                        : [{ ...item, productName: item.productName, lcNo: item.lcNo || sale.lcNo || '', uom: item.uom || 'QTY' }]
+                                        ? item.brandEntries.map(be => ({
+                                            ...be,
+                                            productName: item.productName,
+                                            lcNo: be.lcNo || item.lcNo || sale.lcNo || '',
+                                            bag: (be.bag !== undefined && be.bag !== null && be.bag !== '') ? be.bag : (item.bag !== undefined && item.bag !== null && item.bag !== '') ? item.bag : (sale.bag || ''),
+                                            warehouseName: be.warehouseName || item.warehouseName || sale.warehouseName || '',
+                                            uom: be.uom || item.uom || 'QTY'
+                                        }))
+                                        : [{
+                                            ...item,
+                                            productName: item.productName,
+                                            bag: (item.bag !== undefined && item.bag !== null && item.bag !== '') ? item.bag : (sale.bag || ''),
+                                            lcNo: item.lcNo || sale.lcNo || '',
+                                            warehouseName: item.warehouseName || sale.warehouseName || '',
+                                            uom: item.uom || 'QTY'
+                                        }]
                                 )
                                 : [{
                                     productName: sale.productName,
                                     brand: sale.brand,
+                                    bag: sale.bag || '',
                                     quantity: sale.quantity,
                                     unitPrice: sale.unitPrice,
                                     lcNo: sale.lcNo || '',
+                                    warehouseName: sale.warehouseName || '',
                                     uom: sale.uom || 'QTY'
                                 }];
 
@@ -5901,11 +6065,31 @@ const SaleManagement = ({
                                                 <span className="text-gray-400 font-bold">:</span>
                                                 <span className="font-semibold text-gray-700">{getSafeString(sale.companyName) || sale.port || '-'}</span>
 
-                                                {sale.requestedBy && (
+                                                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Entry By</span>
+                                                <span className="text-indigo-400 font-bold">:</span>
+                                                <span className="font-bold text-indigo-700">{getDisplayName(sale.requestedByUsername || sale.createdByUsername || sale.entryBy, sale.requestedBy || sale.requestedByUsername || sale.createdByName || sale.createdBy || '-')}</span>
+
+                                                {(sale.acceptedBy || sale.approvedByName || sale.approvedBy) && (sale.status || '').toLowerCase() !== 'requested' && (
                                                     <>
-                                                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Requested By</span>
-                                                        <span className="text-indigo-400 font-bold">:</span>
-                                                        <span className="font-bold text-indigo-700">{sale.requestedBy}</span>
+                                                        <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Approved By</span>
+                                                        <span className="text-emerald-400 font-bold">:</span>
+                                                        <span className="font-bold text-emerald-700">✓ {getDisplayName(sale.acceptedByUsername || sale.approvedByUsername, sale.acceptedBy || sale.approvedByName || sale.approvedBy)}</span>
+                                                    </>
+                                                )}
+
+                                                {(sale.editedByName || sale.editedBy || sale.editRequestedBy) && (
+                                                    <>
+                                                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Edited By</span>
+                                                        <span className="text-amber-400 font-bold">:</span>
+                                                        <span className="font-bold text-amber-700">✎ {getDisplayName(sale.editedByUsername || sale.editRequestedByUsername, sale.editedByName || sale.editedBy || sale.editRequestedBy)}</span>
+                                                    </>
+                                                )}
+
+                                                {(sale.editApprovedByName || sale.editApprovedBy) && !sale.isEdited && (
+                                                    <>
+                                                        <span className="text-[10px] font-bold text-purple-500 uppercase tracking-wider">Edit Approved</span>
+                                                        <span className="text-purple-400 font-bold">:</span>
+                                                        <span className="font-bold text-purple-700">✓✎ {getDisplayName(sale.editApprovedByUsername, sale.editApprovedByName || sale.editApprovedBy)}</span>
                                                     </>
                                                 )}
                                             </div>
@@ -5938,12 +6122,18 @@ const SaleManagement = ({
                                                                 <span className="text-gray-400 font-bold">:</span>
                                                                 <span className="font-semibold text-gray-700">{it.brand || '-'}</span>
 
+                                                                {(it.bag !== undefined && it.bag !== null && it.bag !== '') && (
+                                                                    <>
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bag</span>
+                                                                        <span className="text-gray-400 font-bold">:</span>
+                                                                        <span className="font-semibold text-gray-800">{parseFloat(it.bag || 0).toLocaleString('en-US')}</span>
+                                                                    </>
+                                                                )}
+
                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</span>
                                                                 <span className="text-gray-400 font-bold">:</span>
                                                                 <span className="font-bold text-gray-800">
-                                                                    {(it.uom === 'BAG' && showBag)
-                                                                        ? `${parseFloat(it.bag || 0).toLocaleString('en-US')} Bag`
-                                                                        : `${parseFloat(it.quantity || 0).toLocaleString('en-US')} kg`}
+                                                                    {parseFloat(it.quantity || 0).toLocaleString('en-US')} kg
                                                                 </span>
 
                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</span>

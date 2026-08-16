@@ -504,6 +504,7 @@ function App() {
   }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
 
   // Detect touch-only devices (e.g. BB Passport) — must be BOTH coarse pointer AND narrow screen.
   // Desktop touchscreens / MacBook trackpads report 'coarse' too, so we guard with a width check.
@@ -541,6 +542,7 @@ function App() {
   const handleViewChange = (view) => {
     setCurrentView(view);
     setSidebarOpen(false);
+    setSidebarHovered(false);
   };
 
   const [notifHighlightId, setNotifHighlightId] = useState(null);
@@ -549,8 +551,15 @@ function App() {
   // Manage body class when modal is open inside main (handles all modular modals dynamically)
   useEffect(() => {
     const handleMutations = () => {
-      const hasModal = document.querySelector('.app-modal-overlay') !== null;
-      if (hasModal) {
+      const modals = Array.from(document.querySelectorAll('main div.fixed.inset-0, div.app-modal-overlay, div[role="dialog"]'));
+      const isAnyModalActive = modals.some(el => {
+        return !el.classList.contains('no-print') && (
+          el.classList.contains('app-modal-overlay') ||
+          el.querySelector('.bg-white, [class*="rounded-"], [class*="shadow-"]')
+        );
+      });
+
+      if (isAnyModalActive) {
         document.body.classList.add('app-modal-open-active');
       } else {
         document.body.classList.remove('app-modal-open-active');
@@ -563,6 +572,8 @@ function App() {
     observer.observe(document.body, {
       childList: true,
       subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style']
     });
 
     return () => {
@@ -2186,647 +2197,860 @@ function App() {
         />
       )}
       {/* Sidebar */}
-      <aside className={`${windowWidth >= 768 ? `relative ${sidebarOpen ? 'w-56' : 'w-0 overflow-hidden'}` : `fixed inset-y-0 left-0 z-[1100] w-56 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} bg-white text-gray-900 border-gray-200 ${windowWidth >= 768 && !sidebarOpen ? 'border-r-0' : 'border-r'} transform transition-all duration-300 ease-in-out flex-shrink-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`} style={isTouchOnlyDevice ? { transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' } : {}}>
-        {/* Sidebar top — must match header height (64px) exactly */}
-        <div className="flex items-center px-4 border-b border-gray-200 bg-gray-50/50 flex-shrink-0" style={{ height: '64px' }}>
-          <button
-            onClick={() => setShowProfile(true)}
-            className="relative group focus:outline-none flex-shrink-0"
+      {(() => {
+        const isExpanded = sidebarOpen || (windowWidth >= 768 && sidebarHovered);
+        const isMini = windowWidth >= 768 && !isExpanded;
+        return (
+          <aside
+            onMouseEnter={() => {
+              if (windowWidth >= 768 && !document.body.classList.contains('app-modal-open-active')) {
+                setSidebarHovered(true);
+              }
+            }}
+            onMouseLeave={() => { if (windowWidth >= 768) setSidebarHovered(false); }}
+            className={`${windowWidth >= 768 ? `relative ${isExpanded ? 'w-60 shadow-xl z-30' : 'w-16 z-10'}` : `fixed inset-y-0 left-0 z-[1100] w-60 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} bg-white text-gray-900 border-r border-gray-200 transition-[width,box-shadow,transform] duration-300 ease-in-out flex-shrink-0 flex flex-col ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}
+            style={isTouchOnlyDevice ? { transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', WebkitTransform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' } : {}}
           >
-            <img
-              src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
-              alt="Profile"
-              className="w-9 h-9 rounded-full border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
-            />
-          </button>
-          <div className="ml-3 min-w-0">
-            <p className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-tight truncate">
-              {currentUser?.name || currentUser?.username || 'Admin User'}
-            </p>
-            <button
-              onClick={handleLogout}
-              className="text-[11px] text-red-600 font-medium hover:underline cursor-pointer flex items-center mt-0.5"
-            >
-              <LogOutIcon className="w-3 h-3 mr-1" />
-              Logout
-            </button>
-          </div>
-        </div>
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden hide-scrollbar">
-          <button onClick={() => { handleViewChange('dashboard'); }} className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'dashboard' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-            <HomeIcon className="w-5 h-5 mr-3" />
-            <span className="font-medium text-sm">Dashboard</span>
-          </button>
-          {(hasPermission(currentUser, 'employees', 'view') || hasPermission(currentUser, 'backupRestore', 'view')) && (
-            <div>
+            {/* Sidebar top — must match header height (64px) exactly */}
+            <div className="flex items-center px-3.5 border-b border-gray-200 bg-gray-50/50 flex-shrink-0 overflow-hidden" style={{ height: '64px' }}>
               <button
-                onClick={() => toggleSidebarDropdown('hrms')}
-                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all ${['employee-section', 'role-creation', 'system-access'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                onClick={() => {
+                  if (isMini) {
+                    setSidebarOpen(true);
+                  } else {
+                    setShowProfile(true);
+                  }
+                }}
+                className="relative group focus:outline-none flex-shrink-0"
+                title={isMini ? (currentUser?.name || currentUser?.username || 'Profile (Click to expand)') : undefined}
               >
-                <div className="flex items-center">
-                  <BriefcaseIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">HRMS</span>
-                </div>
-                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${hrmsDropdownOpen ? 'transform rotate-180' : ''}`} />
+                <img
+                  src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
+                  alt="Profile"
+                  className="w-9 h-9 rounded-full border-2 border-white shadow-md transition-all group-hover:scale-110 group-hover:border-blue-400"
+                />
               </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${hrmsDropdownOpen ? 'max-h-56 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                <div className="pl-7 pr-2 space-y-1">
-                  {hasPermission(currentUser, 'employees', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('employee-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'employee-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                    >
-                      <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Employee</span>
-                    </button>
-                  )}
-                  {((currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
-                    <>
-                      <button
-                        onClick={() => { handleViewChange('role-creation'); }}
-                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'role-creation' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                      >
-                        <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Role Creation</span>
-                      </button>
-                      <button
-                        onClick={() => { handleViewChange('system-access'); }}
-                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'system-access' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                      >
-                        <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>System access</span>
-                      </button>
-                    </>
-                  )}
-                </div>
+              <div className={`transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'w-auto opacity-100 max-w-[150px] ml-3'}`}>
+                <p className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-tight truncate">
+                  {currentUser?.name || currentUser?.username || 'Admin User'}
+                </p>
+                <button
+                  onClick={handleLogout}
+                  className="text-[11px] text-red-600 font-medium hover:underline cursor-pointer flex items-center mt-0.5"
+                >
+                  <LogOutIcon className="w-3 h-3 mr-1 flex-shrink-0" />
+                  Logout
+                </button>
               </div>
             </div>
-          )}
-          {hasPermission(currentUser, 'port', 'view') && (
-            <button onClick={() => { handleViewChange('port-section'); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-              <AnchorIcon className="w-5 h-5 mr-3" />
-              <span className="font-medium text-sm">Port</span>
-            </button>
-          )}          {hasPermission(currentUser, 'importerExporter', 'view') && (
-            <div>
+
+            <nav className="flex-1 px-2.5 py-3 space-y-1 overflow-y-auto overflow-x-hidden hide-scrollbar">
+              {/* Dashboard */}
               <button
-                onClick={() => toggleSidebarDropdown('importer')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'importer-section' || currentView === 'exporter-section' || currentView === 'supplier-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                onClick={() => { handleViewChange('dashboard'); }}
+                title={isMini ? 'Dashboard' : undefined}
+                className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'dashboard' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
               >
-                <div className="flex items-center">
-                  <GlobeIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">Importer/Exporter</span>
-                </div>
-                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${importerDropdownOpen ? 'transform rotate-180' : ''}`} />
+                <HomeIcon className="w-5 h-5 flex-shrink-0" />
+                <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                  Dashboard
+                </span>
               </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${importerDropdownOpen ? 'max-h-60 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                <div className="pl-7 pr-2 space-y-1">
+
+              {/* HRMS */}
+              {(hasPermission(currentUser, 'employees', 'view') || hasPermission(currentUser, 'backupRestore', 'view')) && (
+                <div>
                   <button
-                    onClick={() => { handleViewChange('importer-section'); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange('employee-section');
+                      } else {
+                        toggleSidebarDropdown('hrms');
+                      }
+                    }}
+                    title={isMini ? 'HRMS' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['employee-section', 'role-creation', 'system-access'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
-                    <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Importer</span>
+                    <div className="flex items-center min-w-0">
+                      <BriefcaseIcon className="w-5 h-5 flex-shrink-0" />
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        HRMS
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${hrmsDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
                   </button>
-                  <button
-                    onClick={() => { handleViewChange('exporter-section'); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'exporter-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Exporter</span>
-                  </button>
-                  <button
-                    onClick={() => { handleViewChange('supplier-section'); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'supplier-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <TruckIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Supplier</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {hasPermission(currentUser, 'bank', 'view') && (
-            <button onClick={() => { handleViewChange('bank-section'); }} className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
-              <DollarSignIcon className="w-5 h-5 mr-3" />
-              <span className="font-medium text-sm">Bank</span>
-            </button>
-          )}
-          {(hasPermission(currentUser, 'cnf', 'view') || hasPermission(currentUser, 'cnfPayment', 'view')) && (
-            <div>
-              <button
-                onClick={() => toggleSidebarDropdown('cnf')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' || currentView === 'cnf-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <div className="flex items-center">
-                  <LinkIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">C&F</span>
-                </div>
-                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${cnfDropdownOpen ? 'transform rotate-180' : ''}`} />
-              </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${cnfDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                <div className="pl-7 pr-2 space-y-1">
-                  {hasPermission(currentUser, 'cnf', 'view') && (
-                    <>
-                      <button
-                        onClick={() => { handleViewChange('indian-cnf-section'); }}
-                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                      >
-                        <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Indian C&F</span>
-                      </button>
-                      <button
-                        onClick={() => { handleViewChange('bd-cnf-section'); }}
-                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bd-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                      >
-                        <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>BD C&F</span>
-                      </button>
-                    </>
-                  )}
-                  {hasPermission(currentUser, 'cnfPayment', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('cnf-payment-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
-                    >
-                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>C&F Payment</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          {hasPermission(currentUser, 'ipManagement', 'view') && (
-            <div>
-              <button
-                onClick={() => toggleSidebarDropdown('ip')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <div className="flex items-center">
-                  <BoxIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">IP</span>
-                </div>
-                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${ipDropdownOpen ? 'transform rotate-180' : ''}`} />
-              </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${ipDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                <div className="pl-7 pr-2 space-y-1">
-                  <button
-                    onClick={() => { handleViewChange('ip-section'); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'ip-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                  >
-                    <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Create IP</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {(hasPermission(currentUser, 'pi', 'view') || hasPermission(currentUser, 'packingList', 'view') || hasPermission(currentUser, 'trSetup', 'view')) && (
-            <div>
-              <button
-                onClick={() => toggleSidebarDropdown('pi')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'pi-section' || currentView === 'packing-list-section' || currentView === 'tr-setup-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <div className="flex items-center">
-                  <FileTextIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">Proforma Invoice</span>
-                </div>
-                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${piDropdownOpen ? 'transform rotate-180' : ''}`} />
-              </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${piDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                <div className="pl-7 pr-2 space-y-1">
-                  {hasPermission(currentUser, 'pi', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('pi-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Proforma Invoice</span>
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'packingList', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('packing-list-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'packing-list-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Packing List</span>
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'trSetup', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('tr-setup-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <SettingsIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>TR Setup</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          {(hasPermission(currentUser, 'insurance', 'view') || hasPermission(currentUser, 'insurancePayment', 'view')) && (
-            <div>
-              <button
-                onClick={() => toggleSidebarDropdown('insurance')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'insurance-section' || currentView === 'insurance-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <div className="flex items-center">
-                  <ShieldIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">Insurance</span>
-                  {(pendingModules?.insurancePayment || pendingModules?.insurance) && (
-                    <span className="ml-2 w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
-                  )}
-                </div>
-                <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${insuranceDropdownOpen ? 'transform rotate-180' : ''}`} />
-              </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${insuranceDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                <div className="pl-7 pr-2 space-y-1">
-                  {hasPermission(currentUser, 'insurance', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('insurance-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Insurance</span>
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'insurancePayment', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('insurance-payment-section'); }}
-                      className={`w-full flex flex-row items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Insurance Payment</span>
-                      </div>
-                      {pendingModules?.insurancePayment && (
-                        <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && hrmsDropdownOpen ? 'max-h-56 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      {hasPermission(currentUser, 'employees', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('employee-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'employee-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <UserIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Employee</span>
+                        </button>
                       )}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          {(hasPermission(currentUser, 'lcManagement', 'view') || hasPermission(currentUser, 'lcGp', 'view') || hasPermission(currentUser, 'lcExpense', 'view') || hasPermission(currentUser, 'marginReturn', 'view') || hasPermission(currentUser, 'lcReceive', 'view')) && (
-            <div>
-              <button
-                onClick={() => toggleSidebarDropdown('lc')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${['lc-management-section', 'lc-gp-section', 'lc-entry-section', 'lc-expense-section', 'margin-return-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <div className="flex items-center">
-                  <LCManagerIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">LC Management</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {pendingModules.lc && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
-                  <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${lcDropdownOpen ? 'transform rotate-180' : ''}`} />
-                </div>
-              </button>
-              {lcDropdownOpen && (
-                <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
-                  {hasPermission(currentUser, 'lcManagement', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('lc-management-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-management-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <LCManagerIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>LC Open</span>
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'lcGp', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('lc-gp-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-gp-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>LC G.P</span>
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'lcExpense', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('lc-expense-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-expense-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>LC Expense</span>
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'marginReturn', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('margin-return-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'margin-return-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Margin Return</span>
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'lcReceive', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('lc-entry-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-entry-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>LC Receive</span>
-                      </div>
-                      {pendingModules.lcReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
+                      {((currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.username === 'admin') && (
+                        <>
+                          <button
+                            onClick={() => { handleViewChange('role-creation'); }}
+                            className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'role-creation' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                          >
+                            <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Role Creation</span>
+                          </button>
+                          <button
+                            onClick={() => { handleViewChange('system-access'); }}
+                            className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'system-access' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                          >
+                            <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>System access</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {(hasPermission(currentUser, 'stock', 'view') || hasPermission(currentUser, 'product', 'view') || hasPermission(currentUser, 'warehouse', 'view') || hasPermission(currentUser, 'transfer', 'view')) && (
-            <div>
-              <button
-                onClick={() => toggleSidebarDropdown('stock')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('stock') || currentView === 'products-section' || currentView === 'warehouse-section' || currentView === 'damage-section' || currentView === 'transfer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <div className="flex items-center">
-                  <ShoppingCartIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">Stock</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {pendingModules.stock && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
-                  <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${stockDropdownOpen ? 'transform rotate-180' : ''}`} />
-                </div>
-              </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${stockDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                <div className="pl-7 pr-2 space-y-1">
-                  {hasPermission(currentUser, 'product', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('products-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'products-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <VegetableIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Product</span>
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'stock', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('stock-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <BarChartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Stock Management</span>
-                      </div>
-                      {pendingModules.stockManagement && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'warehouse', 'view') && (
-                    <>
-                      <button
-                        onClick={() => { handleViewChange('warehouse-section'); }}
-                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                      >
-                        <HomeIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Warehouse</span>
-                      </button>
-                      <button
-                        onClick={() => { handleViewChange('damage-section'); }}
-                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'damage-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                      >
-                        <TrashIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Damage</span>
-                      </button>
-                    </>
-                  )}
-                  {(hasPermission(currentUser, 'transfer', 'view') || hasPermission(currentUser, 'stock', 'view') || hasPermission(currentUser, 'warehouse', 'view')) && (
-                    <button
-                      onClick={() => { handleViewChange('transfer-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'transfer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <TransferIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Transfer</span>
-                      </div>
-                      {pendingModules.transfer && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+              {/* Port */}
+              {hasPermission(currentUser, 'port', 'view') && (
+                <button
+                  onClick={() => { handleViewChange('port-section'); }}
+                  title={isMini ? 'Port' : undefined}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'port-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  <AnchorIcon className="w-5 h-5 flex-shrink-0" />
+                  <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                    Port
+                  </span>
+                </button>
+              )}
 
-          {hasPermission(currentUser, 'customer', 'view') && (
-            <div>
-              <button
-                onClick={() => toggleSidebarDropdown('crm')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView === 'customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <div className="flex items-center">
-                  <UsersIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">CRM</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {pendingModules?.crm && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
-                  <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${crmDropdownOpen ? 'transform rotate-180' : ''}`} />
-                </div>
-              </button>
-              {crmDropdownOpen && (
-                <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
+              {/* Importer / Exporter */}
+              {hasPermission(currentUser, 'importerExporter', 'view') && (
+                <div>
                   <button
-                    onClick={() => { handleViewChange('customer-section'); }}
-                    className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange('importer-section');
+                      } else {
+                        toggleSidebarDropdown('importer');
+                      }
+                    }}
+                    title={isMini ? 'Importer/Exporter' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'importer-section' || currentView === 'exporter-section' || currentView === 'supplier-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
-                    <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                    <span>Customer</span>
+                    <div className="flex items-center min-w-0">
+                      <GlobeIcon className="w-5 h-5 flex-shrink-0" />
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        Importer/Exporter
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${importerDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
                   </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && importerDropdownOpen ? 'max-h-60 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      <button
+                        onClick={() => { handleViewChange('importer-section'); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'importer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      >
+                        <ArrowDownLeftIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Importer</span>
+                      </button>
+                      <button
+                        onClick={() => { handleViewChange('exporter-section'); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'exporter-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      >
+                        <ArrowUpRightIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Exporter</span>
+                      </button>
+                      <button
+                        onClick={() => { handleViewChange('supplier-section'); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'supplier-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      >
+                        <TruckIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Supplier</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {(hasPermission(currentUser, 'paymentCollection', 'view') || hasPermission(currentUser, 'payToCustomer', 'view')) && (
-            <div>
-              <button
-                onClick={() => toggleSidebarDropdown('collectionPayment')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all ${currentView === 'payment-collection-section' || currentView === 'pay-to-customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <div className="flex items-center min-w-0 mr-1">
-                  <DollarSignIcon className="w-5 h-5 mr-2.5 flex-shrink-0" />
-                  <span className="font-medium text-sm whitespace-nowrap">Collection & Pay</span>
+              {/* Bank */}
+              {hasPermission(currentUser, 'bank', 'view') && (
+                <button
+                  onClick={() => { handleViewChange('bank-section'); }}
+                  title={isMini ? 'Bank' : undefined}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'bank-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  <DollarSignIcon className="w-5 h-5 flex-shrink-0" />
+                  <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                    Bank
+                  </span>
+                </button>
+              )}
+
+              {/* C&F */}
+              {(hasPermission(currentUser, 'cnf', 'view') || hasPermission(currentUser, 'cnfPayment', 'view')) && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange(hasPermission(currentUser, 'cnf', 'view') ? 'indian-cnf-section' : 'cnf-payment-section');
+                      } else {
+                        toggleSidebarDropdown('cnf');
+                      }
+                    }}
+                    title={isMini ? 'C&F' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' || currentView === 'cnf-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <LinkIcon className="w-5 h-5 flex-shrink-0" />
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        C&F
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${cnfDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && cnfDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      {hasPermission(currentUser, 'cnf', 'view') && (
+                        <>
+                          <button
+                            onClick={() => { handleViewChange('indian-cnf-section'); }}
+                            className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'indian-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                          >
+                            <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Indian C&F</span>
+                          </button>
+                          <button
+                            onClick={() => { handleViewChange('bd-cnf-section'); }}
+                            className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'bd-cnf-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                          >
+                            <BuildingIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>BD C&F</span>
+                          </button>
+                        </>
+                      )}
+                      {hasPermission(currentUser, 'cnfPayment', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('cnf-payment-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
+                        >
+                          <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>C&F Payment</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {(pendingModules?.paymentCollection || pendingModules?.payToCustomer) && (
-                    <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />
-                  )}
-                  <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${collectionPaymentDropdownOpen ? 'transform rotate-180' : ''}`} />
-                </div>
-              </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${collectionPaymentDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                <div className="pl-7 pr-2 space-y-1">
-                  {hasPermission(currentUser, 'paymentCollection', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('payment-collection-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Payment Collection</span>
-                      </div>
-                      {pendingModules?.paymentCollection && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'payToCustomer', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('pay-to-customer-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pay-to-customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Pay To Customer</span>
-                      </div>
-                      {pendingModules?.payToCustomer && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          {(hasPermission(currentUser, 'sales', 'view') || hasPermission(currentUser, 'borderSale', 'view') || hasPermission(currentUser, 'order', 'view') || hasPermission(currentUser, 'purchase', 'view')) && (
-            <div>
-              <button
-                onClick={() => toggleSidebarDropdown('sale')}
-                className={`w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all ${currentView.includes('sale-section') ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <div className="flex items-center">
-                  <ReceiptIcon className="w-5 h-5 mr-3" />
-                  <span className="font-medium text-sm">Sale</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {pendingModules.sale && <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.6)] animate-pulse" />}
-                  <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${saleDropdownOpen ? 'transform rotate-180' : ''}`} />
-                </div>
-              </button>
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${saleDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                <div className="pl-7 pr-2 space-y-1">
-                  {hasPermission(currentUser, 'purchase', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('purchase-sale-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
+              )}
+
+              {/* IP Management */}
+              {hasPermission(currentUser, 'ipManagement', 'view') && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange('ip-section');
+                      } else {
+                        toggleSidebarDropdown('ip');
+                      }
+                    }}
+                    title={isMini ? 'IP Management' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'ip-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <BoxIcon className="w-5 h-5 flex-shrink-0" />
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        IP
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${ipDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && ipDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      <button
+                        onClick={() => { handleViewChange('ip-section'); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'ip-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      >
                         <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Purchase</span>
+                        <span>Create IP</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PI / Packing / TR */}
+              {(hasPermission(currentUser, 'pi', 'view') || hasPermission(currentUser, 'packingList', 'view') || hasPermission(currentUser, 'trSetup', 'view')) && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange('pi-section');
+                      } else {
+                        toggleSidebarDropdown('pi');
+                      }
+                    }}
+                    title={isMini ? 'Proforma Invoice' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['pi-section', 'packing-list-section', 'tr-setup-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <FileTextIcon className="w-5 h-5 flex-shrink-0" />
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        Proforma Invoice
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${piDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && piDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      {hasPermission(currentUser, 'pi', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('pi-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pi-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Proforma Invoice</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'packingList', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('packing-list-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'packing-list-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <ClipboardIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Packing List</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'trSetup', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('tr-setup-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'tr-setup-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <SettingsIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>TR Setup</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Insurance */}
+              {(hasPermission(currentUser, 'insurance', 'view') || hasPermission(currentUser, 'insurancePayment', 'view')) && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange('insurance-section');
+                      } else {
+                        toggleSidebarDropdown('insurance');
+                      }
+                    }}
+                    title={isMini ? 'Insurance' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'insurance-section' || currentView === 'insurance-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <ShieldIcon className="w-5 h-5 flex-shrink-0" />
+                        {(pendingModules?.insurancePayment || pendingModules?.insurance) && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                        )}
                       </div>
-                      {pendingModules?.purchase && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
-                  {(hasPermission(currentUser, 'purchaseReceive', 'view') || hasPermission(currentUser, 'purchase', 'view')) && (
-                    <button
-                      onClick={() => { handleViewChange('purchase-receive-sale-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-receive-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Purchase Receive</span>
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        Insurance
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${insuranceDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && insuranceDropdownOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      {hasPermission(currentUser, 'insurance', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('insurance-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <ShieldIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Insurance</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'insurancePayment', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('insurance-payment-section'); }}
+                          className={`w-full flex flex-row items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'insurance-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Insurance Payment</span>
+                          </div>
+                          {pendingModules?.insurancePayment && (
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* LC Management */}
+              {(hasPermission(currentUser, 'lcManagement', 'view') || hasPermission(currentUser, 'lcGp', 'view') || hasPermission(currentUser, 'lcExpense', 'view') || hasPermission(currentUser, 'marginReturn', 'view') || hasPermission(currentUser, 'lcReceive', 'view')) && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange('lc-management-section');
+                      } else {
+                        toggleSidebarDropdown('lc');
+                      }
+                    }}
+                    title={isMini ? 'LC Management' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${['lc-management-section', 'lc-gp-section', 'lc-entry-section', 'lc-expense-section', 'margin-return-section'].includes(currentView) ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <LCManagerIcon className="w-5 h-5 flex-shrink-0" />
+                        {pendingModules.lc && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                        )}
                       </div>
-                      {pendingModules?.purchaseReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'order', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('order-sale-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'order-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <ShoppingCartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Order</span>
-                      </div>
-                      {pendingModules.order && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'sales', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('general-sale-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>General Sale</span>
-                      </div>
-                      {pendingModules.generalSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'borderSale', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('border-sale-section'); }}
-                      className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <div className="flex items-center">
-                        <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                        <span>Border Sale</span>
-                      </div>
-                      {pendingModules.borderSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
-                    </button>
-                  )}
-                  {hasPermission(currentUser, 'returnProduct', 'view') && (
-                    <button
-                      onClick={() => { handleViewChange('return-product-section'); }}
-                      className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'return-product-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
-                    >
-                      <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                      <span>Return Product</span>
-                    </button>
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        LC Management
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${lcDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  {lcDropdownOpen && !isMini && (
+                    <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
+                      {hasPermission(currentUser, 'lcManagement', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('lc-management-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-management-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <LCManagerIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>LC Open</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'lcGp', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('lc-gp-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-gp-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <LayoutIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>LC G.P</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'lcExpense', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('lc-expense-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-expense-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>LC Expense</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'marginReturn', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('margin-return-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'margin-return-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Margin Return</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'lcReceive', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('lc-entry-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'lc-entry-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <FileTextIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>LC Receive</span>
+                          </div>
+                          {pendingModules.lcReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
-              </div>
-            </div>
-          )}
-          {hasPermission(currentUser, 'profitLoss', 'view') && (
-            <button
-              onClick={() => { handleViewChange('profit-loss-section'); }}
-              className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'profit-loss-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <BarChartIcon className="w-5 h-5 mr-3" />
-              <span className="font-medium text-sm">Profit & Loss</span>
-            </button>
-          )}
+              )}
 
-          {hasPermission(currentUser, 'costOfGoods', 'view') && (
-            <button
-              onClick={() => { handleViewChange('cost-of-goods-section'); }}
-              className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'cost-of-goods-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <TrendingUpIcon className="w-5 h-5 mr-3" />
-              <span className="font-medium text-sm">Cost of Goods</span>
-            </button>
-          )}
+              {/* Stock */}
+              {(hasPermission(currentUser, 'stock', 'view') || hasPermission(currentUser, 'product', 'view') || hasPermission(currentUser, 'warehouse', 'view') || hasPermission(currentUser, 'transfer', 'view')) && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange('stock-section');
+                      } else {
+                        toggleSidebarDropdown('stock');
+                      }
+                    }}
+                    title={isMini ? 'Stock' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView.includes('stock') || currentView === 'products-section' || currentView === 'warehouse-section' || currentView === 'damage-section' || currentView === 'transfer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <ShoppingCartIcon className="w-5 h-5 flex-shrink-0" />
+                        {pendingModules.stock && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                        )}
+                      </div>
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        Stock
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${stockDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && stockDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      {hasPermission(currentUser, 'product', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('products-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'products-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <VegetableIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Product</span>
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'stock', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('stock-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'stock-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <BarChartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Stock Management</span>
+                          </div>
+                          {pendingModules.stockManagement && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'warehouse', 'view') && (
+                        <>
+                          <button
+                            onClick={() => { handleViewChange('warehouse-section'); }}
+                            className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'warehouse-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                          >
+                            <HomeIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Warehouse</span>
+                          </button>
+                          <button
+                            onClick={() => { handleViewChange('damage-section'); }}
+                            className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'damage-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                          >
+                            <TrashIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Damage</span>
+                          </button>
+                        </>
+                      )}
+                      {(hasPermission(currentUser, 'transfer', 'view') || hasPermission(currentUser, 'stock', 'view') || hasPermission(currentUser, 'warehouse', 'view')) && (
+                        <button
+                          onClick={() => { handleViewChange('transfer-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'transfer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <TransferIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Transfer</span>
+                          </div>
+                          {pendingModules.transfer && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
-          {/* Backup & Restore — Admin Only */}
-          {hasPermission(currentUser, 'backupRestore', 'view') && (
-            <button
-              onClick={() => { handleViewChange('backup-restore-section'); }}
-              className={`w-full flex items-center px-4 py-2.5 rounded-lg transition-all ${currentView === 'backup-restore-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-            >
-              <DatabaseIcon className="w-5 h-5 mr-3" />
-              <span className="font-medium text-sm">Backup & Restore</span>
-            </button>
-          )}
+              {/* CRM */}
+              {hasPermission(currentUser, 'customer', 'view') && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange('customer-section');
+                      } else {
+                        toggleSidebarDropdown('crm');
+                      }
+                    }}
+                    title={isMini ? 'CRM' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <UsersIcon className="w-5 h-5 flex-shrink-0" />
+                        {pendingModules?.crm && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                        )}
+                      </div>
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        CRM
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${crmDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  {crmDropdownOpen && !isMini && (
+                    <div className="pl-7 pr-2 space-y-1 mt-1 transition-all duration-300">
+                      <button
+                        onClick={() => { handleViewChange('customer-section'); }}
+                        className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                      >
+                        <UsersIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                        <span>Customer</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
-        </nav>
-      </aside>
+              {/* Collection & Pay */}
+              {(hasPermission(currentUser, 'paymentCollection', 'view') || hasPermission(currentUser, 'payToCustomer', 'view')) && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange(hasPermission(currentUser, 'paymentCollection', 'view') ? 'payment-collection-section' : 'pay-to-customer-section');
+                      } else {
+                        toggleSidebarDropdown('collectionPayment');
+                      }
+                    }}
+                    title={isMini ? 'Collection & Pay' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'payment-collection-section' || currentView === 'pay-to-customer-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <DollarSignIcon className="w-5 h-5 flex-shrink-0" />
+                        {(pendingModules?.paymentCollection || pendingModules?.payToCustomer) && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                        )}
+                      </div>
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        Collection & Pay
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${collectionPaymentDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && collectionPaymentDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      {hasPermission(currentUser, 'paymentCollection', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('payment-collection-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'payment-collection-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Payment Collection</span>
+                          </div>
+                          {pendingModules?.paymentCollection && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'payToCustomer', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('pay-to-customer-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'pay-to-customer-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Pay To Customer</span>
+                          </div>
+                          {pendingModules?.payToCustomer && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sale */}
+              {(hasPermission(currentUser, 'sales', 'view') || hasPermission(currentUser, 'borderSale', 'view') || hasPermission(currentUser, 'order', 'view') || hasPermission(currentUser, 'purchase', 'view')) && (
+                <div>
+                  <button
+                    onClick={() => {
+                      if (isMini) {
+                        handleViewChange(hasPermission(currentUser, 'sales', 'view') ? 'general-sale-section' : hasPermission(currentUser, 'borderSale', 'view') ? 'border-sale-section' : 'purchase-sale-section');
+                      } else {
+                        toggleSidebarDropdown('sale');
+                      }
+                    }}
+                    title={isMini ? 'Sale' : undefined}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView.includes('sale-section') ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <ReceiptIcon className="w-5 h-5 flex-shrink-0" />
+                        {pendingModules.sale && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />
+                        )}
+                      </div>
+                      <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                        Sale
+                      </span>
+                    </div>
+                    <div className={`transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0 ${isMini ? 'w-0 opacity-0 max-w-0' : 'opacity-100 ml-auto'}`}>
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${saleDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${!isMini && saleDropdownOpen ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                    <div className="pl-7 pr-2 space-y-1">
+                      {hasPermission(currentUser, 'purchase', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('purchase-sale-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Purchase</span>
+                          </div>
+                          {pendingModules?.purchase && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                      {(hasPermission(currentUser, 'purchaseReceive', 'view') || hasPermission(currentUser, 'purchase', 'view')) && (
+                        <button
+                          onClick={() => { handleViewChange('purchase-receive-sale-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'purchase-receive-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <BoxIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Purchase Receive</span>
+                          </div>
+                          {pendingModules?.purchaseReceive && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'order', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('order-sale-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'order-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <ShoppingCartIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Order</span>
+                          </div>
+                          {pendingModules.order && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'sales', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('general-sale-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'general-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>General Sale</span>
+                          </div>
+                          {pendingModules.generalSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'borderSale', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('border-sale-section'); }}
+                          className={`w-full flex items-center justify-between py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'border-sale-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <div className="flex items-center">
+                            <TrendingUpIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                            <span>Border Sale</span>
+                          </div>
+                          {pendingModules.borderSale && <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0 shadow-[0_0_4px_rgba(239,68,68,0.6)] animate-pulse" />}
+                        </button>
+                      )}
+                      {hasPermission(currentUser, 'returnProduct', 'view') && (
+                        <button
+                          onClick={() => { handleViewChange('return-product-section'); }}
+                          className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'return-product-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-55'}`}
+                        >
+                          <RotateCcwIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
+                          <span>Return Product</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Profit & Loss */}
+              {hasPermission(currentUser, 'profitLoss', 'view') && (
+                <button
+                  onClick={() => { handleViewChange('profit-loss-section'); }}
+                  title={isMini ? 'Profit & Loss' : undefined}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'profit-loss-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  <BarChartIcon className="w-5 h-5 flex-shrink-0" />
+                  <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                    Profit & Loss
+                  </span>
+                </button>
+              )}
+
+              {/* Cost of Goods */}
+              {hasPermission(currentUser, 'costOfGoods', 'view') && (
+                <button
+                  onClick={() => { handleViewChange('cost-of-goods-section'); }}
+                  title={isMini ? 'Cost of Goods' : undefined}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'cost-of-goods-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  <TrendingUpIcon className="w-5 h-5 flex-shrink-0" />
+                  <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                    Cost of Goods
+                  </span>
+                </button>
+              )}
+
+              {/* Backup & Restore — Admin Only */}
+              {hasPermission(currentUser, 'backupRestore', 'view') && (
+                <button
+                  onClick={() => { handleViewChange('backup-restore-section'); }}
+                  title={isMini ? 'Backup & Restore' : undefined}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'backup-restore-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  <DatabaseIcon className="w-5 h-5 flex-shrink-0" />
+                  <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                    Backup & Restore
+                  </span>
+                </button>
+              )}
+            </nav>
+          </aside>
+        );
+      })()}
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col overflow-hidden ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}>
+      <div
+        onClick={() => { if (sidebarOpen) setSidebarOpen(false); }}
+        className={`flex-1 flex flex-col overflow-hidden relative z-20 ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}
+      >
         {/* Header */}
         <header className="flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm print:hidden" style={{ height: '64px', flexShrink: 0 }}>
           {/* Left side */}
           <div className="flex items-center gap-3">
-            {/* Hamburger */}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-md text-gray-600 hover:bg-gray-100 transition-colors"
-            >
-              <MenuIcon className="w-6 h-6" />
-            </button>
+            {/* Hamburger — mobile only */}
+            {windowWidth < 768 && (
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-md text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <MenuIcon className="w-6 h-6" />
+              </button>
+            )}
             {/* App title — desktop only */}
             {windowWidth >= 768 && (
               <h1 className="text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight ml-1" style={{ fontFamily: "'Fraunces', serif" }}>
@@ -2844,10 +3068,10 @@ function App() {
 
           {/* Right side — profile and bell icon */}
           <div className="flex items-center gap-3 relative z-10">
-            {windowWidth >= 768 && !sidebarOpen && (
+            {windowWidth < 768 && !sidebarOpen && (
               <button
                 onClick={() => setShowProfile(true)}
-                className="hidden md:block relative group focus:outline-none flex-shrink-0 mr-1 animate-in fade-in duration-200"
+                className="relative group focus:outline-none flex-shrink-0 mr-1 animate-in fade-in duration-200"
               >
                 <img
                   src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
