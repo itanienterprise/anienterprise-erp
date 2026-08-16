@@ -548,40 +548,6 @@ function App() {
   const [notifHighlightId, setNotifHighlightId] = useState(null);
   const [notifIsRequested, setNotifIsRequested] = useState(false);
 
-  // Manage body class when modal is open inside main (handles all modular modals dynamically)
-  useEffect(() => {
-    const handleMutations = () => {
-      const modals = Array.from(document.querySelectorAll('main div.fixed.inset-0, div.app-modal-overlay, div[role="dialog"]'));
-      const isAnyModalActive = modals.some(el => {
-        return !el.classList.contains('no-print') && (
-          el.classList.contains('app-modal-overlay') ||
-          el.querySelector('.bg-white, [class*="rounded-"], [class*="shadow-"]')
-        );
-      });
-
-      if (isAnyModalActive) {
-        document.body.classList.add('app-modal-open-active');
-      } else {
-        document.body.classList.remove('app-modal-open-active');
-      }
-    };
-
-    handleMutations();
-
-    const observer = new MutationObserver(handleMutations);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'style']
-    });
-
-    return () => {
-      observer.disconnect();
-      document.body.classList.remove('app-modal-open-active');
-    };
-  }, []);
-
 
   // Fetch employee name if missing
   useEffect(() => {
@@ -2203,7 +2169,7 @@ function App() {
         return (
           <aside
             onMouseEnter={() => {
-              if (windowWidth >= 768 && !document.body.classList.contains('app-modal-open-active')) {
+              if (windowWidth >= 768) {
                 setSidebarHovered(true);
               }
             }}
@@ -3035,8 +3001,8 @@ function App() {
 
       {/* Main Content */}
       <div
-        onClick={() => { if (sidebarOpen) setSidebarOpen(false); }}
-        className={`flex-1 flex flex-col overflow-hidden relative z-20 ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}
+        onClick={() => { if (sidebarOpen && windowWidth < 768) setSidebarOpen(false); }}
+        className={`flex-1 flex flex-col min-w-0 overflow-hidden ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}
       >
         {/* Header */}
         <header className="flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm print:hidden" style={{ height: '64px', flexShrink: 0 }}>
@@ -3121,7 +3087,7 @@ function App() {
         </header>
 
         {/* Dashboard Content */}
-        <main className={`relative z-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
+        <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
           {renderContent()}
         </main>
       </div>

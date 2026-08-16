@@ -366,26 +366,10 @@ thead::-webkit-scrollbar,
     background-color: #f8fafc !important;
 }
 
-main:has(.app-modal-overlay),
-body.app-modal-open-active main,
-body.app-modal-open-active .flex-1 {
-    position: relative !important;
-    z-index: 2000 !important;
-}
-
-body.app-modal-open-active header {
-    z-index: 10 !important;
-}
-
-body.app-modal-open-active aside {
-    position: relative !important;
-    z-index: 0 !important;
-    pointer-events: none !important;
-}
-
 .app-modal-overlay {
     z-index: 99999 !important;
 }
+
 /* ═══════════════════════════════════════════════════════════
    Global Notification deep-link row highlight animation
    Works on <tr> by targeting its <td> children
@@ -442,30 +426,30 @@ body.app-modal-open-active aside {
    Universal Sticky Table Headers & Independent Row Scrolling
    ═══════════════════════════════════════════════════════════ */
 
-/* Target table wrappers across all modules (excluding print/reports) */
-.overflow-x-auto:has(> table):not(.is-printing-report):not(.print-report-preview),
-main .overflow-x-auto:not(.is-printing-report):not(.print-report-preview) {
+/* Target table wrappers across all modules (excluding print/reports/modals) */
+.overflow-x-auto:has(> table):not(.is-printing-report):not(.print-report-preview):not(.app-modal-overlay *),
+main .overflow-x-auto:not(.is-printing-report):not(.print-report-preview):not(.app-modal-overlay *) {
     max-height: calc(100vh - 210px);
     overflow-y: auto !important;
 }
 
-/* Ensure all table headers stick to the top */
-body:not(.is-printing-report) table thead {
+/* Ensure all main module table headers stick to the top */
+body:not(.is-printing-report) main table thead {
     position: sticky !important;
     top: 0 !important;
-    z-index: 10 !important;
+    z-index: 5 !important;
     background-color: #f9fafb !important;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-body:not(.is-printing-report) table thead tr {
+body:not(.is-printing-report) main table thead tr {
     background-color: #f9fafb !important;
 }
 
-body:not(.is-printing-report) table thead th {
+body:not(.is-printing-report) main table thead th {
     position: sticky !important;
     top: 0 !important;
-    z-index: 10 !important;
+    z-index: 5 !important;
     background-color: #f9fafb !important;
     border-bottom: 1px solid #e5e7eb !important;
 }
