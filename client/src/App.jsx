@@ -3005,7 +3005,7 @@ function App() {
         className={`flex-1 flex flex-col min-w-0 overflow-hidden ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'print:hidden' : ''}`}
       >
         {/* Header */}
-        <header className="flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm print:hidden" style={{ height: '64px', flexShrink: 0 }}>
+        <header className="relative z-[1200] flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm print:hidden" style={{ height: '64px', flexShrink: 0 }}>
           {/* Left side */}
           <div className="flex items-center gap-3">
             {/* Hamburger — mobile only */}
