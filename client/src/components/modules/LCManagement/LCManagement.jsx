@@ -482,8 +482,10 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
         const payments = [];
 
-        // 2.1. Payments from cnf-payments
+        // 2.1. Payments from cnf-payments (Completed only)
         cnfPayments.forEach(p => {
+            const status = (p.status || '').toLowerCase();
+            if (status === 'requested' || status === 'rejected') return;
             if (p.cnfName && p.cnfName.toLowerCase().trim() === targetName) {
                 payments.push({
                     id: p._id,

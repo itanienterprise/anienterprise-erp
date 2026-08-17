@@ -236,7 +236,7 @@ const CnF = ({
         try {
             const response = await axios.get(`${API_BASE_URL}/api/cnf-payments`);
             const allPayments = Array.isArray(response.data) ? response.data : [];
-            const filtered = allPayments.filter(p => p.cnfId === cnfId);
+            const filtered = allPayments.filter(p => p.cnfId === cnfId && (p.status || '').toLowerCase() !== 'requested' && (p.status || '').toLowerCase() !== 'rejected');
             setPaymentRecords([...filtered].sort((a, b) => new Date(a.date) - new Date(b.date)));
         } catch (error) {
             console.error('Error fetching C&F payments:', error);
@@ -575,8 +575,10 @@ const CnF = ({
                     return acc;
                 }, 0);
 
-                // 3. Subtract Payments
+                // 3. Subtract Payments (Completed only)
                 const paid = allPayments.reduce((acc, payment) => {
+                    const status = (payment.status || '').toLowerCase();
+                    if (status === 'requested' || status === 'rejected') return acc;
                     if (payment.cnfId === cnf._id) {
                         return acc + (parseFloat(payment.amount) || 0) + (parseFloat(payment.discount) || 0);
                     }

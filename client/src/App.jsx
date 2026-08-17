@@ -282,13 +282,20 @@ function App() {
 
   const addNotification = async (title, message, targetRoles = ['admin', 'incharge', 'sales manager', 'head of sales'], targetUsers = [], isSystemic = false, link = '') => {
     try {
+      let resolvedTargetUsers = targetUsers;
+      let resolvedLink = link;
+      if (typeof targetUsers === 'string' && targetUsers.endsWith('-section')) {
+        resolvedLink = targetUsers;
+        resolvedTargetUsers = [];
+      }
+
       const newNotif = {
         title,
         message,
         targetRoles,
-        targetUsers, // Added targetUsers for specific employee notifications
+        targetUsers: resolvedTargetUsers,
         isSystemic,
-        link,        // View to navigate to when notification is clicked
+        link: resolvedLink,
         readByUsers: [],
         createdBy: currentUser?.username,
         createdByName: currentUser?.name || currentUser?.username
@@ -321,20 +328,23 @@ function App() {
     purchaseReceive: false,
     order: false,
     insurancePayment: false,
-    insurance: false
+    insurance: false,
+    cnfPayment: false,
+    cnf: false
   });
 
   const fetchPendingEntries = async () => {
     if (!isAuthenticated) return;
     try {
-      const [stockRes, salesRes, purchasesRes, purchaseReceivesRes, customersRes, whRes, insPaymentsRes] = await Promise.all([
+      const [stockRes, salesRes, purchasesRes, purchaseReceivesRes, customersRes, whRes, insPaymentsRes, cnfPaymentsRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/stock`),
         axios.get(`${API_BASE_URL}/api/sales`),
         axios.get(`${API_BASE_URL}/api/purchases`),
         axios.get(`${API_BASE_URL}/api/purchase-receives`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE_URL}/api/customers`),
         axios.get(`${API_BASE_URL}/api/warehouses`),
-        axios.get(`${API_BASE_URL}/api/insurance-payments`)
+        axios.get(`${API_BASE_URL}/api/insurance-payments`),
+        axios.get(`${API_BASE_URL}/api/cnf-payments`).catch(() => ({ data: [] }))
       ]);
       const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
       const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
@@ -415,6 +425,9 @@ function App() {
       const insPaymentsData = Array.isArray(insPaymentsRes?.data) ? insPaymentsRes.data : [];
       const hasRequestedInsurancePayment = insPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
 
+      const cnfPaymentsData = Array.isArray(cnfPaymentsRes?.data) ? cnfPaymentsRes.data : [];
+      const hasRequestedCnfPayment = cnfPaymentsData.some(p => (p.status || '').toLowerCase() === 'requested');
+
       setPendingModules({
         lc: hasRequestedLC,
         stock: hasRequestedStockMgmt || hasRequestedTransfer,
@@ -431,7 +444,9 @@ function App() {
         purchase: hasRequestedPurchase,
         purchaseReceive: hasRequestedPurchaseReceive,
         insurancePayment: hasRequestedInsurancePayment,
-        insurance: hasRequestedInsurancePayment
+        insurance: hasRequestedInsurancePayment,
+        cnfPayment: hasRequestedCnfPayment,
+        cnf: hasRequestedCnfPayment
       });
     } catch (err) {
       console.error('Error checking pending entries:', err);
@@ -1643,7 +1658,15 @@ function App() {
 
 
       case 'cnf-payment-section':
-        return <CnFPayment />;
+        return (
+          <CnFPayment
+            currentUser={currentUser}
+            addNotification={addNotification}
+            highlightId={notifHighlightId}
+            isRequestedNotif={notifIsRequested}
+            refreshPendingIndicators={fetchPendingEntries}
+          />
+        );
       case 'ip-section':
         return (
           <IPManagement
@@ -2376,7 +2399,12 @@ function App() {
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'indian-cnf-section' || currentView === 'bd-cnf-section' || currentView === 'cnf-payment-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                   >
                     <div className="flex items-center min-w-0">
-                      <LinkIcon className="w-5 h-5 flex-shrink-0" />
+                      <div className="relative">
+                        <LinkIcon className="w-5 h-5 flex-shrink-0" />
+                        {(pendingModules?.cnfPayment || pendingModules?.cnf) && (
+                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border-2 border-white" />
+                        )}
+                      </div>
                       <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
                         C&F
                       </span>
@@ -2411,7 +2439,10 @@ function App() {
                           className={`w-full flex flex-row items-center py-2 px-3 rounded-md text-sm transition-colors whitespace-nowrap ${currentView === 'cnf-payment-section' ? 'text-blue-600 bg-blue-50/50 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
                         >
                           <DollarSignIcon className="w-4 h-4 mr-2.5 flex-shrink-0" />
-                          <span>C&F Payment</span>
+                          <span className="flex-1 text-left">C&F Payment</span>
+                          {pendingModules?.cnfPayment && (
+                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-2" />
+                          )}
                         </button>
                       )}
                     </div>

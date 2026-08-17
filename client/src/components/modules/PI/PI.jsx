@@ -31,6 +31,7 @@ function PI({
     const canAdd = hasPermission(currentUser, 'pi', 'add');
     const canEdit = hasPermission(currentUser, 'pi', 'edit');
     const canDelete = hasPermission(currentUser, 'pi', 'delete');
+    const canShowEntryBy = hasPermission(currentUser, 'pi', 'showEntryBy');
     const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
@@ -196,7 +197,7 @@ function PI({
     };
 
     const initialPiFilterState = {
-        quickRange: 'weekly',
+        quickRange: 'monthly',
         selectedMonth: new Date().getMonth() + 1,
         selectedYear: new Date().getFullYear(),
         startDate: '',
@@ -224,8 +225,124 @@ function PI({
     const importerFilterRef = useRef(null);
     const exporterFilterRef = useRef(null);
 
+    const [employeesMap, setEmployeesMap] = useState({});
+    const [notificationsMap, setNotificationsMap] = useState({});
+
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                const empName = (d.name || d.nameEn || d.employeeName || d.fullName || d.username || '').trim();
+                if (d.employeeId) map[d.employeeId] = empName;
+                if (d.username) map[d.username] = empName;
+                if (d._id) map[d._id] = empName;
+                if (d.id) map[d.id] = empName;
+            });
+            setEmployeesMap(map);
+        } catch (error) {
+            console.error('Error fetching employees map in PI:', error);
+        }
+    };
+
+    const getEntryByName = (entryByCode, entryByName) => {
+        if (!entryByCode && !entryByName) return '—';
+        if (entryByName && !entryByName.startsWith('E-') && !entryByName.startsWith('A-') && entryByName !== entryByCode) {
+            return entryByName;
+        }
+        if (entryByCode && employeesMap[entryByCode]) {
+            return employeesMap[entryByCode];
+        }
+        if (entryByName && employeesMap[entryByName]) {
+            return employeesMap[entryByName];
+        }
+        if (entryByName && entryByName !== '—') {
+            return entryByName;
+        }
+        return entryByCode || '—';
+    };
+
+    const getPiEntryDetails = (record) => {
+        if (!record) return { creator: '—', reviser: null, editor: null };
+
+        let created = record.entryByName || record.createdByName || record.entryBy || record.createdBy || record.userId || record.username || record.user || record.author || record.addedBy;
+        let revised = record.revisedByName || record.revisedBy;
+        let edited = record.editedByName || record.editedBy || record.lastEditedByName || record.lastEditedBy || record.updatedByName || record.updatedBy;
+
+        const rawPi = String(record.piNumber || '').trim();
+        const cleanPi = rawPi.replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+
+        // 1. Check revisions history on record
+        if (record.revisions && Array.isArray(record.revisions) && record.revisions.length > 0) {
+            const lastRev = record.revisions[record.revisions.length - 1];
+            if (!revised) revised = lastRev.revisedByName || lastRev.revisedBy || lastRev.entryByName || lastRev.entryBy;
+            if (!edited && (lastRev.editedByName || lastRev.editedBy)) edited = lastRev.editedByName || lastRev.editedBy;
+            const origRev = record.revisions.find(r => r.reviseNo === 'Original PI') || record.revisions[0];
+            if (!created && origRev) {
+                created = origRev.entryByName || origRev.entryBy || origRev.createdBy || origRev.createdByName || origRev.revisedByName || origRev.revisedBy;
+            }
+        }
+
+        // 2. Check notificationsMap
+        if (cleanPi && notificationsMap) {
+            const notifInfo = notificationsMap[cleanPi] ||
+                notificationsMap[rawPi.toLowerCase()] ||
+                notificationsMap[Object.keys(notificationsMap).find(k => k === cleanPi || k.includes(cleanPi) || cleanPi.includes(k))];
+            if (notifInfo) {
+                if (!created && notifInfo.createdByName) created = notifInfo.createdByName;
+                if (!revised && notifInfo.revisedByName) revised = notifInfo.revisedByName;
+                if (!edited && notifInfo.editedByName) edited = notifInfo.editedByName;
+            }
+        }
+
+        // 3. Check linked IP records fallback
+        if (!created && ipRecords && ipRecords.length > 0) {
+            const rawIps = record.ipNumbers || (record.ipNumber ? String(record.ipNumber).split(',') : []);
+            const recordIps = (Array.isArray(rawIps) ? rawIps : [rawIps]).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+            const matchedIp = ipRecords.find(ip => {
+                const ipNum = String(ip.ipNumber || '').trim().toLowerCase();
+                return ipNum && recordIps.includes(ipNum);
+            });
+            if (matchedIp) {
+                created = matchedIp.entryByName || matchedIp.entryBy || matchedIp.createdBy || matchedIp.createdByName;
+            }
+        }
+
+        // 4. Check linked LC records fallback
+        if ((!created || !edited) && lcRecords && lcRecords.length > 0 && cleanPi) {
+            const matchedLc = lcRecords.find(lc => {
+                const lcPi = String(lc.piNumber || lc.piNo || '').trim().toLowerCase();
+                return lcPi && (lcPi === cleanPi || lcPi.includes(cleanPi) || cleanPi.includes(lcPi));
+            });
+            if (matchedLc) {
+                if (!created) created = matchedLc.entryByName || matchedLc.entryBy || matchedLc.createdBy || matchedLc.createdByName;
+                if (!edited) edited = matchedLc.editedByName || matchedLc.editedBy;
+            }
+        }
+
+        const resolvedCreator = getEntryByName(created, created);
+        const resolvedReviser = revised ? getEntryByName(revised, revised) : null;
+        const resolvedEditor = edited ? getEntryByName(edited, edited) : null;
+
+        return {
+            creator: (resolvedCreator && resolvedCreator !== '—') ? resolvedCreator : (created || '—'),
+            reviser: (resolvedReviser && resolvedReviser !== '—') ? resolvedReviser : (revised || null),
+            editor: (resolvedEditor && resolvedEditor !== '—') ? resolvedEditor : (edited || null)
+        };
+    };
+
     useEffect(() => {
         fetchRecords();
+        fetchEmployees();
         Promise.all([
             fetchMetaData('preCarriage', setPreCarriages),
             fetchMetaData('receiptPlace', setReceiptPlaces),
@@ -346,16 +463,57 @@ function PI({
             if (showFullLoading) setIsLoading(false);
 
             // 2. Fetch supporting data asynchronously in background
-            const [bankRes, ipRes, lcRes, stockRes, saleRes] = await Promise.all([
+            const [bankRes, ipRes, lcRes, stockRes, saleRes, notifRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/ip-records`),
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`)
+                axios.get(`${API_BASE_URL}/api/sales`),
+                axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] }))
             ]);
             setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
             setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
+
+            const rawNotifs = Array.isArray(notifRes?.data) ? notifRes.data : [];
+            const notifsMap = {};
+            rawNotifs.forEach(n => {
+                let d = n;
+                if (n && n.data) {
+                    if (typeof n.data === 'string') {
+                        try { d = { ...decryptData(n.data), _id: n._id }; } catch (e) { }
+                    } else if (typeof n.data === 'object') {
+                        d = { ...n.data, _id: n._id };
+                    }
+                }
+                const msg = d.message || '';
+                const piMatch = msg.match(/(?:PI\s*(?:No\.?|Number)?:\s*|PI\s*\(\s*(?:No\.?|Number)?:\s*)([A-Za-z0-9\/\-_]+)/i);
+                if (piMatch && piMatch[1]) {
+                    const piNum = piMatch[1].trim();
+                    let byName = '';
+                    const byIdx = msg.lastIndexOf(' by ');
+                    if (byIdx !== -1) {
+                        byName = msg.substring(byIdx + 4).trim().replace(/\.+$/, '');
+                    } else {
+                        const byMatch = msg.match(/by\s+([^,\n]+)/i);
+                        if (byMatch) byName = byMatch[1].trim().replace(/\.+$/, '');
+                    }
+                    if (byName) {
+                        const cleanPi = piNum.toLowerCase();
+                        if (!notifsMap[cleanPi]) notifsMap[cleanPi] = {};
+                        const title = (d.title || '').toLowerCase();
+                        const msgLower = msg.toLowerCase();
+                        if (title.includes('created') || msgLower.includes('created') || msgLower.includes('new pi') || msgLower.includes('added')) {
+                            if (!notifsMap[cleanPi].createdByName) notifsMap[cleanPi].createdByName = byName;
+                        } else if (title.includes('revised') || msgLower.includes('revised')) {
+                            notifsMap[cleanPi].revisedByName = byName;
+                        } else if (title.includes('updated') || msgLower.includes('updated') || msgLower.includes('edited')) {
+                            notifsMap[cleanPi].editedByName = byName;
+                        }
+                    }
+                }
+            });
+            setNotificationsMap(notifsMap);
 
             const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
             const decryptedStock = rawStock.map(item => {
@@ -1218,7 +1376,14 @@ function PI({
         const submissionData = {
             ...formData,
             grandTotal: calculatedGrandTotal > 0 ? calculatedGrandTotal.toFixed(2) : '',
-            grandTotalQuantity: calculatedGrandTotalQuantity > 0 ? calculatedGrandTotalQuantity.toFixed(2) : ''
+            grandTotalQuantity: calculatedGrandTotalQuantity > 0 ? calculatedGrandTotalQuantity.toFixed(2) : '',
+            entryBy: editingId ? (formData.entryBy || currentUser?.username || currentUser?.id || currentUser?.employeeId || '') : (currentUser?.username || currentUser?.id || currentUser?.employeeId || ''),
+            entryByName: editingId ? (formData.entryByName || currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '') : (currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || ''),
+            ...(editingId ? {
+                editedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
+                editedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
+                lastEditedAt: new Date().toISOString()
+            } : {})
         };
 
         // Capture IP Balance + LC REM snapshots at the moment of FIRST creation.
@@ -1348,7 +1513,12 @@ function PI({
             packingType: '',
             revisions: [],
             piRevision: '',
-            remarks: ''
+            remarks: '',
+            entryBy: '',
+            entryByName: '',
+            editedBy: '',
+            editedByName: '',
+            lastEditedAt: ''
         });
         setEditingId(null);
         setSubmitStatus(null);
@@ -1424,7 +1594,12 @@ function PI({
             ipSnapshots: record.ipSnapshots || {},
             revisions: record.revisions || [],
             piRevision: record.piRevision || '',
-            remarks: record.remarks || ''
+            remarks: record.remarks || '',
+            entryBy: record.entryBy || record.createdBy || record.userId || '',
+            entryByName: record.entryByName || record.createdByName || '',
+            editedBy: record.editedBy || '',
+            editedByName: record.editedByName || '',
+            lastEditedAt: record.lastEditedAt || ''
         });
         setEditingId(record._id);
         setShowForm(true);
@@ -1865,6 +2040,8 @@ function PI({
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
                 remarks: reviseFormData.remarks,
                 ipNumbers: updatedIpNumbers,
+                revisedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
+                revisedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
                 createdAt: new Date().toISOString()
             };
 
@@ -1884,6 +2061,8 @@ function PI({
                     grandTotalQuantity: pi.grandTotalQuantity,
                     remarks: pi.remarks || '',
                     ipNumbers: pi.ipNumbers || (pi.ipNumber ? pi.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []),
+                    revisedBy: pi.entryBy || pi.createdBy || '',
+                    revisedByName: pi.entryByName || pi.createdByName || '',
                     createdAt: pi.createdAt || pi.date || new Date().toISOString()
                 };
                 currentRevisions.push(originalRevision);
@@ -1905,6 +2084,9 @@ function PI({
                 grandTotal: reviseFormData.grandTotal,
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
                 piRevision: `${reviseFormData.reviseNo} DATE: ${formatDate(reviseFormData.reviseDate)}`,
+                revisedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
+                revisedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
+                lastRevisedAt: new Date().toISOString(),
                 revisions: [...currentRevisions, newRevision]
             };
 
@@ -1934,8 +2116,12 @@ function PI({
             const query = searchQuery.toLowerCase();
             const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
                 (record.productsList && record.productsList.some(p => (p.productName || '').toLowerCase().includes(query)));
+            const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
             const matchesSearch = (record.piNumber || '').toLowerCase().includes(query) ||
                 (record.partyName || '').toLowerCase().includes(query) ||
+                (record.exporterName || '').toLowerCase().includes(query) ||
+                (record.entryBy || '').toLowerCase().includes(query) ||
+                (entryByName || '').toLowerCase().includes(query) ||
                 matchesProduct;
             if (!matchesSearch) return false;
         }
@@ -2081,9 +2267,9 @@ function PI({
                             <button
                                 ref={piFilterButtonRef}
                                 onClick={() => setShowPiFilterPanel(!showPiFilterPanel)}
-                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPiFilterPanel || Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'weekly' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')) ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPiFilterPanel || Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'monthly' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')) ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                             >
-                                <FunnelIcon className={`w-4 h-4 ${(showPiFilterPanel || (piFilters && Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'weekly' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')))) ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 ${(showPiFilterPanel || (piFilters && Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'monthly' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')))) ? 'text-white' : 'text-gray-400'}`} />
                                 <span className="text-sm font-medium">Filter</span>
                             </button>
 
@@ -4298,6 +4484,9 @@ function PI({
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Qty</th>
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-blue-600 whitespace-nowrap">Grand T.</th>
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Status</th>
+                                        {canShowEntryBy && (
+                                            <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap text-center">Entry By</th>
+                                        )}
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-center whitespace-nowrap">Action</th>
                                     </tr>
                                 </thead>
@@ -4305,7 +4494,7 @@ function PI({
                                     {isLoading ? (
                                         Array(3).fill(0).map((_, i) => (
                                             <tr key={i} className="animate-pulse">
-                                                <td colSpan="10" className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                                <td colSpan={10 + (canShowEntryBy ? 1 : 0)} className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                             </tr>
                                         ))
                                     ) : filteredRecords.length > 0 ? (
@@ -4320,6 +4509,7 @@ function PI({
 
                                             const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
                                             const hasMultipleProducts = record.productsList && record.productsList.length > 1;
+                                            const entryInfo = getPiEntryDetails(record);
 
                                             return (
                                                 <tr key={record._id} className={`hover:bg-gray-50/50 transition-colors ${highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (record.piNumber) rowRefs.current[record.piNumber] = el; }}
@@ -4377,6 +4567,25 @@ function PI({
                                                             {record.status}
                                                         </span>
                                                     </td>
+                                                    {canShowEntryBy && (
+                                                        <td className="px-2 py-3.5 whitespace-nowrap text-center">
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <span className="text-xs font-semibold text-gray-800">
+                                                                    {entryInfo.creator}
+                                                                </span>
+                                                                {entryInfo.reviser && (
+                                                                    <span className="text-[10px] text-purple-600 font-semibold" title="Revised By">
+                                                                        ⟳ {entryInfo.reviser}
+                                                                    </span>
+                                                                )}
+                                                                {entryInfo.editor && (
+                                                                    <span className="text-[10px] text-amber-600 font-semibold" title="Edited By">
+                                                                        ✎ {entryInfo.editor}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    )}
                                                     <td className="px-2 py-3.5 whitespace-nowrap">
                                                         <div className="flex items-center justify-center gap-1.5">
                                                             <button
@@ -4426,10 +4635,19 @@ function PI({
                                                             >
                                                                 <PDFIcon className="w-5 h-5" />
                                                             </button>
+                                                            {canEdit && (
+                                                                <button
+                                                                    onClick={() => handleEdit(record)}
+                                                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
+                                                                    title="Edit PI"
+                                                                >
+                                                                    <EditIcon className="w-5 h-5" />
+                                                                </button>
+                                                            )}
                                                             {canDelete && (
                                                                 <button
                                                                     onClick={() => handleDelete(record._id)}
-                                                                    className="p-1.5 text-gray-400 hover:text-red-600 transition-all active:scale-90"
+                                                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90"
                                                                     title="Delete Record"
                                                                 >
                                                                     <TrashIcon className="w-5 h-5" />
@@ -4473,6 +4691,7 @@ function PI({
 
                                 const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
                                 const hasMultipleProducts = record.productsList && record.productsList.length > 1;
+                                const entryInfo = getPiEntryDetails(record);
 
                                 return (
                                     <div
@@ -4558,6 +4777,27 @@ function PI({
                                                         <span className="text-indigo-500 font-bold mx-2">-</span>
                                                         <span className="text-sm font-black text-indigo-700 tracking-tight">${parseFloat(record.grandTotal).toLocaleString()}</span>
                                                     </div>
+                                                    {canShowEntryBy && (
+                                                        <div className="flex items-center">
+                                                            <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Entry By</span>
+                                                            <span className="text-gray-400 font-bold mx-2">-</span>
+                                                            <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                                                                <span className="font-semibold text-gray-800">
+                                                                    {entryInfo.creator}
+                                                                </span>
+                                                                {entryInfo.reviser && (
+                                                                    <span className="text-[10px] text-purple-600 font-semibold bg-purple-50 px-1.5 py-0.5 rounded" title="Revised By">
+                                                                        ⟳ {entryInfo.reviser}
+                                                                    </span>
+                                                                )}
+                                                                {entryInfo.editor && (
+                                                                    <span className="text-[10px] text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded" title="Edited By">
+                                                                        ✎ {entryInfo.editor}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -4609,6 +4849,14 @@ function PI({
                                                     >
                                                         <PDFIcon className="w-3.5 h-3.5" /> PDF
                                                     </button>
+                                                    {canEdit && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                            className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-amber-50 text-amber-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                        >
+                                                            <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                        </button>
+                                                    )}
                                                     {canDelete && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}

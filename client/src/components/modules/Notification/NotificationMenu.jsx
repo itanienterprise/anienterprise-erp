@@ -21,6 +21,13 @@ const TITLE_TO_VIEW = [
     // Insurance Payment (place BEFORE LC to prevent 'plc' from matching 'lc')
     { pattern: /\b(?:insurance|gross premium|net premium)\b/i, view: 'insurance-payment-section' },
 
+    // C&F Payment
+    { pattern: /\b(?:c&f|cnf)\s+payment\b/i, view: 'cnf-payment-section' },
+    { pattern: /\b(?:c&f|cnf)\b/i, view: 'cnf-payment-section' },
+    { pattern: /\b1st\s+approval\s+completed\b/i, view: 'cnf-payment-section' },
+    { pattern: /\bpayment\s+for\s+(?:panna|poritosh|haque|bhola|nurislam|firoz)\b/i, view: 'cnf-payment-section' },
+    { pattern: /\bpayment\s+request\s+of\s+.*?\s+for\s+(?:panna|poritosh|haque|bhola|nurislam|firoz)\b/i, view: 'cnf-payment-section' },
+
     // Proforma Invoice / PI
     { pattern: /\b(?:pi|proforma)\b/i, view: 'pi-section' },
 
@@ -63,6 +70,7 @@ const TITLE_TO_VIEW = [
 
 function resolveLink(notif) {
     if (notif.link) return notif.link;
+    if (typeof notif.targetUsers === 'string' && notif.targetUsers.endsWith('-section')) return notif.targetUsers;
 
     let text = '';
     if (typeof notif.title === 'string') text += notif.title + ' ';
@@ -109,7 +117,16 @@ function extractHighlightId(notif) {
         return numMatch[1].trim();
     }
 
-    // 4. Parentheses format: only if inside parentheses there is an explicit code or number
+    // 4. Party / Agent / Customer Name: e.g. "for PANNA (৳500) approved", "from ALIF TRADERS was created", "for PANNA. Pending"
+    const forMatch = text.match(/(?:for|from)\s+([A-Za-z0-9\s\-_\/.]+?)(?:\s*\(|\s+(?:was|has|is|been|submitted|created|updated|added|rejected|approved|\.))/i);
+    if (forMatch) {
+        const val = forMatch[1].trim();
+        if (val.length >= 2 && !val.toLowerCase().startsWith('a ')) {
+            return val;
+        }
+    }
+
+    // 5. Parentheses format: only if inside parentheses there is an explicit code or number
     const parenMatch = text.match(/\(([^)]+)\)/);
     if (parenMatch) {
         const inner = parenMatch[1].trim();
@@ -126,19 +143,10 @@ function extractHighlightId(notif) {
         }
     }
 
-    // 5. Currency Amount figure e.g. ৳35,193.99 or ৳50,000
+    // 6. Currency Amount figure e.g. ৳35,193.99 or ৳50,000
     const amountMatch = text.match(/৳\s*([0-9,]+(?:\.[0-9]+)?)/);
     if (amountMatch) {
         return amountMatch[1].trim();
-    }
-
-    // 6. Fallback for party/company name in text: "for <Name> was/has/is" or "from <Name> was/has/is"
-    const forMatch = text.match(/(?:for|from)\s+([A-Za-z0-9\s\-_\/.]+?)\s+(?:was|has|is|been|submitted|created|updated|added|rejected|approved)/i);
-    if (forMatch) {
-        const val = forMatch[1].trim();
-        if (val.length >= 3 && !val.toLowerCase().startsWith('a ')) {
-            return val;
-        }
     }
 
     return null;
@@ -196,7 +204,19 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
             const titleStr = typeof notif.title === 'string' ? notif.title : (notif.title?.title || notif.title?.message || '');
             const msgStr = typeof notif.message === 'string' ? notif.message : (notif.message?.message || '');
             const titleMsg = (titleStr + ' ' + msgStr).toLowerCase();
-            const isRequested = /request/i.test(titleMsg) || /created/i.test(titleMsg) || /new/i.test(titleMsg) || /pending/i.test(titleMsg) || /ord/i.test(titleMsg) || view === 'order-sale-section';
+
+            // If action is already approved / completed / adjusted / rejected, do not open request view
+            const isCompletedOrApproved = /approved\s+successfully|has\s+been\s+approved|payment\s+approved|receipt\s+approved|collection\s+approved|adjusted|rejected|deleted/i.test(titleMsg) && !/pending|1st\s+approval|awaiting/i.test(titleMsg);
+
+            const isRequested = !isCompletedOrApproved && (
+                /request/i.test(titleMsg) ||
+                /created/i.test(titleMsg) ||
+                /new/i.test(titleMsg) ||
+                /pending/i.test(titleMsg) ||
+                /awaiting/i.test(titleMsg) ||
+                /ord/i.test(titleMsg) ||
+                view === 'order-sale-section'
+            );
             onNavigate(view, highlightId, isRequested);
         }
     };

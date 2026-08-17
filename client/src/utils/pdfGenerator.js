@@ -727,7 +727,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             doc.text("A", margin + 9, margin + 11, { align: 'center' });
         }
 
-        await preloadFrauncesFont().catch(() => {});
+        await preloadFrauncesFont().catch(() => { });
         const isFrauncesLoaded = ensureFrauncesFont(doc);
 
         const xPos = margin + 22;
@@ -3460,8 +3460,16 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
 
         const sortedPayments = [...payments].sort((a, b) => new Date(a.date) - new Date(b.date));
         sortedPayments.forEach((p, idx) => {
-            const amount = parseFloat(p.amount) || 0;
+            const rawAmount = parseFloat(p.amount) || 0;
+            const discount = parseFloat(p.discount) || 0;
+            const amount = rawAmount + discount;
             grandTotal += amount;
+
+            let remark = (p.reference || p.remarks || '').trim();
+            if (discount > 0) {
+                const discountText = `Discount (${discount.toLocaleString('en-IN')})`;
+                remark = remark ? `${remark}, ${discountText}` : discountText;
+            }
 
             tableRows.push([
                 idx + 1,
@@ -3473,7 +3481,7 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
                 (p.branch || '').trim() || '-',
                 p.accountNo || '-',
                 `${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                (p.reference || '').trim() || '-'
+                remark || '-'
             ]);
         });
 
@@ -4828,6 +4836,192 @@ export const generateCnFAgentListReportPDF = (agents, moduleType) => {
     } catch (error) {
         console.error("C&F Agent List PDF Error:", error);
         alert(`Failed to generate C&F Agent List PDF: ${error.message}`);
+    }
+};
+
+export const generateCnFPaymentsListReportPDF = (payments = [], filters = {}, dateStr = '') => {
+    try {
+        const doc = new jsPDF('p', 'mm', 'a4');
+
+        const formatDate = (dateString) => {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 32, pageWidth - margin, 32);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("C&F PAYMENT REPORT", pageWidth / 2, 34, { align: 'center' });
+
+        // --- Info Row ---
+        let yPos = 44;
+        doc.setFontSize(9.5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Total Records:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text((payments.length || 0).toString(), margin + 28, yPos);
+
+        doc.text(`Printed on: ${dateStr || formatDate(new Date().toISOString())}`, pageWidth - margin, yPos, { align: 'right' });
+
+        if (filters?.cnfName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("C&F Agent:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.cnfName, margin + 28, yPos);
+        }
+
+        if (filters?.type || filters?.cnfType) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Type:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.type || filters.cnfType, margin + 28, yPos);
+        }
+
+        if (filters?.startDate || filters?.endDate) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${formatDate(filters?.startDate)} to ${formatDate(filters?.endDate)}`, margin + 28, yPos);
+        }
+
+        const tableRows = [];
+        let totalAmount = 0;
+        let totalDiscount = 0;
+
+        payments.forEach((p, index) => {
+            const amt = parseFloat(p.amount) || 0;
+            const disc = parseFloat(p.discount) || 0;
+            totalAmount += amt;
+            totalDiscount += disc;
+
+            const refBank = p.bankName ? (p.reference ? `${p.bankName} (${p.reference})` : p.bankName) : (p.reference || '-');
+            const billRange = (p.billFrom && p.billTo) ? ` (${formatDate(p.billFrom)} - ${formatDate(p.billTo)})` : '';
+
+            tableRows.push([
+                index + 1,
+                formatDate(p.date),
+                p.cnfName || '-',
+                p.cnfType || '-',
+                p.method || '-',
+                refBank + billRange,
+                amt > 0 ? amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+                disc > 0 ? disc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'
+            ]);
+        });
+
+        autoTable(doc, {
+            startY: yPos + 6,
+            head: [['SL', 'Date', 'C&F Agent', 'Type', 'Method', 'Reference / Bank', 'Amount (Tk)', 'Discount (Tk)']],
+            body: tableRows,
+            foot: [[
+                { content: 'GRAND TOTAL', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
+            theme: 'plain',
+            showFoot: 'lastPage',
+            styles: {
+                fontSize: 9,
+                cellPadding: { top: 2, bottom: 2, left: 2.5, right: 2.5 },
+                minCellHeight: 6.5,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.2,
+                textColor: [0, 0, 0],
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [240, 240, 240],
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 9,
+                cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 }
+            },
+            footStyles: {
+                fillColor: [245, 245, 245],
+                fontStyle: 'bold',
+                fontSize: 9,
+                cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 }
+            },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 10 },
+                1: { halign: 'center', cellWidth: 25 },
+                2: { halign: 'left', cellWidth: 34 },
+                3: { halign: 'center', cellWidth: 16 },
+                4: { halign: 'center', cellWidth: 16 },
+                5: { halign: 'left', cellWidth: 44 },
+                6: { halign: 'right', cellWidth: 26 },
+                7: { halign: 'right', cellWidth: 24 }
+            },
+            margin: { left: margin, right: margin, bottom: 20 },
+            didDrawPage: (data) => {
+                const pageCount = doc.internal.getNumberOfPages();
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'normal');
+                doc.text(
+                    `Page ${data.pageNumber} of ${pageCount}`,
+                    pageWidth - margin,
+                    pageHeight - 8,
+                    { align: 'right' }
+                );
+            }
+        });
+
+        // --- Signatures ---
+        let finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 25 : yPos + 30;
+        if (finalY + 20 > pageHeight) {
+            doc.addPage();
+            finalY = 30;
+        }
+
+        const sigWidth = 45;
+        const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.line(margin, finalY, margin + sigWidth, finalY);
+        doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+        doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+        doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("C&F Payment Report PDF Generation Error:", error);
+        alert(`Failed to generate C&F Payment Report PDF: ${error.message}`);
     }
 };
 

@@ -544,6 +544,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         customerId: customer._id,
                         customerName: customer.customerName,
                         companyName: customer.companyName,
+                        customerType: customer.customerType || 'General Customer',
+                        partyType: customer.customerType || 'General Customer',
                         customerAddress: customer.location || '',
                         readableCustomerId: customer.customerId
                     });
@@ -1769,6 +1771,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             const groupKey = `${payment.date}-${payment.receiptNo || payment.id}-${payment.customerId}`;
             let group = groups.find(g => g.key === groupKey);
             if (!group) {
+                const custObj = rawCustomers.find(c => c._id === payment.customerId || c.customerId === payment.readableCustomerId || (c.companyName && payment.companyName && c.companyName.trim().toLowerCase() === payment.companyName.trim().toLowerCase()));
+                const pType = payment.partyType || payment.customerType || custObj?.customerType || 'General Customer';
                 group = {
                     key: groupKey,
                     date: payment.date,
@@ -1776,6 +1780,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                     companyName: payment.companyName,
                     customerName: payment.customerName,
                     customerId: payment.customerId,
+                    customerType: pType,
+                    partyType: pType,
                     customerAddress: payment.customerAddress || '',
                     status: payment.status,
                     isEdited: payment.isEdited,
@@ -1808,10 +1814,10 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 
     const selectedCustomerForBalance = rawCustomers.find(c => c._id === newPayment.customerId);
     const currentBalance = calculateCustomerBalance(selectedCustomerForBalance);
-    const totalCollection = newPayment.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const totalCollection = newPayment.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) + (Number(newPayment.discount) || 0);
     const totalAmountCollected = payments
         .filter(p => p.customerId === newPayment.customerId && (p.status || '').toLowerCase() !== 'requested')
-        .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+        .reduce((sum, p) => sum + (parseFloat(p.amount) || 0) + (parseFloat(p.discount) || 0), 0);
 
     return (
         <div className="space-y-6">
@@ -2315,7 +2321,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                         displayedGroups.map((group) => {
                                             const isMultiple = group.items.length > 1;
                                             const isExpanded = !collapsedRows.has(group.key);
-                                            const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                                            const paidAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                                            const groupDiscount = group.items.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+                                            const totalAmount = paidAmount + groupDiscount;
 
                                             return (
                                                 <tr
@@ -2373,7 +2381,18 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                         <div className="text-sm font-semibold text-blue-600 leading-tight">{group.receiptNo || '—'}</div>
                                                     </td>
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
-                                                        <div className="text-sm font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
+                                                        <div className="flex flex-col gap-1 items-start">
+                                                            <div className="text-sm font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
+                                                            {group.partyType && (
+                                                                <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide ${
+                                                                    group.partyType === 'Party Customer'
+                                                                        ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                                        : 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                                }`}>
+                                                                    {group.partyType}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         <div className="text-sm text-gray-500 leading-tight truncate max-w-[150px]">{group.customerAddress || '—'}</div>
@@ -2432,16 +2451,34 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                     </td>
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap text-center`}>
                                                         {isMultiple && !isExpanded ? (
-                                                            <div className="inline-block px-3 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-sm font-black">
-                                                                ৳{Number(totalAmount).toLocaleString('en-IN')}
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <div className="inline-block px-3 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100/50 text-sm font-black">
+                                                                    ৳{Number(totalAmount).toLocaleString('en-IN')}
+                                                                </div>
+                                                                {groupDiscount > 0 && (
+                                                                    <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide bg-rose-50 text-rose-700 border border-rose-200/60">
+                                                                        Discount ({Number(groupDiscount).toLocaleString('en-IN')})
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         ) : (
-                                                            <div className="flex flex-col gap-1">
-                                                                {group.items.map((item, idx) => (
-                                                                    <div key={idx} className={`text-sm font-black text-gray-900 leading-tight ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
-                                                                        ৳{Number(item.amount || 0).toLocaleString('en-IN')}
-                                                                    </div>
-                                                                ))}
+                                                            <div className="flex flex-col gap-1 items-center">
+                                                                {group.items.map((item, idx) => {
+                                                                    const itemTotal = (parseFloat(item.amount) || 0) + (parseFloat(item.discount) || 0);
+                                                                    const itemDisc = parseFloat(item.discount) || 0;
+                                                                    return (
+                                                                        <div key={idx} className={`flex flex-col items-center ${idx < group.items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                            <div className="text-sm font-black text-gray-900 leading-tight">
+                                                                                ৳{Number(itemTotal).toLocaleString('en-IN')}
+                                                                            </div>
+                                                                            {itemDisc > 0 && (
+                                                                                <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide bg-rose-50 text-rose-700 border border-rose-200/60 mt-0.5">
+                                                                                    Discount ({Number(itemDisc).toLocaleString('en-IN')})
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         )}
                                                     </td>
@@ -2563,7 +2600,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                             ) : displayedGroups.length > 0 ? (
                                 displayedGroups.map((group) => {
                                     const isExpanded = expandedMobileCards === group.key;
-                                    const totalAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                                    const paidAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                                    const groupDiscount = group.items.reduce((sum, item) => sum + (parseFloat(item.discount) || 0), 0);
+                                    const totalAmount = paidAmount + groupDiscount;
 
                                     return (
                                         <div
@@ -2615,6 +2654,17 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                 )}
                                                 <div className="flex-1 min-w-0 pr-2">
                                                     <div className="mobile-card-title truncate">{group.companyName || group.customerName}</div>
+                                                    {group.partyType && (
+                                                        <div className="mt-0.5">
+                                                            <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide ${
+                                                                group.partyType === 'Party Customer'
+                                                                    ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                                    : 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                            }`}>
+                                                                {group.partyType}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                     <div className="text-[10px] text-gray-500 truncate mt-0.5">
                                                         {formatDate(group.date)} | {group.receiptNo || '—'}
                                                     </div>
@@ -2623,6 +2673,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                     <span className="font-bold text-blue-600">
                                                         ৳{Number(totalAmount).toLocaleString('en-IN')}
                                                     </span>
+                                                    {groupDiscount > 0 && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">
+                                                            Discount ({Number(groupDiscount).toLocaleString('en-IN')})
+                                                        </span>
+                                                    )}
                                                     {group.items.length > 1 && (
                                                         <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-bold">
                                                             {group.items.length} Items
@@ -2658,7 +2713,16 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                 </div>
                                                                 <div className="mobile-card-row">
                                                                     <span className="mobile-card-label text-blue-600">Amount:</span>
-                                                                    <span className="mobile-card-value font-black text-blue-600">৳{Number(item.amount || 0).toLocaleString('en-IN')}</span>
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className="mobile-card-value font-black text-blue-600">
+                                                                            ৳{Number((parseFloat(item.amount) || 0) + (parseFloat(item.discount) || 0)).toLocaleString('en-IN')}
+                                                                        </span>
+                                                                        {parseFloat(item.discount) > 0 && (
+                                                                            <span className="text-[9px] text-rose-700 bg-rose-50 border border-rose-200/60 px-1 rounded font-bold mt-0.5">
+                                                                                Discount ({Number(item.discount).toLocaleString('en-IN')})
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
 
                                                                 {canShowEntryBy && idx === group.items.length - 1 && (

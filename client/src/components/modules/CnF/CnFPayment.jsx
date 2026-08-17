@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon } from '../../Icons';
+import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon, BoxIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { generateCnFPaymentsListReportPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 
@@ -22,12 +23,12 @@ const toYYYYMMDD = (dateVal) => {
     return `${y}-${m}-${day}`;
 };
 
-const CnFPayment = () => {
+const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif, refreshPendingIndicators }) => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
-    const [currentUser] = useState(() => {
+    const [localCurrentUser] = useState(() => {
         try {
             const saved = localStorage.getItem('currentUser');
             return saved ? JSON.parse(saved) : null;
@@ -36,12 +37,180 @@ const CnFPayment = () => {
         }
     });
 
+    const currentUser = propCurrentUser || localCurrentUser;
+
+    const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+
     const canAdd = hasPermission(currentUser, 'cnfPayment', 'add');
     const canEdit = hasPermission(currentUser, 'cnfPayment', 'edit');
     const canDelete = hasPermission(currentUser, 'cnfPayment', 'delete');
-    const canManage = canEdit || canDelete;
-    const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
-    const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
+    const canPaymentRequest = hasPermission(currentUser, 'cnfPayment', 'paymentRequest') || canAdd;
+    const canApproveFirst = hasPermission(currentUser, 'cnfPayment', 'firstApprove');
+    const canApproveSecond = hasPermission(currentUser, 'cnfPayment', 'secondApprove');
+    const canApprove = isAdmin || isIncharge || hasPermission(currentUser, 'cnfPayment', 'special');
+    const canViewPaymentRequest = hasPermission(currentUser, 'cnfPayment', 'paymentRequest') || hasPermission(currentUser, 'cnfPayment', 'special') || canApproveFirst || canApproveSecond || canApprove;
+    const canShowEntryBy = isAdmin || isIncharge || hasPermission(currentUser, 'cnfPayment', 'showEntryBy');
+    const canManage = canAdd || canEdit || canDelete || canApprove || canApproveFirst || canApproveSecond || canPaymentRequest;
+
+    // Check if current user has permission to approve the specific request step
+    const showRequestedApprovalButtons = (p) => {
+        if (isAdmin) return true;
+
+        const entryBy = String(p.entryBy || '').toLowerCase().trim();
+        const createdBy = String(p.createdBy || '').toLowerCase().trim();
+        const myIdentifiers = [
+            currentUser?.username,
+            currentUser?.employeeId,
+            currentUser?.id,
+            currentUser?.name,
+            currentUser?.nameEn
+        ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+        const isSelfEntry = myIdentifiers.includes(entryBy) || myIdentifiers.includes(createdBy);
+        if (isSelfEntry) return false;
+
+        const isFirstApproved = p.firstApproved === true || p.smApproved === true;
+        const userModulePerms = currentUser?.permissions?.cnfPayment;
+        const currentUserRole = (currentUser?.role || '').toLowerCase();
+
+        if (isFirstApproved) {
+            const firstApprovedBy = String(p.firstApprovedBy || p.smApprovedBy || '').toLowerCase().trim();
+            const isFirstApprover = firstApprovedBy && myIdentifiers.includes(firstApprovedBy);
+            if (isFirstApprover) return false;
+
+            if (userModulePerms && typeof userModulePerms.secondApprove === 'boolean') {
+                return userModulePerms.secondApprove === true;
+            }
+            return currentUserRole === 'incharge' || canApproveSecond || canApprove;
+        }
+
+        if (userModulePerms && typeof userModulePerms.firstApprove === 'boolean') {
+            return userModulePerms.firstApprove === true;
+        }
+        return currentUserRole === 'incharge' || canApproveFirst || canApprove;
+    };
+
+    // Creator can edit their own entry while it's still pending approval (before 1st approval)
+    const canEditBeforeApproval = (payment) => {
+        if (!payment) return false;
+        const status = (payment.status || '').toLowerCase();
+        if (status !== 'requested') return false;
+
+        // Admin, Incharge, or users with explicit edit permission can always edit
+        if (canEdit || isAdmin || isIncharge) return true;
+
+        if (payment.firstApproved === true || payment.smApproved === true) return false;
+
+        const entryBy = String(payment.entryBy || '').toLowerCase().trim();
+        const createdBy = String(payment.createdBy || '').toLowerCase().trim();
+
+        const myIdentifiers = [
+            currentUser?.username,
+            currentUser?.employeeId,
+            currentUser?.id,
+            currentUser?.name,
+            currentUser?.nameEn
+        ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+        return myIdentifiers.includes(entryBy) || myIdentifiers.includes(createdBy);
+    };
+
+    const getStatusBadge = (p) => {
+        const status = (p.status || '').toLowerCase();
+        if (status === 'requested') {
+            const isFirstApproved = p.firstApproved === true || p.smApproved === true;
+            if (isFirstApproved) {
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                        Pending 2nd Approval
+                    </span>
+                );
+            }
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    Pending 1st Approval
+                </span>
+            );
+        }
+        if (status === 'rejected') {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                    Rejected
+                </span>
+            );
+        }
+        return (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CheckIcon className="w-3 h-3 text-emerald-600" />
+                Completed
+            </span>
+        );
+    };
+
+    // Requested Filter State
+    const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    useEffect(() => {
+        if (!highlightId && isRequestedNotif) {
+            setIsRequestedOnly(true);
+        }
+    }, [isRequestedNotif, highlightId]);
+    const [isRequestMode, setIsRequestMode] = useState(false);
+
+    const requestedCount = useMemo(() => {
+        return payments.filter(p => (p.status || '').toLowerCase() === 'requested').length;
+    }, [payments]);
+
+    // Highlighting logic
+    const rowRefs = useRef({});
+    useEffect(() => {
+        if (!highlightId) return;
+
+        const cleanH = String(highlightId).toLowerCase().trim();
+        const targetItem = payments.find(p => 
+            (p.cnfName && (String(p.cnfName).toLowerCase().trim() === cleanH || cleanH.includes(String(p.cnfName).toLowerCase().trim()) || String(p.cnfName).toLowerCase().trim().includes(cleanH))) ||
+            (p.reference && (String(p.reference).toLowerCase().trim() === cleanH || cleanH.includes(String(p.reference).toLowerCase().trim()))) ||
+            String(p._id) === cleanH
+        );
+
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase() === 'requested';
+            setIsRequestedOnly(isReq);
+        } else if (isRequestedNotif) {
+            setIsRequestedOnly(true);
+        } else {
+            setIsRequestedOnly(false);
+        }
+
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => {
+                const cleanK = k.trim().toLowerCase();
+                return cleanK === target || cleanK.includes(target) || target.includes(cleanK);
+            });
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchQuery(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId, payments, isRequestedNotif]);
 
     // Edit States
     const [isEditMode, setIsEditMode] = useState(false);
@@ -271,8 +440,11 @@ const CnFPayment = () => {
             }
         });
 
-        // Process Payments for this C&F
-        const paymentsFiltered = rawPayments.filter(p => p.cnfId === cnfId);
+        // Process Payments for this C&F (exclude requested and rejected)
+        const paymentsFiltered = rawPayments.filter(p => {
+            const pStatus = (p.status || '').toLowerCase();
+            return p.cnfId === cnfId && pStatus !== 'requested' && pStatus !== 'rejected';
+        });
 
         return { historyRecords: rows, paymentRecords: paymentsFiltered };
     };
@@ -497,8 +669,10 @@ const CnFPayment = () => {
                     return acc;
                 }, 0);
 
-                // 3. Subtract Payments (including discount)
+                // 3. Subtract Payments (including discount) - only completed/approved payments
                 const paid = allPayments.reduce((acc, payment) => {
+                    const pStatus = (payment.status || '').toLowerCase();
+                    if (pStatus === 'requested' || pStatus === 'rejected') return acc;
                     if (payment.cnfId === cnf._id) {
                         return acc + (parseFloat(payment.amount) || 0) + (parseFloat(payment.discount) || 0);
                     }
@@ -592,45 +766,183 @@ const CnFPayment = () => {
     const uniqueCnfNames = [...new Set(cnfs.map(c => c.name).filter(Boolean))].sort();
 
     const handleAddPayment = async (e) => {
-        e.preventDefault();
-        const hasAccess = isEditMode ? canEdit : canAdd;
+        if (e && e.preventDefault) e.preventDefault();
+        const isCreatorEditingBeforeApproval = isEditMode && editingPayment && canEditBeforeApproval(editingPayment);
+        const hasAccess = isEditMode ? (canEdit || isCreatorEditingBeforeApproval) : (canAdd || canPaymentRequest);
         if (!hasAccess) {
-            alert(`Forbidden: You do not have permission to ${isEditMode ? 'edit' : 'add'} C&F payments`);
+            alert(`Forbidden: You do not have permission to ${isEditMode ? 'edit' : (isRequestMode ? 'request' : 'add')} C&F payments`);
             return;
         }
-        if (!newPayment.cnfId || !newPayment.amount || parseFloat(newPayment.amount) <= 0) return;
+
+        if (!newPayment.cnfId) {
+            alert('Please select a C&F agent.');
+            return;
+        }
+
+        const amountVal = parseFloat(newPayment.amount) || 0;
+        const discountVal = parseFloat(newPayment.discount) || 0;
+
+        if (amountVal <= 0 && discountVal <= 0) {
+            alert('Please enter a payment amount or discount.');
+            return;
+        }
 
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
             const selectedCnf = cnfs.find(c => c._id === newPayment.cnfId);
+            const initialStatus = isEditMode ? (editingPayment?.status || 'Completed') : (isRequestMode || !canApprove ? 'Requested' : 'Completed');
             const paymentData = {
                 ...newPayment,
                 cnfName: selectedCnf?.name,
                 cnfType: selectedCnf?.type,
-                amount: parseFloat(newPayment.amount),
-                discount: parseFloat(newPayment.discount || 0)
+                amount: amountVal,
+                discount: discountVal,
+                status: initialStatus,
+                entryBy: editingPayment?.entryBy || currentUser?.name || currentUser?.username || 'Admin',
+                createdBy: editingPayment?.createdBy || currentUser?.username || 'Admin',
+                createdRole: editingPayment?.createdRole || currentUser?.role || 'Admin',
+                ...(initialStatus === 'Completed' && !editingPayment?.approvedBy ? {
+                    approvedBy: currentUser?.name || currentUser?.username || 'Admin',
+                    approverRole: currentUser?.role || 'Admin',
+                    approvedAt: new Date().toISOString()
+                } : {})
             };
 
             if (isEditMode) {
                 await axios.put(`${API_BASE_URL}/api/cnf-payments/${editingPayment._id}`, paymentData);
+                if (addNotification) {
+                    addNotification(
+                        'C&F Payment Updated',
+                        `C&F payment for ${selectedCnf?.name} was updated by ${currentUser?.name || currentUser?.username || 'User'}.`,
+                        ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Accounts Manager'],
+                        'cnf-payment-section',
+                        selectedCnf?.name
+                    );
+                }
             } else {
                 await axios.post(`${API_BASE_URL}/api/cnf-payments`, paymentData);
+                if (addNotification) {
+                    if (initialStatus === 'Requested') {
+                        addNotification(
+                            'New C&F Payment Requested',
+                            `Payment request of ৳${(amountVal || discountVal).toLocaleString('en-IN')} for C&F agent ${selectedCnf?.name} was submitted by ${currentUser?.name || currentUser?.username || 'User'}.`,
+                            ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Accounts Manager'],
+                            'cnf-payment-section',
+                            selectedCnf?.name
+                        );
+                    } else {
+                        addNotification(
+                            'New C&F Payment Added',
+                            `C&F payment of ৳${amountVal.toLocaleString('en-IN')} for ${selectedCnf?.name} has been recorded by ${currentUser?.name || currentUser?.username || 'User'}.`,
+                            ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Accounts Manager'],
+                            'cnf-payment-section',
+                            selectedCnf?.name
+                        );
+                    }
+                }
             }
 
             setSubmitStatus('success');
             fetchPayments();
+            fetchCnFs();
+            refreshPendingIndicators?.();
             setTimeout(() => {
                 setShowAddModal(false);
                 setSubmitStatus(null);
                 resetNewPayment();
-            }, 1500);
+            }, 1200);
         } catch (error) {
             console.error('Error saving C&F payment:', error);
             setSubmitStatus('error');
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleApprovePayment = async (payment) => {
+        if (!showRequestedApprovalButtons(payment)) {
+            alert('Forbidden: You do not have permission to approve this payment request');
+            return;
+        }
+
+        const isFirstApproved = payment.firstApproved === true || payment.smApproved === true;
+        const userModulePerms = currentUser?.permissions?.cnfPayment;
+        const isFirstApproverOnly = ((userModulePerms && userModulePerms.firstApprove === true) || canApproveFirst) && 
+            !isAdmin && !isIncharge && !canApproveSecond && !(userModulePerms && userModulePerms.secondApprove === true) && !hasPermission(currentUser, 'cnfPayment', 'special');
+
+        setIsSubmitting(true);
+        try {
+            let updatedData;
+            if (!isFirstApproved && isFirstApproverOnly) {
+                // Perform 1st approval step
+                updatedData = {
+                    ...payment,
+                    firstApproved: true,
+                    firstApprovedBy: currentUser?.name || currentUser?.username || 'Approver',
+                    firstApprovedRole: currentUser?.role || 'Approver',
+                    firstApprovedAt: new Date().toISOString(),
+                    status: 'Requested'
+                };
+            } else {
+                // Perform 2nd / Final approval step
+                updatedData = {
+                    ...payment,
+                    status: 'Completed',
+                    firstApproved: true,
+                    firstApprovedBy: payment.firstApprovedBy || currentUser?.name || currentUser?.username || 'Approver',
+                    firstApprovedRole: payment.firstApprovedRole || currentUser?.role || 'Approver',
+                    firstApprovedAt: payment.firstApprovedAt || new Date().toISOString(),
+                    secondApproved: true,
+                    secondApprovedBy: currentUser?.name || currentUser?.username || 'Admin',
+                    secondApprovedRole: currentUser?.role || 'Admin',
+                    secondApprovedAt: new Date().toISOString(),
+                    approvedBy: currentUser?.name || currentUser?.username || 'Admin',
+                    approverRole: currentUser?.role || 'Admin',
+                    approvedAt: new Date().toISOString()
+                };
+            }
+
+            await axios.put(`${API_BASE_URL}/api/cnf-payments/${payment._id}`, updatedData);
+
+            if (addNotification) {
+                if (updatedData.status === 'Completed') {
+                    addNotification(
+                        'C&F Payment Approved',
+                        `C&F payment of ৳${(payment.amount || payment.discount || 0).toLocaleString('en-IN')} for ${payment.cnfName} has been approved by ${currentUser?.name || currentUser?.username || 'Admin'}.`,
+                        ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Accounts Manager'],
+                        'cnf-payment-section',
+                        payment.cnfName
+                    );
+                } else {
+                    addNotification(
+                        'C&F Payment 1st Approved',
+                        `1st Approval completed for C&F agent ${payment.cnfName} (৳${(payment.amount || payment.discount || 0).toLocaleString('en-IN')}) by ${currentUser?.name || currentUser?.username || 'Approver'}. Pending 2nd approval.`,
+                        ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Accounts Manager'],
+                        'cnf-payment-section',
+                        payment.cnfName
+                    );
+                }
+            }
+
+            fetchPayments();
+            fetchCnFs();
+            refreshPendingIndicators?.();
+        } catch (error) {
+            console.error('Error approving payment request:', error);
+            alert('Failed to approve payment request');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleRejectPayment = (payment) => {
+        if (!showRequestedApprovalButtons(payment) && !canDelete && !canApprove) {
+            alert('Forbidden: You do not have permission to reject/delete this payment');
+            return;
+        }
+        setPaymentToDelete(payment);
+        setShowDeleteConfirm(true);
     };
 
     const resetNewPayment = () => {
@@ -649,17 +961,19 @@ const CnFPayment = () => {
         setCnfSearchQuery('');
         setIsEditMode(false);
         setEditingPayment(null);
+        setIsRequestMode(false);
     };
 
     const handleEditPayment = (payment) => {
         setIsEditMode(true);
         setEditingPayment(payment);
+        setIsRequestMode(payment.status === 'Requested');
         setNewPayment({
             cnfId: payment.cnfId,
             date: payment.date,
             method: payment.method,
-            amount: payment.amount.toString(),
-            discount: (payment.discount || 0).toString(),
+            amount: payment.amount !== undefined && payment.amount !== null ? payment.amount.toString() : '',
+            discount: payment.discount !== undefined && payment.discount !== null ? payment.discount.toString() : '',
             reference: payment.reference || '',
             bankName: payment.bankName || '',
             remarks: payment.remarks || '',
@@ -672,7 +986,7 @@ const CnFPayment = () => {
     };
 
     const handleDeletePayment = (payment) => {
-        if (!canDelete) {
+        if (!canDelete && !canApprove) {
             alert('Forbidden: You do not have permission to delete C&F payments');
             return;
         }
@@ -686,11 +1000,22 @@ const CnFPayment = () => {
         try {
             await axios.delete(`${API_BASE_URL}/api/cnf-payments/${paymentToDelete._id}`);
             setSubmitStatus('success');
+            if (addNotification) {
+                addNotification(
+                    'C&F Payment Deleted',
+                    `Payment record for C&F agent ${paymentToDelete?.cnfName || ''} was deleted by ${currentUser?.name || currentUser?.username || 'Admin'}.`,
+                    ['Admin', 'Incharge', 'LC Manager', 'Border Manager', 'Accounts Manager'],
+                    'cnf-payment-section',
+                    paymentToDelete?.cnfName
+                );
+            }
             setTimeout(() => {
                 setShowDeleteConfirm(false);
                 setPaymentToDelete(null);
                 setSubmitStatus(null);
                 fetchPayments();
+                fetchCnFs();
+                refreshPendingIndicators?.();
             }, 1000);
         } catch (error) {
             console.error('Error deleting C&F payment:', error);
@@ -713,10 +1038,18 @@ const CnFPayment = () => {
     };
 
     const filteredPayments = payments.filter(p => {
+        const statusLower = (p.status || '').toLowerCase();
+        if (isRequestedOnly) {
+            if (statusLower !== 'requested') return false;
+        } else {
+            if (statusLower === 'requested') return false;
+        }
+
         const matchSearch = !searchQuery ||
             (p.cnfName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.method || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (p.reference || '').toLowerCase().includes(searchQuery.toLowerCase());
+            (p.reference || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.entryBy || '').toLowerCase().includes(searchQuery.toLowerCase());
 
         const matchStartDate = !filters.startDate || p.date >= filters.startDate;
         const matchEndDate = !filters.endDate || p.date <= filters.endDate;
@@ -735,8 +1068,13 @@ const CnFPayment = () => {
         return valA < valB ? -1 : 1;
     });
 
-    const totalPaid = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
-    const totalDiscount = filteredPayments.reduce((sum, p) => sum + (p.discount || 0), 0);
+    const handleGenerateReport = () => {
+        const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        generateCnFPaymentsListReportPDF(filteredPayments, filters, todayStr);
+    };
+
+    const totalPaid = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const totalDiscount = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.discount) || 0), 0);
     const transactionCount = filteredPayments.length;
 
     return (
@@ -747,17 +1085,35 @@ const CnFPayment = () => {
                 </div>
 
                 {!showAddModal && (
-                    <div className="flex-1 w-full max-w-md mx-auto relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <div className="flex-1 w-full max-w-none md:max-w-xl mx-auto flex flex-col items-center gap-2">
+                        <div className="w-full relative group">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search by C&F, method, reference..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="block w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
+                            />
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Search by C&F, method, reference..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="h-10 block w-full pl-10 pr-4 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
-                        />
+
+                        <div className="flex items-center gap-2">
+                            {canViewPaymentRequest && (
+                                <button
+                                    onClick={() => setIsRequestedOnly(!isRequestedOnly)}
+                                    className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${isRequestedOnly ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
+                                >
+                                    Requested
+                                    {requestedCount > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-pulse border-2 border-white">
+                                            {requestedCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
 
@@ -827,13 +1183,25 @@ const CnFPayment = () => {
                             )}
                         </div>
                     )}
-                    {!showAddModal && canAdd && (
+                    {!showAddModal && (
                         <button
-                            onClick={() => setShowAddModal(true)}
+                            onClick={handleGenerateReport}
+                            className="h-10 flex items-center justify-center gap-2 px-4 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95 text-sm font-medium shadow-sm cursor-pointer"
+                        >
+                            <BarChartIcon className="w-4 h-4 text-gray-400 hidden sm:block" />
+                            <span className="text-sm font-medium">Report</span>
+                        </button>
+                    )}
+                    {(canAdd || canPaymentRequest) && !showAddModal && (
+                        <button
+                            onClick={() => {
+                                setIsRequestMode(!canApprove);
+                                setShowAddModal(true);
+                            }}
                             className="h-10 border border-transparent flex items-center justify-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-sm hover:shadow-blue-500/30"
                         >
                             <PlusIcon className="w-4 h-4" />
-                            <span>Add Payment</span>
+                            <span>{!canApprove && canPaymentRequest ? 'Request Payment' : 'Add Payment'}</span>
                         </button>
                     )}
                 </div>
@@ -844,9 +1212,9 @@ const CnFPayment = () => {
                 <div className="relative group mb-8">
                     <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[2.5rem] blur opacity-5 group-hover:opacity-10 transition duration-1000"></div>
                     <div className="relative bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-2xl animate-in slide-in-from-top-4 duration-500">
-                        <div className="px-8 py-6 border-b border-gray-100/50 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-white">
+                        <div className="px-8 py-6 border-b border-gray-100/50 flex items-center justify-between bg-gradient-to-r from-gray-50/50 to-white rounded-t-[2rem]">
                             <div>
-                                <h3 className="text-lg font-black text-gray-900 tracking-tight">{isEditMode ? 'Edit C&F Payment' : 'New C&F Payment'}</h3>
+                                <h3 className="text-lg font-black text-gray-900 tracking-tight">{isEditMode ? 'Edit C&F Payment' : (isRequestMode ? 'New Payment Request' : 'New C&F Payment')}</h3>
                                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">C&F Financial Record</p>
                             </div>
                             <button onClick={() => { setShowAddModal(false); resetNewPayment(); }} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all active:scale-90">
@@ -1053,19 +1421,31 @@ const CnFPayment = () => {
                                 </div>
                             </div>
 
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Remarks</label>
+                                <textarea
+                                    value={newPayment.remarks}
+                                    onChange={(e) => setNewPayment({ ...newPayment, remarks: e.target.value })}
+                                    placeholder="Add any remarks or details..."
+                                    rows="2"
+                                    className="w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                />
+                            </div>
+
                             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-50">
                                 <button
                                     type="submit"
+                                    onClick={handleAddPayment}
                                     disabled={isSubmitting}
-                                    className="px-10 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50"
+                                    className="px-10 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50 cursor-pointer active:scale-95"
                                 >
-                                    {isSubmitting ? 'Processing...' : isEditMode ? 'Update Payment' : 'Confirm Payment'}
+                                    {isSubmitting ? 'Processing...' : isEditMode ? 'Update Payment' : (isRequestMode ? 'Submit Request' : 'Confirm Payment')}
                                 </button>
                             </div>
                         </form>
 
                         {submitStatus === 'success' && (
-                            <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in">
+                            <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in rounded-[2rem]">
                                 <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
                                     <CheckIcon className="w-8 h-8" />
                                 </div>
@@ -1085,7 +1465,7 @@ const CnFPayment = () => {
                                 <div className="p-1.5 sm:p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
                                     <DollarSignIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </div>
-                                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Paid</span>
+                                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">{isRequestedOnly ? 'Requested Amount' : 'Total Paid'}</span>
                             </div>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-xl sm:text-2xl font-black text-gray-900">৳{totalPaid.toLocaleString('en-IN')}</span>
@@ -1113,7 +1493,7 @@ const CnFPayment = () => {
                                 <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                                     <BarChartIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </div>
-                                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">Transactions</span>
+                                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">{isRequestedOnly ? 'Requests' : 'Transactions'}</span>
                             </div>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-xl sm:text-2xl font-black text-gray-900">{transactionCount}</span>
@@ -1122,8 +1502,6 @@ const CnFPayment = () => {
                             <div className="text-[9px] sm:text-[10px] text-gray-400 mt-1 italic">Total entries</div>
                         </div>
                     </div>
-
-
 
                     {/* Table Section */}
                     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
@@ -1154,55 +1532,143 @@ const CnFPayment = () => {
                                             </div>
                                         </th>
                                         <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-right">Discount</th>
+                                        <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Status</th>
+                                        {canShowEntryBy && (
+                                            <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Entry By</th>
+                                        )}
                                         {canManage && <th className="px-4 py-3 font-bold text-gray-500 text-xs uppercase tracking-wider text-center">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {isLoading ? (
-                                        <tr><td colSpan={canManage ? 8 : 7} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
+                                        <tr><td colSpan={canShowEntryBy ? (canManage ? 10 : 9) : (canManage ? 9 : 8)} className="px-4 py-12 text-center text-gray-400">Loading payments...</td></tr>
                                     ) : filteredPayments.length === 0 ? (
-                                        <tr><td colSpan={canManage ? 8 : 7} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
+                                        <tr><td colSpan={canShowEntryBy ? (canManage ? 10 : 9) : (canManage ? 9 : 8)} className="px-4 py-12 text-center text-gray-400">No payment records found.</td></tr>
                                     ) : (
-                                        filteredPayments.map((p) => (
-                                            <tr key={p._id} className="hover:bg-gray-50/50 transition-colors group">
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-700">{formatDate(p.date)}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    <div className="font-bold text-gray-900">{p.cnfName}</div>
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.cnfType}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">
-                                                    {p.bankName || p.reference ? (
-                                                        <div>
-                                                            <div className="text-gray-900 font-medium">{p.bankName || p.reference}</div>
-                                                            {p.billFrom && p.billTo && (
-                                                                <div className="text-[10px] text-gray-400 font-medium">
+                                        filteredPayments.map((p) => {
+                                            const isReq = (p.status || '').toLowerCase() === 'requested';
+                                            const cleanH = String(highlightId || '').replace(/[৳,\s]/g, '').toLowerCase().trim();
+                                            const rawH = String(highlightId || '').toLowerCase().trim();
+                                            const isHighlighted = highlightId && (
+                                                String(p._id) === String(highlightId) ||
+                                                (p.cnfName && String(p.cnfName).toLowerCase().trim() === rawH) ||
+                                                (p.cnfName && rawH.includes(String(p.cnfName).toLowerCase().trim())) ||
+                                                (p.cnfName && String(p.cnfName).toLowerCase().trim().includes(rawH)) ||
+                                                (p.reference && String(p.reference).toLowerCase().trim() === rawH) ||
+                                                (p.reference && rawH.includes(String(p.reference).toLowerCase().trim())) ||
+                                                (cleanH && cleanH.length >= 2 && (String(p.amount) === cleanH || String(p.discount) === cleanH))
+                                            );
+                                            return (
+                                                <tr
+                                                    key={p._id}
+                                                    ref={el => {
+                                                        if (el) {
+                                                            rowRefs.current[p._id] = el;
+                                                            if (p.cnfName) rowRefs.current[p.cnfName] = el;
+                                                            if (p.reference) rowRefs.current[p.reference] = el;
+                                                        }
+                                                    }}
+                                                    className={`hover:bg-gray-50/50 transition-all duration-300 group ${isHighlighted ? 'notif-row-highlight' : ''}`}
+                                                    style={isHighlighted ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                                >
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-700">{formatDate(p.date)}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <div className="font-bold text-gray-900">{p.cnfName}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.cnfType}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500">
+                                                        {p.bankName || p.reference ? (
+                                                            <div>
+                                                                <div className="text-gray-900 font-medium">{p.bankName || p.reference}</div>
+                                                                {p.billFrom && p.billTo && (
+                                                                    <div className="text-[10px] text-gray-400 font-medium">
+                                                                        {formatDate(p.billFrom)} to {formatDate(p.billTo)}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            p.billFrom && p.billTo ? (
+                                                                <div className="text-gray-900 font-medium text-xs">
                                                                     {formatDate(p.billFrom)} to {formatDate(p.billTo)}
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        p.billFrom && p.billTo ? (
-                                                            <div className="text-gray-900 font-medium text-xs">
-                                                                {formatDate(p.billFrom)} to {formatDate(p.billTo)}
-                                                            </div>
-                                                        ) : '-'
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-right font-black text-gray-900">৳{p.amount.toLocaleString('en-IN')}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-emerald-600">
-                                                    {p.discount > 0 ? `৳${p.discount.toLocaleString('en-IN')}` : '-'}
-                                                </td>
-                                                {canManage && (
-                                                    <td className="px-4 py-3 whitespace-nowrap text-center">
-                                                        <div className="flex items-center justify-center gap-2">
-                                                            {canEdit && <button onClick={() => handleEditPayment(p)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>}
-                                                            {canDelete && <button onClick={() => handleDeletePayment(p)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>}
-                                                        </div>
+                                                            ) : '-'
+                                                        )}
                                                     </td>
-                                                )}
-                                            </tr>
-                                        ))
+                                                    <td className="px-4 py-3 whitespace-nowrap text-right font-black text-gray-900">৳{(parseFloat(p.amount) || 0).toLocaleString('en-IN')}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-emerald-600">
+                                                        {p.discount > 0 ? `৳${(parseFloat(p.discount) || 0).toLocaleString('en-IN')}` : '-'}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-center">
+                                                        {getStatusBadge(p)}
+                                                    </td>
+                                                    {canShowEntryBy && (
+                                                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <span className="text-xs font-semibold text-gray-700">
+                                                                    {p.entryByName || p.entryBy || p.createdBy || '-'}
+                                                                </span>
+                                                                {(p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy) && (
+                                                                    <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                                                        ✓ {p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy}
+                                                                    </span>
+                                                                )}
+                                                                {(p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy || (p.status === 'Completed' ? (p.entryByName || p.entryBy || p.createdBy) : null)) && (
+                                                                    <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
+                                                                        ✓✓ {p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy || p.entryByName || p.entryBy || p.createdBy}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                    {canManage && (
+                                                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                {isReq && showRequestedApprovalButtons(p) && (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => handleApprovePayment(p)}
+                                                                            disabled={isSubmitting}
+                                                                            className="p-1 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded transition-colors cursor-pointer"
+                                                                            title={p.firstApproved ? "Accept 2nd Approval" : "Accept 1st Approval"}
+                                                                        >
+                                                                            <CheckIcon className="w-5 h-5" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleRejectPayment(p)}
+                                                                            disabled={isSubmitting}
+                                                                            className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors cursor-pointer"
+                                                                            title="Reject"
+                                                                        >
+                                                                            <XIcon className="w-5 h-5" />
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                                {(canEdit || canEditBeforeApproval(p)) && (
+                                                                    <button
+                                                                        onClick={() => handleEditPayment(p)}
+                                                                        className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors cursor-pointer"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <EditIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                                {!isReq && canDelete && (
+                                                                    <button
+                                                                        onClick={() => handleDeletePayment(p)}
+                                                                        disabled={isSubmitting}
+                                                                        className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors cursor-pointer"
+                                                                        title="Delete"
+                                                                    >
+                                                                        <TrashIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            );
+                                        })
                                     )}
                                 </tbody>
                             </table>
@@ -1215,21 +1681,46 @@ const CnFPayment = () => {
                             ) : filteredPayments.length === 0 ? (
                                 <div className="px-4 py-12 text-center text-gray-400">No payment records found.</div>
                             ) : (
-                                filteredPayments.map((p) => {
-                                    const isExpanded = expandedCard === p._id;
-                                    return (
-                                        <div key={p._id} className="p-5 bg-white hover:bg-gray-50 transition-all cursor-pointer" onClick={() => toggleCard(p._id)}>
+                                    filteredPayments.map((p) => {
+                                        const isExpanded = expandedCard === p._id;
+                                        const isReq = (p.status || '').toLowerCase() === 'requested';
+                                        const cleanH = String(highlightId || '').replace(/[৳,\s]/g, '').toLowerCase().trim();
+                                        const rawH = String(highlightId || '').toLowerCase().trim();
+                                        const isHighlighted = highlightId && (
+                                            String(p._id) === String(highlightId) ||
+                                            (p.cnfName && String(p.cnfName).toLowerCase().trim() === rawH) ||
+                                            (p.cnfName && rawH.includes(String(p.cnfName).toLowerCase().trim())) ||
+                                            (p.cnfName && String(p.cnfName).toLowerCase().trim().includes(rawH)) ||
+                                            (p.reference && String(p.reference).toLowerCase().trim() === rawH) ||
+                                            (p.reference && rawH.includes(String(p.reference).toLowerCase().trim())) ||
+                                            (cleanH && cleanH.length >= 2 && (String(p.amount) === cleanH || String(p.discount) === cleanH))
+                                        );
+                                        return (
+                                            <div
+                                                key={p._id}
+                                                ref={el => {
+                                                    if (el) {
+                                                        rowRefs.current[p._id] = el;
+                                                        if (p.cnfName) rowRefs.current[p.cnfName] = el;
+                                                        if (p.reference) rowRefs.current[p.reference] = el;
+                                                    }
+                                                }}
+                                                className={`p-5 bg-white hover:bg-gray-50 transition-all cursor-pointer ${isHighlighted ? 'notif-row-highlight !border-l-4 !border-l-amber-500 rounded-xl shadow-md' : ''}`}
+                                                style={isHighlighted ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                                onClick={() => toggleCard(p._id)}
+                                            >
                                             <div className="flex flex-col gap-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-2 overflow-hidden mr-2">
-                                                            <div className="text-base md:text-lg font-black text-gray-900 truncate tracking-tight">{p.cnfName}</div>
-                                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">{p.cnfType}</span>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="text-base md:text-lg font-black text-gray-900">৳{p.amount.toLocaleString('en-IN')}</div>
-                                                            {p.discount > 0 && <div className="text-[10px] font-bold text-emerald-600 leading-none">(-৳{p.discount.toLocaleString('en-IN')})</div>}
-                                                        </div>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2 overflow-hidden mr-2">
+                                                        <div className="text-base md:text-lg font-black text-gray-900 truncate tracking-tight">{p.cnfName}</div>
+                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">{p.cnfType}</span>
                                                     </div>
+                                                    <div className="text-right">
+                                                        <div className="text-base md:text-lg font-black text-gray-900">৳{(parseFloat(p.amount) || 0).toLocaleString('en-IN')}</div>
+                                                        {p.discount > 0 && <div className="text-[10px] font-bold text-emerald-600 leading-none">(-৳{(parseFloat(p.discount) || 0).toLocaleString('en-IN')})</div>}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-4">
                                                         <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
                                                             <CalendarIcon className="w-3.5 h-3.5" />
@@ -1240,65 +1731,101 @@ const CnFPayment = () => {
                                                             {p.method}
                                                         </div>
                                                     </div>
+                                                    <div>
+                                                        {getStatusBadge(p)}
+                                                    </div>
                                                 </div>
+                                            </div>
 
-                                                {isExpanded && (
-                                                    <div className="mt-5 pt-5 border-t border-gray-100 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                        <div className="grid grid-cols-[140px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Payment Method</span>
-                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                            <span className="font-semibold text-gray-900 text-[11px]">{p.method}</span>
+                                            {isExpanded && (
+                                                <div className="mt-5 pt-5 border-t border-gray-100 space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    <div className="grid grid-cols-[140px_8px_1fr] gap-y-2 text-xs items-baseline text-left">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Payment Method</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="font-semibold text-gray-900 text-[11px]">{p.method}</span>
 
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Agent Type</span>
-                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                            <span className="font-semibold text-gray-900 text-[11px] uppercase">{p.cnfType}</span>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Agent Type</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="font-semibold text-gray-900 text-[11px] uppercase">{p.cnfType}</span>
 
-                                                            {p.billFrom && p.billTo && (
-                                                                <>
-                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bill Period</span>
-                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                    <span className="font-semibold text-gray-900 text-[11px]">{formatDate(p.billFrom)} to {formatDate(p.billTo)}</span>
-                                                                </>
-                                                            )}
+                                                        {p.billFrom && p.billTo && (
+                                                            <>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bill Period</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="font-semibold text-gray-900 text-[11px]">{formatDate(p.billFrom)} to {formatDate(p.billTo)}</span>
+                                                            </>
+                                                        )}
 
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reference / Bank</span>
-                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                            <span className="font-semibold text-gray-800 text-[11px] leading-relaxed">{p.bankName || p.reference || '-'}</span>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reference / Bank</span>
+                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                        <span className="font-semibold text-gray-800 text-[11px] leading-relaxed">{p.bankName || p.reference || '-'}</span>
 
-                                                            {p.discount > 0 && (
-                                                                <>
-                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Discount Given</span>
-                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                    <span className="font-bold text-emerald-600 text-[11px] italic">৳{p.discount.toLocaleString('en-IN')}</span>
-                                                                </>
-                                                            )}
+                                                        {p.discount > 0 && (
+                                                            <>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Discount Given</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="font-bold text-emerald-600 text-[11px] italic">৳{(parseFloat(p.discount) || 0).toLocaleString('en-IN')}</span>
+                                                            </>
+                                                        )}
 
-                                                            {p.remarks && (
-                                                                <>
-                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
-                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                    <span className="text-gray-600 text-[11px] leading-relaxed italic">{p.remarks}</span>
-                                                                </>
-                                                            )}
-                                                        </div>
+                                                        {(p.entryBy || p.createdBy) && (
+                                                            <>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entry By</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <span className="font-semibold text-gray-700 text-[11px]">{p.entryByName || p.entryBy || p.createdBy}</span>
+                                                                    {(p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy) && (
+                                                                        <span className="text-[10px] text-blue-600 font-medium">✓ {p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy} (1st Appr)</span>
+                                                                    )}
+                                                                    {(p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy || (p.status === 'Completed' ? (p.entryByName || p.entryBy || p.createdBy) : null)) && (
+                                                                        <span className="text-[10px] text-emerald-600 font-semibold">✓✓ {p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy || p.entryByName || p.entryBy || p.createdBy} (Final Appr)</span>
+                                                                    )}
+                                                                </div>
+                                                            </>
+                                                        )}
+
+                                                        {p.remarks && (
+                                                            <>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="text-gray-600 text-[11px] leading-relaxed italic">{p.remarks}</span>
+                                                            </>
+                                                        )}
+                                                    </div>
 
                                                     {/* Action Buttons in Expanded View */}
                                                     {canManage && (
-                                                        <div className="col-span-2 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">
-                                                            {canEdit && (
+                                                        <div className="flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full" onClick={(e) => e.stopPropagation()}>
+                                                            {isReq && showRequestedApprovalButtons(p) && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => handleApprovePayment(p)}
+                                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 text-emerald-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                                    >
+                                                                        <CheckIcon className="w-4 h-4" /> {p.firstApproved ? 'Accept (2nd)' : 'Accept (1st)'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleRejectPayment(p)}
+                                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
+                                                                    >
+                                                                        <XIcon className="w-4 h-4" /> Reject
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            {(canEdit || canEditBeforeApproval(p)) && (
                                                                 <button
                                                                     onClick={() => handleEditPayment(p)}
                                                                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
                                                                 >
-                                                                    <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                                    <EditIcon className="w-4 h-4" /> Edit
                                                                 </button>
                                                             )}
-                                                            {canDelete && (
+                                                            {!isReq && canDelete && (
                                                                 <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleDeletePayment(p); }}
+                                                                    onClick={() => handleDeletePayment(p)}
                                                                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-xs active:scale-95 transition-all"
                                                                 >
-                                                                    <TrashIcon className="w-3.5 h-3.5" /> Delete
+                                                                    <TrashIcon className="w-4 h-4" /> Delete
                                                                 </button>
                                                             )}
                                                         </div>
@@ -1314,7 +1841,7 @@ const CnFPayment = () => {
                 </>
             )}
 
-            {/* Delete Confirmation */}
+            {/* Delete / Reject Confirmation */}
             {showDeleteConfirm && (
                 <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => !isSubmitting && setShowDeleteConfirm(false)} />
@@ -1322,9 +1849,11 @@ const CnFPayment = () => {
                         <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 transform rotate-12 shadow-inner">
                             <TrashIcon className="w-10 h-10" />
                         </div>
-                        <h3 className="text-2xl font-black text-gray-900 mb-2">Delete Payment?</h3>
+                        <h3 className="text-2xl font-black text-gray-900 mb-2">{(paymentToDelete?.status || '').toLowerCase() === 'requested' ? 'Reject Request?' : 'Delete Payment?'}</h3>
                         <p className="text-gray-500 mb-8 text-sm leading-relaxed px-2">
-                            This action will permanently remove this record from the system. This cannot be undone.
+                            {(paymentToDelete?.status || '').toLowerCase() === 'requested'
+                                ? 'This will reject and remove the payment request from the system.'
+                                : 'This action will permanently remove this record from the system. This cannot be undone.'}
                         </p>
                         <div className="flex gap-3">
                             <button
@@ -1338,7 +1867,7 @@ const CnFPayment = () => {
                                 disabled={isSubmitting}
                                 className="flex-1 py-4 bg-gradient-to-br from-red-500 to-red-600 text-white font-bold rounded-2xl shadow-xl shadow-red-200 transition-all hover:shadow-red-300 active:scale-95 disabled:opacity-50"
                             >
-                                {isSubmitting ? 'Deleting...' : 'Delete'}
+                                {isSubmitting ? 'Processing...' : (paymentToDelete?.status || '').toLowerCase() === 'requested' ? 'Reject' : 'Delete'}
                             </button>
                         </div>
 
@@ -1347,8 +1876,8 @@ const CnFPayment = () => {
                                 <div className="w-20 h-20 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mb-4 animate-bounce">
                                     <CheckIcon className="w-10 h-10" />
                                 </div>
-                                <h4 className="text-2xl font-black text-gray-900">Deleted!</h4>
-                                <p className="text-gray-500">Record removed successfully.</p>
+                                <h4 className="text-2xl font-black text-gray-900">Success!</h4>
+                                <p className="text-gray-500">Record updated successfully.</p>
                             </div>
                         )}
                     </div>

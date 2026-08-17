@@ -9,7 +9,19 @@ export const MODULES_LIST = [
     { key: 'port', label: 'Port Management' },
     { key: 'importerExporter', label: 'Importer / Exporter / Supplier' },
     { key: 'cnf', label: 'C&F Management' },
-    { key: 'cnfPayment', label: 'C&F Payment' },
+    {
+        key: 'cnfPayment',
+        label: 'C&F Payment',
+        specialLabels: [
+            { key: 'firstApprove', label: '1st Approve' },
+            { key: 'secondApprove', label: '2nd Approve' },
+            { key: 'special', label: 'Approve Payment' },
+            { key: 'paymentRequest', label: 'Payment Request' },
+            { key: 'editRequest', label: 'Edit Request' },
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     {
         key: 'ipManagement',
         label: 'IP Management',
@@ -17,7 +29,13 @@ export const MODULES_LIST = [
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
-    { key: 'pi', label: 'PI Management' },
+    {
+        key: 'pi',
+        label: 'PI Management',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     { key: 'packingList', label: 'Packing List' },
     { key: 'trSetup', label: 'TR Setup' },
     {
@@ -249,8 +267,8 @@ export const getDefaultPermissionsForRole = (role) => {
             }
         });
     } else if (roleLower === 'accounts manager') {
-        // Accounts Manager can access paymentCollection, payToCustomer, bank, insurance, insurancePayment, returnProduct, purchase
-        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'returnProduct', 'costOfGoods', 'purchase', 'purchaseReceive'];
+        // Accounts Manager can access paymentCollection, payToCustomer, bank, insurance, insurancePayment, cnfPayment, returnProduct, purchase
+        const accModules = ['paymentCollection', 'payToCustomer', 'bank', 'insurance', 'insurancePayment', 'cnfPayment', 'returnProduct', 'costOfGoods', 'purchase', 'purchaseReceive'];
         accModules.forEach(key => {
             const mod = MODULES_LIST.find(m => m.key === key);
             const permsObj = { view: true, add: true, edit: true, delete: true, special: true };

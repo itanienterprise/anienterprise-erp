@@ -610,7 +610,7 @@ apiRouter.post('/api/cnf-payments', async (req, res) => {
   }
 });
 
-apiRouter.delete('/api/cnf-payments/:id', adminOnly, async (req, res) => {
+apiRouter.delete('/api/cnf-payments/:id', async (req, res) => {
   try {
     const record = await CnFPayment.findById(req.params.id);
     if (!record) return res.status(404).json({ message: 'Payment record not found' });
@@ -627,7 +627,7 @@ apiRouter.delete('/api/cnf-payments/:id', adminOnly, async (req, res) => {
   }
 });
 
-apiRouter.put('/api/cnf-payments/:id', adminOnly, async (req, res) => {
+apiRouter.put('/api/cnf-payments/:id', async (req, res) => {
   try {
     const record = await CnFPayment.findById(req.params.id);
     if (!record) return res.status(404).json({ message: 'Payment record not found' });

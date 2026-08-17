@@ -106,7 +106,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
         return true;
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    const grandTotal = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const grandTotal = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0) + (parseFloat(p.discount) || 0), 0);
 
     const handlePrint = () => {
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
@@ -115,7 +115,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
-            <div className="bg-white w-full max-w-5xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
+            <div className="bg-white w-full max-w-7xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
                 {/* Modal Header — hidden on print */}
                 <div className="flex flex-row items-center justify-between px-4 sm:px-8 py-4 border-b border-gray-100 print:hidden gap-2">
@@ -342,7 +342,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
 
                 {/* Printable Content */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-12 print:p-0 print:overflow-visible bg-white">
-                    <div className="max-w-[1000px] mx-auto space-y-6 sm:space-y-8">
+                    <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
 
                         {/* Company Header */}
                         <div className="text-center space-y-1">
@@ -404,7 +404,9 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                 <tbody className="divide-y divide-gray-900 text-[13px] sm:text-[14px]">
                                     {filteredPayments.length > 0 ? (
                                         filteredPayments.map((p, idx) => {
-                                            const amount = parseFloat(p.amount) || 0;
+                                            const rawAmount = parseFloat(p.amount) || 0;
+                                            const discount = parseFloat(p.discount) || 0;
+                                            const amount = rawAmount + discount;
                                             return (
                                                 <tr key={idx} className="border-b border-gray-200">
                                                     <td className="border-r border-gray-900 px-2 py-1.5 text-center">{idx + 1}</td>
@@ -421,7 +423,10 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                                                         {p.accountNo || '-'}
                                                     </td>
                                                     <td className="px-2 py-1.5 text-right font-bold text-gray-900 whitespace-nowrap">
-                                                        ৳{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        <div>৳{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                        {discount > 0 && (
+                                                            <div className="text-[10px] text-rose-600 font-semibold">Discount: ৳{Number(discount).toLocaleString('en-IN')}</div>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             );

@@ -869,6 +869,7 @@ function IPManagement({
     const [allStockRecords, setAllStockRecords] = useState([]);
     const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [piRecords, setPiRecords] = useState([]);
+    const [employeesMap, setEmployeesMap] = useState({});
 
     // Authorization check for administrative actions
     const canAdd = hasPermission(currentUser, 'ipManagement', 'add');
@@ -877,6 +878,48 @@ function IPManagement({
     const canShowEntryBy = hasPermission(currentUser, 'ipManagement', 'showEntryBy');
     const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                const empName = (d.name || d.nameEn || d.employeeName || d.fullName || d.username || '').trim();
+                if (d.employeeId) map[d.employeeId] = empName;
+                if (d.username) map[d.username] = empName;
+                if (d._id) map[d._id] = empName;
+                if (d.id) map[d.id] = empName;
+            });
+            setEmployeesMap(map);
+        } catch (error) {
+            console.error('Error fetching employees map:', error);
+        }
+    };
+
+    const getEntryByName = (entryByCode, entryByName) => {
+        if (entryByName && !entryByName.startsWith('E-') && !entryByName.startsWith('A-') && entryByName !== entryByCode) {
+            return entryByName;
+        }
+        if (entryByCode && employeesMap[entryByCode]) {
+            return employeesMap[entryByCode];
+        }
+        if (entryByName && employeesMap[entryByName]) {
+            return employeesMap[entryByName];
+        }
+        if (entryByName && entryByName !== entryByCode) {
+            return entryByName;
+        }
+        return entryByCode || '—';
+    };
 
     const [formData, setFormData] = useState({
         openingDate: '',
@@ -920,6 +963,7 @@ function IPManagement({
 
     useEffect(() => {
         fetchIpRecords();
+        fetchEmployees();
     }, []);
 
     useEffect(() => {
@@ -1406,8 +1450,8 @@ function IPManagement({
 
             const payload = {
                 ...formData,
-                entryBy: editingId ? (formData.entryBy || currentUser?.username || currentUser?.id || '') : (currentUser?.username || currentUser?.id || ''),
-                entryByName: editingId ? (formData.entryByName || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || '')
+                entryBy: editingId ? (formData.entryBy || currentUser?.username || currentUser?.id || currentUser?.employeeId || '') : (currentUser?.username || currentUser?.id || currentUser?.employeeId || ''),
+                entryByName: editingId ? (formData.entryByName || currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || currentUser?.username || '') : (currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || currentUser?.username || '')
             };
 
             if (editingId) {
@@ -1578,8 +1622,12 @@ function IPManagement({
     const sortData = (data) => {
         if (!sortConfig.ip?.key) return data;
         return [...data].sort((a, b) => {
-            const aVal = a[sortConfig.ip.key];
-            const bVal = b[sortConfig.ip.key];
+            let aVal = a[sortConfig.ip.key];
+            let bVal = b[sortConfig.ip.key];
+            if (sortConfig.ip.key === 'entryBy') {
+                aVal = getEntryByName(a.entryBy || a.createdBy || a.userId, a.entryByName || a.createdByName);
+                bVal = getEntryByName(b.entryBy || b.createdBy || b.userId, b.entryByName || b.createdByName);
+            }
             if (aVal < bVal) return sortConfig.ip.direction === 'asc' ? -1 : 1;
             if (aVal > bVal) return sortConfig.ip.direction === 'asc' ? 1 : -1;
             return 0;
@@ -1603,11 +1651,14 @@ function IPManagement({
         // Apply text search
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
+            const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
             const matchesText =
                 (record.ipNumber || '').toLowerCase().includes(query) ||
                 (record.ipParty || '').toLowerCase().includes(query) ||
                 (record.productName || '').toLowerCase().includes(query) ||
-                (record.referenceNo || '').toLowerCase().includes(query);
+                (record.referenceNo || '').toLowerCase().includes(query) ||
+                (record.entryBy || '').toLowerCase().includes(query) ||
+                (entryByName || '').toLowerCase().includes(query);
             if (!matchesText) return false;
         }
 
@@ -2421,7 +2472,7 @@ function IPManagement({
                                                 </td>
                                                 {canShowEntryBy && (
                                                     <td className="px-3 py-3 text-sm font-semibold text-gray-700 whitespace-nowrap">
-                                                        {record.entryBy || record.entryByName || record.createdBy || record.createdByName || record.userId || '-'}
+                                                        {getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName)}
                                                     </td>
                                                 )}
                                                 <td className="px-3 py-3">
@@ -2565,6 +2616,13 @@ function IPManagement({
                                                                 <span className="text-gray-400 font-bold mx-2">-</span>
                                                                 <span className="text-sm font-bold text-gray-900">{record.port}</span>
                                                             </div>
+                                                            {canShowEntryBy && (
+                                                                <div className="flex items-center">
+                                                                    <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Entry By</span>
+                                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                                    <span className="text-sm font-semibold text-gray-800 truncate">{getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName)}</span>
+                                                                </div>
+                                                            )}
                                                         </div>
 
                                                         {/* Card Actions - Grouped Layout */}

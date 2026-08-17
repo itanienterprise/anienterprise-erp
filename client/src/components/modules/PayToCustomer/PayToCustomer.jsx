@@ -541,6 +541,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                         customerId: customer._id,
                         customerName: customer.customerName,
                         companyName: customer.companyName,
+                        customerType: customer.customerType || 'General Customer',
+                        partyType: customer.customerType || 'General Customer',
                         customerAddress: customer.location || '',
                         readableCustomerId: customer.customerId
                     });
@@ -1713,6 +1715,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             const groupKey = `${payment.date}-${payment.receiptNo || payment.id}-${payment.customerId}`;
             let group = groups.find(g => g.key === groupKey);
             if (!group) {
+                const custObj = rawCustomers.find(c => c._id === payment.customerId || c.customerId === payment.readableCustomerId || (c.companyName && payment.companyName && c.companyName.trim().toLowerCase() === payment.companyName.trim().toLowerCase()));
+                const pType = payment.partyType || payment.customerType || custObj?.customerType || 'General Customer';
                 group = {
                     key: groupKey,
                     date: payment.date,
@@ -1720,6 +1724,8 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                     companyName: payment.companyName,
                     customerName: payment.customerName,
                     customerId: payment.customerId,
+                    customerType: pType,
+                    partyType: pType,
                     customerAddress: payment.customerAddress || '',
                     status: payment.status,
                     isEdited: payment.isEdited,
@@ -2063,7 +2069,18 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
                                                     <div className="text-sm font-semibold text-blue-600 leading-tight">{group.receiptNo || '—'}</div>
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
+                                                    <div className="flex flex-col gap-1 items-start">
+                                                        <div className="text-sm font-semibold text-gray-800 leading-tight truncate max-w-[200px]">{group.companyName || group.customerName}</div>
+                                                        {group.partyType && (
+                                                            <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide ${
+                                                                group.partyType === 'Party Customer'
+                                                                    ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                                                    : 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                                            }`}>
+                                                                {group.partyType}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap">
                                                     <div className="text-sm text-gray-500 leading-tight truncate max-w-[150px]">{group.customerAddress || '—'}</div>
