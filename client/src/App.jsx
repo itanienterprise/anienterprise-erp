@@ -3119,7 +3119,9 @@ function App() {
 
         {/* Dashboard Content */}
         <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 ${currentView === 'profit-loss-section' ? 'p-0' : 'p-6'} ${(showLcReport || showStockReport || showProductHistoryReport || showSalesReport) ? 'no-print' : ''}`}>
-          {renderContent()}
+          <div key={currentView} className="page-transition-enter h-full">
+            {renderContent()}
+          </div>
         </main>
       </div>
 

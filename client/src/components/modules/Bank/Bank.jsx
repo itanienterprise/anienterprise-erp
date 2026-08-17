@@ -829,7 +829,7 @@ const Bank = ({ onDeleteConfirm }) => {
                 )}
 
                 {!showForm && !cannotAddEdit && (
-                    <div className="w-full md:w-1/4 flex justify-end gap-3 z-50">
+                    <div className="w-full md:w-1/4 flex justify-end gap-3">
                         <button
                             onClick={() => setShowForm(true)}
                             className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center text-sm"
