@@ -56,11 +56,12 @@ function PackingList({
     currentUser,
     highlightId
 }) {
-    
+
     const canAdd = hasPermission(currentUser, 'packingList', 'add');
     const canEdit = hasPermission(currentUser, 'packingList', 'edit');
     const canDelete = hasPermission(currentUser, 'packingList', 'delete');
     const canManage = canAdd || canEdit || canDelete;
+    const canShowEntryBy = hasPermission(currentUser, 'packingList', 'showEntryBy');
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
 
     const [showForm, setShowForm] = useState(false);
@@ -97,6 +98,8 @@ function PackingList({
     const [banks, setBanks] = useState([]);
     const [ipRecords, setIpRecords] = useState([]);
     const [trSetups, setTrSetups] = useState([]);
+    const [employeesMap, setEmployeesMap] = useState({});
+    const [notificationsMap, setNotificationsMap] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -206,7 +209,9 @@ function PackingList({
         certification: '',
         otherReferences: '',
         buyerName: '',
-        selectedRevisionNo: ''
+        selectedRevisionNo: '',
+        entryBy: '',
+        entryByName: ''
     });
 
     useEffect(() => {
@@ -312,6 +317,67 @@ function PackingList({
         return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
     };
 
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'object') d = { ...emp.data, _id: emp._id };
+                }
+                const empName = (d.name || d.nameEn || d.employeeName || d.fullName || d.username || '').trim();
+                if (d.employeeId) map[d.employeeId] = empName;
+                if (d.username) map[d.username] = empName;
+                if (d._id) map[d._id] = empName;
+                if (d.id) map[d.id] = empName;
+            });
+            setEmployeesMap(map);
+        } catch (error) {
+            console.error('Error fetching employees map in PackingList:', error);
+        }
+    };
+
+    const getEntryByName = (entryByCode, entryByName) => {
+        if (!entryByCode && !entryByName) return '—';
+        if (entryByName && !entryByName.startsWith('E-') && !entryByName.startsWith('A-') && entryByName !== entryByCode) {
+            return entryByName;
+        }
+        if (entryByCode && employeesMap[entryByCode]) return employeesMap[entryByCode];
+        if (entryByName && employeesMap[entryByName]) return employeesMap[entryByName];
+        if (entryByName && entryByName !== '—') return entryByName;
+        return entryByCode || '—';
+    };
+
+    const getPlEntryDetails = (record) => {
+        if (!record) return { creator: '—', editor: null };
+
+        let created = record.entryByName || record.createdByName || record.entryBy || record.createdBy || record.userId || record.username || record.user || record.author || record.addedBy;
+        let edited = record.editedByName || record.editedBy || record.lastEditedByName || record.lastEditedBy || record.updatedByName || record.updatedBy;
+
+        const rawInv = String(record.packingListNumber || record.invoiceNo || '').trim();
+        const cleanInv = rawInv.toLowerCase();
+
+        // Check notificationsMap for names extracted from notifications
+        if (cleanInv && notificationsMap) {
+            const notifInfo = notificationsMap[cleanInv] ||
+                notificationsMap[Object.keys(notificationsMap).find(k => k === cleanInv || k.includes(cleanInv) || cleanInv.includes(k))];
+            if (notifInfo) {
+                if (!created && notifInfo.createdByName) created = notifInfo.createdByName;
+                if (!edited && notifInfo.editedByName) edited = notifInfo.editedByName;
+            }
+        }
+
+        const resolvedCreator = getEntryByName(created, created);
+        const resolvedEditor = edited ? getEntryByName(edited, edited) : null;
+
+        return {
+            creator: (resolvedCreator && resolvedCreator !== '—') ? resolvedCreator : (created || '—'),
+            editor: (resolvedEditor && resolvedEditor !== '—') ? resolvedEditor : (edited || null)
+        };
+    };
+
     const fetchTrSetups = async () => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/tr-setups`);
@@ -331,16 +397,46 @@ function PackingList({
             setIsLoading(false);
 
             // 2. Fetch secondary data in background
-            const [piRes, lcRes, bankRes, ipRes] = await Promise.all([
+            const [piRes, lcRes, bankRes, ipRes, notifRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/pi`),
                 axios.get(`${API_BASE_URL}/api/lc-management`),
                 axios.get(`${API_BASE_URL}/api/banks`),
-                axios.get(`${API_BASE_URL}/api/ip-records`)
+                axios.get(`${API_BASE_URL}/api/ip-records`),
+                axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] }))
             ]);
             setPiRecords(Array.isArray(piRes.data) ? piRes.data : []);
             setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
             setBanks(Array.isArray(bankRes.data) ? bankRes.data : []);
             setIpRecords(Array.isArray(ipRes.data) ? ipRes.data : []);
+
+            // Build notificationsMap for Entry By resolution
+            const rawNotifs = Array.isArray(notifRes?.data) ? notifRes.data : [];
+            const notifsMap = {};
+            rawNotifs.forEach(n => {
+                let d = n;
+                if (n && n.data && typeof n.data === 'object') d = { ...n.data, _id: n._id };
+                const msg = d.message || '';
+                const invMatch = msg.match(/Invoice\s*No[:\s]+([A-Za-z0-9\/\-_]+)/i);
+                if (invMatch && invMatch[1]) {
+                    const invNum = invMatch[1].trim();
+                    let byName = '';
+                    const byIdx = msg.lastIndexOf(' by ');
+                    if (byIdx !== -1) byName = msg.substring(byIdx + 4).trim().replace(/\.+$/, '');
+                    if (byName) {
+                        const cleanInv = invNum.toLowerCase();
+                        if (!notifsMap[cleanInv]) notifsMap[cleanInv] = {};
+                        const title = (d.title || '').toLowerCase();
+                        if (title.includes('created') || (d.message || '').toLowerCase().includes('created')) {
+                            if (!notifsMap[cleanInv].createdByName) notifsMap[cleanInv].createdByName = byName;
+                        } else if (title.includes('updated') || (d.message || '').toLowerCase().includes('updated')) {
+                            notifsMap[cleanInv].editedByName = byName;
+                        }
+                    }
+                }
+            });
+            setNotificationsMap(notifsMap);
+
+            fetchEmployees();
             fetchTrSetups();
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -506,7 +602,7 @@ function PackingList({
 
                 // 1. Check selected PI revision object for reviseDate / amendmentDate / date
                 let amndDateVal = selectedRev.reviseDate || selectedRev.amendmentDate;
-                
+
                 // 2. Check matched LC amendments array at corresponding index
                 if (!amndDateVal && matchedLcByPi && Array.isArray(matchedLcByPi.amendments) && matchedLcByPi.amendments[amndIndex - 1]) {
                     const targetAmnd = matchedLcByPi.amendments[amndIndex - 1];
@@ -661,25 +757,40 @@ function PackingList({
         setSubmitStatus({ type: 'loading', message: editingId ? 'Updating...' : 'Creating...' });
 
         try {
+            const submissionData = {
+                ...formData,
+                entryBy: editingId
+                    ? (formData.entryBy || currentUser?.username || currentUser?.id || currentUser?.employeeId || '')
+                    : (currentUser?.username || currentUser?.id || currentUser?.employeeId || ''),
+                entryByName: editingId
+                    ? (formData.entryByName || currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '')
+                    : (currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || ''),
+                ...(editingId ? {
+                    editedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
+                    editedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
+                    lastEditedAt: new Date().toISOString()
+                } : {})
+            };
+
             if (editingId) {
-                const response = await axios.put(`${API_BASE_URL}/api/packing-lists/${editingId}`, formData);
+                const response = await axios.put(`${API_BASE_URL}/api/packing-lists/${editingId}`, submissionData);
                 setRecords(prev => prev.map(rec => rec._id === editingId ? response.data : rec));
                 showToast('Packing List updated successfully.');
 
                 // Add system notification
                 addNotification(
                     'Packing List Updated',
-                    `Packing List (Invoice No: ${formData.packingListNumber}) has been updated by ${currentUser?.name || currentUser?.username}.`,
+                    `Packing List (Invoice No: ${submissionData.packingListNumber}) has been updated by ${currentUser?.name || currentUser?.username}.`,
                     ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
                 );
             } else {
-                const response = await axios.post(`${API_BASE_URL}/api/packing-lists`, formData);
+                const response = await axios.post(`${API_BASE_URL}/api/packing-lists`, submissionData);
                 setRecords(prev => [response.data, ...prev]);
                 showToast('Packing List created successfully.');
 
                 addNotification(
                     'Packing List Created',
-                    `A new Packing List (Invoice No: ${formData.packingListNumber}) has been created by ${currentUser?.name || currentUser?.username}.`,
+                    `A new Packing List (Invoice No: ${submissionData.packingListNumber}) has been created by ${currentUser?.name || currentUser?.username}.`,
                     ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
                 );
             }
@@ -772,7 +883,9 @@ function PackingList({
             certification: record.certification || '',
             otherReferences: record.otherReferences || '',
             buyerName: record.buyerName || '',
-            selectedRevisionNo: revisionNo
+            selectedRevisionNo: revisionNo,
+            entryBy: record.entryBy || record.createdBy || '',
+            entryByName: record.entryByName || record.createdByName || ''
         });
         setShowForm(true);
     };
@@ -1320,11 +1433,10 @@ function PackingList({
                                                                 loadPiRevision(selectedPiRaw, rev.reviseNo);
                                                                 setActiveDropdown(null);
                                                             }}
-                                                            className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors ${
-                                                                (formData.selectedRevisionNo || 'Original PI') === rev.reviseNo
+                                                            className={`w-full px-4 py-2.5 text-left text-sm flex justify-between items-center transition-colors ${(formData.selectedRevisionNo || 'Original PI') === rev.reviseNo
                                                                     ? 'bg-blue-50 text-blue-700 font-semibold'
                                                                     : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             <span>{getRevName(rev.reviseNo)}</span>
                                                         </button>
@@ -2173,6 +2285,9 @@ function PackingList({
                                         <th className="px-6 py-4 text-center">Net Wt (KG)</th>
                                         <th className="px-6 py-4 text-center">Gross Wt (KG)</th>
                                         <th className="px-6 py-4 text-center">TR No.</th>
+                                        {canShowEntryBy && (
+                                            <th className="px-6 py-4 text-center whitespace-nowrap">Entry By</th>
+                                        )}
                                         <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -2189,6 +2304,7 @@ function PackingList({
                                             });
                                         }
 
+                                        const entryInfo = getPlEntryDetails(rec);
                                         return (
                                             <tr key={rec._id}
                                                 className={`hover:bg-gray-50/50 ${highlightId && (
@@ -2215,11 +2331,11 @@ function PackingList({
                                                 <td className="px-6 py-4 text-gray-600">{rec.piNumber || 'N/A'}</td>
                                                 <td className="px-6 py-4 font-semibold text-gray-800 truncate max-w-[180px]">{rec.partyName}</td>
                                                 <td className="px-6 py-4 text-gray-600 truncate max-w-[150px]" title={
-                                                    Array.isArray(rec.productsList) 
+                                                    Array.isArray(rec.productsList)
                                                         ? rec.productsList.map(p => p.productName).filter(Boolean).join(', ')
                                                         : ''
                                                 }>
-                                                    {Array.isArray(rec.productsList) 
+                                                    {Array.isArray(rec.productsList)
                                                         ? rec.productsList.map(p => p.productName).filter(Boolean).join(', ')
                                                         : '-'}
                                                 </td>
@@ -2231,11 +2347,25 @@ function PackingList({
                                                         {rec.trNumber || 'N/A'}
                                                     </span>
                                                 </td>
+                                                {canShowEntryBy && (
+                                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                        <div className="flex flex-col items-center gap-0.5">
+                                                            <span className="text-xs font-semibold text-gray-800">
+                                                                {entryInfo.creator}
+                                                            </span>
+                                                            {entryInfo.editor && (
+                                                                <span className="text-[10px] text-amber-600 font-semibold" title="Edited By">
+                                                                    ✎ {entryInfo.editor}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                )}
                                                 <td className="px-6 py-4 text-right space-x-2">
                                                     <button
                                                         onClick={async () => {
                                                             try {
-                                                                    await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
+                                                                await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
                                                             } catch (err) {
                                                                 console.error('PDF generation failed:', err);
                                                                 showToast('Failed to generate PDF.', 'error');
@@ -2318,6 +2448,18 @@ function PackingList({
                                                     <span className="block font-medium text-gray-400">Net Wt / Gross Wt</span>
                                                     <span className="font-bold text-blue-600 block">{Math.round(totalNet).toLocaleString('en-US')} / {Math.round(totalGross).toLocaleString('en-US')} KG</span>
                                                 </div>
+                                                {canShowEntryBy && (() => {
+                                                    const mobileEntryInfo = getPlEntryDetails(rec);
+                                                    return (
+                                                        <div className="col-span-2">
+                                                            <span className="block font-medium text-gray-400">Entry By</span>
+                                                            <span className="font-semibold text-gray-800 block">{mobileEntryInfo.creator}</span>
+                                                            {mobileEntryInfo.editor && (
+                                                                <span className="text-[10px] text-amber-600 font-semibold">✎ {mobileEntryInfo.editor}</span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
 
                                             <div className="flex justify-between items-center pt-2">
@@ -2332,7 +2474,7 @@ function PackingList({
                                                     <button
                                                         onClick={async () => {
                                                             try {
-                                                                    await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
+                                                                await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups);
                                                             } catch (err) {
                                                                 console.error('PDF generation failed:', err);
                                                                 showToast('Failed to generate PDF.', 'error');

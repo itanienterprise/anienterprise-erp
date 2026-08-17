@@ -1253,7 +1253,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
 
             {/* Modal for Create/Edit */}
             {showModal && (
-                <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[5000] overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 app-modal-overlay">
                     <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden border border-gray-100">
                         {/* Header */}
                         <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between">

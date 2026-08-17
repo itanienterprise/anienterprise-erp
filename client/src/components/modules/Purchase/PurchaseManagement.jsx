@@ -913,7 +913,7 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
 
             {/* Modal for Add / Edit Purchase */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 app-modal-overlay">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 border border-gray-100">
                         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
                             <h3 className="text-xl font-black text-gray-900">{editingId ? 'Edit Purchase Entry' : 'New Purchase Entry'}</h3>

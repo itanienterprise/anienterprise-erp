@@ -481,23 +481,36 @@ function LCReceive({
         useEffect(() => {
         if (!highlightId) return;
 
-        const targetItem = lcReceiveRecords.find(item => 
-            (item.lcNo && String(item.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
-            (item.lcNo && String(highlightId).toLowerCase().includes(String(item.lcNo).toLowerCase().trim())) ||
-            (item.lcNo && String(item.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim())) ||
-            String(item._id) === String(highlightId)
+        const target = String(highlightId).trim().toLowerCase();
+
+        // Find the matching grouped record — check top-level lcNo AND entry-level lcNo
+        const targetItem = lcReceiveRecords.find(item =>
+            (item.lcNo && (
+                String(item.lcNo).toLowerCase().trim() === target ||
+                target.includes(String(item.lcNo).toLowerCase().trim()) ||
+                String(item.lcNo).toLowerCase().includes(target)
+            )) ||
+            String(item._id) === String(highlightId) ||
+            (item.entries && item.entries.some(e =>
+                e.lcNo && (
+                    String(e.lcNo).toLowerCase().trim() === target ||
+                    target.includes(String(e.lcNo).toLowerCase().trim()) ||
+                    String(e.lcNo).toLowerCase().includes(target)
+                )
+            ))
         );
 
         if (targetItem) {
+            // Use the ACTUAL record status — not the notification flag
             const isReq = (targetItem.status || '').toLowerCase().includes('requested');
-            if (isReq) {
-                setIsRequestedOnly(true);
-            }
+            setIsRequestedOnly(isReq);
+        } else if (isRequestedNotif) {
+            // Fallback to notification flag only if record not yet found (data still loading)
+            setIsRequestedOnly(true);
         }
 
         const scrollToRow = () => {
             if (!highlightId) return false;
-            const target = String(highlightId).trim().toLowerCase();
             const keys = Object.keys(rowRefs.current);
             const matchedKey = keys.find(k => {
                 const cleanK = k.trim().toLowerCase();
@@ -594,7 +607,9 @@ function LCReceive({
     };
     const [viewData, setViewData] = useState(null);
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
-    useEffect(() => { if (isRequestedNotif) { setIsRequestedOnly(true); } }, [isRequestedNotif]);
+    // Note: isRequestedOnly is now set correctly by the highlightId useEffect based on actual record status.
+    // The old blind setter (if (isRequestedNotif) setIsRequestedOnly(true)) was removed because it caused
+    // approved LC entries to be hidden when navigating from a "New LC Received" notification.
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const [employeesMap, setEmployeesMap] = useState({});
 
@@ -4078,6 +4093,7 @@ function LCReceive({
                                                     {renderSortIcon('lcNo')}
                                                 </div>
                                             </th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invoice No</th>
                                             <th
                                                 className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
                                                 onClick={() => handleSort('port')}
@@ -4152,7 +4168,7 @@ function LCReceive({
                                     <tbody className="divide-y divide-gray-100">
                                         {filteredRecords.length === 0 ? (
                                             <tr>
-                                                <td colSpan={(isSelectionMode || selectedItems.size > 0) ? (isRequestedOnly ? 14 : 13) : (isRequestedOnly ? 13 : 12)} className="px-6 py-12 text-center text-gray-400 bg-white/50">
+                                                <td colSpan={(isSelectionMode || selectedItems.size > 0) ? (isRequestedOnly ? 15 : 14) : (isRequestedOnly ? 14 : 13)} className="px-6 py-12 text-center text-gray-400 bg-white/50">
                                                     <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                                     <p>No LC receive records found</p>
                                                 </td>
@@ -4222,6 +4238,16 @@ function LCReceive({
                                                         )}
                                                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
                                                         <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-top whitespace-nowrap">
+                                                            {(() => {
+                                                                const invoiceNos = [...new Set((entry.entries || []).map(e => e.invoiceNo).filter(Boolean))];
+                                                                return invoiceNos.length > 0
+                                                                    ? invoiceNos.map((inv, idx) => (
+                                                                        <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{inv}</div>
+                                                                    ))
+                                                                    : <span>-</span>;
+                                                            })()}
+                                                        </td>
                                                         <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
                                                         <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{entry.importer || '-'}</td>
                                                         <td className="px-6 py-4 text-sm text-gray-600">{entry.exporter || '-'}</td>
@@ -4383,7 +4409,15 @@ function LCReceive({
                                                 <div className="flex-1 min-w-0">
                                                     <div className="text-xs text-gray-400 mb-0.5">{formatDate(entry.date)}</div>
                                                     <div className="flex items-center justify-between overflow-hidden">
-                                                        <div className="text-sm font-bold text-gray-900 truncate pr-2">{entry.lcNo || 'N/A'}</div>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <div className="text-sm font-bold text-gray-900 truncate pr-2">{entry.lcNo || 'N/A'}</div>
+                                                            {(() => {
+                                                                const invoiceNos = [...new Set((entry.entries || []).map(e => e.invoiceNo).filter(Boolean))];
+                                                                return invoiceNos.length > 0 ? (
+                                                                    <div className="text-[11px] text-gray-500 font-medium truncate">Inv: {invoiceNos.join(', ')}</div>
+                                                                ) : null;
+                                                            })()}
+                                                        </div>
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             {!isExpanded && (
                                                                 <>

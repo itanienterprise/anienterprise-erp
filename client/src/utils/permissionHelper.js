@@ -36,7 +36,13 @@ export const MODULES_LIST = [
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
-    { key: 'packingList', label: 'Packing List' },
+    {
+        key: 'packingList',
+        label: 'Packing List',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     { key: 'trSetup', label: 'TR Setup' },
     {
         key: 'order',
