@@ -1963,17 +1963,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             previousBalance = calculatedPrevBalance;
         }
 
-        // --- Background Patterns (Organic Waves - Adjusted for Portrait) ---
-        doc.setFillColor(255, 247, 237);
-        doc.circle(0, 0, 35, 'F');
-        doc.setFillColor(254, 215, 170);
-
-        doc.setFillColor(255, 247, 237);
-        doc.circle(pageWidth, pageHeight, 45, 'F');
-        doc.setFillColor(254, 215, 170);
-        doc.circle(0, pageHeight, 30, 'F');
-
-        // Load and embed company logo
+        // Load and embed company logo (identical to stock report)
         const logoImg = await new Promise((resolve) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
@@ -1989,24 +1979,47 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             img.src = '/logo.png';
         });
 
+        // --- Header (identical to Stock Report) ---
         if (logoImg) {
-            doc.addImage(logoImg, 'PNG', margin, margin, 22, 22);
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
         } else {
             doc.setFillColor(249, 115, 22);
-            doc.roundedRect(margin, margin, 20, 20, 3, 3, 'F');
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
             doc.setTextColor(255, 255, 255);
-            doc.setFontSize(18);
+            doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
-            doc.text("A", margin + 10, margin + 13, { align: 'center' });
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
         }
 
-        doc.setTextColor(20, 25, 35);
-        doc.setFontSize(28);
-        doc.setFont('helvetica', 'bold');
-        doc.text("ANI ENTERPRISE", margin + 24, margin + 13);
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
 
-        // Contact Info (Company) - Structured Multi-line
-        doc.setFontSize(10);
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill
+        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
         doc.text([
@@ -2014,10 +2027,16 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             "Borogola, Bogura, Bangladesh",
             "Tel: +8802588813057",
             "Email: anienterprise051@gmail.com"
-        ], pageWidth - margin, margin + 3, { align: 'right', lineHeightFactor: 1.15 });
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
 
         // --- Body Section ---
-        let y = margin + 40;
+        y += 8;
         doc.setFontSize(12);
         doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
@@ -2036,11 +2055,11 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 
         // --- 2. Boxed Title ---
         doc.setFillColor(249, 115, 22); // Orange color
-        doc.rect((pageWidth / 2) - 35, y - 8, 70, 9, 'F');
-        doc.setFontSize(12);
+        doc.rect((pageWidth / 2) - 35, y - 5, 70, 8, 'F');
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
-        doc.text("SALES INVOICE", pageWidth / 2, y - 2, { align: 'center' });
+        doc.text("SALES INVOICE", pageWidth / 2, y + 0.5, { align: 'center' });
 
         // --- 2b. Customer Type (Centered under Title Box) ---
         let custTypeLabel = "General Customer";
