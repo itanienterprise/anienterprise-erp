@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
-import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
+import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance } from '../../../utils/helpers';
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF } from '../../../utils/pdfGenerator';
 import { api } from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -482,148 +482,7 @@ const Customer = ({
     };
 
     const getCustomerFinalBalance = (c) => {
-        if (!c) return 0;
-
-        const sales = (c.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested').map(s => {
-            let updatedS = { ...s };
-            if (salesRecords && salesRecords.length > 0) {
-                const itemInv = (s.invoiceNo || '').trim().toUpperCase();
-                const itemOrd = (s.orderNo || '').trim().toUpperCase();
-                const matchingSale = salesRecords.find(sale => {
-                    const sInv = (sale.invoiceNo || '').trim().toUpperCase();
-                    const sOrd = (sale.orderNo || '').trim().toUpperCase();
-                    return (itemInv && (sInv === itemInv || sOrd === itemInv)) ||
-                           (itemOrd && (sInv === itemOrd || sOrd === itemOrd));
-                });
-
-                if (matchingSale) {
-                    const pName = (s.product || s.productName || '').trim().toLowerCase();
-                    const bName = (s.brand || s.brandName || '').trim().toLowerCase();
-                    let latestRate = null;
-
-                    (matchingSale.items || []).forEach(si => {
-                        const siProd = (si.productName || si.product || '').trim().toLowerCase();
-                        if (!pName || siProd === pName) {
-                            if (si.brandEntries && si.brandEntries.length > 0) {
-                                si.brandEntries.forEach(be => {
-                                    const beBrand = (be.brand || be.brandName || '').trim().toLowerCase();
-                                    if (!bName || beBrand === bName) {
-                                        const r = parseFloat(be.rate !== undefined && be.rate !== null && be.rate !== '' ? be.rate : be.unitPrice) || 0;
-                                        if (r > 0) latestRate = r;
-                                    }
-                                });
-                            } else {
-                                const r = parseFloat(si.rate !== undefined && si.rate !== null && si.rate !== '' ? si.rate : si.unitPrice) || 0;
-                                if (r > 0) latestRate = r;
-                            }
-                        }
-                    });
-
-                    if (latestRate && Math.abs((parseFloat(s.rate) || 0) - latestRate) > 0.001) {
-                        const qty = parseFloat(s.quantity || s.qty) || 0;
-                        const bag = parseFloat(s.bag || s.packet) || 0;
-                        const isBagUom = (s.uom || c?.uom || '').toLowerCase() === 'bag';
-                        const newAmt = isBagUom && bag > 0 ? (bag * latestRate) : (qty * latestRate);
-                        const disc = parseFloat(s.discount) || 0;
-                        const paid = parseFloat(s.paid) || 0;
-                        updatedS.rate = latestRate;
-                        updatedS.amount = Number(newAmt.toFixed(2));
-                        updatedS.due = Number(Math.max(0, newAmt - disc - paid).toFixed(2));
-                    }
-                }
-            }
-            return {
-                ...updatedS,
-                type: 'sale',
-                sortDate: new Date(s.date || 0)
-            };
-        });
-
-        const payments = (c.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested').map(p => ({
-            ...p,
-            type: 'payment',
-            sortDate: new Date(p.date || 0)
-        }));
-
-        const payouts = (c.payToCustomerHistory || []).filter(pc => (pc.status || '').toLowerCase() !== 'requested').map(pc => ({
-            ...pc,
-            type: 'payToCustomer',
-            sortDate: new Date(pc.date || 0)
-        }));
-
-        const { prEntries, coveredPurchaseNos } = getPRHistoryEntries(c);
-
-        const matchedPurchases = (purchasesList || []).filter(p => {
-            if ((p.status || '').toLowerCase() === 'requested') return false;
-            const pNo = (p.purchaseNo || p.invoiceNo || '').trim().toUpperCase();
-            if (pNo && coveredPurchaseNos.has(pNo)) return false;
-
-            return (
-                p.customerId === c?._id ||
-                p.customerId === c?.customerId ||
-                (p.companyName && p.companyName.toLowerCase() === (c?.companyName || '').toLowerCase()) ||
-                (p.customerName && p.customerName.toLowerCase() === (c?.customerName || '').toLowerCase()) ||
-                (p.supplierName && (
-                    p.supplierName.toLowerCase() === (c?.companyName || '').toLowerCase() ||
-                    p.supplierName.toLowerCase() === (c?.customerName || '').toLowerCase()
-                ))
-            );
-        }).flatMap(p => {
-            if (p.items && Array.isArray(p.items)) {
-                return p.items.flatMap(item => {
-                    if (item.brandEntries && Array.isArray(item.brandEntries)) {
-                        return item.brandEntries.map(b => ({
-                            amount: b.total || (parseFloat(b.qty || 0) * parseFloat(b.rate || 0)),
-                            discount: p.discount || 0,
-                            paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
-                            type: 'purchase',
-                            sortDate: new Date(p.date || 0)
-                        }));
-                    }
-                    return [{
-                        amount: item.total || item.amount || 0,
-                        discount: p.discount || 0,
-                        paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
-                        type: 'purchase',
-                        sortDate: new Date(p.date || 0)
-                    }];
-                });
-            }
-            return [{
-                amount: p.totalAmount || p.amount || 0,
-                discount: p.discount || 0,
-                paid: p.paid || p.paidAmount || 0,
-                type: 'purchase',
-                sortDate: new Date(p.date || 0)
-            }];
-        });
-
-        const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
-        const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
-
-        let currentBalance = 0;
-        all.forEach(item => {
-            if (item.type === 'sale') {
-                const amt = parseFloat(item.amount) || 0;
-                const pd = parseFloat(item.paid) || 0;
-                const disc = parseFloat(item.discount) || 0;
-                currentBalance += (amt - pd - disc);
-            } else if (item.type === 'payment') {
-                const amt = parseFloat(item.amount) || 0;
-                const disc = parseFloat(item.discount) || 0;
-                currentBalance -= (amt + disc);
-            } else if (item.type === 'payToCustomer') {
-                const amt = parseFloat(item.amount) || 0;
-                currentBalance += amt;
-            } else if (item.type === 'purchase') {
-                const amt = parseFloat(item.amount) || 0;
-                const pd = parseFloat(item.paid) || 0;
-                const disc = parseFloat(item.discount) || 0;
-                currentBalance -= (amt - pd - disc);
-            }
-        });
-
-        return currentBalance;
+        return computeCustomerBalance(c, { salesRecords, purchasesList, purchaseReceivesList });
     };
 
     const sortData = (data) => {
@@ -3741,6 +3600,8 @@ const Customer = ({
                 onClose={() => setShowReport(false)}
                 customers={customers}
                 purchasesList={purchasesList}
+                salesRecords={salesRecords}
+                purchaseReceivesList={purchaseReceivesList}
             />
         </>
     );

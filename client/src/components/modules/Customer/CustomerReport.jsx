@@ -1,9 +1,17 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { XIcon, BarChartIcon, PrinterIcon, SearchIcon } from '../../Icons';
-import { formatDate } from '../../../utils/helpers';
+import { formatDate, computeCustomerBalance } from '../../../utils/helpers';
 import { generateCustomerReportPDF } from '../../../utils/pdfGenerator';
 
-const CustomerReport = ({ isOpen, onClose, customers = [], purchasesList = [] }) => {
+const CustomerReport = ({
+    isOpen,
+    onClose,
+    customers = [],
+    purchasesList = [],
+    salesRecords = [],
+    purchaseReceivesList = []
+}) => {
     if (!isOpen) return null;
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -11,74 +19,7 @@ const CustomerReport = ({ isOpen, onClose, customers = [], purchasesList = [] })
 
     // --- Calculate running balance per customer from all history (sales, payments, payouts, purchases) ---
     const computeDue = (customer) => {
-        if (!customer) return 0;
-
-        const sales = (customer.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested').map(s => ({
-            amount: parseFloat(s.amount) || 0,
-            paid: parseFloat(s.paid) || 0,
-            discount: parseFloat(s.discount) || 0,
-            type: 'sale',
-            sortDate: new Date(s.date || 0)
-        }));
-
-        const payments = (customer.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested').map(p => ({
-            amount: parseFloat(p.amount) || 0,
-            discount: parseFloat(p.discount) || 0,
-            type: 'payment',
-            sortDate: new Date(p.date || 0)
-        }));
-
-        const payouts = (customer.payToCustomerHistory || []).filter(pc => (pc.status || '').toLowerCase() !== 'requested').map(pc => ({
-            amount: parseFloat(pc.amount) || 0,
-            type: 'payToCustomer',
-            sortDate: new Date(pc.date || 0)
-        }));
-
-        const directPurchases = (customer.purchaseHistory || []).filter(pu => (pu.status || '').toLowerCase() !== 'requested').map(pu => ({
-            amount: parseFloat(pu.amount || pu.totalAmount || 0),
-            paid: parseFloat(pu.paid || pu.paidAmount || 0),
-            discount: parseFloat(pu.discount || 0),
-            type: 'purchase',
-            sortDate: new Date(pu.date || 0)
-        }));
-
-        const matchedPurchases = (purchasesList || []).filter(p => {
-            if ((p.status || '').toLowerCase() === 'requested') return false;
-            return (
-                p.customerId === customer?._id ||
-                p.customerId === customer?.customerId ||
-                (p.companyName && p.companyName.toLowerCase() === (customer?.companyName || '').toLowerCase()) ||
-                (p.customerName && p.customerName.toLowerCase() === (customer?.customerName || '').toLowerCase()) ||
-                (p.supplierName && (
-                    p.supplierName.toLowerCase() === (customer?.companyName || '').toLowerCase() ||
-                    p.supplierName.toLowerCase() === (customer?.customerName || '').toLowerCase()
-                ))
-            );
-        }).map(p => ({
-            amount: parseFloat(p.totalAmount || p.amount || 0),
-            paid: parseFloat(p.paid || p.paidAmount || 0),
-            discount: parseFloat(p.discount || 0),
-            type: 'purchase',
-            sortDate: new Date(p.date || 0)
-        }));
-
-        const purchases = [...directPurchases, ...matchedPurchases];
-        const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
-
-        let currentBalance = 0;
-        all.forEach(item => {
-            if (item.type === 'sale') {
-                currentBalance += (item.amount - item.paid - item.discount);
-            } else if (item.type === 'payment') {
-                currentBalance -= (item.amount + item.discount);
-            } else if (item.type === 'payToCustomer') {
-                currentBalance += item.amount;
-            } else if (item.type === 'purchase') {
-                currentBalance -= (item.amount - item.paid - item.discount);
-            }
-        });
-
-        return currentBalance;
+        return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList });
     };
 
     const getLastTransDay = (customer) => {
@@ -114,26 +55,29 @@ const CustomerReport = ({ isOpen, onClose, customers = [], purchasesList = [] })
             (c.phone || '').toLowerCase().includes(q);
         return matchType && matchSearch;
     }).sort((a, b) => {
-        const idA = a.customerId || '';
-        const idB = b.customerId || '';
-        if (!idA) return 1;
-        if (!idB) return -1;
-        return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+        const nameA = (a.companyName || a.customerName || '').trim().toLowerCase();
+        const nameB = (b.companyName || b.customerName || '').trim().toLowerCase();
+        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
     });
 
     const grandTotalDue = filtered.reduce((s, c) => s + computeDue(c), 0);
-    // Only show customers with positive or negative (advance/credit) balances — exclude zero
-    const tableCustomers = filtered.filter(c => Math.abs(computeDue(c)) > 0.01);
-    const positiveCustomers = tableCustomers.filter(c => computeDue(c) > 0);
-    const negativeCustomers = tableCustomers.filter(c => computeDue(c) < 0);
-    const displayCustomers = [...positiveCustomers, ...negativeCustomers];
+    // Only show customers with positive or negative (advance/credit) balances in alphabetical order — exclude zero
+    const displayCustomers = filtered.filter(c => Math.abs(computeDue(c)) > 0.01);
 
     const handlePrint = () => {
-        generateCustomerReportPDF(filtered, typeFilter, grandTotalDue, formatDate(new Date().toISOString().split('T')[0]), purchasesList);
+        generateCustomerReportPDF(
+            filtered,
+            typeFilter,
+            grandTotalDue,
+            formatDate(new Date().toISOString().split('T')[0]),
+            purchasesList,
+            salesRecords,
+            purchaseReceivesList
+        );
     };
 
-    return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
+    return createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
             <div className="bg-white w-full max-w-5xl max-h-[82vh] sm:max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
                 {/* Modal Header — hidden on print */}
@@ -435,7 +379,8 @@ const CustomerReport = ({ isOpen, onClose, customers = [], purchasesList = [] })
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

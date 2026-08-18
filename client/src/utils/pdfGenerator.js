@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
+import { computeCustomerBalance } from './helpers';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -3141,93 +3142,34 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 };
 
 
-export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, dateStr, purchasesList = []) => {
+export const generateCustomerReportPDF = (
+    customers,
+    typeFilter,
+    grandTotalDue,
+    dateStr,
+    purchasesList = [],
+    salesRecords = [],
+    purchaseReceivesList = []
+) => {
     try {
         const doc = new jsPDF();
 
         const computeDue = (customer) => {
-            if (!customer) return 0;
-
-            const sales = (customer.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested').map(s => ({
-                amount: parseFloat(s.amount) || 0,
-                paid: parseFloat(s.paid) || 0,
-                discount: parseFloat(s.discount) || 0,
-                type: 'sale',
-                sortDate: new Date(s.date || 0)
-            }));
-
-            const payments = (customer.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested').map(p => ({
-                amount: parseFloat(p.amount) || 0,
-                discount: parseFloat(p.discount) || 0,
-                type: 'payment',
-                sortDate: new Date(p.date || 0)
-            }));
-
-            const payouts = (customer.payToCustomerHistory || []).filter(pc => (pc.status || '').toLowerCase() !== 'requested').map(pc => ({
-                amount: parseFloat(pc.amount) || 0,
-                type: 'payToCustomer',
-                sortDate: new Date(pc.date || 0)
-            }));
-
-            const directPurchases = (customer.purchaseHistory || []).filter(pu => (pu.status || '').toLowerCase() !== 'requested').map(pu => ({
-                amount: parseFloat(pu.amount || pu.totalAmount || 0),
-                paid: parseFloat(pu.paid || pu.paidAmount || 0),
-                discount: parseFloat(pu.discount || 0),
-                type: 'purchase',
-                sortDate: new Date(pu.date || 0)
-            }));
-
-            const matchedPurchases = (purchasesList || []).filter(p => {
-                if ((p.status || '').toLowerCase() === 'requested') return false;
-                return (
-                    p.customerId === customer?._id ||
-                    p.customerId === customer?.customerId ||
-                    (p.companyName && p.companyName.toLowerCase() === (customer?.companyName || '').toLowerCase()) ||
-                    (p.customerName && p.customerName.toLowerCase() === (customer?.customerName || '').toLowerCase()) ||
-                    (p.supplierName && (
-                        p.supplierName.toLowerCase() === (customer?.companyName || '').toLowerCase() ||
-                        p.supplierName.toLowerCase() === (customer?.customerName || '').toLowerCase()
-                    ))
-                );
-            }).map(p => ({
-                amount: parseFloat(p.totalAmount || p.amount || 0),
-                paid: parseFloat(p.paid || p.paidAmount || 0),
-                discount: parseFloat(p.discount || 0),
-                type: 'purchase',
-                sortDate: new Date(p.date || 0)
-            }));
-
-            const purchases = [...directPurchases, ...matchedPurchases];
-            const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
-
-            let currentBalance = 0;
-            all.forEach(item => {
-                if (item.type === 'sale') {
-                    currentBalance += (item.amount - item.paid - item.discount);
-                } else if (item.type === 'payment') {
-                    currentBalance -= (item.amount + item.discount);
-                } else if (item.type === 'payToCustomer') {
-                    currentBalance += item.amount;
-                } else if (item.type === 'purchase') {
-                    currentBalance -= (item.amount - item.paid - item.discount);
-                }
-            });
-
-            return currentBalance;
+            return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList });
         };
 
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
         const margin = 10;
 
-        // Filter out customers with zero balance
-        const activeCustomers = customers.filter(c => {
+        // Filter out customers with zero balance, sorted in alphabetical ascending order
+        const displayCustomers = customers.filter(c => {
             const due = computeDue(c);
             return Math.abs(due) > 0.01; // Avoid floating point issues with zero
         }).sort((a, b) => {
-            const nameA = (a.companyName || a.customerName || '').toLowerCase();
-            const nameB = (b.companyName || b.customerName || '').toLowerCase();
-            return nameA.localeCompare(nameB);
+            const nameA = (a.companyName || a.customerName || '').trim().toLowerCase();
+            const nameB = (b.companyName || b.customerName || '').trim().toLowerCase();
+            return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
         });
 
         // --- Header ---
@@ -3270,7 +3212,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         doc.setFont('helvetica', 'bold');
         doc.text("Total Records:", margin, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(activeCustomers.length.toString(), margin + 30, yPos);
+        doc.text(customers.length.toString(), margin + 30, yPos);
 
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
@@ -3299,7 +3241,7 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
 
         // --- Table ---
         const tableRows = [];
-        activeCustomers.forEach((c, idx) => {
+        displayCustomers.forEach((c, idx) => {
             const due = computeDue(c);
             tableRows.push([
                 idx + 1,
@@ -3317,10 +3259,14 @@ export const generateCustomerReportPDF = (customers, typeFilter, grandTotalDue, 
         });
 
         // Add Grand Total
-        const gtContent = grandTotalDue < 0
-            ? `(-${Math.round(Math.abs(grandTotalDue)).toLocaleString('en-IN')})`
-            : `${Math.round(grandTotalDue).toLocaleString('en-IN')}`;
-        const gtColor = grandTotalDue < 0 ? [5, 150, 105] : [220, 38, 38]; // emerald or rose
+        const totalDueVal = grandTotalDue !== undefined && grandTotalDue !== null
+            ? grandTotalDue
+            : customers.reduce((s, c) => s + computeDue(c), 0);
+
+        const gtContent = totalDueVal < 0
+            ? `(-${Math.round(Math.abs(totalDueVal)).toLocaleString('en-IN')})`
+            : `${Math.round(totalDueVal).toLocaleString('en-IN')}`;
+        const gtColor = totalDueVal < 0 ? [5, 150, 105] : [220, 38, 38]; // emerald or rose
         tableRows.push([
             { content: 'GRAND TOTAL BALANCE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
             { content: gtContent, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240], textColor: gtColor } },
