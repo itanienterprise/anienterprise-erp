@@ -1201,7 +1201,16 @@ const SaleManagement = ({
                 }
                 return d && typeof d === 'object' ? { ...d, _id: item._id } : item;
             });
-            setWarehouses(decrypted);
+            const seen = new Set();
+            const unique = decrypted.filter(item => {
+                const name = (item?.whName || item?.name || '').trim().toLowerCase();
+                if (name && !seen.has(name)) {
+                    seen.add(name);
+                    return true;
+                }
+                return false;
+            });
+            setWarehouses(unique);
         } catch (error) {
             console.error('Error fetching warehouses:', error);
         }
@@ -2519,6 +2528,153 @@ const SaleManagement = ({
         );
     };
 
+    const getFilteredBrands = (pIdx) => {
+        const targetIdx = (pIdx !== undefined && pIdx !== null) ? pIdx : activeItemIndex;
+        let selectedProductName = '';
+        let selectedProductId = '';
+        let selectedLcNo = '';
+        if (targetIdx !== null && targetIdx !== undefined && formData.items?.[targetIdx]) {
+            selectedProductName = formData.items[targetIdx].productName || '';
+            selectedProductId = formData.items[targetIdx].productId || '';
+            if (activeEntryIndex !== null && activeEntryIndex !== undefined) {
+                selectedLcNo = formData.items[targetIdx].brandEntries?.[activeEntryIndex]?.lcNo || '';
+            }
+        }
+
+        const brandsSet = new Set();
+        const selectedProduct = (products || []).find(p =>
+            (selectedProductId && p._id === selectedProductId) ||
+            (selectedProductName && (
+                (p.name || '').toLowerCase().trim() === selectedProductName.toLowerCase().trim() ||
+                (p.ipName || '').toLowerCase().trim() === selectedProductName.toLowerCase().trim()
+            ))
+        );
+
+        if (selectedProduct) {
+            if (selectedProduct.brand) brandsSet.add(selectedProduct.brand);
+            if (Array.isArray(selectedProduct.brands)) {
+                selectedProduct.brands.forEach(b => { if (b && b.brand) brandsSet.add(b.brand); });
+            }
+        }
+
+        // Check stockRecords for matching product
+        if (stockRecords && Array.isArray(stockRecords)) {
+            const pNameLower = (selectedProductName || selectedProduct?.name || '').toLowerCase().trim();
+            stockRecords.forEach(r => {
+                const rProdName = (r.productName || r.product || '').trim().toLowerCase();
+                if (!pNameLower || rProdName === pNameLower) {
+                    if (r.brand) brandsSet.add(r.brand);
+                    if (Array.isArray(r.entries)) r.entries.forEach(e => { if (e && e.brand) brandsSet.add(e.brand); });
+                    if (Array.isArray(r.brandEntries)) r.brandEntries.forEach(e => { if (e && e.brand) brandsSet.add(e.brand); });
+                }
+            });
+        }
+
+        // Check lcRecords for matching product or LC
+        if (lcRecords && Array.isArray(lcRecords)) {
+            const pNameLower = (selectedProductName || selectedProduct?.name || '').toLowerCase().trim();
+            const cleanLc = (selectedLcNo || '').toLowerCase().trim();
+            lcRecords.forEach(lc => {
+                const lcProdName = (lc.productName || '').trim().toLowerCase();
+                const curLcNo = (lc.lcNo || lc.lcNumber || '').toString().trim().toLowerCase();
+                if ((!pNameLower || lcProdName === pNameLower) || (cleanLc && curLcNo === cleanLc)) {
+                    if (lc.brand) brandsSet.add(lc.brand);
+                }
+            });
+        }
+
+        // Fallback: if no product selected or set is empty, collect all brands from products list
+        if (brandsSet.size === 0 && (!selectedProductName && !selectedProductId)) {
+            (products || []).forEach(p => {
+                if (p.brand) brandsSet.add(p.brand);
+                if (Array.isArray(p.brands)) {
+                    p.brands.forEach(b => { if (b && b.brand) brandsSet.add(b.brand); });
+                }
+            });
+        }
+
+        const query = (brandSearch || '').toLowerCase();
+        return Array.from(brandsSet)
+            .filter(Boolean)
+            .filter(b => (b || '').toLowerCase().includes(query))
+            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    };
+
+    const getBrandsForSelectedProduct = () => {
+        const pName = saleFilters.productName;
+        if (!pName) return [];
+        const pNameLower = pName.toLowerCase().trim();
+        const brandsSet = new Set();
+
+        const selectedProduct = (products || []).find(p =>
+            (p.name || '').toLowerCase().trim() === pNameLower ||
+            (p.ipName || '').toLowerCase().trim() === pNameLower ||
+            p._id === pName
+        );
+        if (selectedProduct) {
+            if (selectedProduct.brand) brandsSet.add(selectedProduct.brand);
+            if (Array.isArray(selectedProduct.brands)) {
+                selectedProduct.brands.forEach(b => { if (b && b.brand) brandsSet.add(b.brand); });
+            }
+        }
+
+        if (stockRecords && Array.isArray(stockRecords)) {
+            stockRecords.forEach(r => {
+                const rProdName = (r.productName || r.product || '').trim().toLowerCase();
+                if (rProdName === pNameLower) {
+                    if (r.brand) brandsSet.add(r.brand);
+                    if (Array.isArray(r.entries)) r.entries.forEach(e => { if (e && e.brand) brandsSet.add(e.brand); });
+                    if (Array.isArray(r.brandEntries)) r.brandEntries.forEach(e => { if (e && e.brand) brandsSet.add(e.brand); });
+                }
+            });
+        }
+
+        if (allSalesRecords && Array.isArray(allSalesRecords)) {
+            allSalesRecords.forEach(s => {
+                (s.items || []).forEach(item => {
+                    if ((item.productName || '').trim().toLowerCase() === pNameLower) {
+                        (item.brandEntries || []).forEach(b => {
+                            if (b && (b.brand || b.brandName)) brandsSet.add(b.brand || b.brandName);
+                        });
+                    }
+                });
+            });
+        }
+
+        return Array.from(brandsSet).filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    };
+
+    const getFilteredWarehouses = () => {
+        const query = (warehouseSearch || '').toLowerCase().trim();
+        const seen = new Set();
+        const uniqueWarehouses = [];
+
+        (warehouses || []).forEach(w => {
+            const name = (w?.whName || w?.name || '').trim();
+            if (name && !seen.has(name.toLowerCase())) {
+                seen.add(name.toLowerCase());
+                uniqueWarehouses.push({
+                    _id: w._id || name,
+                    whName: name,
+                    name: name
+                });
+            }
+        });
+
+        if (uniqueWarehouses.length === 0) {
+            ['HILI', 'DINAJPUR', 'CHATTOGRAM', 'DHAKA'].forEach(name => {
+                if (!seen.has(name.toLowerCase())) {
+                    seen.add(name.toLowerCase());
+                    uniqueWarehouses.push({ _id: name, whName: name, name: name });
+                }
+            });
+        }
+
+        return uniqueWarehouses.filter(w =>
+            (w.whName || '').toLowerCase().includes(query)
+        );
+    };
+
     const handleLcSelect = (lc) => {
         const selectedLcNo = lc?.lcNo || (typeof lc === 'string' ? lc : '');
 
@@ -2696,14 +2852,16 @@ const SaleManagement = ({
 
     const handleWarehouseSelect = (warehouse) => {
         if (activeItemIndex === null || activeEntryIndex === null) return;
+        const whName = typeof warehouse === 'string' ? warehouse : (warehouse?.whName || warehouse?.name || '');
+        const whId = typeof warehouse === 'object' ? (warehouse?._id || '') : '';
         setFormData(prev => {
             const newItems = [...prev.items];
             const item = { ...newItems[activeItemIndex] };
             const brandEntries = [...item.brandEntries];
             brandEntries[activeEntryIndex] = {
                 ...brandEntries[activeEntryIndex],
-                warehouseId: warehouse._id,
-                warehouseName: warehouse.whName
+                warehouseId: whId,
+                warehouseName: whName
             };
             item.brandEntries = brandEntries;
             newItems[activeItemIndex] = item;
