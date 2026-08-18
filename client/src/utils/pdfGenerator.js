@@ -1963,8 +1963,15 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             previousBalance = calculatedPrevBalance;
         }
 
-        // Load and embed company logo (identical to stock report)
-        const logoImg = await new Promise((resolve) => {
+        // --- Background Patterns (Organic Waves / Decorative Circles) ---
+        doc.setFillColor(255, 247, 237);
+        doc.circle(0, 0, 35, 'F');
+        doc.circle(pageWidth, pageHeight, 45, 'F');
+        doc.setFillColor(254, 215, 170);
+        doc.circle(0, pageHeight, 30, 'F');
+
+        // Load company logo and centered watermark
+        const { logoImg, watermarkImg } = await new Promise((resolve) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
             img.onload = () => {
@@ -1973,11 +1980,30 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                 canvas.height = img.height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0);
-                resolve(canvas.toDataURL('image/png'));
+                const normal = canvas.toDataURL('image/png');
+
+                // Generate translucent watermark
+                const wmCanvas = document.createElement('canvas');
+                wmCanvas.width = img.width;
+                wmCanvas.height = img.height;
+                const wmCtx = wmCanvas.getContext('2d');
+                wmCtx.globalAlpha = 0.15; // increased visibility watermark opacity
+                wmCtx.drawImage(img, 0, 0);
+                const wm = wmCanvas.toDataURL('image/png');
+
+                resolve({ logoImg: normal, watermarkImg: wm });
             };
-            img.onerror = () => resolve(null);
+            img.onerror = () => resolve({ logoImg: null, watermarkImg: null });
             img.src = '/logo.png';
         });
+
+        // --- Centered Logo Watermark (shifted slightly up) ---
+        if (watermarkImg) {
+            const wmSize = 95;
+            const wmX = (pageWidth - wmSize) / 2;
+            const wmY = ((pageHeight - wmSize) / 2) - 20;
+            doc.addImage(watermarkImg, 'PNG', wmX, wmY, wmSize, wmSize);
+        }
 
         // --- Header (identical to Stock Report) ---
         if (logoImg) {
@@ -2055,25 +2081,46 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 
         // --- 2. Boxed Title ---
         doc.setFillColor(249, 115, 22); // Orange color
-        doc.rect((pageWidth / 2) - 35, y - 5, 70, 8, 'F');
+        doc.roundedRect((pageWidth / 2) - 35, y - 5, 70, 8, 2, 2, 'F');
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
         doc.text("SALES INVOICE", pageWidth / 2, y + 0.5, { align: 'center' });
 
-        // --- 2b. Customer Type (Centered under Title Box) ---
+        // --- 2b. Customer Type Tag (Centered with gap under Title Box) ---
         let custTypeLabel = "General Customer";
         const cType = (customer?.customerType || sale.customerType || "").toLowerCase();
         if (cType.includes("party") || sale.isParty) {
             custTypeLabel = "Party Customer";
         }
-        y += 6;
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 0, 0);
-        doc.text(custTypeLabel, pageWidth / 2, y, { align: 'center' });
+        const isParty = custTypeLabel === "Party Customer";
 
-        y += 12;
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        const tagTextWidth = doc.getTextWidth(custTypeLabel);
+        const tagW = tagTextWidth + 8;
+        const tagH = 5.2;
+        const tagX = (pageWidth / 2) - (tagW / 2);
+        const tagY = y + 5.5; // clean gap below the Sales Invoice box
+
+        if (isParty) {
+            doc.setFillColor(254, 243, 199); // amber-100
+            doc.setDrawColor(245, 158, 11);  // amber-500
+            doc.setTextColor(180, 83, 9);    // amber-700
+        } else {
+            doc.setFillColor(239, 246, 255); // blue-50
+            doc.setDrawColor(191, 219, 254); // blue-200
+            doc.setTextColor(29, 78, 216);   // blue-700
+        }
+        doc.setLineWidth(0.2);
+        doc.roundedRect(tagX, tagY, tagW, tagH, 1.5, 1.5, 'FD');
+        doc.text(custTypeLabel, pageWidth / 2, tagY + 3.7, { align: 'center' });
+
+        // Reset colors to black for invoice details
+        doc.setTextColor(0, 0, 0);
+        doc.setDrawColor(0, 0, 0);
+
+        y = tagY + tagH + 8;
 
         // Line 1: Date (Left) | Invoice No (Right)
         doc.setFont('helvetica', 'bold');
