@@ -2745,7 +2745,7 @@ const Customer = ({
                                                                                             paid: group.totalPaid,
                                                                                             status: group.status
                                                                                         };
-                                                                                        generateSaleInvoicePDF(saleObject);
+                                                                                        generateSaleInvoicePDF(saleObject, customers && customers.length > 0 ? customers : [viewData]);
                                                                                     }}
                                                                                     className="p-1.5 hover:bg-gray-100 text-gray-400 hover:text-blue-600 rounded-lg transition-colors"
                                                                                 >
@@ -2896,7 +2896,7 @@ const Customer = ({
                                                                                         paid: group.totalPaid,
                                                                                         status: group.status
                                                                                     };
-                                                                                    generateSaleInvoicePDF(saleObject);
+                                                                                    generateSaleInvoicePDF(saleObject, customers && customers.length > 0 ? customers : [viewData]);
                                                                                 }}
                                                                                 className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
                                                                             >

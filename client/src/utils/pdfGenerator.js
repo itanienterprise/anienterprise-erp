@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
 import { computeCustomerBalance } from './helpers';
+import { api } from './api';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -1852,31 +1853,114 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         // --- Calculate Previous Balance Dynamically ---
         let previousBalance = parseFloat(sale.previousBalance || 0);
 
-        const customer = allCustomers.find(c =>
-            c._id === sale.customerId ||
-            (c.companyName && sale.companyName && c.companyName.trim().toLowerCase() === sale.companyName.trim().toLowerCase())
-        );
+        let customersList = Array.isArray(allCustomers) && allCustomers.length > 0 ? allCustomers : [];
+        if (customersList.length === 0) {
+            try {
+                const fetched = await api.get('/api/customers');
+                if (Array.isArray(fetched)) {
+                    customersList = fetched;
+                }
+            } catch (err) {
+                console.warn('Could not fetch customers in generateSaleInvoicePDF:', err);
+            }
+        }
+
+        const norm = (s) => (s || '').toString().toLowerCase().replace(/m\/s|m\/s\.|[^a-z0-9]/g, '').trim();
+        const normPhone = (p) => (p || '').toString().replace(/\D/g, '').slice(-10);
+
+        const targetCustId = (sale.customerId || sale.customer?._id || sale.customer?.customerId || '').toString().trim();
+        const targetComp = norm(sale.companyName || sale.customerName || sale.party || '');
+        const targetPhone = normPhone(sale.contact || sale.phone || '');
+
+        let customer = customersList.find(c => {
+            if (targetCustId && (c._id === targetCustId || c.customerId === targetCustId)) return true;
+            const cComp = norm(c.companyName || '');
+            const cCust = norm(c.customerName || '');
+            if (targetComp && (cComp === targetComp || cCust === targetComp)) return true;
+            if (targetComp && cComp && (cComp.includes(targetComp) || targetComp.includes(cComp))) return true;
+            if (targetPhone && c.phone && normPhone(c.phone) === targetPhone) return true;
+            return false;
+        });
+
+        if (!customer && sale.customer && typeof sale.customer === 'object') {
+            customer = sale.customer;
+        }
 
         if (customer) {
-            const sHistory = customer.salesHistory || [];
-            const pHistory = customer.paymentHistory || [];
+            const sHistory = (customer.salesHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested');
+            const pHistory = (customer.paymentHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested');
+            const ptcHistory = (customer.payToCustomerHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested');
+            const puHistory = (customer.purchaseHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested');
 
+            const saleDateStr = sale.date ? (typeof sale.date === 'string' ? sale.date.split('T')[0] : new Date(sale.date).toISOString().split('T')[0]) : '';
+            const currentInv = (sale.invoiceNo || '').trim().toUpperCase();
+
+            // 1. Previous Sales
             const prevSales = sHistory.filter(h => {
-                if (h.invoiceNo === sale.invoiceNo) return false;
-                if (h.date < sale.date) return true;
-                if (h.date === sale.date && h.invoiceNo < sale.invoiceNo) return true;
+                const hInv = (h.invoiceNo || '').trim().toUpperCase();
+                if (currentInv && hInv === currentInv) return false;
+                
+                const hDateStr = h.date ? (typeof h.date === 'string' ? h.date.split('T')[0] : new Date(h.date).toISOString().split('T')[0]) : '';
+                if (!saleDateStr || !hDateStr) return true;
+                if (hDateStr < saleDateStr) return true;
+                if (hDateStr === saleDateStr) {
+                    if (currentInv && hInv) return hInv < currentInv;
+                    return false;
+                }
                 return false;
             });
 
-            const totalPrevAmt = prevSales.reduce((sum, h) => sum + (parseFloat(h.amount) || 0), 0);
-            const totalPrevPaid = prevSales.reduce((sum, h) => sum + (parseFloat(h.paid) || 0), 0);
-            const totalPrevDisc = prevSales.reduce((sum, h) => sum + (parseFloat(h.discount) || 0), 0);
+            // 2. Previous Payments
+            const prevPayments = pHistory.filter(h => {
+                const hDateStr = h.date ? (typeof h.date === 'string' ? h.date.split('T')[0] : new Date(h.date).toISOString().split('T')[0]) : '';
+                if (!saleDateStr || !hDateStr) return true;
+                return hDateStr <= saleDateStr;
+            });
 
-            const prevPayments = pHistory.filter(h => h.date < sale.date);
-            const totalPrevPayAmt = prevPayments.reduce((sum, h) => sum + (parseFloat(h.amount) || 0), 0);
+            // 3. Previous PayToCustomer payouts
+            const prevPayouts = ptcHistory.filter(h => {
+                const hDateStr = h.date ? (typeof h.date === 'string' ? h.date.split('T')[0] : new Date(h.date).toISOString().split('T')[0]) : '';
+                if (!saleDateStr || !hDateStr) return true;
+                return hDateStr <= saleDateStr;
+            });
 
-            const calculatedPrevBalance = totalPrevAmt - totalPrevPaid - totalPrevDisc - totalPrevPayAmt;
-            previousBalance = Math.max(0, calculatedPrevBalance);
+            // 4. Previous Purchases
+            const prevPurchases = puHistory.filter(h => {
+                const hDateStr = h.date ? (typeof h.date === 'string' ? h.date.split('T')[0] : new Date(h.date).toISOString().split('T')[0]) : '';
+                if (!saleDateStr || !hDateStr) return true;
+                return hDateStr <= saleDateStr;
+            });
+
+            let totalPrevSales = 0;
+            prevSales.forEach(h => {
+                const amt = parseFloat(h.amount) || 0;
+                const paid = parseFloat(h.paid) || 0;
+                const disc = parseFloat(h.discount) || 0;
+                totalPrevSales += (amt - paid - disc);
+            });
+
+            let totalPrevPayments = 0;
+            prevPayments.forEach(h => {
+                const amt = parseFloat(h.amount) || 0;
+                const disc = parseFloat(h.discount) || 0;
+                totalPrevPayments += (amt + disc);
+            });
+
+            let totalPrevPayouts = 0;
+            prevPayouts.forEach(h => {
+                totalPrevPayouts += (parseFloat(h.amount) || 0);
+            });
+
+            let totalPrevPurchases = 0;
+            prevPurchases.forEach(h => {
+                const amt = parseFloat(h.amount || h.totalAmount || 0);
+                const paid = parseFloat(h.paid || h.paidAmount || 0);
+                const disc = parseFloat(h.discount || 0);
+                totalPrevPurchases += (amt - paid - disc);
+            });
+
+            const calculatedPrevBalance = totalPrevSales - totalPrevPayments + totalPrevPayouts - totalPrevPurchases;
+            previousBalance = calculatedPrevBalance;
         }
 
         // --- Background Patterns (Organic Waves - Adjusted for Portrait) ---
