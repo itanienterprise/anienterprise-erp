@@ -199,15 +199,34 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
             let filteredIpNumbersList = ipNumbersList;
             if (isPiRevised && pi?.revisions?.length > 0) {
-                const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
-                const originalProducts = originalRev?.productsList || [];
+                let targetRevIndex = -1;
+                if (record.selectedRevisionNo) {
+                    targetRevIndex = pi.revisions.findIndex(r => r.reviseNo === record.selectedRevisionNo);
+                }
+                if (targetRevIndex === -1 && record.lcAmendment) {
+                    const revNumMatch = record.lcAmendment.match(/\d+/);
+                    if (revNumMatch) {
+                        const amndIdx = parseInt(revNumMatch[0], 10);
+                        targetRevIndex = pi.revisions.findIndex(r => r.reviseNo !== 'Original PI' && r.reviseNo.includes(String(amndIdx)));
+                        if (targetRevIndex === -1 && pi.revisions[amndIdx]) {
+                            targetRevIndex = amndIdx;
+                        }
+                    }
+                }
+                if (targetRevIndex === -1) {
+                    targetRevIndex = pi.revisions.length - 1;
+                }
+
+                const currentRev = pi.revisions[targetRevIndex] || pi;
+                const prevRev = targetRevIndex > 0 ? pi.revisions[targetRevIndex - 1] : (pi.revisions.find(r => r.reviseNo === 'Original PI') || pi);
+                const prevProducts = prevRev?.productsList || [];
                 const changedProducts = [];
 
-                (pi.productsList || []).forEach(p => {
-                    const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
-                    const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
-                    const revQty = parseFloat(p.quantity) || 0;
-                    if (revQty - origQty > 0) {
+                (currentRev.productsList || []).forEach(p => {
+                    const prevProd = prevProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
+                    const prevQty = prevProd ? (parseFloat(prevProd.quantity) || 0) : 0;
+                    const curQty = parseFloat(p.quantity) || 0;
+                    if (curQty - prevQty > 0) {
                         changedProducts.push(p.productName?.trim().toLowerCase());
                     }
                 });
@@ -382,15 +401,34 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
             let filteredIpNumbersList = ipNumbersList;
             if (isPiRevised && pi?.revisions?.length > 0) {
-                const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
-                const originalProducts = originalRev?.productsList || [];
+                let targetRevIndex = -1;
+                if (record.selectedRevisionNo) {
+                    targetRevIndex = pi.revisions.findIndex(r => r.reviseNo === record.selectedRevisionNo);
+                }
+                if (targetRevIndex === -1 && record.lcAmendment) {
+                    const revNumMatch = record.lcAmendment.match(/\d+/);
+                    if (revNumMatch) {
+                        const amndIdx = parseInt(revNumMatch[0], 10);
+                        targetRevIndex = pi.revisions.findIndex(r => r.reviseNo !== 'Original PI' && r.reviseNo.includes(String(amndIdx)));
+                        if (targetRevIndex === -1 && pi.revisions[amndIdx]) {
+                            targetRevIndex = amndIdx;
+                        }
+                    }
+                }
+                if (targetRevIndex === -1) {
+                    targetRevIndex = pi.revisions.length - 1;
+                }
+
+                const currentRev = pi.revisions[targetRevIndex] || pi;
+                const prevRev = targetRevIndex > 0 ? pi.revisions[targetRevIndex - 1] : (pi.revisions.find(r => r.reviseNo === 'Original PI') || pi);
+                const prevProducts = prevRev?.productsList || [];
                 const changedProducts = [];
 
-                (pi.productsList || []).forEach(p => {
-                    const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
-                    const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
-                    const revQty = parseFloat(p.quantity) || 0;
-                    if (revQty - origQty > 0) {
+                (currentRev.productsList || []).forEach(p => {
+                    const prevProd = prevProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
+                    const prevQty = prevProd ? (parseFloat(prevProd.quantity) || 0) : 0;
+                    const curQty = parseFloat(p.quantity) || 0;
+                    if (curQty - prevQty > 0) {
                         changedProducts.push(p.productName?.trim().toLowerCase());
                     }
                 });
@@ -460,19 +498,39 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         let amt = prod.amount;
         let totFrt = prod.totalFreight;
 
-        if (isPiRevised && pi?.revisions?.length > 0) {
-            const originalRev = pi.revisions.find(r => r.reviseNo === 'Original PI');
-            const originalProducts = originalRev?.productsList || [];
-            const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === prod.productName?.trim().toLowerCase());
+        if ((!qty || parseFloat(qty) === 0) && isPiRevised && pi?.revisions?.length > 0) {
+            let targetRevIndex = -1;
+            if (record.selectedRevisionNo) {
+                targetRevIndex = pi.revisions.findIndex(r => r.reviseNo === record.selectedRevisionNo);
+            }
+            if (targetRevIndex === -1 && record.lcAmendment) {
+                const revNumMatch = record.lcAmendment.match(/\d+/);
+                if (revNumMatch) {
+                    const amndIdx = parseInt(revNumMatch[0], 10);
+                    targetRevIndex = pi.revisions.findIndex(r => r.reviseNo !== 'Original PI' && r.reviseNo.includes(String(amndIdx)));
+                    if (targetRevIndex === -1 && pi.revisions[amndIdx]) {
+                        targetRevIndex = amndIdx;
+                    }
+                }
+            }
+            if (targetRevIndex === -1) {
+                targetRevIndex = pi.revisions.length - 1;
+            }
 
-            const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
-            const revQty = piProd ? (parseFloat(piProd.quantity) || 0) : 0;
-            const diffQty = revQty - origQty;
+            const currentRev = pi.revisions[targetRevIndex] || pi;
+            const prevRev = targetRevIndex > 0 ? pi.revisions[targetRevIndex - 1] : (pi.revisions.find(r => r.reviseNo === 'Original PI') || pi);
+            const prevProducts = prevRev?.productsList || [];
+            const prevProd = prevProducts.find(op => op.productName?.trim().toLowerCase() === prod.productName?.trim().toLowerCase());
+
+            const curProd = (currentRev.productsList || []).find(p => p.productName?.trim().toLowerCase() === prod.productName?.trim().toLowerCase()) || piProd;
+            const prevQty = prevProd ? (parseFloat(prevProd.quantity) || 0) : 0;
+            const curQty = curProd ? (parseFloat(curProd.quantity) || 0) : 0;
+            const diffQty = curQty - prevQty;
 
             if (diffQty > 0) {
                 qty = String(diffQty);
-                amt = String((diffQty * (parseFloat(prod.rate || piProd?.rate || 0))).toFixed(2));
-                totFrt = String((diffQty * (parseFloat(prod.freight || piProd?.freight || 0))).toFixed(2));
+                amt = String((diffQty * (parseFloat(prod.rate || curProd?.rate || 0))).toFixed(2));
+                totFrt = String((diffQty * (parseFloat(prod.freight || curProd?.freight || 0))).toFixed(2));
             }
         }
 
@@ -482,9 +540,9 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             packingType: prod.packingType,
             quantity: qty,
             rate: prod.rate || piProd?.rate || '',
-            amount: amt || piProd?.amount || '',
+            amount: amt || (qty && prod.rate ? String((parseFloat(qty) * parseFloat(prod.rate)).toFixed(2)) : (piProd?.amount || '')),
             freight: prod.freight || piProd?.freight || '',
-            totalFreight: totFrt || piProd?.totalFreight || ''
+            totalFreight: totFrt || (qty && prod.freight ? String((parseFloat(qty) * parseFloat(prod.freight)).toFixed(2)) : (piProd?.totalFreight || ''))
         };
     });
 

@@ -9142,7 +9142,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
                                         <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-1.5 text-left">
-                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Amendment Number</label>
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Revised Cover Note Number</label>
                                                 <input
                                                     type="text"
                                                     name="addnNo"
@@ -9155,7 +9155,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
                                             <div className="space-y-1.5">
                                                 <CustomDatePicker
-                                                    label="Amendment Date"
+                                                    label="Revised Cover Note Date"
                                                     name="addnDate"
                                                     value={amendmentFormData.addnDate}
                                                     onChange={(e) => setAmendmentFormData(prev => ({ ...prev, addnDate: e.target.value }))}

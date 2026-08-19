@@ -489,16 +489,21 @@ function PackingList({
         let mappedProducts = [];
 
         if (isRevised && revisions.length > 0) {
-            const originalRev = revisions.find(r => r.reviseNo === 'Original PI') || rawPi;
-            const originalProducts = originalRev?.productsList || [];
+            // Find index of selected revision
+            const selectedRevIndex = revisions.findIndex(r => r.reviseNo === revisionNo);
+            // Baseline revision to compare against: immediately preceding revision (selectedRevIndex - 1), or Original PI
+            const baselineRev = (selectedRevIndex > 0)
+                ? revisions[selectedRevIndex - 1]
+                : (revisions.find(r => r.reviseNo === 'Original PI') || rawPi);
+            const baselineProducts = baselineRev?.productsList || [];
 
-            // Filter and map only the changed products between selected revision and original revision
+            // Filter and map only the changed products between selected revision and previous revision
             const revisedProducts = selectedRev.productsList || [];
             revisedProducts.forEach(p => {
-                const origProd = originalProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
-                const origQty = origProd ? (parseFloat(origProd.quantity) || 0) : 0;
+                const baseProd = baselineProducts.find(op => op.productName?.trim().toLowerCase() === p.productName?.trim().toLowerCase());
+                const baseQty = baseProd ? (parseFloat(baseProd.quantity) || 0) : 0;
                 const revQty = parseFloat(p.quantity) || 0;
-                const diffQty = revQty - origQty;
+                const diffQty = revQty - baseQty;
 
                 if (diffQty !== 0) {
                     // This product has changed!
@@ -566,6 +571,24 @@ function PackingList({
             mappedProducts = [{ productName: '', hsCode: '', quantity: '', bagCount: '', packingType: resolvePiPackingType(null, selectedRev, rawPi), netWeight: '', grossWeight: '', rate: '', amount: '', freight: '', totalFreight: '' }];
         }
 
+        // Find previous Packing List record for this PI if available to auto-fill TR details for revised PIs
+        let prevTrNumber = '';
+        let prevTrName = '';
+        let prevTrDate = '';
+
+        if (Array.isArray(records)) {
+            const cleanTargetPi = (rawPi.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
+            const prevPl = records.find(r => {
+                const rPi = (r.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
+                return rPi === cleanTargetPi && (r.trNumber || r.trName);
+            });
+            if (prevPl) {
+                prevTrNumber = prevPl.trNumber || '';
+                prevTrName = prevPl.trName || '';
+                prevTrDate = prevPl.trDate ? prevPl.trDate.split('T')[0] : '';
+            }
+        }
+
         setFormData(prev => ({
             ...prev,
             piNumber: displayPiNumber,
@@ -593,6 +616,9 @@ function PackingList({
             invoiceStyle: rawPi.invoiceStyle || 'Style 2 AAS',
             bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : '',
             branchName: matchedLcByPi ? (matchedLcByPi.bankBranch || '') : '',
+            trNumber: isRevised && prevTrNumber ? prevTrNumber : (isRevised ? prev.trNumber : prev.trNumber),
+            trName: isRevised && prevTrName ? prevTrName : (isRevised ? prev.trName : prev.trName),
+            trDate: isRevised && prevTrDate ? prevTrDate : (isRevised ? prev.trDate : prev.trDate),
             lcAmendment: (() => {
                 if (!isRevised) return '';
                 // Determine exact amendment number from selected revision (e.g. 'Revised 1' -> '01', 'Revised 2' -> '02')
