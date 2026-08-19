@@ -45,9 +45,15 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
             const matchedCog = (costOfGoods || []).find(cog => {
                 const lcMatch = String(cog.lcNo || '').trim().toLowerCase() === String(data.lcNo || '').trim().toLowerCase();
                 const invoiceMatch = String(cog.invoiceNo || '').trim().toLowerCase() === String(item.invoiceNo || '').trim().toLowerCase();
+                const productMatch = !item.productName || !cog.product || String(cog.product).trim().toLowerCase() === String(item.productName).trim().toLowerCase();
+                const brandMatch = !item.brand || !cog.brand || String(cog.brand).trim().toLowerCase() === String(item.brand).trim().toLowerCase();
+                return lcMatch && invoiceMatch && productMatch && brandMatch;
+            }) || (costOfGoods || []).find(cog => {
+                const lcMatch = String(cog.lcNo || '').trim().toLowerCase() === String(data.lcNo || '').trim().toLowerCase();
+                const invoiceMatch = String(cog.invoiceNo || '').trim().toLowerCase() === String(item.invoiceNo || '').trim().toLowerCase();
                 return lcMatch && invoiceMatch;
             });
-            const invQty = matchedCog ? (parseFloat(matchedCog.quantity) || 0) : 0;
+            const invQty = item.invoiceQty !== undefined && item.invoiceQty !== null && item.invoiceQty !== '' ? (parseFloat(item.invoiceQty) || 0) : (matchedCog ? (parseFloat(matchedCog.quantity) || 0) : 0);
             acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0, packet: 0, invoiceQty: invQty };
         }
         const arrQty = parseFloat(item.quantity) || 0;
@@ -63,7 +69,8 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
     const uniqueInvoicesMap = {};
     uniqueEntries.forEach(item => {
         if (item.invoiceNo) {
-            uniqueInvoicesMap[item.invoiceNo] = item.invoiceQty;
+            const invKey = `${item.invoiceNo}__${item.productName || ''}__${item.brand || ''}`;
+            uniqueInvoicesMap[invKey] = item.invoiceQty || 0;
         }
     });
     const totalInvoiceQty = Object.values(uniqueInvoicesMap).reduce((s, q) => s + q, 0);
@@ -1043,7 +1050,29 @@ function LCReceive({
         });
     };
 
-    const handleBrandEntryChange = (pIndex, bIndex, field, value) => {
+    const getCogCostingDetails = (matchedCog) => {
+        if (!matchedCog) return { price: '', qty: '' };
+        const billSum = matchedCog.totalBill !== undefined ? matchedCog.totalBill : ((parseFloat(matchedCog.amount) || 0) + (parseFloat(matchedCog.indTruckFare) || 0) + (parseFloat(matchedCog.slofCf) || 0));
+        const rebatePct = matchedCog.rebate !== undefined ? matchedCog.rebate : (matchedCog.redate !== undefined ? matchedCog.redate : '2.9');
+        const rebateVal = matchedCog.rebateAmount !== undefined ? matchedCog.rebateAmount : (matchedCog.redateAmount !== undefined ? matchedCog.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
+        const netBillVal = matchedCog.netBill !== undefined ? matchedCog.netBill : (billSum - rebateVal);
+        const qtyVal = parseFloat(matchedCog.quantity) || 0;
+        const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
+        const dollarRateVal = parseFloat(matchedCog.rsToDollar) || 0;
+        const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
+        const bdtRateVal = parseFloat(matchedCog.dollarRateBdt) || 0;
+        const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
+        const cfExpVal = parseFloat(matchedCog.cfOtherExpense !== undefined ? matchedCog.cfOtherExpense : '9') || 0;
+        const costingKgVal = rateKgBdtVal + cfExpVal;
+
+        const finalPrice = matchedCog.costingKg || costingKgVal || 0;
+        return {
+            price: Number(finalPrice).toFixed(2),
+            qty: qtyVal
+        };
+    };
+
+    const handleBrandEntryChange = (pIndex, bIndex, field, value, selectedInvoiceObj = null) => {
         setStockFormData(prev => {
             const updatedProducts = [...prev.productEntries];
             const product = { ...updatedProducts[pIndex] };
@@ -1057,42 +1086,82 @@ function LCReceive({
                     entry.brand = '';
                     entry.purchasedPrice = '';
                     entry.invoiceQty = '';
+                    entry.matchedCogId = '';
                 } else {
-                    const matchedCog = costOfGoods.find(cog => {
-                        const lcMatch = !prev.lcNo || String(cog.lcNo || '').trim().toLowerCase() === String(prev.lcNo).trim().toLowerCase();
-                        const invoiceMatch = String(cog.invoiceNo || '').trim().toLowerCase() === String(value).trim().toLowerCase();
-                        return lcMatch && invoiceMatch;
-                    });
-                    if (matchedCog) {
-                        if (matchedCog.brand) {
-                            entry.brand = matchedCog.brand;
-                            const productDef = products.find(p => p.name === product.productName);
-                            if (productDef && productDef.brands) {
-                                const brandData = productDef.brands.find(b => b.brand === matchedCog.brand);
-                                if (brandData) {
-                                    entry.packetSize = brandData.packetSize || entry.packetSize;
+                    let matchedCog = selectedInvoiceObj?.cog || null;
+                    if (!matchedCog) {
+                        const targetInv = String(value).trim().toLowerCase();
+                        const targetLc = String(prev.lcNo || '').trim().toLowerCase();
+                        const targetProd = String(product.productName || '').trim().toLowerCase();
+                        const targetBrand = String(entry.brand || '').trim().toLowerCase();
+
+                        // 1. Match LC + Invoice + Product + Brand
+                        matchedCog = costOfGoods.find(cog => {
+                            const lcMatch = !targetLc || String(cog.lcNo || '').trim().toLowerCase() === targetLc;
+                            const invMatch = String(cog.invoiceNo || '').trim().toLowerCase() === targetInv;
+                            const prodMatch = !targetProd || !cog.product || String(cog.product).trim().toLowerCase() === targetProd;
+                            const brandMatch = !targetBrand || !cog.brand || String(cog.brand).trim().toLowerCase() === targetBrand;
+                            return lcMatch && invMatch && prodMatch && brandMatch;
+                        });
+
+                        // 2. Match LC + Invoice + Product
+                        if (!matchedCog) {
+                            matchedCog = costOfGoods.find(cog => {
+                                const lcMatch = !targetLc || String(cog.lcNo || '').trim().toLowerCase() === targetLc;
+                                const invMatch = String(cog.invoiceNo || '').trim().toLowerCase() === targetInv;
+                                const prodMatch = !targetProd || !cog.product || String(cog.product).trim().toLowerCase() === targetProd;
+                                return lcMatch && invMatch && prodMatch;
+                            });
+                        }
+
+                        // 3. Match LC + Invoice + Brand
+                        if (!matchedCog && targetBrand) {
+                            matchedCog = costOfGoods.find(cog => {
+                                const lcMatch = !targetLc || String(cog.lcNo || '').trim().toLowerCase() === targetLc;
+                                const invMatch = String(cog.invoiceNo || '').trim().toLowerCase() === targetInv;
+                                const brandMatch = String(cog.brand || '').trim().toLowerCase() === targetBrand;
+                                return lcMatch && invMatch && brandMatch;
+                            });
+                        }
+
+                        // 4. Match unassigned COG for this LC + Invoice
+                        if (!matchedCog) {
+                            const usedCogIds = new Set();
+                            product.brandEntries.forEach((otherE, oIdx) => {
+                                if (oIdx !== bIndex && otherE.invoiceNo === value && otherE.matchedCogId) {
+                                    usedCogIds.add(otherE.matchedCogId);
                                 }
+                            });
+                            matchedCog = costOfGoods.find(cog => {
+                                const lcMatch = !targetLc || String(cog.lcNo || '').trim().toLowerCase() === targetLc;
+                                const invMatch = String(cog.invoiceNo || '').trim().toLowerCase() === targetInv;
+                                return lcMatch && invMatch && !usedCogIds.has(cog._id);
+                            }) || costOfGoods.find(cog => {
+                                const lcMatch = !targetLc || String(cog.lcNo || '').trim().toLowerCase() === targetLc;
+                                const invMatch = String(cog.invoiceNo || '').trim().toLowerCase() === targetInv;
+                                return lcMatch && invMatch;
+                            });
+                        }
+                    }
+
+                    if (matchedCog) {
+                        entry.matchedCogId = matchedCog._id;
+                        if (matchedCog.brand && (!entry.brand || selectedInvoiceObj)) {
+                            entry.brand = matchedCog.brand;
+                        }
+                        const currentBrand = entry.brand || matchedCog.brand;
+                        const productDef = products.find(p => p.name === product.productName);
+                        if (productDef && productDef.brands && currentBrand) {
+                            const brandData = productDef.brands.find(b => b.brand === currentBrand);
+                            if (brandData) {
+                                entry.packetSize = brandData.packetSize || entry.packetSize;
                             }
                         }
 
-                        const billSum = matchedCog.totalBill !== undefined ? matchedCog.totalBill : ((parseFloat(matchedCog.amount) || 0) + (parseFloat(matchedCog.indTruckFare) || 0) + (parseFloat(matchedCog.slofCf) || 0));
-                        const rebatePct = matchedCog.rebate !== undefined ? matchedCog.rebate : (matchedCog.redate !== undefined ? matchedCog.redate : '2.9');
-                        const rebateVal = matchedCog.rebateAmount !== undefined ? matchedCog.rebateAmount : (matchedCog.redateAmount !== undefined ? matchedCog.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
-                        const netBillVal = matchedCog.netBill !== undefined ? matchedCog.netBill : (billSum - rebateVal);
-                        const qtyVal = parseFloat(matchedCog.quantity) || 0;
-                        const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
-                        const dollarRateVal = parseFloat(matchedCog.rsToDollar) || 0;
-                        const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
-                        const bdtRateVal = parseFloat(matchedCog.dollarRateBdt) || 0;
-                        const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
-                        const cfExpVal = parseFloat(matchedCog.cfOtherExpense !== undefined ? matchedCog.cfOtherExpense : '9') || 0;
-                        const costingKgVal = rateKgBdtVal + cfExpVal;
-
-                        const finalPrice = matchedCog.costingKg || costingKgVal || 0;
-                        entry.purchasedPrice = Number(finalPrice).toFixed(2);
-                        entry.invoiceQty = qtyVal;
+                        const costing = getCogCostingDetails(matchedCog);
+                        entry.purchasedPrice = costing.price;
+                        entry.invoiceQty = costing.qty;
                     } else {
-                        entry.brand = '';
                         entry.purchasedPrice = '';
                         entry.invoiceQty = '';
                     }
@@ -1105,10 +1174,40 @@ function LCReceive({
                     const brandData = productDef.brands.find(b => b.brand === value);
                     if (brandData) {
                         entry.packetSize = brandData.packetSize || entry.packetSize;
-                        entry.purchasedPrice = brandData.purchasedPrice || entry.purchasedPrice;
-                        recalculateEntry(entry);
+                        if (brandData.purchasedPrice) {
+                            entry.purchasedPrice = brandData.purchasedPrice;
+                        }
                     }
                 }
+
+                // If this entry has an invoiceNo, lookup the exact COG record matching this brand for the invoice!
+                if (entry.invoiceNo) {
+                    const targetInv = String(entry.invoiceNo).trim().toLowerCase();
+                    const targetLc = String(prev.lcNo || '').trim().toLowerCase();
+                    const targetBrand = String(value || '').trim().toLowerCase();
+                    const targetProd = String(product.productName || '').trim().toLowerCase();
+
+                    const matchedCog = costOfGoods.find(cog => {
+                        const lcMatch = !targetLc || String(cog.lcNo || '').trim().toLowerCase() === targetLc;
+                        const invMatch = String(cog.invoiceNo || '').trim().toLowerCase() === targetInv;
+                        const brandMatch = String(cog.brand || '').trim().toLowerCase() === targetBrand;
+                        const prodMatch = !targetProd || !cog.product || String(cog.product).trim().toLowerCase() === targetProd;
+                        return lcMatch && invMatch && brandMatch && prodMatch;
+                    }) || costOfGoods.find(cog => {
+                        const lcMatch = !targetLc || String(cog.lcNo || '').trim().toLowerCase() === targetLc;
+                        const invMatch = String(cog.invoiceNo || '').trim().toLowerCase() === targetInv;
+                        const brandMatch = String(cog.brand || '').trim().toLowerCase() === targetBrand;
+                        return lcMatch && invMatch && brandMatch;
+                    });
+
+                    if (matchedCog) {
+                        entry.matchedCogId = matchedCog._id;
+                        const costing = getCogCostingDetails(matchedCog);
+                        entry.purchasedPrice = costing.price || entry.purchasedPrice;
+                        entry.invoiceQty = costing.qty;
+                    }
+                }
+                recalculateEntry(entry);
             }
 
             // Always recalculate if quantity, packets or size changes
@@ -1409,7 +1508,7 @@ function LCReceive({
             if (options && options.length > 0) {
                 const selected = options[indexToSelect];
                 const value = typeof selected === 'object' ? (selected.invoiceNo || selected.lcNo || selected.name || selected.whName || selected.port || selected.brand || selected.value || selected.bankName || selected.ipNumber || selected) : selected;
-                onSelect(fieldOrValue, value);
+                onSelect(fieldOrValue, value, selected);
                 setHighlightedIndex(-1);
             } else {
                 setActiveDropdown(null);
@@ -1515,6 +1614,7 @@ function LCReceive({
                             inHouseQuantity: brandEntry.inHouseQuantity,
                             totalInHousePacket: brandEntry.inHousePacket,
                             totalInHouseQuantity: brandEntry.inHouseQuantity,
+                            invoiceQty: brandEntry.invoiceQty !== undefined ? brandEntry.invoiceQty : ''
                         };
 
                         if (brandEntry._id) {
@@ -1568,7 +1668,8 @@ function LCReceive({
                             inHousePacket: brandEntry.inHousePacket,
                             inHouseQuantity: brandEntry.inHouseQuantity,
                             totalInHousePacket: brandEntry.inHousePacket,
-                            totalInHouseQuantity: brandEntry.inHouseQuantity
+                            totalInHouseQuantity: brandEntry.inHouseQuantity,
+                            invoiceQty: brandEntry.invoiceQty !== undefined ? brandEntry.invoiceQty : ''
                         });
                     });
                 });
@@ -1723,20 +1824,37 @@ function LCReceive({
                     isMultiBrand: isMulti,
                     productName: resolveProductName(pName),
                     truckNo: prodEntries[0]?.truckNo || '',
-                    brandEntries: prodEntries.map(e => ({
-                        _id: e._id,
-                        invoiceNo: e.invoiceNo || '',
-                        brand: e.brand,
-                        purchasedPrice: e.purchasedPrice,
-                        packet: e.packet,
-                        packetSize: e.packetSize,
-                        quantity: e.quantity,
-                        unit: e.unit,
-                        sweepedPacket: e.sweepedPacket,
-                        sweepedQuantity: e.sweepedQuantity,
-                        inHousePacket: e.inHousePacket,
-                        inHouseQuantity: e.inHouseQuantity
-                    }))
+                    brandEntries: prodEntries.map(e => {
+                        const matchedCog = (costOfGoods || []).find(cog => {
+                            const lcMatch = String(cog.lcNo || '').trim().toLowerCase() === String(record.lcNo || '').trim().toLowerCase();
+                            const invoiceMatch = String(cog.invoiceNo || '').trim().toLowerCase() === String(e.invoiceNo || '').trim().toLowerCase();
+                            const prodMatch = !pName || !cog.product || String(cog.product).trim().toLowerCase() === String(pName).trim().toLowerCase();
+                            const brandMatch = !e.brand || !cog.brand || String(cog.brand).trim().toLowerCase() === String(e.brand).trim().toLowerCase();
+                            return lcMatch && invoiceMatch && prodMatch && brandMatch;
+                        }) || (costOfGoods || []).find(cog => {
+                            const lcMatch = String(cog.lcNo || '').trim().toLowerCase() === String(record.lcNo || '').trim().toLowerCase();
+                            const invoiceMatch = String(cog.invoiceNo || '').trim().toLowerCase() === String(e.invoiceNo || '').trim().toLowerCase();
+                            return lcMatch && invoiceMatch;
+                        });
+                        const invQty = e.invoiceQty !== undefined && e.invoiceQty !== '' ? e.invoiceQty : (matchedCog ? (parseFloat(matchedCog.quantity) || '') : '');
+
+                        return {
+                            _id: e._id,
+                            invoiceNo: e.invoiceNo || '',
+                            brand: e.brand,
+                            purchasedPrice: e.purchasedPrice,
+                            packet: e.packet,
+                            packetSize: e.packetSize,
+                            quantity: e.quantity,
+                            unit: e.unit,
+                            sweepedPacket: e.sweepedPacket,
+                            sweepedQuantity: e.sweepedQuantity,
+                            inHousePacket: e.inHousePacket,
+                            inHouseQuantity: e.inHouseQuantity,
+                            invoiceQty: invQty,
+                            matchedCogId: matchedCog?._id || ''
+                        };
+                    })
                 };
             });
 
@@ -2192,24 +2310,43 @@ function LCReceive({
         return brandsArr.filter(b => b.toLowerCase().includes(input.toLowerCase()));
     };
 
-    const getFilteredInvoices = (input) => {
+    const getFilteredInvoices = (input, currentProductName = '') => {
         if (!stockFormData.lcNo) return [];
         const matched = costOfGoods.filter(cog => {
             return String(cog.lcNo || '').trim().toLowerCase() === String(stockFormData.lcNo).trim().toLowerCase();
         });
-        const uniqueMap = new Map();
+
+        const list = [];
+        const seenKeys = new Set();
+
         matched.forEach(cog => {
             if (cog.invoiceNo) {
                 const inv = String(cog.invoiceNo).trim();
-                uniqueMap.set(inv, (cog.brand || '').trim());
+                const brand = (cog.brand || '').trim();
+                const prod = (cog.product || '').trim();
+                const qty = parseFloat(cog.quantity) || 0;
+                const price = parseFloat(cog.costingKg) || 0;
+                const uniqueKey = `${inv.toLowerCase()}__${prod.toLowerCase()}__${brand.toLowerCase()}__${qty}`;
+                if (!seenKeys.has(uniqueKey)) {
+                    seenKeys.add(uniqueKey);
+                    list.push({
+                        invoiceNo: inv,
+                        brand,
+                        product: prod,
+                        quantity: qty,
+                        price,
+                        cog
+                    });
+                }
             }
         });
-        const list = Array.from(uniqueMap.entries()).map(([invoiceNo, brand]) => ({ invoiceNo, brand }));
+
         if (!input) return list;
-        const q = String(input).toLowerCase();
+        const q = String(input).toLowerCase().trim();
         return list.filter(item => 
             item.invoiceNo.toLowerCase().includes(q) || 
-            item.brand.toLowerCase().includes(q)
+            item.brand.toLowerCase().includes(q) ||
+            item.product.toLowerCase().includes(q)
         );
     };
 
@@ -3577,7 +3714,7 @@ function LCReceive({
                                                                                             setActiveDropdown(`lcr-invoice-${pIndex}-${bIndex}`);
                                                                                             setHighlightedIndex(-1);
                                                                                         }}
-                                                                                        onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-invoice-${pIndex}-${bIndex}`, (field, val) => { handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', val); setActiveDropdown(null); }, 'invoiceNo', getFilteredInvoices(entry.invoiceNo || ''))}
+                                                                                        onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-invoice-${pIndex}-${bIndex}`, (field, val, selectedItem) => { handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', val, selectedItem); setActiveDropdown(null); }, 'invoiceNo', getFilteredInvoices(entry.invoiceNo || '', product.productName))}
                                                                                         className={`w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-12 ${entry.invoiceNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                                     />
                                                                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -3590,24 +3727,33 @@ function LCReceive({
                                                                                     </div>
                                                                                 </div>
                                                                                 {activeDropdown === `lcr-invoice-${pIndex}-${bIndex}` && (
-                                                                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto py-1">
-                                                                                        {getFilteredInvoices(entry.invoiceNo || '').map((inv, idx) => (
+                                                                                    <div className="absolute z-[60] w-full min-w-[220px] mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto py-1 divide-y divide-gray-50">
+                                                                                        {getFilteredInvoices(entry.invoiceNo || '', product.productName).map((inv, idx) => (
                                                                                             <button
                                                                                                 key={idx}
                                                                                                 type="button"
                                                                                                 onMouseDown={(e) => {
                                                                                                     e.preventDefault();
                                                                                                     e.stopPropagation();
-                                                                                                    handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', inv.invoiceNo);
+                                                                                                    handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', inv.invoiceNo, inv);
                                                                                                     setActiveDropdown(null);
                                                                                                 }}
                                                                                                 onMouseEnter={() => setHighlightedIndex(idx)}
-                                                                                                className={`w-full text-left px-3 py-2 text-sm transition-colors font-medium ${entry.invoiceNo === inv.invoiceNo ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                                                                className={`w-full text-left px-3 py-2 text-sm transition-colors font-medium ${entry.invoiceNo === inv.invoiceNo && entry.brand === inv.brand ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
                                                                                             >
-                                                                                                {inv.invoiceNo}{inv.brand ? ` (${inv.brand})` : ''}
+                                                                                                <div className="flex items-center justify-between">
+                                                                                                    <span className="font-semibold text-gray-900">{inv.invoiceNo}</span>
+                                                                                                    <span className="text-xs text-blue-600 font-bold">{inv.brand || ''}</span>
+                                                                                                </div>
+                                                                                                {(inv.quantity > 0 || inv.product) && (
+                                                                                                    <div className="text-[11px] text-gray-500 mt-0.5 flex items-center justify-between">
+                                                                                                        <span>{inv.product ? `Product: ${inv.product}` : ''}</span>
+                                                                                                        <span>{inv.quantity ? `Qty: ${Number(inv.quantity).toLocaleString()} kg` : ''}</span>
+                                                                                                    </div>
+                                                                                                )}
                                                                                             </button>
                                                                                         ))}
-                                                                                        {getFilteredInvoices(entry.invoiceNo || '').length === 0 && (
+                                                                                        {getFilteredInvoices(entry.invoiceNo || '', product.productName).length === 0 && (
                                                                                             <div className="px-3 py-2 text-sm text-gray-500 italic">No invoices found</div>
                                                                                         )}
                                                                                     </div>
