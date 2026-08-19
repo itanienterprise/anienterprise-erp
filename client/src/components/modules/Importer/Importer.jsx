@@ -686,10 +686,10 @@ const Importer = ({
                 </div>
             );
             })()}
-            {viewData && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setExpandedHistoryRowKey(null); setHistorySearchQuery(''); }}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
+            {viewData && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setExpandedHistoryRowKey(null); setHistorySearchQuery(''); }}></div>
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200 z-10">
                         {/* Modal Header */}
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left">
@@ -703,24 +703,29 @@ const Importer = ({
                             </div>
 
                             {/* Search bar */}
-                            <div className="flex-1 w-full md:max-w-sm md:mx-auto">
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                                    </div>
+                            <div className="w-full md:w-64">
+                                <div className="relative">
+                                    <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                                     <input
                                         type="text"
-                                        placeholder="Search import history..."
+                                        placeholder="Search in history..."
                                         value={historySearchQuery}
                                         onChange={(e) => setHistorySearchQuery(e.target.value)}
-                                        className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                     />
+                                    {historySearchQuery && (
+                                        <button
+                                            onClick={() => setHistorySearchQuery('')}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full"
+                                        >
+                                            <XIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
-                            {/* Close button */}
                             <button onClick={() => { setViewData(null); setExpandedHistoryRowKey(null); setHistorySearchQuery(''); }} className="absolute right-4 top-4 md:static p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
-                                <XIcon className="w-5 h-5" />
+                                <XIcon className="w-6 h-6" />
                             </button>
                         </div>
 
@@ -868,7 +873,8 @@ const Importer = ({
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

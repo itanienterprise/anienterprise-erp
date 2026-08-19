@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon, BoxIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { decryptData, encryptData } from '../../../utils/encryption';
@@ -1842,10 +1843,10 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
             )}
 
             {/* Delete / Reject Confirmation */}
-            {showDeleteConfirm && (
-                <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => !isSubmitting && setShowDeleteConfirm(false)} />
-                    <div className="relative bg-white w-full max-w-[340px] rounded-[2.5rem] shadow-2xl p-8 text-center animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+            {showDeleteConfirm && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => !isSubmitting && setShowDeleteConfirm(false)} />
+                    <div className="relative bg-white w-full max-w-[340px] rounded-[2.5rem] shadow-2xl p-8 text-center animate-in fade-in zoom-in-95 duration-200 overflow-hidden z-10">
                         <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 transform rotate-12 shadow-inner">
                             <TrashIcon className="w-10 h-10" />
                         </div>
@@ -1881,7 +1882,8 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                             </div>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

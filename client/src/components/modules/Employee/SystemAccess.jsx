@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { UserIcon, SearchIcon, ChevronDownIcon, EyeIcon, ShieldIcon, CheckIcon, RefreshIcon, XIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -753,8 +754,8 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
             </div>
 
             {/* Custom Premium Confirm Modal */}
-            {confirmModal && (
-                <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+            {confirmModal && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] overflow-y-auto flex items-center justify-center p-4">
                     {/* Backdrop */}
                     <div 
                         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
@@ -801,7 +802,8 @@ const SystemAccess = ({ currentUser, setCurrentUser }) => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

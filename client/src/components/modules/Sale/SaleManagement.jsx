@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon } from '../../Icons';
 import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
@@ -2963,11 +2964,11 @@ const SaleManagement = ({
     };
 
     const renderViewModal = () => {
-        if (!viewData) return null;
-        return (
-            <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
-                <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300">
+        if (!viewData || typeof document === 'undefined' || !document.body) return null;
+        return createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
+                <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300 z-10">
                     <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-white">
                         <div className="flex items-center gap-4">
                             <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
@@ -3113,7 +3114,8 @@ const SaleManagement = ({
                         </div>
                     </div>
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 
@@ -6390,10 +6392,10 @@ const SaleManagement = ({
             {viewData && renderViewModal()}
 
             {/* Bulk Rate Edit Modal */}
-            {showBulkRateModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowBulkRateModal(false)}></div>
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            {showBulkRateModal && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowBulkRateModal(false)}></div>
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 z-10">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                             <h3 className="text-xl font-bold text-gray-900">Edit Rate</h3>
                             <button onClick={() => setShowBulkRateModal(false)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400">
@@ -6437,7 +6439,8 @@ const SaleManagement = ({
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {confirmModalConfig && (
@@ -6458,11 +6461,11 @@ const SaleManagement = ({
 };
 
 const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', confirmText = 'Confirm', cancelText = 'Cancel', isSubmitting = false }) => {
-    if (!isOpen) return null;
+    if (!isOpen || typeof document === 'undefined' || !document.body) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200">
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200 z-10">
                 <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
                     type === 'danger' ? 'bg-red-100 text-red-600' :
                     type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
@@ -6516,7 +6519,8 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'dang
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

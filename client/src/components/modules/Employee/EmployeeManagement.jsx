@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, EyeIcon, ShieldIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -803,10 +804,10 @@ const EmployeeManagement = ({
                 </div>
             )}
 
-            {viewData && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setResetPasswordValue(null); setShowConfirmReset(false); }}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-in zoom-in duration-200">
+            {viewData && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setResetPasswordValue(null); setShowConfirmReset(false); }}></div>
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-in zoom-in duration-200 z-10">
                         <div className="flex justify-between items-start mb-6">
                             <div>
                                 <h2 className="text-2xl font-bold text-gray-900 font-sans">{viewData.name}</h2>
@@ -881,7 +882,8 @@ const EmployeeManagement = ({
                             )}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import './WarehouseManagement.css';
 import {
     PlusIcon,
@@ -1656,10 +1657,10 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                     </>
                 )
             }
-            {editingStock && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setEditingStock(null)}></div>
-                    <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 animate-in zoom-in duration-200">
+            {editingStock && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setEditingStock(null)}></div>
+                    <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 animate-in zoom-in duration-200 z-10">
                         <div className="flex justify-between items-center mb-6 pb-2 border-b border-gray-100">
                             <h3 className="text-xl font-bold text-gray-900">Edit Stock Details</h3>
                             <button onClick={() => setEditingStock(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -1805,12 +1806,13 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
-            {deleteConfirm.show && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirm({ show: false, id: null, type: 'stock' })}></div>
-                    <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 animate-in zoom-in duration-200">
+            {deleteConfirm.show && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirm({ show: false, id: null, type: 'stock' })}></div>
+                    <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 animate-in zoom-in duration-200 z-10">
                         <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 mx-auto">
                             <TrashIcon className="w-8 h-8 text-red-500" />
                         </div>
@@ -1831,12 +1833,13 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
-            {viewingTransferHistory && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewingTransferHistory(null)}></div>
-                    <div className="relative bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col border border-gray-100 animate-in zoom-in duration-200">
+            {viewingTransferHistory && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewingTransferHistory(null)}></div>
+                    <div className="relative bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col border border-gray-100 animate-in zoom-in duration-200 z-10">
                         {/* Modal Header */}
                         <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                             <div>
@@ -1952,7 +1955,8 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

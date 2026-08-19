@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { DatabaseIcon, DownloadIcon, UploadIcon, RotateCcwIcon, TrashIcon, XIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -703,9 +704,9 @@ const BackupRestore = ({ addNotification }) => {
             </div>
 
             {/* Confirm Restoring Modal */}
-            {showConfirmModal && (
-                <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)}></div>
+            {showConfirmModal && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)}></div>
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl p-6 max-w-md w-full relative z-10 animate-in zoom-in duration-200">
                         <div className="space-y-4">
                             <h3 className="text-lg font-bold text-gray-900">Confirm System Restoration</h3>
@@ -749,7 +750,8 @@ const BackupRestore = ({ addNotification }) => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

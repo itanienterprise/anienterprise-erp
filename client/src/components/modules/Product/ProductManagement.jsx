@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { PlusIcon, XIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, EyeIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
@@ -174,10 +175,10 @@ const ProductManagement = ({
             </div>
 
             {/* Add/Edit Modal */}
-            {showProductForm && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            {showProductForm && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
                     <div
-                        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
                         onClick={() => { setShowProductForm(false); resetProductForm(); }}
                     />
                     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-4 md:p-6 w-full max-w-5xl transform transition-all relative z-10 animate-scale-in max-h-[92vh] overflow-y-auto mx-auto mt-[4vh] md:mt-0 custom-scrollbar">
@@ -384,7 +385,8 @@ const ProductManagement = ({
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
