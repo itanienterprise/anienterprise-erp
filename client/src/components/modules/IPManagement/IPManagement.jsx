@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
     FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, BoxIcon, ChevronUpIcon, SearchIcon, EyeIcon, PDFIcon, PlusIcon, DownloadIcon, BarChartIcon
 } from '../../Icons';
@@ -12,7 +13,7 @@ import { generateIPManagementReportPDF } from '../../../utils/pdfGenerator';
 
 // Modal to show all LCs using a specific IP
 const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords = [], allSalesRecords = [], piRecords = [], onClose }) => {
-    if (!ipRecord) return null;
+    if (!ipRecord || typeof document === 'undefined' || !document.body) return null;
 
     const cleanLc = (val) => String(val || '').replace(/\D/g, '');
 
@@ -262,18 +263,16 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
 
     const relatedLCs = lcRecords.filter(lc => isLcLinkedToIpModal(lc, ipRecord));
 
-    // Compute remaining quantity for each LC (same logic as LCManagement table)
-    const computeLcRemQty = (lc) => {
+    // Calculate total receive quantity for an LC (with updatedLcReceive override support)
+    const getLcReceiveQty = (lc) => {
+        if (!lc) return 0;
         const lcNoClean = cleanLc(lc.lcNo);
-        const targetIpNo = String(ipRecord.ipNumber || '').trim();
-        const targetIpNoClean = cleanLc(targetIpNo);
+        if (!lcNoClean) return 0;
 
-        const lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
-            ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
-            : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
-
-        const isMatch = lcIpNos.length === 0 || lcIpNos.some(n => n === targetIpNo || (cleanLc(n) && cleanLc(n) === targetIpNoClean)) || isLcLinkedToIpModal(lc, ipRecord);
-        if (!isMatch) return 0;
+        const hasCustomReceive = lc.updatedLcReceive !== undefined && lc.updatedLcReceive !== null && lc.updatedLcReceive !== '';
+        if (hasCustomReceive) {
+            return parseNum(lc.updatedLcReceive);
+        }
 
         const receiptsMapForBalance = {};
         allStockRecords
@@ -323,7 +322,53 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                 return sum + qty;
             }, 0);
 
-        let totalConsumption = receivedQtyKg + borderSaleQtyKg;
+        return receivedQtyKg + borderSaleQtyKg;
+    };
+
+    // Calculate LC receive quantity allocated specifically to the current IP
+    const getLcReceiveQtyForIp = (lc) => {
+        const totalConsumption = getLcReceiveQty(lc);
+        const targetIpNo = String(ipRecord.ipNumber || '').trim();
+        const targetIpNoClean = cleanLc(targetIpNo);
+
+        const lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+            ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+            : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+        if (lcIpNos.length <= 1) {
+            return totalConsumption;
+        }
+
+        let remainingConsumption = totalConsumption;
+        for (const ipNo of lcIpNos) {
+            const ipRecordForNo = (ipRecords || []).find(ip => {
+                const num = String(ip.ipNumber || '').trim();
+                return num === ipNo || (cleanLc(num) && cleanLc(num) === cleanLc(ipNo));
+            }) || ipRecord;
+            const allocatedQtyForIp = getLcConsumptionFromIp(lc, lc, true, ipRecordForNo);
+            const consumedFromIp = Math.min(allocatedQtyForIp, remainingConsumption);
+            remainingConsumption = Math.max(0, remainingConsumption - consumedFromIp);
+
+            if (ipNo === targetIpNo || cleanLc(ipNo) === targetIpNoClean) {
+                return consumedFromIp;
+            }
+        }
+        return totalConsumption;
+    };
+
+    // Compute remaining quantity for each LC (same logic as LCManagement table)
+    const computeLcRemQty = (lc) => {
+        const targetIpNo = String(ipRecord.ipNumber || '').trim();
+        const targetIpNoClean = cleanLc(targetIpNo);
+
+        const lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+            ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+            : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+        const isMatch = lcIpNos.length === 0 || lcIpNos.some(n => n === targetIpNo || (cleanLc(n) && cleanLc(n) === targetIpNoClean)) || isLcLinkedToIpModal(lc, ipRecord);
+        if (!isMatch) return 0;
+
+        let totalConsumption = getLcReceiveQty(lc);
 
         let remQtyOnTargetIp = 0;
         const effectiveIpNos = lcIpNos.length > 0 ? lcIpNos : [targetIpNo];
@@ -440,16 +485,15 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
     const ipRemQtyKg = Math.max(0, ipQtyKg - totalLcQtyKg);
 
     const totalRemainingUnreceivedLcQty = relatedLCs.reduce((sum, lc) => {
-        const productRemQtyKg = computeLcRemQty(lc);
-        const latestQtyKg = getLcQtyForIpInKg(lc, ipRecord);
-        const productConsumptionKg = latestQtyKg - productRemQtyKg;
-        return sum + Math.max(0, latestQtyKg - productConsumptionKg);
+        const lcIpQty = getLcConsumptionFromIp(lc, lc);
+        const lcRecQty = getLcReceiveQtyForIp(lc);
+        return sum + Math.max(0, lcIpQty - lcRecQty);
     }, 0);
 
-    return (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-7xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden">
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-7xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh] overflow-hidden z-10">
                 {/* Header - Solid & Fixed at top */}
                 <div className="bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between z-20">
                     <div className="flex items-center gap-4">
@@ -526,6 +570,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                     <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">Bank</th>
                                     <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">Quantity</th>
                                     <th className="px-5 py-3.5 text-xs font-bold text-blue-600 uppercase tracking-wider text-right bg-blue-50/50 sticky top-0 bg-blue-50 z-10">IP Qty</th>
+                                    <th className="px-5 py-3.5 text-xs font-bold text-gray-600 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">LC Receive</th>
                                     <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-50 z-10">Remaining LC Qty</th>
                                     <th className="px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center sticky top-0 bg-gray-50 z-10">Status</th>
                                 </tr>
@@ -534,16 +579,14 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                 {relatedLCs.length > 0 ? (
                                     relatedLCs.flatMap((lc, lcIdx) => {
                                         const states = getLcStates(lc);
-                                        const productRemQtyKg = computeLcRemQty(lc);
-                                        const latestQtyKg = getLcQtyForIpInKg(lc, ipRecord);
-                                        const productConsumptionKg = latestQtyKg - productRemQtyKg;
+                                        const lcReceiveQtyKg = getLcReceiveQtyForIp(lc);
 
                                         return states.map((state, sIdx) => {
                                             const stateQtyKg = getLcConsumptionFromIp(state, lc, false);
                                             const stateIpQtyUsedKg = getLcConsumptionFromIp(state, lc);
-                                            const stateRemQtyKg = Math.max(0, stateQtyKg - productConsumptionKg);
                                             const isLastState = sIdx === states.length - 1;
                                             const isOriginalState = state.amendmentNo === 'Original LC';
+                                            const stateRemQtyKg = isLastState ? Math.max(0, stateIpQtyUsedKg - lcReceiveQtyKg) : 0;
 
                                             // Calculate diff for quantity
                                             const prevQtyKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc, false) : 0;
@@ -586,6 +629,11 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                                         }>
                                                             {sIdx > 0 && diffIpQtyUsedKg > 0 ? '+' : ''}
                                                             {(sIdx > 0 ? diffIpQtyUsedKg : stateIpQtyUsedKg).toLocaleString('en-US')}
+                                                        </span> <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-sm font-bold text-right whitespace-nowrap">
+                                                        <span className={isLastState ? 'text-gray-900 font-bold' : 'text-gray-400'}>
+                                                            {(isLastState ? lcReceiveQtyKg : 0).toLocaleString('en-US')}
                                                         </span> <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
                                                     </td>
                                                     <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
@@ -632,7 +680,7 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan="8" className="px-5 py-12 text-center text-gray-400 font-bold">No LC records found for this IP.</td>
+                                        <td colSpan="9" className="px-5 py-12 text-center text-gray-400 font-bold">No LC records found for this IP.</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -646,12 +694,14 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                         <td className="px-5 py-3 text-sm text-right whitespace-nowrap bg-blue-100/50 text-blue-900">
                                             {totalLcQtyKg.toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-600">kg</span>
                                         </td>
+                                        <td className="px-5 py-3 text-sm text-right whitespace-nowrap text-gray-900">
+                                            {relatedLCs.reduce((sum, lc) => sum + getLcReceiveQtyForIp(lc), 0).toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-600">kg</span>
+                                        </td>
                                         <td className="px-5 py-3 text-sm text-right whitespace-nowrap text-blue-700">
                                             {relatedLCs.reduce((sum, lc) => {
-                                                const productRemQtyKg = computeLcRemQty(lc);
-                                                const latestQtyKg = getLcQtyForIpInKg(lc, ipRecord);
-                                                const productConsumptionKg = latestQtyKg - productRemQtyKg;
-                                                return sum + Math.max(0, latestQtyKg - productConsumptionKg);
+                                                const lcIpQty = getLcConsumptionFromIp(lc, lc);
+                                                const lcRecQty = getLcReceiveQtyForIp(lc);
+                                                return sum + Math.max(0, lcIpQty - lcRecQty);
                                             }, 0).toLocaleString('en-US')} <span className="text-[10px] font-normal uppercase text-gray-500">kg</span>
                                         </td>
                                         <td></td>
@@ -666,20 +716,18 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                         {relatedLCs.length > 0 ? (
                             relatedLCs.flatMap((lc, lcIdx) => {
                                 const states = getLcStates(lc);
-                                const productRemQtyKg = computeLcRemQty(lc);
-                                const latestQtyKg = getLcQtyForIpInKg(lc, ipRecord);
-                                const productConsumptionKg = latestQtyKg - productRemQtyKg;
+                                const lcReceiveQtyKg = getLcReceiveQtyForIp(lc);
 
                                 return states.map((state, sIdx) => {
                                     const stateQtyKg = getLcConsumptionFromIp(state, lc, false);
-                                    const stateRemQtyKg = Math.max(0, stateQtyKg - productConsumptionKg);
+                                    const stateIpQtyUsedKg = getLcConsumptionFromIp(state, lc);
                                     const isLastState = sIdx === states.length - 1;
                                     const isOriginalState = state.amendmentNo === 'Original LC';
+                                    const stateRemQtyKg = isLastState ? Math.max(0, stateIpQtyUsedKg - lcReceiveQtyKg) : 0;
 
                                     const prevQtyKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc, false) : 0;
                                     const diffQtyKg = stateQtyKg - prevQtyKg;
 
-                                    const stateIpQtyUsedKg = getLcConsumptionFromIp(state, lc);
                                     const prevStateIpQtyUsedKg = sIdx > 0 ? getLcConsumptionFromIp(states[sIdx - 1], lc) : 0;
                                     const diffIpQtyUsedKg = stateIpQtyUsedKg - prevStateIpQtyUsedKg;
 
@@ -765,6 +813,13 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center">
+                                                    <span className="w-[100px] text-[11px] font-black text-gray-500 uppercase tracking-widest shrink-0">LC Receive</span>
+                                                    <span className="text-gray-400 font-bold mx-2">-</span>
+                                                    <span className={`text-sm font-bold ${isLastState ? 'text-gray-900' : 'text-gray-400'}`}>
+                                                        {(isLastState ? lcReceiveQtyKg : 0).toLocaleString('en-US')} kg
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center">
                                                     <span className={`w-[100px] text-[11px] font-black uppercase tracking-widest shrink-0 ${isLastState ? 'text-blue-500' : 'text-gray-400'}`}>Rem. LC Qty</span>
                                                     <span className={`font-bold mx-2 ${isLastState ? 'text-blue-500' : 'text-gray-400'}`}>-</span>
                                                     <span className={`text-sm font-black ${isLastState ? (stateRemQtyKg <= 0 ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>{stateRemQtyKg.toLocaleString('en-US')} kg</span>
@@ -782,18 +837,19 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
 // Modal specifically for viewing attached PDFs
 const PDFViewerModal = ({ pdfData, fileName, onClose, onDownload }) => {
-    if (!pdfData) return null;
+    if (!pdfData || typeof document === 'undefined' || !document.body) return null;
 
-    return (
-        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-md" onClick={onClose}></div>
-            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-in zoom-in duration-300">
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-md" onClick={onClose}></div>
+            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-in zoom-in duration-300 z-10">
                 {/* Header - Responsive & Premium */}
                 <div className="flex items-center justify-between px-4 md:px-8 py-4 md:py-5 border-b border-gray-100 bg-white/95 backdrop-blur-md sticky top-0 z-10">
                     <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
@@ -842,7 +898,8 @@ const PDFViewerModal = ({ pdfData, fileName, onClose, onDownload }) => {
                     </p>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -1097,6 +1154,113 @@ function IPManagement({
         return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
     };
 
+    // Calculate total receive quantity for an LC (with updatedLcReceive override support)
+    const getLcReceiveQty = (lc) => {
+        if (!lc) return 0;
+        const lcNoClean = cleanLc(lc.lcNo);
+        if (!lcNoClean) return 0;
+
+        const hasCustomReceive = lc.updatedLcReceive !== undefined && lc.updatedLcReceive !== null && lc.updatedLcReceive !== '';
+        if (hasCustomReceive) {
+            return parseNum(lc.updatedLcReceive);
+        }
+
+        const receiptsMapForBalance = {};
+        (allStockRecords || [])
+            .filter(s => {
+                const recordLcNoClean = cleanLc(s.lcNo);
+                const status = (s.status || '').toLowerCase();
+                return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+            })
+            .forEach(s => {
+                const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                const key = `${dateStr}_${groupVal}`;
+
+                if (!receiptsMapForBalance[key]) {
+                    const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                    receiptsMapForBalance[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                } else {
+                    if (!s.totalLcQuantity) {
+                        receiptsMapForBalance[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    }
+                }
+            });
+        const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((sum, qty) => sum + qty, 0);
+
+        const borderSaleQtyKg = (allSalesRecords || [])
+            .filter(s => {
+                const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
+                    cleanLc(s.lcNumber) === lcNoClean ||
+                    cleanLc(s.lc_no) === lcNoClean ||
+                    (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                const isBorder = sTypeLow.includes('border') ||
+                    (s.invoiceNo || '').startsWith('BS') ||
+                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
+                    (matchesLc && !!(s.port || s.importer));
+                const status = (s.status || '').toLowerCase();
+                const isValidStatus = !status.includes('rejected') && status !== 'requested';
+                return matchesLc && isValidStatus && isBorder;
+            })
+            .reduce((sum, s) => {
+                const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                    const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                    return iSum + (brandSubtotal || parseNum(item.quantity));
+                }, 0);
+                const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
+                return sum + qty;
+            }, 0);
+
+        return receivedQtyKg + borderSaleQtyKg;
+    };
+
+    const getLcReceiveQtyForIp = (lc, targetIp) => {
+        const totalConsumption = getLcReceiveQty(lc);
+        const targetIpNo = String(targetIp?.ipNumber || '').trim();
+        const targetIpNoClean = cleanLc(targetIpNo);
+
+        const lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+            ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+            : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+        if (lcIpNos.length <= 1) {
+            return totalConsumption;
+        }
+
+        let remainingConsumption = totalConsumption;
+        for (const ipNo of lcIpNos) {
+            const ipRecordForNo = (ipRecords || []).find(ip => {
+                const num = String(ip.ipNumber || '').trim();
+                return num === ipNo || (cleanLc(num) && cleanLc(num) === cleanLc(ipNo));
+            }) || targetIp;
+            const prodKey = ipRecordForNo?.productName || '';
+            let baseQtyKg = 0;
+            if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+                const matched = prodKey ? lc.productsList.filter(p => (p.productName || '').toLowerCase().includes(prodKey.toLowerCase())) : lc.productsList;
+                if (matched.length > 0) {
+                    baseQtyKg = matched.reduce((sum, p) => {
+                        const q = parseNum(p.quantity);
+                        return sum + (q < 50000 ? q * 1000 : q);
+                    }, 0);
+                }
+            }
+            if (baseQtyKg === 0) {
+                const q = parseNum(lc.quantity || lc.totalQuantity || lc.lcQuantity);
+                if (q > 0) baseQtyKg = q < 50000 ? q * 1000 : q;
+            }
+            const allocatedQtyForIp = baseQtyKg;
+            const consumedFromIp = Math.min(allocatedQtyForIp, remainingConsumption);
+            remainingConsumption = Math.max(0, remainingConsumption - consumedFromIp);
+
+            if (ipNo === targetIpNo || cleanLc(ipNo) === targetIpNoClean) {
+                return consumedFromIp;
+            }
+        }
+        return totalConsumption;
+    };
+
     // Calculate dynamic remaining quantity for each IP using sequential consumption.
     // IPs with the same product share a pool of LC consumption — fill first IP completely, then next.
     const enrichedIpRecords = useMemo(() => {
@@ -1149,8 +1313,12 @@ function IPManagement({
                 })) return true;
             }
 
-            // 5. Linked via PI (Proforma Invoice)
-            if (Array.isArray(piRecords) && piRecords.length > 0) {
+            // 5. Linked via PI (Proforma Invoice) ONLY if LC has NO explicit IP fields
+            const hasExplicitIp = (Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0) ||
+                !!(lc.ipNo || lc.ipNumber || lc.ip_number || lc.ipRef || lc.ipId || lc.ipRecordId || lc.ip_id) ||
+                (Array.isArray(lc.ipDetails) && lc.ipDetails.length > 0);
+
+            if (!hasExplicitIp && Array.isArray(piRecords) && piRecords.length > 0) {
                 const lcPiNo = String(lc.piNo || lc.piNumber || '').trim();
                 const lcPiId = String(lc.piId || lc.pi_id || '');
                 if (lcPiNo || lcPiId) {
@@ -1270,7 +1438,8 @@ function IPManagement({
                 }
             }
 
-            const lcId = lc.lcNo || String(lc._id);
+            const lcId1 = lc.lcNo ? String(lc.lcNo).trim() : '';
+            const lcId2 = lc._id ? String(lc._id).trim() : '';
             let remainingLcQtyToDeduct = baseLcQtyKg;
             for (const ip of linkedIpsForLc) {
                 if (remainingLcQtyToDeduct <= 0) break;
@@ -1281,10 +1450,60 @@ function IPManagement({
                 lcRemMap[ip.ipNumber] = Math.max(0, currentAvail - toDeduct);
                 remainingLcQtyToDeduct -= Math.max(0, toDeduct - extraForThisIp);
 
-                const key = `${lcId}_${ip.ipNumber}`;
-                lcIpAllocatedMap[key] = toDeduct;
+                if (lcId1) lcIpAllocatedMap[`${lcId1}_${ip.ipNumber}`] = toDeduct;
+                if (lcId2) lcIpAllocatedMap[`${lcId2}_${ip.ipNumber}`] = toDeduct;
+                if (lcId1) lcIpAllocatedMap[`${cleanLc(lcId1)}_${cleanLc(ip.ipNumber)}`] = toDeduct;
+                if (lcId2) lcIpAllocatedMap[`${lcId2}_${cleanLc(ip.ipNumber)}`] = toDeduct;
             }
         });
+
+        const getLcReceiveQtyForIp = (lc, targetIp) => {
+            const totalConsumption = getLcReceiveQty(lc);
+            if (totalConsumption <= 0) return 0;
+
+            const targetIpNo = String(targetIp?.ipNumber || '').trim();
+            const targetIpNoClean = cleanLc(targetIpNo);
+
+            let lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+                : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+            if (lcIpNos.length === 0) {
+                lcIpNos = ipRecords.filter(ip => isLcLinkedToIp(lc, ip)).map(ip => String(ip.ipNumber || '').trim()).filter(Boolean);
+            }
+
+            if (lcIpNos.length <= 1) {
+                return totalConsumption;
+            }
+
+            let remCons = totalConsumption;
+            const lcNoStr = lc.lcNo ? String(lc.lcNo).trim() : '';
+            const lcIdStr = lc._id ? String(lc._id).trim() : '';
+
+            for (const ipNo of lcIpNos) {
+                const ipRecordForNo = (ipRecords || []).find(i => {
+                    const num = String(i.ipNumber || '').trim();
+                    return num === ipNo || (cleanLc(num) && cleanLc(num) === cleanLc(ipNo));
+                }) || targetIp;
+
+                const actualIpNo = ipRecordForNo?.ipNumber || ipNo;
+                const cleanActualIpNo = cleanLc(actualIpNo);
+
+                const allocatedQtyForIp = lcIpAllocatedMap[`${lcNoStr}_${actualIpNo}`] ??
+                    lcIpAllocatedMap[`${lcIdStr}_${actualIpNo}`] ??
+                    lcIpAllocatedMap[`${cleanLc(lcNoStr)}_${cleanActualIpNo}`] ??
+                    lcIpAllocatedMap[`${lcIdStr}_${cleanActualIpNo}`] ??
+                    getLcProductQtyInKg(lc, ipRecordForNo?.productName, actualIpNo);
+
+                const consumedFromIp = Math.min(allocatedQtyForIp, remCons);
+                remCons = Math.max(0, remCons - consumedFromIp);
+
+                if (ipNo === targetIpNo || cleanLc(ipNo) === targetIpNoClean || (ipRecordForNo && cleanLc(ipRecordForNo.ipNumber) === targetIpNoClean)) {
+                    return consumedFromIp;
+                }
+            }
+            return 0;
+        };
 
         // --- Step 2: Enrich each IP record with computed values ---
         return ipRecords.map(ip => {
@@ -1298,67 +1517,9 @@ function IPManagement({
             const rawRemQty = lcRemMap[ip.ipNumber] !== undefined ? lcRemMap[ip.ipNumber] : Math.max(0, ipQty - totalLcQtyKg);
             const calculatedRemQty = Math.round(rawRemQty * 100) / 100;
 
-            // Total LC Receive Quantity across all LCs linked to this IP
-            const totalLcReceiveQty = relatedLcs.reduce((sum, lc) => {
-                const lcNoClean = cleanLc(lc.lcNo);
-                if (!lcNoClean) return sum;
-
-                const hasCustomReceive = lc.updatedLcReceive !== undefined && lc.updatedLcReceive !== null && lc.updatedLcReceive !== '';
-                if (hasCustomReceive) {
-                    return sum + parseNum(lc.updatedLcReceive);
-                }
-
-                const receiptsMapForBalance = {};
-                (allStockRecords || [])
-                    .filter(s => {
-                        const recordLcNoClean = cleanLc(s.lcNo);
-                        const status = (s.status || '').toLowerCase();
-                        return recordLcNoClean === lcNoClean && (status === 'accepted' || status === 'in stock');
-                    })
-                    .forEach(s => {
-                        const rawDate = s.date || s.receiveDate || s.createdAt || '';
-                        const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
-                        const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
-                        const key = `${dateStr}_${groupVal}`;
-                        const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                        const receiptQty = itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
-                        if (!receiptsMapForBalance[key]) {
-                            receiptsMapForBalance[key] = receiptQty;
-                        } else {
-                            receiptsMapForBalance[key] += receiptQty;
-                        }
-                    });
-                const receivedQtyKg = Object.values(receiptsMapForBalance).reduce((rSum, qty) => rSum + qty, 0);
-
-                const borderSaleQtyKg = (allSalesRecords || [])
-                    .filter(s => {
-                        const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                            cleanLc(s.lcNumber) === lcNoClean ||
-                            cleanLc(s.lc_no) === lcNoClean ||
-                            (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
-                        const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                        const isBorder = sTypeLow.includes('border') ||
-                            (s.invoiceNo || '').startsWith('BS') ||
-                            (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                            (matchesLc && !!(s.port || s.importer));
-                        const status = (s.status || '').toLowerCase();
-                        const isValidStatus = !status.includes('rejected') && status !== 'requested';
-                        return matchesLc && isValidStatus && isBorder;
-                    })
-                    .reduce((bSum, s) => {
-                        const itemSubtotal = (s.items || []).reduce((iSum, item) => {
-                            const brandSubtotal = (item.brandEntries || []).reduce((bSum2, b) => bSum2 + parseNum(b.quantity), 0);
-                            return iSum + (brandSubtotal || parseNum(item.quantity));
-                        }, 0);
-                        const qty = parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal;
-                        return bSum + qty;
-                    }, 0);
-
-                return sum + (receivedQtyKg + borderSaleQtyKg);
-            }, 0);
-
-            // IP Balance = IP Quantity - LC Receive Qty
-            const calculatedIpBalance = Math.max(0, ipQty - totalLcReceiveQty);
+            // IP Balance = IP Qty - Total LC Receive on this IP
+            const totalLcReceiveOnIp = relatedLcs.reduce((sum, lc) => sum + getLcReceiveQtyForIp(lc, ip), 0);
+            const calculatedIpBalance = Math.round(Math.max(0, ipQty - totalLcReceiveOnIp) * 100) / 100;
 
             let computedStatus = "Active";
             if (ip.closeDate) {
@@ -2503,7 +2664,7 @@ function IPManagement({
                                                 <td className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">{record.productName}</td>
                                                 <td className="px-3 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{(parseFloat(record.quantity) || 0).toLocaleString('en-IN')} kg</td>
                                                 <td className="px-3 py-3 text-sm font-medium text-black whitespace-nowrap">{(parseFloat(record.remainingQuantity) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg</td>
-                                                <td className="px-3 py-3 text-sm font-bold text-blue-700 whitespace-nowrap">{(record.ipBalance || 0).toLocaleString('en-IN')} kg</td>
+                                                <td className="px-3 py-3 text-sm font-bold text-blue-700 whitespace-nowrap">{(record.ipBalance || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg</td>
                                                 <td className="px-3 py-3 text-sm font-bold text-indigo-600 whitespace-nowrap">{record.totalLcCount || 0}</td>
                                                 <td className="px-3 py-3">
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${record.computedStatus === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
@@ -2649,6 +2810,11 @@ function IPManagement({
                                                                 <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Rem. Qty</span>
                                                                 <span className="text-gray-400 font-bold mx-2">-</span>
                                                                 <span className="text-sm font-bold text-black">{(parseFloat(record.remainingQuantity) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg</span>
+                                                            </div>
+                                                            <div className="flex items-center">
+                                                                <span className="w-[100px] text-[11px] font-black text-blue-600 uppercase tracking-widest shrink-0">IP Balance</span>
+                                                                <span className="text-blue-500 font-bold mx-2">-</span>
+                                                                <span className="text-sm font-black text-blue-700">{(record.ipBalance || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg</span>
                                                             </div>
                                                             <div className="flex items-center">
                                                                 <span className="w-[100px] text-[11px] font-black text-indigo-500 uppercase tracking-widest shrink-0">Total LC</span>
