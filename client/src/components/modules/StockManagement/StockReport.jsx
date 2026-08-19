@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { SearchIcon, XIcon, BarChartIcon, FunnelIcon, PrinterIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateStockReportPDF } from '../../../utils/pdfGenerator';
@@ -925,7 +926,8 @@ const StockReport = ({
         );
     };
 
-    return (
+    if (typeof document === 'undefined' || !document.body) return null;
+    return createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-2 pt-10 sm:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
             <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar (Hidden on Print) */}
@@ -1412,7 +1414,8 @@ const StockReport = ({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

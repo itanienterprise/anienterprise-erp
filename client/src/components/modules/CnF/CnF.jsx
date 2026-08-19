@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon, BarChartIcon, ReceiptIcon, TruckIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateCnFHistoryReportPDF, generateCnFAgentListReportPDF, generateCnFExpenseReportPDF, generateCnFPaymentReportPDF, generateCnFAllReportPDF } from '../../../utils/pdfGenerator';
@@ -1508,10 +1509,10 @@ const CnF = ({
                 );
             })()}
 
-            {viewData && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[96vw] xl:max-w-[1750px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
+            {viewData && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[96vw] xl:max-w-[1750px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200 z-10">
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left w-full flex items-center justify-between md:block pr-12 md:pr-0">
                                 <div>
@@ -2516,13 +2517,14 @@ const CnF = ({
                             )}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            {editRecord && (
-                <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 app-modal-overlay">
-                    <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setEditRecord(null)}></div>
-                    <div className="cnf-form-container w-full max-w-xl">
+            {editRecord && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setEditRecord(null)}></div>
+                    <div className="cnf-form-container w-full max-w-xl relative z-10">
 
                         <div className="cnf-form-header">
                             <h3 className="cnf-form-title">Edit History Record</h3>
@@ -2552,13 +2554,14 @@ const CnF = ({
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            {isBulkEditModalOpen && (
-                <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 app-modal-overlay">
-                    <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setIsBulkEditModalOpen(false)}></div>
-                    <div className="cnf-form-container w-full max-w-xl">
+            {isBulkEditModalOpen && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsBulkEditModalOpen(false)}></div>
+                    <div className="cnf-form-container w-full max-w-xl relative z-10">
 
                         <div className="cnf-form-header">
                             <h3 className="cnf-form-title">Bulk Edit History</h3>
@@ -2588,7 +2591,8 @@ const CnF = ({
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             <CnFReport

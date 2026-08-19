@@ -1,4 +1,5 @@
 import React, { useRef,  useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import {
     SearchIcon, PlusIcon, EditIcon, TrashIcon, CheckIcon, XIcon,
@@ -912,9 +913,10 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
             </div>
 
             {/* Modal for Add / Edit Purchase */}
-            {showModal && (
-                <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 app-modal-overlay">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 border border-gray-100">
+            {showModal && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowModal(false)} />
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 border border-gray-100 relative z-10 animate-in zoom-in duration-200">
                         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
                             <h3 className="text-xl font-black text-gray-900">{editingId ? 'Edit Purchase Entry' : 'New Purchase Entry'}</h3>
                             <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
@@ -1410,7 +1412,8 @@ const PurchaseManagement = ({ currentUser, addNotification, fetchStockRecords, r
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

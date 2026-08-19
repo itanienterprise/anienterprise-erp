@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
     PlusIcon,
@@ -867,7 +868,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             </div>
 
             {/* Add/Edit Modal */}
-            {isModalOpen && (
+            {isModalOpen && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
                     <div className="bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl max-w-xl w-full p-6 md:p-8 border border-white/60 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                         {/* Header */}
@@ -1063,13 +1064,14 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Delete Modal */}
-            {deleteModalRecord && (
+            {deleteModalRecord && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-150">
+                    <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-150 relative z-10">
                         <h3 className="text-base font-bold text-gray-900">Delete Margin Return?</h3>
                         <p className="text-xs text-gray-500 mt-2">
                             Are you sure you want to delete the margin return record for LC <strong className="text-gray-800">{deleteModalRecord.lcNo}</strong> (৳{parseFloat(deleteModalRecord.returnAmount || 0).toLocaleString('en-IN')})?
@@ -1089,7 +1091,8 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

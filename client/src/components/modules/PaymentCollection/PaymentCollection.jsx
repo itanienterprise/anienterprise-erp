@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, ChevronUpIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { generateMoneyReceiptPDF } from '../../../utils/pdfGenerator';
@@ -3314,11 +3315,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             />
 
             {/* Premium Delete Confirmation Modal */}
-            {showDeleteConfirm && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            {showDeleteConfirm && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
                     {/* Backdrop */}
                     <div
-                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300"
+                        className="fixed inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => !isSubmitting && setShowDeleteConfirm(false)}
                     ></div>
 
@@ -3378,7 +3379,8 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                             </button>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Bulk Action Confirmation Modal */}
@@ -3400,11 +3402,11 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
 };
 
 const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', confirmText = 'Confirm', cancelText = 'Cancel', isSubmitting = false }) => {
-    if (!isOpen) return null;
+    if (!isOpen || typeof document === 'undefined' || !document.body) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200">
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200 z-10">
                 <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
                     type === 'danger' ? 'bg-red-100 text-red-600' :
                     type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
@@ -3454,7 +3456,8 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'dang
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

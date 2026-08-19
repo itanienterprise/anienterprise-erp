@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
     FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, FileTextIcon
 } from '../../Icons';
@@ -4923,7 +4924,8 @@ function PI({
                 });
                 const linkedLcNo = linkedLc ? linkedLc.lcNo : null;
 
-                return (
+                if (typeof document === 'undefined' || !document.body) return null;
+                return createPortal(
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-white w-full max-w-6xl h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
                             {/* Modal Header */}
@@ -5248,7 +5250,8 @@ function PI({
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </div>,
+                    document.body
                 );
             })()}
         </div>

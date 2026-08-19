@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { XIcon, PrinterIcon, SearchIcon, FunnelIcon, ChevronDownIcon } from '../../Icons';
 import { generateCnFAgentListReportPDF } from '../../../utils/pdfGenerator';
 import { formatDate } from '../../../utils/helpers';
@@ -69,7 +70,8 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
         setFilterDropdownOpen({ name: false });
     };
 
-    return (
+    if (typeof document === 'undefined' || !document.body) return null;
+    return createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 app-modal-overlay">
             <div className="bg-white w-full max-w-[1200px] max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col">
 
@@ -373,7 +375,8 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

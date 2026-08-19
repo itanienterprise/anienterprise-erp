@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import {
     PlusIcon, EditIcon, TrashIcon, SearchIcon, FunnelIcon, EyeIcon, XIcon,
@@ -2447,10 +2448,10 @@ const OrderManagement = ({
             )}
 
             {/* View Order Modal */}
-            {viewRecord && (
-                <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl max-w-2xl w-full p-6 md:p-8 animate-in zoom-in duration-200">
+            {viewRecord && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
+                    <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl max-w-2xl w-full p-6 md:p-8 animate-in zoom-in duration-200 z-10">
                         <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4">
                             <div>
                                 <h3 className="text-xl font-black text-gray-900">Order Details - {viewRecord.invoiceNo || viewRecord.orderNo}</h3>
@@ -2492,7 +2493,8 @@ const OrderManagement = ({
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {confirmModalConfig && (
@@ -2513,11 +2515,11 @@ const OrderManagement = ({
 };
 
 const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', confirmText = 'Confirm', cancelText = 'Cancel', isSubmitting = false }) => {
-    if (!isOpen) return null;
+    if (!isOpen || typeof document === 'undefined' || !document.body) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200">
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all animate-in zoom-in-95 duration-200 z-10">
                 <div className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
                     type === 'danger' ? 'bg-red-100 text-red-600' :
                     type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
@@ -2554,7 +2556,8 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'dang
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
