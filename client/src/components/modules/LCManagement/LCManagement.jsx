@@ -6987,6 +6987,247 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         }
     };
 
+    const ipStatsMap = useMemo(() => {
+        const stats = {};
+        if (!ipRecordsRaw || ipRecordsRaw.length === 0) return stats;
+
+        const parseNum = (val) => {
+            if (val === null || val === undefined) return 0;
+            return parseFloat(String(val).replace(/[^0-9.]/g, '')) || 0;
+        };
+        const cleanLc = (val) => String(val || '').replace(/\D/g, '');
+
+        const matchProduct = (p1, p2) => {
+            if (!p1 || !p2) return false;
+            return String(p1).trim().toLowerCase() === String(p2).trim().toLowerCase();
+        };
+
+        const isLcLinkedToIp = (lc, ip) => {
+            const lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+                : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+            const targetIpNo = String(ip.ipNumber || '').trim();
+            const targetIpNoClean = cleanLc(targetIpNo);
+            return lcIpNos.some(no => no === targetIpNo || cleanLc(no) === targetIpNoClean);
+        };
+
+        const getLcProductQtyInKg = (lc, productKey, ipNo = '') => {
+            let baseQtyKg = 0;
+            if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+                let matched = lc.productsList;
+                if (productKey) {
+                    matched = lc.productsList.filter(p => matchProduct(p.productName || p.name, productKey));
+                }
+                if (matched.length > 0) {
+                    baseQtyKg = matched.reduce((sum, p) => {
+                        const q = parseNum(p.quantity);
+                        return sum + (q < 50000 ? q * 1000 : q);
+                    }, 0);
+                }
+            }
+            if (baseQtyKg === 0 && Array.isArray(lc.items) && lc.items.length > 0) {
+                let matched = lc.items;
+                if (productKey) {
+                    matched = lc.items.filter(i => matchProduct(i.productName || i.name, productKey));
+                }
+                if (matched.length > 0) {
+                    baseQtyKg = matched.reduce((sum, i) => {
+                        const q = parseNum(i.quantity || i.qty);
+                        return sum + (q < 50000 ? q * 1000 : q);
+                    }, 0);
+                }
+            }
+            if (baseQtyKg === 0 && (!productKey || matchProduct(lc.productName, productKey))) {
+                const q = parseNum(lc.quantity || lc.totalQuantity || lc.lcQuantity);
+                if (q > 0) baseQtyKg = q < 50000 ? q * 1000 : q;
+            }
+
+            if (baseQtyKg > 0 && ipNo && lc.enableValueQtyAdjustment && lc.adjustedQuantity) {
+                const lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                    ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+                    : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+                const toleranceIpNo = String(lc.toleranceIpNo || lcIpNos[0] || '').trim();
+                if (ipNo === toleranceIpNo) {
+                    const adjQtyRaw = parseNum(lc.adjustedQuantity);
+                    const adjQtyKg = adjQtyRaw < 50000 ? adjQtyRaw * 1000 : adjQtyRaw;
+                    const extraKg = Math.max(0, adjQtyKg - baseQtyKg);
+                    baseQtyKg += extraKg;
+                }
+            }
+            return baseQtyKg;
+        };
+
+        const getLcReceiveQty = (lc) => {
+            if (lc.updatedLcReceive !== undefined && lc.updatedLcReceive !== null && lc.updatedLcReceive !== '') {
+                return parseNum(lc.updatedLcReceive);
+            }
+            const lcNoClean = cleanLc(lc.lcNo);
+            const receiptsMap = {};
+            (allStockRecords || [])
+                .filter(s => {
+                    const recordLcClean = cleanLc(s.lcNo);
+                    const status = (s.status || '').toLowerCase();
+                    return recordLcClean === lcNoClean && (status === 'accepted' || status === 'in stock');
+                })
+                .forEach(s => {
+                    const rawDate = s.date || s.receiveDate || s.createdAt || '';
+                    const dateStr = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                    const groupVal = s.totalLcQuantity || s.billOfEntry || s.totalLcTruck || s.truckNo || s.truck || 'single';
+                    const key = `${dateStr}_${groupVal}`;
+                    if (!receiptsMap[key]) {
+                        const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
+                        receiptsMap[key] = parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    } else if (!s.totalLcQuantity) {
+                        receiptsMap[key] += parseNum(s.inHouseQuantity) || parseNum(s.quantity);
+                    }
+                });
+            const totalStockReceive = Object.values(receiptsMap).reduce((sum, q) => sum + q, 0);
+
+            const totalBorderSales = (allSalesRecords || [])
+                .filter(s => {
+                    const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
+                        cleanLc(s.lcNumber) === lcNoClean ||
+                        cleanLc(s.lc_no) === lcNoClean ||
+                        (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                    const sTypeLow = (s.saleType || '').toLowerCase().trim();
+                    const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer)) || (matchesLc && !!(s.port || s.importer));
+                    const status = (s.status || '').toLowerCase();
+                    return matchesLc && !status.includes('rejected') && status !== 'requested' && isBorder;
+                })
+                .reduce((sum, s) => {
+                    const itemSubtotal = (s.items || []).reduce((iSum, item) => {
+                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                        return iSum + (brandSubtotal || parseNum(item.quantity));
+                    }, 0);
+                    return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal);
+                }, 0);
+
+            return totalStockReceive + totalBorderSales;
+        };
+
+        const lcRemMap = {};
+        ipRecordsRaw.forEach(ip => {
+            lcRemMap[ip.ipNumber] = parseNum(ip.quantity) || 0;
+        });
+
+        const sortedLcs = [...(lcRecords || [])].sort((a, b) => new Date(a.openingDate || a.createdAt || 0) - new Date(b.openingDate || b.createdAt || 0));
+        const lcIpAllocatedMap = {};
+
+        sortedLcs.forEach(lc => {
+            const baseLcQtyKg = getLcProductQtyInKg(lc, '');
+            if (baseLcQtyKg <= 0) return;
+
+            let linkedIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+                : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+            let linkedIpsForLc = [];
+            if (linkedIpNos.length > 0) {
+                linkedIpsForLc = linkedIpNos.map(ipNo => {
+                    const clean = cleanLc(ipNo);
+                    return ipRecordsRaw.find(ip => ip.ipNumber === ipNo || cleanLc(ip.ipNumber) === clean);
+                }).filter(Boolean);
+            }
+            if (linkedIpsForLc.length === 0) {
+                linkedIpsForLc = ipRecordsRaw.filter(ip => isLcLinkedToIp(lc, ip));
+            }
+            if (linkedIpsForLc.length === 0) return;
+
+            const isToleranceEnabled = !!lc.enableValueQtyAdjustment;
+            const toleranceIpNo = String(lc.toleranceIpNo || linkedIpNos[0] || '').trim();
+            let toleranceQtyKg = 0;
+            if (isToleranceEnabled && lc.adjustedQuantity) {
+                const adjQtyTon = parseNum(lc.adjustedQuantity);
+                if (adjQtyTon > 0) {
+                    const adjQtyKg = adjQtyTon < 50000 ? adjQtyTon * 1000 : adjQtyTon;
+                    toleranceQtyKg = Math.max(0, adjQtyKg - baseLcQtyKg);
+                }
+            }
+
+            const lcId1 = lc.lcNo ? String(lc.lcNo).trim() : '';
+            const lcId2 = lc._id ? String(lc._id).trim() : '';
+            let remainingLcQtyToDeduct = baseLcQtyKg;
+
+            for (const ip of linkedIpsForLc) {
+                if (remainingLcQtyToDeduct <= 0) break;
+                const extraForThisIp = (isToleranceEnabled && ip.ipNumber === toleranceIpNo) ? toleranceQtyKg : 0;
+                const totalForThisIp = remainingLcQtyToDeduct + extraForThisIp;
+                const currentAvail = lcRemMap[ip.ipNumber] || 0;
+                const toDeduct = Math.min(currentAvail, totalForThisIp);
+                lcRemMap[ip.ipNumber] = Math.max(0, currentAvail - toDeduct);
+                remainingLcQtyToDeduct -= Math.max(0, toDeduct - extraForThisIp);
+
+                if (lcId1) lcIpAllocatedMap[`${lcId1}_${ip.ipNumber}`] = toDeduct;
+                if (lcId2) lcIpAllocatedMap[`${lcId2}_${ip.ipNumber}`] = toDeduct;
+                if (lcId1) lcIpAllocatedMap[`${cleanLc(lcId1)}_${cleanLc(ip.ipNumber)}`] = toDeduct;
+                if (lcId2) lcIpAllocatedMap[`${lcId2}_${cleanLc(ip.ipNumber)}`] = toDeduct;
+            }
+        });
+
+        const getLcReceiveQtyForIp = (lc, targetIp) => {
+            const totalConsumption = getLcReceiveQty(lc);
+            if (totalConsumption <= 0) return 0;
+            const targetIpNo = String(targetIp?.ipNumber || '').trim();
+            const targetIpNoClean = cleanLc(targetIpNo);
+
+            let lcIpNos = Array.isArray(lc.ipNumbers) && lc.ipNumbers.length > 0
+                ? lc.ipNumbers.map(s => String(s).trim()).filter(Boolean)
+                : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+            if (lcIpNos.length === 0) {
+                lcIpNos = ipRecordsRaw.filter(ip => isLcLinkedToIp(lc, ip)).map(ip => String(ip.ipNumber || '').trim()).filter(Boolean);
+            }
+            if (lcIpNos.length <= 1) return totalConsumption;
+
+            let remCons = totalConsumption;
+            const lcNoStr = lc.lcNo ? String(lc.lcNo).trim() : '';
+            const lcIdStr = lc._id ? String(lc._id).trim() : '';
+
+            for (const ipNo of lcIpNos) {
+                const ipRecordForNo = (ipRecordsRaw || []).find(i => {
+                    const num = String(i.ipNumber || '').trim();
+                    return num === ipNo || (cleanLc(num) && cleanLc(num) === cleanLc(ipNo));
+                }) || targetIp;
+
+                const actualIpNo = ipRecordForNo?.ipNumber || ipNo;
+                const cleanActualIpNo = cleanLc(actualIpNo);
+                const allocatedQtyForIp = lcIpAllocatedMap[`${lcNoStr}_${actualIpNo}`] ??
+                    lcIpAllocatedMap[`${lcIdStr}_${actualIpNo}`] ??
+                    lcIpAllocatedMap[`${cleanLc(lcNoStr)}_${cleanActualIpNo}`] ??
+                    lcIpAllocatedMap[`${lcIdStr}_${cleanActualIpNo}`] ??
+                    getLcProductQtyInKg(lc, ipRecordForNo?.productName, actualIpNo);
+
+                const consumedFromIp = Math.min(allocatedQtyForIp, remCons);
+                remCons = Math.max(0, remCons - consumedFromIp);
+
+                if (ipNo === targetIpNo || cleanLc(ipNo) === targetIpNoClean || (ipRecordForNo && cleanLc(ipRecordForNo.ipNumber) === targetIpNoClean)) {
+                    return consumedFromIp;
+                }
+            }
+            return 0;
+        };
+
+        ipRecordsRaw.forEach(ip => {
+            const relatedLcs = (lcRecords || []).filter(lc => isLcLinkedToIp(lc, ip));
+            const ipQtyKg = parseNum(ip.quantity) || 0;
+            const rawRemKg = lcRemMap[ip.ipNumber] !== undefined ? lcRemMap[ip.ipNumber] : ipQtyKg;
+            const lcRemKg = Math.round(rawRemKg * 100) / 100;
+            const totalLcReceiveOnIp = relatedLcs.reduce((sum, lc) => sum + getLcReceiveQtyForIp(lc, ip), 0);
+            const ipBalKg = Math.round(Math.max(0, ipQtyKg - totalLcReceiveOnIp) * 100) / 100;
+
+            stats[ip.ipNumber] = {
+                ipQtyKg,
+                ipQtyTon: ipQtyKg / 1000,
+                lcRemKg,
+                lcRemTon: lcRemKg / 1000,
+                ipBalKg,
+                ipBalTon: ipBalKg / 1000
+            };
+        });
+
+        return stats;
+    }, [ipRecordsRaw, lcRecords, allStockRecords, allSalesRecords]);
+
     const handleUpdateDollarRate = async (recordId, updatedRecord) => {
         try {
             setLcRecords(prev => prev.map(r => r._id === recordId ? updatedRecord : r));
@@ -10041,36 +10282,38 @@ style={
                                                                                 </span>
                                                                             </div>
                                                                         )}
-                                                                        {/* IP Rem — always visible */}
+                                                                        {/* IP Rem & IP Bal — always visible in KG */}
                                                                         {(() => {
                                                                             const selectedIpNo = record.toleranceIpNo || (record.ipNumbers && record.ipNumbers[0]) || (record.ipNo ? record.ipNo.split(',')[0].trim() : '');
-                                                                            const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === selectedIpNo);
-                                                                            if (!selectedIp) return null;
-                                                                            const ipQtyKg = parseFloat(String(selectedIp.quantity || 0).replace(/[^0-9.]/g, '')) || 0;
-                                                                            const totalUsedKg = lcRecords
-                                                                                .filter(lc => {
-                                                                                    const lcIps = lc.ipNumbers?.length ? lc.ipNumbers : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
-                                                                                    return lcIps.includes(selectedIpNo);
-                                                                                })
-                                                                                .reduce((sum, lc) => {
-                                                                                    const adjLc = getAdjustedLcValues(lc);
-                                                                                    return sum + (adjLc.adjustedQtyKg || (parseFloat(lc.quantity || 0) * 1000));
-                                                                                }, 0);
-                                                                            const ipRemKg = ipQtyKg - totalUsedKg;
-                                                                            const ipRemTon = ipRemKg / 1000;
+                                                                            const ipStat = ipStatsMap[selectedIpNo];
+                                                                            if (!ipStat) return null;
+                                                                            const lcRemKg = ipStat.lcRemKg;
+                                                                            const ipBalKg = ipStat.ipBalKg;
                                                                             return (
-                                                                                <span className="flex items-center gap-1 border-l border-blue-200/60 pl-3 ml-1">
-                                                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-tight">IP Rem:</span>
-                                                                                    <span className={`px-2 py-0.5 rounded text-xs font-black uppercase tracking-wide ${
-                                                                                        ipRemKg > 0
-                                                                                            ? 'bg-emerald-50 text-emerald-700'
-                                                                                            : ipRemKg < 0
-                                                                                                ? 'bg-red-50 text-red-600'
-                                                                                                : 'bg-gray-100 text-gray-400'
-                                                                                    }`}>
-                                                                                        {ipRemTon.toLocaleString('en-IN', { minimumFractionDigits: 3 })} Ton
+                                                                                <div className="flex items-center gap-2 border-l border-blue-200/60 pl-3 ml-1">
+                                                                                    <span className="flex items-center gap-1">
+                                                                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-tight">IP Rem:</span>
+                                                                                        <span className={`px-2 py-0.5 rounded text-xs font-black uppercase tracking-wide ${
+                                                                                            lcRemKg > 0
+                                                                                                ? 'bg-emerald-50 text-emerald-700'
+                                                                                                : lcRemKg < 0
+                                                                                                    ? 'bg-red-50 text-red-600'
+                                                                                                    : 'bg-gray-100 text-gray-400'
+                                                                                        }`}>
+                                                                                            {lcRemKg.toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg
+                                                                                        </span>
                                                                                     </span>
-                                                                                </span>
+                                                                                    <span className="flex items-center gap-1">
+                                                                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-tight">IP Bal:</span>
+                                                                                        <span className={`px-2 py-0.5 rounded text-xs font-black uppercase tracking-wide ${
+                                                                                            ipBalKg > 0
+                                                                                                ? 'bg-blue-50 text-blue-700'
+                                                                                                : 'bg-gray-100 text-gray-400'
+                                                                                        }`}>
+                                                                                            {ipBalKg.toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg
+                                                                                        </span>
+                                                                                    </span>
+                                                                                </div>
                                                                             );
                                                                         })()}
                                                                     </div>
@@ -10821,36 +11064,38 @@ style={
                                                                         </span>
                                                                     </div>
                                                                 )}
-                                                                {/* IP Rem — always visible */}
+                                                                {/* IP Rem & IP Bal — always visible in KG */}
                                                                 {(() => {
                                                                     const selectedIpNo = record.toleranceIpNo || (record.ipNumbers && record.ipNumbers[0]) || (record.ipNo ? record.ipNo.split(',')[0].trim() : '');
-                                                                    const selectedIp = ipRecordsRaw.find(ip => ip.ipNumber === selectedIpNo);
-                                                                    if (!selectedIp) return null;
-                                                                    const ipQtyKg = parseFloat(String(selectedIp.quantity || 0).replace(/[^0-9.]/g, '')) || 0;
-                                                                    const totalUsedKg = lcRecords
-                                                                        .filter(lc => {
-                                                                            const lcIps = lc.ipNumbers?.length ? lc.ipNumbers : (lc.ipNo ? lc.ipNo.split(',').map(s => s.trim()).filter(Boolean) : []);
-                                                                            return lcIps.includes(selectedIpNo);
-                                                                        })
-                                                                        .reduce((sum, lc) => {
-                                                                            const adjLc = getAdjustedLcValues(lc);
-                                                                            return sum + (adjLc.adjustedQtyKg || (parseFloat(lc.quantity || 0) * 1000));
-                                                                        }, 0);
-                                                                    const ipRemKg = ipQtyKg - totalUsedKg;
-                                                                    const ipRemTon = ipRemKg / 1000;
+                                                                    const ipStat = ipStatsMap[selectedIpNo];
+                                                                    if (!ipStat) return null;
+                                                                    const lcRemKg = ipStat.lcRemKg;
+                                                                    const ipBalKg = ipStat.ipBalKg;
                                                                     return (
-                                                                        <span className="flex items-center gap-1 border-l border-blue-200/60 pl-2 ml-1">
-                                                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">IP Rem:</span>
-                                                                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide ${
-                                                                                ipRemKg > 0
-                                                                                    ? 'bg-emerald-50 text-emerald-700'
-                                                                                    : ipRemKg < 0
-                                                                                        ? 'bg-red-50 text-red-600'
-                                                                                        : 'bg-gray-100 text-gray-400'
-                                                                            }`}>
-                                                                                {ipRemTon.toLocaleString('en-IN', { minimumFractionDigits: 3 })} Ton
+                                                                        <div className="flex items-center gap-2 border-l border-blue-200/60 pl-2 ml-1">
+                                                                            <span className="flex items-center gap-1">
+                                                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">IP Rem:</span>
+                                                                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide ${
+                                                                                    lcRemKg > 0
+                                                                                        ? 'bg-emerald-50 text-emerald-700'
+                                                                                        : lcRemKg < 0
+                                                                                            ? 'bg-red-50 text-red-600'
+                                                                                            : 'bg-gray-100 text-gray-400'
+                                                                                }`}>
+                                                                                    {lcRemKg.toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg
+                                                                                </span>
                                                                             </span>
-                                                                        </span>
+                                                                            <span className="flex items-center gap-1">
+                                                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">IP Bal:</span>
+                                                                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide ${
+                                                                                    ipBalKg > 0
+                                                                                        ? 'bg-blue-50 text-blue-700'
+                                                                                        : 'bg-gray-100 text-gray-400'
+                                                                                }`}>
+                                                                                    {ipBalKg.toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg
+                                                                                </span>
+                                                                            </span>
+                                                                        </div>
                                                                     );
                                                                 })()}
                                                             </div>
