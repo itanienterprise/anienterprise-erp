@@ -1867,20 +1867,58 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 
         const norm = (s) => (s || '').toString().toLowerCase().replace(/m\/s|m\/s\.|[^a-z0-9]/g, '').trim();
         const normPhone = (p) => (p || '').toString().replace(/\D/g, '').slice(-10);
+        const isValidPhone = (p) => {
+            const clean = (p || '').toString().replace(/\D/g, '');
+            if (clean.length < 7) return false;
+            if (/^(.)\1+$/.test(clean)) return false; // ignore repeating dummy digits like 0000000000
+            if (/^0+$/.test(clean)) return false;
+            return true;
+        };
 
         const targetCustId = (sale.customerId || sale.customer?._id || sale.customer?.customerId || '').toString().trim();
         const targetComp = norm(sale.companyName || sale.customerName || sale.party || '');
+        const targetCustName = norm(sale.customerName || '');
         const targetPhone = normPhone(sale.contact || sale.phone || '');
 
-        let customer = customersList.find(c => {
-            if (targetCustId && (c._id === targetCustId || c.customerId === targetCustId)) return true;
-            const cComp = norm(c.companyName || '');
-            const cCust = norm(c.customerName || '');
-            if (targetComp && (cComp === targetComp || cCust === targetComp)) return true;
-            if (targetComp && cComp && (cComp.includes(targetComp) || targetComp.includes(cComp))) return true;
-            if (targetPhone && c.phone && normPhone(c.phone) === targetPhone) return true;
-            return false;
-        });
+        let customer = null;
+
+        // 1. Match by Customer ID
+        if (targetCustId) {
+            customer = customersList.find(c => (c._id && c._id.toString() === targetCustId) || (c.customerId && c.customerId.toString().toLowerCase() === targetCustId.toLowerCase()));
+        }
+
+        // 2. Match by Exact Company Name and Customer Name
+        if (!customer && targetComp && targetCustName) {
+            customer = customersList.find(c => {
+                const cComp = norm(c.companyName || '');
+                const cCust = norm(c.customerName || '');
+                return (cComp === targetComp && cCust === targetCustName) || (cComp === targetCustName && cCust === targetComp);
+            });
+        }
+
+        // 3. Match by Exact Company Name or Customer Name
+        if (!customer && targetComp) {
+            customer = customersList.find(c => {
+                const cComp = norm(c.companyName || '');
+                const cCust = norm(c.customerName || '');
+                return (cComp && cComp === targetComp) || (cCust && cCust === targetComp);
+            });
+        }
+
+        // 4. Match by Partial Company / Customer Name (at least 3 characters)
+        if (!customer && targetComp && targetComp.length >= 3) {
+            customer = customersList.find(c => {
+                const cComp = norm(c.companyName || '');
+                const cCust = norm(c.customerName || '');
+                return (cComp && (cComp.includes(targetComp) || targetComp.includes(cComp))) ||
+                       (cCust && (cCust.includes(targetComp) || targetComp.includes(cCust)));
+            });
+        }
+
+        // 5. Match by Valid Phone Number only (avoiding dummy numbers like +8800000000000)
+        if (!customer && isValidPhone(sale.contact || sale.phone)) {
+            customer = customersList.find(c => isValidPhone(c.phone) && normPhone(c.phone) === targetPhone);
+        }
 
         if (!customer && sale.customer && typeof sale.customer === 'object') {
             customer = sale.customer;
@@ -1894,11 +1932,14 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 
             const saleDateStr = sale.date ? (typeof sale.date === 'string' ? sale.date.split('T')[0] : new Date(sale.date).toISOString().split('T')[0]) : '';
             const currentInv = (sale.invoiceNo || '').trim().toUpperCase();
+            const currentOrd = (sale.orderNo || '').trim().toUpperCase();
 
-            // 1. Previous Sales
+            // 1. Previous Sales (exclude current invoice/order entries)
             const prevSales = sHistory.filter(h => {
                 const hInv = (h.invoiceNo || '').trim().toUpperCase();
-                if (currentInv && hInv === currentInv) return false;
+                const hOrd = (h.orderNo || '').trim().toUpperCase();
+                if (currentInv && (hInv === currentInv || hOrd === currentInv)) return false;
+                if (currentOrd && (hInv === currentOrd || hOrd === currentOrd)) return false;
                 
                 const hDateStr = h.date ? (typeof h.date === 'string' ? h.date.split('T')[0] : new Date(h.date).toISOString().split('T')[0]) : '';
                 if (!saleDateStr || !hDateStr) return true;
