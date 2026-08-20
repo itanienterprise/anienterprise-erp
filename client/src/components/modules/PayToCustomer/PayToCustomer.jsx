@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, ChevronUpIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon, FileTextIcon } from '../../Icons';
-import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
+import { API_BASE_URL, formatDate, SortIcon, compareTransactions } from '../../../utils/helpers';
 import { generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -804,7 +804,7 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
         });
 
         const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
-        const all = [...sales, ...paymentsHistoryList, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
+        const all = [...sales, ...paymentsHistoryList, ...payouts, ...purchases].sort(compareTransactions);
 
         let currentBalance = 0;
         all.forEach(item => {

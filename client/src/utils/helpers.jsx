@@ -236,7 +236,7 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
     });
 
     const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
-    const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
+    const all = [...sales, ...payments, ...payouts, ...purchases].sort(compareTransactions);
 
     let currentBalance = 0;
     all.forEach(item => {
@@ -262,4 +262,43 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
 
     return currentBalance;
 };
+
+// Helper to extract timestamp from createdAt, timestamp ID, or date
+export const getItemTimestamp = (item) => {
+    if (!item) return 0;
+    if (item.createdAt) {
+        const t = new Date(item.createdAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+    }
+    const idStr = String(item.id || item._id || '');
+    if (idStr) {
+        const matchTime = idStr.match(/^(\d{12,14})/);
+        if (matchTime) {
+            const t = parseInt(matchTime[1], 10);
+            if (!isNaN(t) && t > 1500000000000) return t;
+        }
+        if (/^[0-9a-fA-F]{24}$/.test(idStr)) {
+            const sec = parseInt(idStr.substring(0, 8), 16);
+            if (!isNaN(sec) && sec > 1500000000) return sec * 1000;
+        }
+    }
+    if (item.date) {
+        const t = new Date(item.date).getTime();
+        if (!isNaN(t)) return t;
+    }
+    return 0;
+};
+
+// Comparator to sort transactions chronologically (by calendar date, then precise creation timestamp)
+export const compareTransactions = (a, b) => {
+    const aDate = new Date(a.date || a.sortDate || 0).setHours(0, 0, 0, 0);
+    const bDate = new Date(b.date || b.sortDate || 0).setHours(0, 0, 0, 0);
+    if (aDate !== bDate) {
+        return aDate - bDate;
+    }
+    const aTime = getItemTimestamp(a);
+    const bTime = getItemTimestamp(b);
+    return aTime - bTime;
+};
+
 

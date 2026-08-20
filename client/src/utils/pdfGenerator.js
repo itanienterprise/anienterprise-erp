@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
-import { computeCustomerBalance } from './helpers';
+import { computeCustomerBalance, compareTransactions } from './helpers';
 import { api } from './api';
 
 const formatDate = (dateString) => {
@@ -1925,82 +1925,155 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         }
 
         if (customer) {
-            const sHistory = (customer.salesHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested');
-            const pHistory = (customer.paymentHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested');
-            const ptcHistory = (customer.payToCustomerHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested');
-            const puHistory = (customer.purchaseHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested');
+            let prList = [];
+            let pList = [];
+            try {
+                const [prRes, pRes] = await Promise.all([
+                    api.get('/api/purchase-receives').catch(() => ({ data: [] })),
+                    api.get('/api/purchases').catch(() => ({ data: [] }))
+                ]);
+                prList = Array.isArray(prRes.data) ? prRes.data : (Array.isArray(prRes) ? prRes : []);
+                pList = Array.isArray(pRes.data) ? pRes.data : (Array.isArray(pRes) ? pRes : []);
+            } catch (e) {
+                console.warn('Could not fetch purchase receives/purchases for invoice balance:', e);
+            }
 
-            const saleDateStr = sale.date ? (typeof sale.date === 'string' ? sale.date.split('T')[0] : new Date(sale.date).toISOString().split('T')[0]) : '';
+            const cComp = (customer?.companyName || '').trim().toLowerCase();
+            const cCust = (customer?.customerName || '').trim().toLowerCase();
+            const cIdStr = (customer?._id || customer?.customerId || '').toString();
+
+            // 1. Matched Purchase Receives
+            const matchedPRs = prList.filter(pr => {
+                if ((pr.status || '').toLowerCase() === 'requested') return false;
+                const sName = (pr.supplierName || pr.companyName || '').trim().toLowerCase();
+                return (
+                    (cIdStr && pr.customerId === cIdStr) ||
+                    (cComp && (sName === cComp || sName.includes(cComp) || cComp.includes(sName))) ||
+                    (cCust && (sName === cCust || sName.includes(cCust) || cCust.includes(sName)))
+                );
+            });
+
+            const prEntries = matchedPRs.flatMap(pr => {
+                const pNo = pr.purchaseNo || pr.purchaseReceiveNo || 'PUR-0000';
+                if (pr.items && Array.isArray(pr.items)) {
+                    return pr.items.flatMap(item => {
+                        if (item.brandEntries && Array.isArray(item.brandEntries)) {
+                            return item.brandEntries.map(b => {
+                                const q = parseFloat((b.inHouseQuantity ?? b.inHouseQty ?? b.inhouseQty ?? b.qty) || 0);
+                                const r = parseFloat(b.rate || 0);
+                                const amt = b.total ? parseFloat(b.total) : (q * r);
+                                return {
+                                    _id: `${pr._id}-${item.productName}-${b.brand}`,
+                                    purchaseNo: pNo,
+                                    invoiceNo: pNo,
+                                    date: pr.date,
+                                    product: item.productName || item.product,
+                                    brand: b.brand,
+                                    quantity: q,
+                                    rate: r,
+                                    amount: amt,
+                                    discount: pr.discount || 0,
+                                    paid: pr.paid || pr.paidAmount || 0,
+                                    type: 'purchase'
+                                };
+                            });
+                        }
+                        const q = parseFloat((item.inHouseQuantity ?? item.inHouseQty ?? item.qty) || 0);
+                        const r = parseFloat(item.rate || 0);
+                        const amt = item.total ? parseFloat(item.total) : (q * r);
+                        return [{
+                            _id: `${pr._id}-${item.productName}`,
+                            purchaseNo: pNo,
+                            invoiceNo: pNo,
+                            date: pr.date,
+                            product: item.productName || item.product,
+                            brand: item.brand || '-',
+                            quantity: q,
+                            rate: r,
+                            amount: amt,
+                            discount: pr.discount || 0,
+                            paid: pr.paid || pr.paidAmount || 0,
+                            type: 'purchase'
+                        }];
+                    });
+                }
+                return [];
+            });
+
+            const coveredPurchaseNos = new Set(prEntries.map(e => (e.purchaseNo || '').trim().toUpperCase()));
+
+            // 2. Matched Purchases (excluding those already covered in PR)
+            const matchedPurchases = pList.filter(p => {
+                if ((p.status || '').toLowerCase() === 'requested') return false;
+                const pNo = (p.purchaseNo || p.invoiceNo || '').trim().toUpperCase();
+                if (pNo && coveredPurchaseNos.has(pNo)) return false;
+
+                return (
+                    (cIdStr && (p.customerId === cIdStr || p.customerId === customer?.customerId)) ||
+                    (p.companyName && p.companyName.toLowerCase() === (customer?.companyName || '').toLowerCase()) ||
+                    (p.customerName && p.customerName.toLowerCase() === (customer?.customerName || '').toLowerCase()) ||
+                    (p.supplierName && (
+                        p.supplierName.toLowerCase() === (customer?.companyName || '').toLowerCase() ||
+                        p.supplierName.toLowerCase() === (customer?.customerName || '').toLowerCase()
+                    ))
+                );
+            }).flatMap(p => {
+                const pNo = p.purchaseNo || p.invoiceNo || 'PUR-0000';
+                return [{
+                    _id: p._id,
+                    purchaseNo: pNo,
+                    invoiceNo: pNo,
+                    date: p.date,
+                    amount: p.totalAmount || p.amount || 0,
+                    discount: p.discount || 0,
+                    paid: p.paid || p.paidAmount || 0,
+                    type: 'purchase'
+                }];
+            });
+
+            const sHistory = (customer.salesHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested').map(s => ({ ...s, type: 'sale' }));
+            const pHistory = (customer.paymentHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested').map(p => ({ ...p, type: 'payment' }));
+            const ptcHistory = (customer.payToCustomerHistory || []).filter(h => (h.status || '').toLowerCase() !== 'requested').map(pc => ({ ...pc, type: 'payToCustomer' }));
+            const puHistory = prEntries.length > 0 ? prEntries : (matchedPurchases.length > 0 ? matchedPurchases : (customer.purchaseHistory || []).map(pu => ({ ...pu, type: 'purchase' })));
+
             const currentInv = (sale.invoiceNo || '').trim().toUpperCase();
             const currentOrd = (sale.orderNo || '').trim().toUpperCase();
 
-            // 1. Previous Sales (exclude current invoice/order entries)
-            const prevSales = sHistory.filter(h => {
-                const hInv = (h.invoiceNo || '').trim().toUpperCase();
-                const hOrd = (h.orderNo || '').trim().toUpperCase();
-                if (currentInv && (hInv === currentInv || hOrd === currentInv)) return false;
-                if (currentOrd && (hInv === currentOrd || hOrd === currentOrd)) return false;
-                
-                const hDateStr = h.date ? (typeof h.date === 'string' ? h.date.split('T')[0] : new Date(h.date).toISOString().split('T')[0]) : '';
-                if (!saleDateStr || !hDateStr) return true;
-                if (hDateStr < saleDateStr) return true;
-                if (hDateStr === saleDateStr) {
-                    if (currentInv && hInv) return hInv < currentInv;
-                    return false;
+            // All history transactions sorted chronologically
+            const allHistory = [...sHistory, ...pHistory, ...ptcHistory, ...puHistory].sort(compareTransactions);
+
+            // Filter only transactions occurring strictly BEFORE the current sale invoice
+            const prevTransactions = allHistory.filter(item => {
+                const hInv = (item.invoiceNo || item.orderNo || '').trim().toUpperCase();
+                // Exclude all line items belonging to the current sale invoice
+                if (currentInv && hInv === currentInv) return false;
+                if (currentOrd && hInv === currentOrd) return false;
+
+                // Compare timestamp/order with the current sale
+                return compareTransactions(item, sale) < 0;
+            });
+
+            let calculatedPrevBalance = 0;
+            prevTransactions.forEach(item => {
+                if (item.type === 'sale') {
+                    const amt = parseFloat(item.amount) || 0;
+                    const paid = parseFloat(item.paid) || 0;
+                    const disc = parseFloat(item.discount) || 0;
+                    calculatedPrevBalance += (amt - paid - disc);
+                } else if (item.type === 'payment') {
+                    const amt = parseFloat(item.amount) || 0;
+                    const disc = parseFloat(item.discount) || 0;
+                    calculatedPrevBalance -= (amt + disc);
+                } else if (item.type === 'payToCustomer') {
+                    calculatedPrevBalance += (parseFloat(item.amount) || 0);
+                } else if (item.type === 'purchase') {
+                    const amt = parseFloat(item.amount || item.totalAmount || 0);
+                    const paid = parseFloat(item.paid || item.paidAmount || 0);
+                    const disc = parseFloat(item.discount || 0);
+                    calculatedPrevBalance -= (amt - paid - disc);
                 }
-                return false;
             });
 
-            // 2. Previous Payments
-            const prevPayments = pHistory.filter(h => {
-                const hDateStr = h.date ? (typeof h.date === 'string' ? h.date.split('T')[0] : new Date(h.date).toISOString().split('T')[0]) : '';
-                if (!saleDateStr || !hDateStr) return true;
-                return hDateStr <= saleDateStr;
-            });
-
-            // 3. Previous PayToCustomer payouts
-            const prevPayouts = ptcHistory.filter(h => {
-                const hDateStr = h.date ? (typeof h.date === 'string' ? h.date.split('T')[0] : new Date(h.date).toISOString().split('T')[0]) : '';
-                if (!saleDateStr || !hDateStr) return true;
-                return hDateStr <= saleDateStr;
-            });
-
-            // 4. Previous Purchases
-            const prevPurchases = puHistory.filter(h => {
-                const hDateStr = h.date ? (typeof h.date === 'string' ? h.date.split('T')[0] : new Date(h.date).toISOString().split('T')[0]) : '';
-                if (!saleDateStr || !hDateStr) return true;
-                return hDateStr <= saleDateStr;
-            });
-
-            let totalPrevSales = 0;
-            prevSales.forEach(h => {
-                const amt = parseFloat(h.amount) || 0;
-                const paid = parseFloat(h.paid) || 0;
-                const disc = parseFloat(h.discount) || 0;
-                totalPrevSales += (amt - paid - disc);
-            });
-
-            let totalPrevPayments = 0;
-            prevPayments.forEach(h => {
-                const amt = parseFloat(h.amount) || 0;
-                const disc = parseFloat(h.discount) || 0;
-                totalPrevPayments += (amt + disc);
-            });
-
-            let totalPrevPayouts = 0;
-            prevPayouts.forEach(h => {
-                totalPrevPayouts += (parseFloat(h.amount) || 0);
-            });
-
-            let totalPrevPurchases = 0;
-            prevPurchases.forEach(h => {
-                const amt = parseFloat(h.amount || h.totalAmount || 0);
-                const paid = parseFloat(h.paid || h.paidAmount || 0);
-                const disc = parseFloat(h.discount || 0);
-                totalPrevPurchases += (amt - paid - disc);
-            });
-
-            const calculatedPrevBalance = totalPrevSales - totalPrevPayments + totalPrevPayouts - totalPrevPurchases;
             previousBalance = calculatedPrevBalance;
         }
 

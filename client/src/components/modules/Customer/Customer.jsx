@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
-import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance } from '../../../utils/helpers';
+import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTransactions, getItemTimestamp } from '../../../utils/helpers';
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF } from '../../../utils/pdfGenerator';
 import { api } from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -842,8 +842,8 @@ const Customer = ({
             let bVal = b[key];
 
             if (key === 'date') {
-                aVal = new Date(a.date);
-                bVal = new Date(b.date);
+                const diff = compareTransactions(a, b);
+                return direction === 'asc' ? diff : -diff;
             } else if (key === 'amount' || key === 'rate' || key === 'quantity' || key === 'discount') {
                 aVal = parseFloat(a[key]) || 0;
                 bVal = parseFloat(b[key]) || 0;
@@ -886,8 +886,8 @@ const Customer = ({
             let bVal = b[key];
 
             if (key === 'date') {
-                aVal = new Date(a.date);
-                bVal = new Date(b.date);
+                const diff = compareTransactions(a, b);
+                return direction === 'asc' ? diff : -diff;
             } else if (key === 'amount') {
                 aVal = parseFloat(a[key]) || 0;
                 bVal = parseFloat(b[key]) || 0;
@@ -928,8 +928,8 @@ const Customer = ({
             let bVal = b[key];
 
             if (key === 'date') {
-                aVal = new Date(a.date);
-                bVal = new Date(b.date);
+                const diff = compareTransactions(a, b);
+                return direction === 'asc' ? diff : -diff;
             } else if (key === 'amount') {
                 aVal = parseFloat(a[key]) || 0;
                 bVal = parseFloat(b[key]) || 0;
@@ -1050,7 +1050,7 @@ const Customer = ({
         const purchases = prEntries.length > 0 ? prEntries : matchedPurchases;
 
         // Combine and sort chronologically (earliest first for absolute balance calculation)
-        const all = [...sales, ...payments, ...payouts, ...purchases].sort((a, b) => a.sortDate - b.sortDate);
+        const all = [...sales, ...payments, ...payouts, ...purchases].sort(compareTransactions);
 
         // Calculate running balance on ALL history records
         let currentBalance = 0;
@@ -1106,8 +1106,8 @@ const Customer = ({
             let bVal = b[key];
 
             if (key === 'date') {
-                aVal = new Date(a.date);
-                bVal = new Date(b.date);
+                const diff = compareTransactions(a, b);
+                return direction === 'asc' ? diff : -diff;
             } else if (key === 'lcNo') {
                 aVal = (a.invoiceNo || a.lcNo || a.receiptNo || '').toLowerCase();
                 bVal = (b.invoiceNo || b.lcNo || b.receiptNo || '').toLowerCase();
@@ -1149,7 +1149,7 @@ const Customer = ({
                 type: 'payment',
                 sortDate: new Date(p.date)
             }));
-        const all = [...sales, ...payments].sort((a, b) => a.sortDate - b.sortDate);
+        const all = [...sales, ...payments].sort(compareTransactions);
 
         let currentBalance = 0;
         const historyWithBalance = all.map(item => {
