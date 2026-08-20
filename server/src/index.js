@@ -317,6 +317,23 @@ const verifyPermission = (moduleName, action = 'view') => {
 // IP Records APIs
 apiRouter.post('/api/ip-records', async (req, res) => {
   try {
+    // Check for duplicate IP Number
+    if (req.body.ipNumber) {
+      const cleanIpNumber = req.body.ipNumber.trim().toLowerCase();
+      const existingRecords = await IpRecord.find({});
+      const isDuplicate = existingRecords.some(record => {
+        try {
+          const data = decryptData(record.data);
+          return data.ipNumber && data.ipNumber.trim().toLowerCase() === cleanIpNumber;
+        } catch (e) {
+          return false;
+        }
+      });
+      if (isDuplicate) {
+        return res.status(400).json({ message: 'Duplicate IP Number detected! This IP Number already exists in the system.' });
+      }
+    }
+
     const encryptedData = encryptData(req.body);
     const newRecord = new IpRecord({ data: encryptedData });
     const savedRecord = await newRecord.save();
@@ -340,6 +357,24 @@ apiRouter.delete('/api/ip-records/:id', async (req, res) => {
 // Update IP Record (for Edit functionality)
 apiRouter.put('/api/ip-records/:id', async (req, res) => {
   try {
+    // Check for duplicate IP Number
+    if (req.body.ipNumber) {
+      const cleanIpNumber = req.body.ipNumber.trim().toLowerCase();
+      const existingRecords = await IpRecord.find({});
+      const isDuplicate = existingRecords.some(record => {
+        if (record._id.toString() === req.params.id) return false;
+        try {
+          const data = decryptData(record.data);
+          return data.ipNumber && data.ipNumber.trim().toLowerCase() === cleanIpNumber;
+        } catch (e) {
+          return false;
+        }
+      });
+      if (isDuplicate) {
+        return res.status(400).json({ message: 'Duplicate IP Number detected! This IP Number already exists in the system.' });
+      }
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedRecord = await IpRecord.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Record not found' });

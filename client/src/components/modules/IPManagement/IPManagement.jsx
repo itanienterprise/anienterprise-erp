@@ -1051,6 +1051,16 @@ function IPManagement({
 
     const activePorts = useMemo(() => (ports || []).filter(p => !p.isLoadingPort), [ports]);
 
+    const isDuplicateIpNumber = useMemo(() => {
+        if (!formData.ipNumber || !formData.ipNumber.trim()) return false;
+        const cleanNum = formData.ipNumber.trim().toLowerCase();
+        return (ipRecords || []).some(r =>
+            r.ipNumber &&
+            r.ipNumber.trim().toLowerCase() === cleanNum &&
+            r._id !== editingId
+        );
+    }, [formData.ipNumber, ipRecords, editingId]);
+
     const ipImporterRef = useRef(null);
     const ipPortRef = useRef(null);
     const ipProductRef = useRef(null);
@@ -1645,6 +1655,13 @@ function IPManagement({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Prevent submission if duplicate IP Number
+        if (isDuplicateIpNumber) {
+            setSubmitStatus('error');
+            return;
+        }
+
         setIsSubmitting(true);
         setSubmitStatus(null);
 
@@ -2247,17 +2264,34 @@ function IPManagement({
                         />
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">IP Number</label>
-                            <input
-                                type="text"
-                                name="ipNumber"
-                                value={formData.ipNumber}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="Enter IP Number"
-                                autoComplete="off"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                            />
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-gray-700">IP Number</label>
+                                {isDuplicateIpNumber && (
+                                    <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                                        ⚠️ Duplicate IP No
+                                    </span>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="ipNumber"
+                                    value={formData.ipNumber}
+                                    onChange={handleInputChange}
+                                    required
+                                    placeholder="Enter IP Number"
+                                    autoComplete="off"
+                                    className={`w-full px-4 py-2 bg-white/50 border rounded-lg focus:ring-2 outline-none transition-all backdrop-blur-sm ${isDuplicateIpNumber ? 'border-red-500 bg-red-50/30 text-red-900 focus:ring-red-500 focus:border-red-500' : 'border-gray-200/60 focus:ring-blue-500 focus:border-transparent'}`}
+                                />
+                            </div>
+                            {isDuplicateIpNumber && (
+                                <p className="text-xs text-red-600 font-semibold flex items-center gap-1 mt-1 animate-in fade-in duration-200">
+                                    <svg className="w-3.5 h-3.5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <span>Duplicate IP Number detected! This IP Number already exists and cannot be saved.</span>
+                                </p>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -2513,8 +2547,8 @@ function IPManagement({
                             <div className="flex-1"></div>
                             <button
                                 type="submit"
-                                disabled={isSubmitting}
-                                className={`px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center ${isSubmitting ? 'opacity-70 cursor-not-allowed scale-100' : ''}`}
+                                disabled={isSubmitting || isDuplicateIpNumber}
+                                className={`px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center ${(isSubmitting || isDuplicateIpNumber) ? 'opacity-50 cursor-not-allowed grayscale scale-100' : ''}`}
                             >
                                 {isSubmitting ? 'Saving...' : 'Save IP Record'}
                             </button>
