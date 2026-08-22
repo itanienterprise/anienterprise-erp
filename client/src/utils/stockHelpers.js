@@ -21,19 +21,27 @@ export const isLcMatch = (targetLc, filterLc) => {
 };
 
 // Helper to group split brand entries by quality & brand name to avoid split-induced inflation in subtotals/totals
-export const getGroupedBrandList = (brandList) => {
+export const getGroupedBrandList = (brandList, isPriceReport = false) => {
     if (!Array.isArray(brandList)) return [];
     const groups = {};
     brandList.forEach(b => {
         const cleanBrand = (b.brand || 'No Brand').trim();
         const cleanQuality = (b.quality || '-').trim();
-        const key = `${cleanQuality.toLowerCase()}_${cleanBrand.toLowerCase()}`;
+        const cleanLc = (b.lcNo || 'no-lc').trim();
+        const price = safeParse(b.purchasedPrice ?? b.rate);
+        
+        const key = isPriceReport
+            ? `${cleanQuality.toLowerCase()}_${cleanBrand.toLowerCase()}_${cleanLc.toLowerCase()}_${price.toFixed(2)}`
+            : `${cleanQuality.toLowerCase()}_${cleanBrand.toLowerCase()}`;
+
         if (!groups[key]) {
             const { openingQuantity, openingPacket, periodArrivalQuantity, periodArrivalPacket, saleQuantity, salePacket, orderQuantity, orderPacket, saleableQuantity, saleablePacket, sweepedQuantity, sweepedPacket, damageQuantity, damagePacket, inHouseQuantity, inHousePacket, totalInHouseQuantity, totalInHousePacket, closingQuantity, closingPacket, ...rest } = b;
             groups[key] = {
                 ...rest,
                 brand: cleanBrand,
                 quality: cleanQuality,
+                lcNo: cleanLc !== 'no-lc' ? cleanLc : (b.lcNo || ''),
+                purchasedPrice: price > 0 ? price : (b.purchasedPrice || 0),
                 openingQuantity: 0,
                 openingPacket: 0,
                 periodArrivalQuantity: 0,
@@ -87,7 +95,13 @@ export const getGroupedBrandList = (brandList) => {
         g.saleablePacket = Math.max(0, g.closingPacket - g.orderPacket);
     });
 
-    return Object.values(groups).sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
+    return Object.values(groups).sort((a, b) => {
+        const bCmp = (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' });
+        if (bCmp !== 0) return bCmp;
+        const qCmp = (a.quality || '-').localeCompare(b.quality || '-', undefined, { sensitivity: 'base' });
+        if (qCmp !== 0) return qCmp;
+        return (a.lcNo || '').localeCompare(b.lcNo || '', undefined, { sensitivity: 'base' });
+    });
 };
 
 
@@ -122,7 +136,8 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
     }
 };
 
-export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = []) => {
+export const calculateStockData = (stockRecords, stockFilters = {}, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = []) => {
+    const isPriceReport = stockFilters && (stockFilters.reportType === 'price' || stockFilters.showRate === true);
     const isWhFilter = stockFilters.warehouse &&
         typeof stockFilters.warehouse === 'string' &&
         stockFilters.warehouse.trim() !== '' &&
@@ -179,7 +194,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             });
 
             const displayRecords = Object.values(combinedProductsMap).map(prod => {
-                const groupedBrands = getGroupedBrandList(prod.brandList);
+                const groupedBrands = getGroupedBrandList(prod.brandList, isPriceReport);
                 const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
                 const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
                 const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
@@ -203,7 +218,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     orderQuantity: orderQty,
                     orderPacket: orderPkt,
                 };
-            }).sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
+            }).sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { sensitivity: 'base' }));
 
             let tOpeningQty = 0; let tSaleQty = 0; let tInHouseQty = 0; let tShortageQty = 0; let tDamageQty = 0;
             const tOpeningPkt = { whole: 0, remainder: 0 };
@@ -258,7 +273,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             };
         }
     }
-    const isPriceReport = stockFilters && stockFilters.reportType === 'price';
 
     const resolveQuality = (pName, bName) => {
         if (!products || !Array.isArray(products)) return '-';
@@ -1055,12 +1069,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         });
 
         // Group by quality and brand name
-        brandList = getGroupedBrandList(brandList);
+        brandList = getGroupedBrandList(brandList, isPriceReport);
 
         brandList = brandList.sort((a, b) => {
-            const qCmp = (a.quality || '-').localeCompare(b.quality || '-');
+            const bCmp = (a.brand || '').localeCompare(b.brand || '', undefined, { sensitivity: 'base' });
+            if (bCmp !== 0) return bCmp;
+            const qCmp = (a.quality || '-').localeCompare(b.quality || '-', undefined, { sensitivity: 'base' });
             if (qCmp !== 0) return qCmp;
-            return a.brand.localeCompare(b.brand);
+            return (a.lcNo || '').localeCompare(b.lcNo || '', undefined, { sensitivity: 'base' });
         }).filter(b => {
             const closing = Math.abs(b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0));
             const order = Math.abs(b.orderQuantity || 0);
@@ -1075,7 +1091,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
         if (brandList.length === 0) return null;
 
-        const groupedBrands = getGroupedBrandList(brandList);
+        const groupedBrands = getGroupedBrandList(brandList, isPriceReport);
         const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity || 0), 0);
         const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
         const saleQty = groupedBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
@@ -1110,7 +1126,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             damageQuantity: damageQty,
             damagePacket: damagePkt
         };
-    }).filter(p => p !== null && p.productName && p.productName.trim() !== '-' && p.productName.trim() !== '').sort((a, b) => a.productName.localeCompare(b.productName));
+    }).filter(p => p !== null && p.productName && p.productName.trim() !== '-' && p.productName.trim() !== '').sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { sensitivity: 'base' }));
 
     // Summary Calculations
     let tOpeningQty = 0; let tSaleQty = 0; let tInHouseQty = 0; let tShortageQty = 0; let tDamageQty = 0;
