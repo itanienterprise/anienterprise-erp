@@ -4096,16 +4096,23 @@ const StockManagement = ({
                                 {historyTab === 'purchase' ? (() => {
                                     const history = activePurchaseHistory;
                                     const unit = history[0]?.unit || 'kg';
-                                    // Helper: only show entries with a real brand (not productName fallback) and actual qty
                                     const validEntries = (item) => {
-                                        const isPurchase = (item.lcNo || '').startsWith('PUR-') || item.recordType === 'purchase';
-                                        return (item.entries || []).filter(e =>
-                                            e.brand &&
-                                            (isPurchase || e.brand.toLowerCase() !== (item.productName || '').toLowerCase()) &&
-                                            (parseFloat(e.quantity || 0) > 0 || parseFloat(e.inHouseQuantity || 0) > 0 || parseFloat(e.packet || 0) > 0)
-                                        );
+                                        if (item.entries && item.entries.length > 0) {
+                                            return item.entries;
+                                        }
+                                        return [{
+                                            brand: item.brand || item.productName || '-',
+                                            purchasedPrice: item.purchasedPrice,
+                                            packet: item.totalPacket || item.packet,
+                                            quantity: item.totalQuantity || item.quantity,
+                                            inHousePacket: item.totalInHousePacket || item.inHousePacket,
+                                            inHouseQuantity: item.totalInHouseQuantity || item.inHouseQuantity,
+                                            sweepedPacket: item.sweepedPacket,
+                                            sweepedQuantity: item.totalShortage || item.sweepedQuantity,
+                                            unit: item.unit || unit
+                                        }];
                                     };
-                                    const visibleHistory = history.filter(item => validEntries(item).length > 0);
+                                    const visibleHistory = history;
 
                                     const tPkts = history.reduce((sum, item) => sum + (parseFloat(item.totalPacket) || 0), 0);
                                     const tQty = history.reduce((sum, item) => sum + (parseFloat(item.totalQuantity) || 0), 0);
