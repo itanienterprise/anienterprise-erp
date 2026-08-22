@@ -2323,12 +2323,8 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        const filters = {
-            ...stockFilters,
-            reportType: effectiveShowRate ? 'price' : (stockFilters.reportType || 'short')
-        };
-        return calculateStockData(stockRecords, filters, stockSearchQuery, warehouseData, salesRecords, products, damages);
-    }, [stockRecords, stockFilters, effectiveShowRate, stockSearchQuery, warehouseData, salesRecords, products, damages]);
+        return calculateStockData(stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products, damages);
+    }, [stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products, damages]);
 
     const isStockGroupSelected = (productName) => {
         const groupItems = stockRecords.filter(r => r.productName === productName);

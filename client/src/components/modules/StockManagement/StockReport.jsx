@@ -120,12 +120,8 @@ const StockReport = ({
 
     // --- Stock Data for Report (uses unified calculated stockData) ---
     const activeStockData = React.useMemo(() => {
-        const filters = {
-            ...stockFilters,
-            reportType
-        };
-        return calculateStockData(stockRecords, filters, searchQuery, warehouseData, salesRecords, products, damages);
-    }, [stockRecords, stockFilters, reportType, searchQuery, warehouseData, salesRecords, products, damages]);
+        return stockData;
+    }, [stockData]);
 
     // --- Search & Filter Logic ---
     const filteredRecords = React.useMemo(() => {
