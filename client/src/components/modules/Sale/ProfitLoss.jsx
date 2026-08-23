@@ -22,15 +22,15 @@ const ThreeDPieChart = ({ items, total }) => {
 
   const cx = 330;
   const cy = 200;
-  const outerR = 150;
-  const innerR = 80;
-  const plateR = 162;
+  const outerR = 175;
+  const innerR = 92;
+  const plateR = 188;
 
   // Compute Donut Slice Paths
   const slices = items.map((item, idx) => {
     const midAngle = (item.startAngle + item.endAngle) / 2;
     const isHovered = hoveredIdx === idx;
-    const explodeDist = isHovered ? 4 : 0;
+    const explodeDist = isHovered ? 5 : 0;
 
     const dx = explodeDist * Math.cos(midAngle);
     const dy = explodeDist * Math.sin(midAngle);
@@ -84,7 +84,7 @@ const ThreeDPieChart = ({ items, total }) => {
       const shift = avgNat - avgAdj;
       return sorted.map(item => ({
         ...item,
-        adjustedY: Math.max(40, Math.min(360, item.adjustedY + shift))
+        adjustedY: Math.max(35, Math.min(365, item.adjustedY + shift))
       }));
     };
 
@@ -96,7 +96,7 @@ const ThreeDPieChart = ({ items, total }) => {
 
   return (
     <div className="flex flex-col items-center justify-center w-full flex-1 my-auto py-1">
-      <div className="relative w-full aspect-[660/400] max-w-[660px] flex items-center justify-center">
+      <div className="relative w-full aspect-[660/400] flex items-center justify-center">
         <svg viewBox="0 0 660 400" className="w-full h-full overflow-visible">
           <defs>
             <filter id="plate-shadow" x="-30%" y="-30%" width="160%" height="160%">
@@ -148,19 +148,19 @@ const ThreeDPieChart = ({ items, total }) => {
           />
           <text
             x={cx}
-            y={cy - 9}
+            y={cy - 10}
             textAnchor="middle"
             className="fill-slate-400 font-black uppercase tracking-wider"
-            style={{ fontSize: '13px' }}
+            style={{ fontSize: '14px' }}
           >
             Total Value
           </text>
           <text
             x={cx}
-            y={cy + 20}
+            y={cy + 22}
             textAnchor="middle"
             className="fill-slate-900 font-black"
-            style={{ fontSize: '20px' }}
+            style={{ fontSize: '22px' }}
           >
             ৳ {Math.round(total).toLocaleString('en-IN')}
           </text>
@@ -170,9 +170,9 @@ const ThreeDPieChart = ({ items, total }) => {
             const isHovered = hoveredIdx === item.idx;
             const isRight = item.isRight;
 
-            const elbowX = isRight ? item.dotX + 40 : item.dotX - 40;
+            const elbowX = isRight ? Math.min(620, item.dotX + 35) : Math.max(40, item.dotX - 35);
             const elbowY = item.adjustedY;
-            const targetX = isRight ? 535 : 125;
+            const targetX = isRight ? 545 : 115;
 
             return (
               <g
@@ -196,14 +196,14 @@ const ThreeDPieChart = ({ items, total }) => {
                 <circle cx={item.dotX} cy={item.dotY} r="6" fill="#1e293b" stroke="#ffffff" strokeWidth="2" />
 
                 {/* Header Title & Subtitle */}
-                <g transform={`translate(${isRight ? targetX + 12 : targetX - 12}, ${elbowY})`}>
+                <g transform={`translate(${isRight ? targetX + 10 : targetX - 10}, ${elbowY})`}>
                   <text
                     x="0"
                     y="-7"
                     textAnchor={isRight ? 'start' : 'end'}
                     fill={item.color}
                     className="font-black tracking-wide"
-                    style={{ fontSize: '17px', fontWeight: 900 }}
+                    style={{ fontSize: '16px', fontWeight: 900 }}
                   >
                     {item.label}
                   </text>
@@ -212,7 +212,7 @@ const ThreeDPieChart = ({ items, total }) => {
                     y="18"
                     textAnchor={isRight ? 'start' : 'end'}
                     className="fill-slate-800 font-extrabold"
-                    style={{ fontSize: '15px', fontWeight: 800 }}
+                    style={{ fontSize: '14px', fontWeight: 800 }}
                   >
                     ৳ {Math.round(item.value).toLocaleString('en-IN')} ({item.pct.toFixed(1)}%)
                   </text>
