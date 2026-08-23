@@ -7617,7 +7617,8 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     };
 
     const generatePDFReport = () => {
-        const reportData = sortedRecords.map(record => {
+        const recordsToUse = [...sortedRecords].sort((a, b) => new Date(a.openingDate || a.createdAt || 0) - new Date(b.openingDate || b.createdAt || 0));
+        const reportData = recordsToUse.map(record => {
             const adj = getAdjustedLcValues(record);
             const displayProducts = record.productsList && record.productsList.length > 0
                 ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
@@ -7650,13 +7651,13 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             };
         });
 
-        const totalQty = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedQtyKg || 0), 0);
-        const totalReceived = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).totalReceivedQtyKg || 0), 0);
-        const totalVal = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedTotalAmount || 0), 0);
-        const totalBal = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).combinedRemKg || 0), 0);
-        const totalExp = sortedRecords.reduce((sum, r) => sum + (getLcTotalPaidExpense(r) || 0), 0);
-        const totalBillValueUsd = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).billValueUsd || 0), 0);
-        const totalLessDollar = sortedRecords.reduce((sum, r) => sum + (getAdjustedLcValues(r).lessDollar || 0), 0);
+        const totalQty = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedQtyKg || 0), 0);
+        const totalReceived = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).totalReceivedQtyKg || 0), 0);
+        const totalVal = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).adjustedTotalAmount || 0), 0);
+        const totalBal = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).combinedRemKg || 0), 0);
+        const totalExp = recordsToUse.reduce((sum, r) => sum + (getLcTotalPaidExpense(r) || 0), 0);
+        const totalBillValueUsd = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).billValueUsd || 0), 0);
+        const totalLessDollar = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).lessDollar || 0), 0);
 
         generateLCManagementReportPDF(
             reportData,
@@ -7668,8 +7669,9 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
     const generateBillReport = () => {
         const cleanLc = (no) => String(no || '').trim().toLowerCase();
+        const recordsToUse = [...sortedRecords].sort((a, b) => new Date(a.openingDate || a.createdAt || 0) - new Date(b.openingDate || b.createdAt || 0));
 
-        const reportData = sortedRecords.map(record => {
+        const reportData = recordsToUse.map(record => {
             const lcNoClean = cleanLc(record.lcNo);
             const bk = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (record.bankName || '').trim().toUpperCase());
             const displayBankName = bk?.shortName || record.bankName || '-';

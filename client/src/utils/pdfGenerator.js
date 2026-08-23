@@ -6164,12 +6164,14 @@ export const generateLCBillReportPDF = (reportData, totals, searchQuery = '', fi
             doc.text(filters.bankName, margin + 25, yPos);
         }
 
-        // Data Preparation
+        // Data Preparation - sorted in ascending chronological order by date
         const tableHeaders = [
             ['Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Product', 'Bank Bill', 'Margin Bill', 'C&F Bill', 'Insu. Bill', 'Other', 'Total Bill', 'Paid Bill', 'Remarks']
         ];
 
-        const tableRows = reportData.map(record => [
+        const sortedReportData = [...reportData].sort((a, b) => new Date(a.date || a.openingDate || 0) - new Date(b.date || b.openingDate || 0));
+
+        const tableRows = sortedReportData.map(record => [
             formatDate(record.date),
             String(record.lcNo || '-').trim(),
             String(record.importer || '-').trim(),
@@ -6235,16 +6237,16 @@ export const generateLCBillReportPDF = (reportData, totals, searchQuery = '', fi
                 0: { cellWidth: 17, halign: 'center', valign: 'middle' }, // Date
                 1: { cellWidth: 22, halign: 'center', valign: 'middle', fontStyle: 'bold' }, // LC No
                 2: { cellWidth: 19, overflow: "hidden", valign: 'middle' }, // Importer
-                3: { cellWidth: 19, overflow: "hidden", valign: 'middle' }, // Exporter
+                3: { cellWidth: 15, overflow: "hidden", valign: 'middle' }, // Exporter
                 4: { cellWidth: 12, overflow: "hidden", valign: 'middle' }, // Bank
                 5: { cellWidth: 21, halign: 'left', valign: 'middle' },   // Product
                 6: { cellWidth: 19, halign: 'right', valign: 'middle' },  // Bank Bill
-                7: { cellWidth: 20, halign: 'right', valign: 'middle' },  // Margin Bill
+                7: { cellWidth: 23, halign: 'right', valign: 'middle' },  // Margin Bill
                 8: { cellWidth: 18, halign: 'right', valign: 'middle' },  // C&F Bill
                 9: { cellWidth: 18, halign: 'right', valign: 'middle' },  // Insu. Bill
                 10: { cellWidth: 16, halign: 'right', valign: 'middle' }, // Other
-                11: { cellWidth: 21, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Total Bill
-                12: { cellWidth: 21, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Paid Bill
+                11: { cellWidth: 23, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Total Bill
+                12: { cellWidth: 23, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Paid Bill
                 13: { cellWidth: 44, halign: 'left', valign: 'middle' }   // Remarks
             },
             margin: { left: margin, right: margin }
