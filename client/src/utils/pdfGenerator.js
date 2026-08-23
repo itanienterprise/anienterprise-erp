@@ -1911,7 +1911,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                 const cComp = norm(c.companyName || '');
                 const cCust = norm(c.customerName || '');
                 return (cComp && (cComp.includes(targetComp) || targetComp.includes(cComp))) ||
-                       (cCust && (cCust.includes(targetComp) || targetComp.includes(cCust)));
+                    (cCust && (cCust.includes(targetComp) || targetComp.includes(cCust)));
             });
         }
 
@@ -6166,7 +6166,7 @@ export const generateLCBillReportPDF = (reportData, totals, searchQuery = '', fi
 
         // Data Preparation
         const tableHeaders = [
-            ['Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Product', 'Bank Charges', 'Margin Bill', 'C&F Bill', 'Other', 'Total Bill', 'Paid Bill', 'Remarks']
+            ['Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Product', 'Bank Bill', 'Margin Bill', 'C&F Bill', 'Insu. Bill', 'Other', 'Total Bill', 'Paid Bill', 'Remarks']
         ];
 
         const tableRows = reportData.map(record => [
@@ -6179,6 +6179,7 @@ export const generateLCBillReportPDF = (reportData, totals, searchQuery = '', fi
             record.bankCharges > 0 ? `${Math.round(record.bankCharges).toLocaleString('en-US')}` : '—',
             record.marginBill > 0 ? `${Math.round(record.marginBill).toLocaleString('en-US')}` : '—',
             record.cnfBill > 0 ? `${Math.round(record.cnfBill).toLocaleString('en-US')}` : '—',
+            record.insuranceBill > 0 ? `${Math.round(record.insuranceBill).toLocaleString('en-US')}` : '—',
             record.other > 0 ? `${Math.round(record.other).toLocaleString('en-US')}` : '—',
             record.totalBill > 0 ? `${Math.round(record.totalBill).toLocaleString('en-US')}` : '—',
             record.paidBill > 0 ? `${Math.round(record.paidBill).toLocaleString('en-US')}` : '—',
@@ -6190,6 +6191,7 @@ export const generateLCBillReportPDF = (reportData, totals, searchQuery = '', fi
             { content: totals.totalBankCharges > 0 ? `${Math.round(totals.totalBankCharges).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
             { content: totals.totalMarginBill > 0 ? `${Math.round(totals.totalMarginBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
             { content: totals.totalCnfBill > 0 ? `${Math.round(totals.totalCnfBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.totalInsuranceBill > 0 ? `${Math.round(totals.totalInsuranceBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
             { content: totals.totalOther > 0 ? `${Math.round(totals.totalOther).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
             { content: totals.totalBill > 0 ? `${Math.round(totals.totalBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
             { content: totals.totalPaidBill > 0 ? `${Math.round(totals.totalPaidBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
@@ -6205,7 +6207,7 @@ export const generateLCBillReportPDF = (reportData, totals, searchQuery = '', fi
             theme: 'grid',
             styles: {
                 fontSize: 8.5,
-                cellPadding: 1.2,
+                cellPadding: 1.0,
                 textColor: [0, 0, 0],
                 lineColor: [0, 0, 0],
                 lineWidth: 0.1,
@@ -6215,30 +6217,35 @@ export const generateLCBillReportPDF = (reportData, totals, searchQuery = '', fi
                 fillColor: [245, 245, 245],
                 textColor: [0, 0, 0],
                 fontStyle: 'bold',
+                fontSize: 9,
+                cellPadding: { top: 2, bottom: 2, left: 0.3, right: 0.3 },
                 halign: 'center',
                 valign: 'middle',
-                lineWidth: 0.1
+                lineWidth: 0.1,
+                overflow: 'visible'
             },
             footStyles: {
                 fillColor: [245, 245, 245],
                 textColor: [0, 0, 0],
                 fontStyle: 'bold',
+                fontSize: 8.5,
                 lineWidth: 0.1
             },
             columnStyles: {
-                0: { cellWidth: 18, halign: 'center', valign: 'middle' }, // Date
-                1: { cellWidth: 23, halign: 'center', valign: 'middle', fontStyle: 'bold' }, // LC No
-                2: { cellWidth: 22, overflow: "hidden", valign: 'middle' }, // Importer
-                3: { cellWidth: 22, overflow: "hidden", valign: 'middle' }, // Exporter
-                4: { cellWidth: 15, overflow: "hidden", valign: 'middle' }, // Bank
-                5: { cellWidth: 24, halign: 'left', valign: 'middle' },   // Product
-                6: { cellWidth: 23, halign: 'right', valign: 'middle' },  // Bank Charges
-                7: { cellWidth: 24, halign: 'right', valign: 'middle' },  // Margin Bill
-                8: { cellWidth: 23, halign: 'right', valign: 'middle' },  // C&F Bill
-                9: { cellWidth: 20, halign: 'right', valign: 'middle' },  // Other
-                10: { cellWidth: 24, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Total Bill
-                11: { cellWidth: 24, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Paid Bill
-                12: { cellWidth: 25, halign: 'left', valign: 'middle' }   // Remarks
+                0: { cellWidth: 17, halign: 'center', valign: 'middle' }, // Date
+                1: { cellWidth: 22, halign: 'center', valign: 'middle', fontStyle: 'bold' }, // LC No
+                2: { cellWidth: 19, overflow: "hidden", valign: 'middle' }, // Importer
+                3: { cellWidth: 19, overflow: "hidden", valign: 'middle' }, // Exporter
+                4: { cellWidth: 12, overflow: "hidden", valign: 'middle' }, // Bank
+                5: { cellWidth: 21, halign: 'left', valign: 'middle' },   // Product
+                6: { cellWidth: 19, halign: 'right', valign: 'middle' },  // Bank Bill
+                7: { cellWidth: 20, halign: 'right', valign: 'middle' },  // Margin Bill
+                8: { cellWidth: 18, halign: 'right', valign: 'middle' },  // C&F Bill
+                9: { cellWidth: 18, halign: 'right', valign: 'middle' },  // Insu. Bill
+                10: { cellWidth: 16, halign: 'right', valign: 'middle' }, // Other
+                11: { cellWidth: 21, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Total Bill
+                12: { cellWidth: 21, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Paid Bill
+                13: { cellWidth: 44, halign: 'left', valign: 'middle' }   // Remarks
             },
             margin: { left: margin, right: margin }
         });
