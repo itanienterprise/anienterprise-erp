@@ -178,7 +178,13 @@ export const MODULES_LIST = [
         ]
     },
     { key: 'lcGp', label: 'LC GatePass' },
-    { key: 'lcExpense', label: 'LC Expense' },
+    {
+        key: 'lcExpense',
+        label: 'LC Expense',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     { key: 'marginReturn', label: 'Margin Return' },
     { key: 'returnProduct', label: 'Return Product' },
     { key: 'backupRestore', label: 'Backup & Restore' }

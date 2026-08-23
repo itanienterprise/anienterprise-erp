@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
-import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon } from '../../Icons';
+import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarSignIcon, FileTextIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, BarChartIcon } from '../../Icons';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { generateLCExpenseReportPDF } from '../../../utils/pdfGenerator';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
     const canAdd = hasPermission(currentUser, 'lcExpense', 'add');
     const canEdit = hasPermission(currentUser, 'lcExpense', 'edit');
     const canDelete = hasPermission(currentUser, 'lcExpense', 'delete');
+    const canShowEntryBy = hasPermission(currentUser, 'lcExpense', 'showEntryBy');
     const cannotDelete = !canDelete;
     const cannotAddEdit = !canAdd && !canEdit;
     const [expenses, setExpenses] = useState([]);
@@ -410,7 +412,14 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         try {
             const dataToSubmit = {
                 ...formData,
-                amount: parseFloat(formData.amount) || 0
+                amount: parseFloat(formData.amount) || 0,
+                ...(isEditMode ? {
+                    updatedBy: currentUser?.username || currentUser?.id || '',
+                    updatedByName: currentUser?.name || currentUser?.nameEn || currentUser?.username || ''
+                } : {
+                    entryBy: currentUser?.username || currentUser?.id || '',
+                    entryByName: currentUser?.name || currentUser?.nameEn || currentUser?.username || ''
+                })
             };
 
             if (isEditMode && editingId) {
@@ -465,14 +474,48 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
         setExpandedExpenseIdx(null);
     };
 
+    const getExpenseDisplayName = (exp) => {
+        if (exp.cnfAgent) return exp.cnfAgent;
+        if (exp.bankName) return exp.bankName;
+        if (exp.name) return exp.name;
+        if (exp.partyName) return exp.partyName;
+        if (exp.beneficiary) return exp.beneficiary;
+
+        if (exp.lcNo) {
+            const cleanLc = (no) => String(no || '').trim().toLowerCase();
+            const matched = lcs.find(l => cleanLc(l.lcNo) === cleanLc(exp.lcNo));
+            if (matched) {
+                if (exp.expenseHead === 'C&F Commission' || exp.expenseHead === 'C&F Bill') {
+                    return matched.bdCnF || matched.indianCnF || '-';
+                }
+                return matched.bankName || matched.bank || '-';
+            }
+        }
+        return '-';
+    };
+
+    const getExpenseEntryBy = (exp) => {
+        return exp.entryByName || exp.createdByName || exp.entryBy || exp.createdBy || exp.userName || exp.user || '—';
+    };
+
+    const handleGenerateReport = () => {
+        const enrichedExpenses = filteredExpenses.map(exp => ({
+            ...exp,
+            displayName: getExpenseDisplayName(exp)
+        }));
+        generateLCExpenseReportPDF(enrichedExpenses, expenseFilters, searchQuery);
+    };
+
     const filteredExpenses = expenses.filter(exp => {
         if (exp.type === 'bill') return false;
 
         // Search Query Filter
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
+            const displayName = getExpenseDisplayName(exp).toLowerCase();
             const matchesSearch = (exp.lcNo || '').toLowerCase().includes(query) ||
-                (exp.expenseHead || '').toLowerCase().includes(query);
+                (exp.expenseHead || '').toLowerCase().includes(query) ||
+                displayName.includes(query);
             if (!matchesSearch) return false;
         }
 
@@ -562,7 +605,6 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                 value={expenseFilters.endDate}
                                                 onChange={(e) => setExpenseFilters({ ...expenseFilters, endDate: e.target.value })}
                                                 compact={true}
-                                                rightAlign={true}
                                             />
                                         </div>
 
@@ -642,6 +684,16 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                             )}
                         </div>
 
+                        {/* Report Button */}
+                        <button
+                            type="button"
+                            onClick={handleGenerateReport}
+                            className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 h-[40px] shadow-sm transform active:scale-95 md:hover:scale-105"
+                        >
+                            <BarChartIcon className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm font-medium">Report</span>
+                        </button>
+
                         {canAdd && (
                             <button
                                 onClick={() => setShowAddModal(true)}
@@ -687,24 +739,34 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Date</th>
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">LC No</th>
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Expense Head</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Name</th>
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Amount</th>
+                                    {canShowEntryBy && (
+                                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Entry By</th>
+                                    )}
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-400">Loading expenses...</td></tr>
+                                    <tr><td colSpan={6 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-gray-400">Loading expenses...</td></tr>
                                 ) : filteredExpenses.length === 0 ? (
-                                    <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-400">No expenses found.</td></tr>
+                                    <tr><td colSpan={6 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-gray-400">No expenses found.</td></tr>
                                 ) : (
                                     filteredExpenses.map((exp) => (
                                         <tr key={exp._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">{formatDate(exp.date)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{exp.lcNo || '-'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">{exp.expenseHead}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-semibold">{getExpenseDisplayName(exp)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-gray-900 text-right">
                                                 ৳{parseFloat(exp.amount || 0).toLocaleString('en-IN')}
                                             </td>
+                                            {canShowEntryBy && (
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-semibold text-center">
+                                                    {getExpenseEntryBy(exp)}
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-2">
                                                     {canEdit && (
@@ -793,19 +855,23 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <span className="font-semibold text-blue-600 text-[11px] truncate max-w-[180px]">{exp.expenseHead}</span>
 
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bank Name</span>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Name</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{exp.bankName || '-'}</span>
-
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">C&F Agent</span>
-                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{exp.cnfAgent || '-'}</span>
+                                                    <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{getExpenseDisplayName(exp)}</span>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amount</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <span className="font-black text-gray-900 text-[11px]">
                                                         ৳{parseFloat(exp.amount || 0).toLocaleString('en-IN')}
                                                     </span>
+
+                                                    {canShowEntryBy && (
+                                                        <>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entry By</span>
+                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                            <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[180px]">{getExpenseEntryBy(exp)}</span>
+                                                        </>
+                                                    )}
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>

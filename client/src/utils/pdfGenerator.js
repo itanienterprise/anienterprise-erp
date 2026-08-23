@@ -8181,4 +8181,198 @@ export const generateExporterProfileReportPDF = async (exporter, records, filter
     }
 };
 
+export const generateLCExpenseReportPDF = (expenses = [], filters = {}, searchQuery = '') => {
+    try {
+        const doc = new jsPDF('p', 'mm', 'a4');
+
+        const formatDate = (dateString) => {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 32, pageWidth - margin, 32);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("LC EXPENSE REPORT", pageWidth / 2, 34, { align: 'center' });
+
+        // --- Info Section ---
+        let yPos = 45;
+        doc.setFontSize(9);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Total Records:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text((expenses.length || 0).toString(), margin + 25, yPos);
+
+        const printDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.setFont('helvetica', 'bold');
+        doc.text("Printed on:", pageWidth - margin - 45, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(printDateStr, pageWidth - margin - 23, yPos);
+
+        if (filters?.startDate || filters?.endDate) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
+        }
+
+        if (filters?.lcNo) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 25, yPos);
+        }
+
+        if (filters?.expenseHead) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Expense Head:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.expenseHead, margin + 25, yPos);
+        }
+
+        // --- Table Data (Ascending by Date) ---
+        const sortedExpenses = [...expenses].sort((a, b) => new Date(a.date || a.createdAt || 0) - new Date(b.date || b.createdAt || 0));
+
+        let grandTotal = 0;
+        const tableRows = sortedExpenses.map((exp, idx) => {
+            const amt = parseFloat(exp.amount) || 0;
+            grandTotal += amt;
+
+            return [
+                idx + 1,
+                formatDate(exp.date),
+                String(exp.lcNo || '-').trim(),
+                String(exp.expenseHead || '-').trim(),
+                String(exp.displayName || exp.name || exp.bankName || exp.cnfAgent || '-').trim(),
+                String(exp.remarks || exp.description || '-').trim(),
+                amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ];
+        });
+
+        const tableHeaders = [
+            ['SL', 'Date', 'LC No', 'Expense Head', 'Name', 'Remarks', 'Amount (Tk)']
+        ];
+
+        const footerRow = [
+            { content: 'GRAND TOTAL', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+        ];
+
+        autoTable(doc, {
+            startY: yPos + 8,
+            head: tableHeaders,
+            body: tableRows,
+            foot: [footerRow],
+            showFoot: 'lastPage',
+            theme: 'grid',
+            styles: {
+                fontSize: 9,
+                cellPadding: 2,
+                textColor: [0, 0, 0],
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                fontSize: 9,
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.1
+            },
+            footStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                fontSize: 9,
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 10, halign: 'center', valign: 'middle' }, // SL
+                1: { cellWidth: 22, halign: 'center', valign: 'middle' }, // Date
+                2: { cellWidth: 28, halign: 'center', valign: 'middle', fontStyle: 'bold' }, // LC No
+                3: { cellWidth: 36, halign: 'left', valign: 'middle' },   // Expense Head
+                4: { cellWidth: 36, halign: 'left', valign: 'middle' },   // Name
+                5: { cellWidth: 30, halign: 'left', valign: 'middle' },   // Remarks
+                6: { cellWidth: 28, halign: 'right', valign: 'middle', fontStyle: 'bold' }  // Amount
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // Signatures at bottom
+        let finalY = doc.lastAutoTable.finalY + 20;
+        if (finalY + 25 > pageHeight) {
+            doc.addPage();
+            finalY = 20;
+        }
+
+        const sigWidth = 45;
+        const sigY = finalY + 15;
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.setLineDashPattern([1, 1], 0);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.line(pageWidth / 2 - sigWidth / 2, sigY, pageWidth / 2 + sigWidth / 2, sigY);
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setLineDashPattern([], 0);
+        doc.text("Prepared By", margin + (sigWidth / 2), sigY + 5, { align: 'center' });
+        doc.text("Checked By", pageWidth / 2, sigY + 5, { align: 'center' });
+        doc.text("Authorized Signature", pageWidth - margin - (sigWidth / 2), sigY + 5, { align: 'center' });
+
+        // Page numbering
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text('M/S ANI ENTERPRISE - LC EXPENSE REPORT', margin, pageHeight - 6);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (err) {
+        console.error("Error generating LC Expense Report PDF:", err);
+        alert(`Failed to generate LC Expense Report PDF: ${err.message}`);
+    }
+};
+
 
