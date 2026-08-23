@@ -173,7 +173,8 @@ export const MODULES_LIST = [
             { key: 'special', label: 'Add Bill' },
             { key: 'specialEdit', label: 'Edit Bill' },
             { key: 'editLcReceive', label: 'Edit LC Receive' },
-            { key: 'editDollarRate', label: 'Edit Dollar Rate' }
+            { key: 'editDollarRate', label: 'Edit Dollar Rate' },
+            { key: 'deleteAmendment', label: 'Delete Amendment' }
         ]
     },
     { key: 'lcGp', label: 'LC GatePass' },

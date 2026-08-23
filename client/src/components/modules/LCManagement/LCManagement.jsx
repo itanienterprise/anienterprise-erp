@@ -64,7 +64,7 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     }
 };
 
-const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onUpdateDollarRate, canManage, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [] }) => {
+const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onDeleteAmendment, onUpdateDollarRate, canManage, canDelete, canDeleteAmendment, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [] }) => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const [showConsumption, setShowConsumption] = useState(true);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
@@ -74,6 +74,8 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     const [insurancePayments, setInsurancePayments] = useState([]);
     const [cnfPayments, setCnfPayments] = useState([]);
     const [costOfGoodsRecords, setCostOfGoodsRecords] = useState([]);
+    const [showDeleteAmendmentConfirm, setShowDeleteAmendmentConfirm] = useState(false);
+    const [deleteAmendmentStatus, setDeleteAmendmentStatus] = useState(null);
 
     const returnAmount = useMemo(() => {
         if (!data || !marginReturns) return 0;
@@ -3601,24 +3603,120 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                     </div>
                                 )}
 
-                                {/* Edit Button */}
-                                {canManage && (onEdit || onEditAmendment) && (
+                                {/* Action Buttons: Delete Amendment & Edit Button */}
+                                {canManage && (
                                     <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                onClose();
-                                                if (activeMilestone.isOriginal) {
-                                                    onEdit?.(data);
-                                                } else {
-                                                    onEditAmendment?.(data, activeMilestone);
-                                                }
-                                            }}
-                                            className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
-                                        >
-                                            <EditIcon className="w-4 h-4 text-gray-500" />
-                                            <span>{activeMilestone.isOriginal ? 'Edit Original LC' : 'Edit Amendment'}</span>
-                                        </button>
+                                        {!activeMilestone.isOriginal && onDeleteAmendment && canDeleteAmendment && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowDeleteAmendmentConfirm(true)}
+                                                className="px-6 py-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 border border-red-200 shadow-sm"
+                                            >
+                                                <TrashIcon className="w-4 h-4 text-red-500" />
+                                                <span>Delete Amendment</span>
+                                            </button>
+                                        )}
+                                        {(onEdit || onEditAmendment) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    onClose();
+                                                    if (activeMilestone.isOriginal) {
+                                                        onEdit?.(data);
+                                                    } else {
+                                                        onEditAmendment?.(data, activeMilestone);
+                                                    }
+                                                }}
+                                                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                                            >
+                                                <EditIcon className="w-4 h-4 text-gray-500" />
+                                                <span>{activeMilestone.isOriginal ? 'Edit Original LC' : 'Edit Amendment'}</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Delete Amendment Confirmation Modal Card */}
+                    {showDeleteAmendmentConfirm && (
+                        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
+                            <div 
+                                className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
+                                onClick={() => {
+                                    if (deleteAmendmentStatus !== 'loading') {
+                                        setShowDeleteAmendmentConfirm(false);
+                                        setDeleteAmendmentStatus(null);
+                                    }
+                                }}
+                            ></div>
+                            <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-300 z-10">
+                                {deleteAmendmentStatus === 'success' ? (
+                                    <div className="p-12 text-center">
+                                        <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-in zoom-in duration-500">
+                                            <CheckIcon className="w-10 h-10 text-emerald-500" />
+                                        </div>
+                                        <h3 className="text-xl font-black text-gray-900 mb-2">Deleted!</h3>
+                                        <p className="text-sm text-gray-500">The amendment has been removed.</p>
+                                    </div>
+                                ) : (
+                                    <div className="p-8 text-center">
+                                        <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-3">
+                                            <TrashIcon className="w-8 h-8 text-red-500" />
+                                        </div>
+                                        <h3 className="text-xl font-black text-gray-900 mb-2">Delete Amendment?</h3>
+                                        <p className="text-sm text-gray-500 mb-8 leading-relaxed">
+                                            Are you sure you want to delete <span className="font-bold text-gray-800">{activeMilestone.amendmentNo || 'this amendment'}</span> for LC <span className="font-bold text-blue-600">{data.lcNo}</span>? This action cannot be undone.
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowDeleteAmendmentConfirm(false);
+                                                    setDeleteAmendmentStatus(null);
+                                                }}
+                                                className="py-3.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-2xl transition-all active:scale-95"
+                                                disabled={deleteAmendmentStatus === 'loading'}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    setDeleteAmendmentStatus('loading');
+                                                    try {
+                                                        const deleted = await onDeleteAmendment(data, activeMilestone);
+                                                        if (deleted) {
+                                                            setDeleteAmendmentStatus('success');
+                                                            setTimeout(() => {
+                                                                setShowDeleteAmendmentConfirm(false);
+                                                                setDeleteAmendmentStatus(null);
+                                                                setActiveMilestoneIndex(0);
+                                                            }, 1200);
+                                                        } else {
+                                                            setDeleteAmendmentStatus('error');
+                                                            setTimeout(() => setDeleteAmendmentStatus(null), 3000);
+                                                        }
+                                                    } catch (err) {
+                                                        setDeleteAmendmentStatus('error');
+                                                        setTimeout(() => setDeleteAmendmentStatus(null), 3000);
+                                                    }
+                                                }}
+                                                className="py-3.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl shadow-lg shadow-red-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                disabled={deleteAmendmentStatus === 'loading'}
+                                            >
+                                                {deleteAmendmentStatus === 'loading' ? (
+                                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                ) : (
+                                                    'Delete Now'
+                                                )}
+                                            </button>
+                                        </div>
+                                        {deleteAmendmentStatus === 'error' && (
+                                            <p className="text-center text-xs font-bold text-red-500 mt-4 animate-bounce">Failed to delete amendment. Please try again.</p>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -4999,6 +5097,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const canSpecialEdit = hasPermission(currentUser, 'lcManagement', 'specialEdit');
     const canEditLcReceive = hasPermission(currentUser, 'lcManagement', 'editLcReceive');
     const canEditDollarRate = hasPermission(currentUser, 'lcManagement', 'editDollarRate');
+    const canDeleteAmendment = hasPermission(currentUser, 'lcManagement', 'deleteAmendment');
     const canSpecialAccess = canEditLcReceive || canEditDollarRate;
     const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
@@ -6002,6 +6101,44 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         });
         setShowAmendmentForm(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleDeleteAmendment = async (record, milestone) => {
+        if (!canDeleteAmendment) {
+            return false;
+        }
+        if (!record || !milestone) return false;
+
+        try {
+            const currentAmendments = Array.isArray(record.amendments) ? [...record.amendments] : [];
+            const updatedAmendments = currentAmendments.filter(a => String(a.amendmentNo) !== String(milestone.amendmentNo));
+
+            const updatedRecord = {
+                ...record,
+                amendments: updatedAmendments
+            };
+
+            await axios.put(`${API_BASE_URL}/api/lc-management/${record._id}`, updatedRecord);
+
+            // Update local state
+            setLcRecords(prev => prev.map(r => r._id === record._id ? updatedRecord : r));
+            
+            // Update viewData if open
+            if (viewData && viewData._id === record._id) {
+                setViewData(updatedRecord);
+            }
+
+            if (addNotification) {
+                addNotification('LC Amendment deleted successfully', 'success');
+            }
+            return true;
+        } catch (error) {
+            console.error('Error deleting amendment:', error);
+            if (addNotification) {
+                addNotification(`Failed to delete amendment: ${error.response?.data?.message || error.message}`, 'error');
+            }
+            return false;
+        }
     };
 
     const handleDelete = (id) => {
@@ -11407,9 +11544,12 @@ style={
                     lcRecords={lcRecords}
                     onEdit={handleEdit}
                     onEditAmendment={handleEditAmendment}
+                    onDeleteAmendment={handleDeleteAmendment}
                     onUpdateDollarRate={(rec) => setDollarRateModalRecord(rec)}
                     onUpdateLcReceive={(rec) => setLcReceiveModalRecord(rec)}
                     canManage={canManage}
+                    canDelete={canDelete}
+                    canDeleteAmendment={canDeleteAmendment}
                     canManageSpecial={canSpecialAccess}
                     canAddBill={canSpecial}
                     canEditBill={canSpecialEdit}
