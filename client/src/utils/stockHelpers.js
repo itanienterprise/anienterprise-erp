@@ -319,6 +319,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     salePacket: salePkt,
                     orderQuantity: orderQty,
                     orderPacket: orderPkt,
+                    saleableQuantity: saleableQty,
+                    saleablePacket: saleablePkt
                 };
             }).filter(prod => prod && prod.brandList && prod.brandList.length > 0).sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
 
