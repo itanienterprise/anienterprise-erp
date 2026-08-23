@@ -1,10 +1,148 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, ChevronUpIcon, ChevronDownIcon, FunnelIcon, PrinterIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { decryptData } from '../../../utils/encryption';
+import { generateSupplierProfileReportPDF } from '../../../utils/pdfGenerator';
+import CustomDatePicker from '../../shared/CustomDatePicker';
 import './Supplier.css';
 import { hasPermission } from '../../../utils/permissionHelper';
+const SearchableFilterSelect = ({ label, value, onChange, options = [], placeholder = 'Search...' }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
+    const dropdownRef = useRef(null);
+    const inputRef = useRef(null);
+
+    const filteredOptions = options.filter(opt =>
+        String(opt || '').toLowerCase().includes(search.toLowerCase())
+    );
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setIsOpen(false);
+                setSearch('');
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        setHighlightedIndex(0);
+    }, [search, isOpen]);
+
+    const handleKeyDown = (e) => {
+        if (!isOpen) {
+            if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                setIsOpen(true);
+                e.preventDefault();
+            }
+            return;
+        }
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev < filteredOptions.length - 1 ? prev + 1 : 0));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev > 0 ? prev - 1 : filteredOptions.length - 1));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (filteredOptions.length > 0) {
+                const selected = filteredOptions[highlightedIndex] !== undefined ? filteredOptions[highlightedIndex] : filteredOptions[0];
+                onChange(selected);
+                setIsOpen(false);
+                setSearch('');
+            }
+        } else if (e.key === 'Escape') {
+            setIsOpen(false);
+            setSearch('');
+        }
+    };
+
+    return (
+        <div className="space-y-1 relative" ref={dropdownRef}>
+            {label && <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">{label}</label>}
+            <div className="relative">
+                <input
+                    ref={inputRef}
+                    type="text"
+                    value={isOpen ? search : (value || '')}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        if (!isOpen) setIsOpen(true);
+                    }}
+                    onFocus={() => {
+                        setIsOpen(true);
+                        setSearch('');
+                    }}
+                    onKeyDown={handleKeyDown}
+                    placeholder={value || placeholder}
+                    className={`w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none transition-all pr-8 ${
+                        value && !isOpen ? 'font-semibold text-gray-900 bg-blue-50/40 border-blue-200' : 'text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'
+                    }`}
+                />
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {value ? (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onChange('');
+                                setSearch('');
+                            }}
+                            className="p-0.5 text-gray-400 hover:text-gray-600 rounded-full"
+                        >
+                            <XIcon className="w-3.5 h-3.5" />
+                        </button>
+                    ) : (
+                        <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 pointer-events-none transition-transform ${isOpen ? 'rotate-180 text-blue-500' : ''}`} />
+                    )}
+                </div>
+            </div>
+
+            {isOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-[5300] max-h-44 overflow-y-auto py-1 animate-in fade-in zoom-in-95 duration-150">
+                    {filteredOptions.length > 0 ? (
+                        filteredOptions.map((opt, idx) => {
+                            const isSelected = value === opt;
+                            const isHighlighted = highlightedIndex === idx;
+                            return (
+                                <button
+                                    key={idx}
+                                    type="button"
+                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                    onClick={() => {
+                                        onChange(opt);
+                                        setIsOpen(false);
+                                        setSearch('');
+                                    }}
+                                    className={`w-full px-3 py-1.5 text-left text-xs transition-colors flex items-center justify-between ${
+                                        isSelected
+                                            ? 'bg-blue-50 text-blue-700 font-bold'
+                                            : isHighlighted
+                                            ? 'bg-gray-100 text-gray-900'
+                                            : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <span className="truncate">{opt}</span>
+                                    {isSelected && <span className="text-blue-600 text-xs font-bold ml-2">✓</span>}
+                                </button>
+                            );
+                        })
+                    ) : (
+                        <div className="px-3 py-3 text-center text-gray-400 text-xs">
+                            No options found
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const Supplier = ({
     exporters = [],
@@ -34,6 +172,22 @@ const Supplier = ({
     const [suppliers, setSuppliers] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [viewData, setViewData] = useState(null);
+    const [historyRecords, setHistoryRecords] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historySearchQuery, setHistorySearchQuery] = useState('');
+    const [historySortConfig, setHistorySortConfig] = useState({ key: 'date', direction: 'desc' });
+    const [expandedHistoryIdx, setExpandedHistoryIdx] = useState(null);
+    const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
+    const [historyFilters, setHistoryFilters] = useState({
+        quickRange: 'all',
+        startDate: '',
+        endDate: '',
+        product: '',
+        brand: '',
+        lcNo: ''
+    });
+    const historyFilterPanelRef = useRef(null);
+    const historyFilterButtonRef = useRef(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [exporterDropdownOpen, setExporterDropdownOpen] = useState(false);
     const [exporterSearchQuery, setExporterSearchQuery] = useState('');
@@ -51,6 +205,231 @@ const Supplier = ({
     });
 
     useEffect(() => { fetchSuppliers(); }, []);
+
+    useEffect(() => {
+        if (viewData && viewData.name) {
+            fetchSupplierHistory(viewData.name);
+        } else {
+            setHistoryRecords([]);
+            setHistorySearchQuery('');
+            setExpandedHistoryIdx(null);
+            setShowHistoryFilterPanel(false);
+            setHistoryFilters({
+                quickRange: 'all',
+                startDate: '',
+                endDate: '',
+                product: '',
+                brand: '',
+                lcNo: ''
+            });
+        }
+    }, [viewData]);
+
+    // Close history filter panel on click outside
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (
+                showHistoryFilterPanel &&
+                historyFilterPanelRef.current &&
+                !historyFilterPanelRef.current.contains(e.target) &&
+                !historyFilterButtonRef.current?.contains(e.target)
+            ) {
+                setShowHistoryFilterPanel(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showHistoryFilterPanel]);
+
+    const availableProducts = [...new Set(historyRecords.map(r => r.product).filter(Boolean))].sort();
+    const availableBrands = [...new Set(historyRecords.map(r => r.brand).filter(Boolean))].sort();
+    const availableLcs = [...new Set(historyRecords.map(r => r.lcNo).filter(Boolean))].sort();
+
+    const isFilterActive = 
+        historyFilters.quickRange !== 'all' ||
+        historyFilters.startDate !== '' ||
+        historyFilters.endDate !== '' ||
+        historyFilters.product !== '' ||
+        historyFilters.brand !== '' ||
+        historyFilters.lcNo !== '';
+
+    const getFilteredHistory = () => {
+        return historyRecords.filter(row => {
+            // Quick Range
+            if (historyFilters.quickRange && historyFilters.quickRange !== 'all') {
+                const rowDate = new Date(row.date);
+                const now = new Date();
+                if (historyFilters.quickRange === 'weekly') {
+                    const d = new Date();
+                    d.setDate(now.getDate() - 7);
+                    if (rowDate < d || rowDate > now) return false;
+                } else if (historyFilters.quickRange === 'monthly') {
+                    const d = new Date();
+                    d.setMonth(now.getMonth() - 1);
+                    if (rowDate < d || rowDate > now) return false;
+                } else if (historyFilters.quickRange === 'yearly') {
+                    const d = new Date();
+                    d.setFullYear(now.getFullYear() - 1);
+                    if (rowDate < d || rowDate > now) return false;
+                }
+            }
+
+            // Date Range
+            if (historyFilters.startDate) {
+                const rDate = (row.date || '').slice(0, 10);
+                if (rDate < historyFilters.startDate) return false;
+            }
+            if (historyFilters.endDate) {
+                const rDate = (row.date || '').slice(0, 10);
+                if (rDate > historyFilters.endDate) return false;
+            }
+
+            // Product
+            if (historyFilters.product && (row.product || '').toLowerCase() !== historyFilters.product.toLowerCase()) {
+                return false;
+            }
+
+            // Brand
+            if (historyFilters.brand && (row.brand || '').toLowerCase() !== historyFilters.brand.toLowerCase()) {
+                return false;
+            }
+
+            // LC No
+            if (historyFilters.lcNo && (row.lcNo || '').toLowerCase() !== historyFilters.lcNo.toLowerCase()) {
+                return false;
+            }
+
+            // Search Query
+            const q = (historySearchQuery || '').toLowerCase().trim();
+            if (!q) return true;
+            return (
+                (row.date || '').toLowerCase().includes(q) ||
+                (row.invoiceNo || '').toLowerCase().includes(q) ||
+                (row.lcNo || '').toLowerCase().includes(q) ||
+                (row.product || '').toLowerCase().includes(q) ||
+                (row.brand || '').toLowerCase().includes(q) ||
+                String(row.invoiceQty).toLowerCase().includes(q) ||
+                String(row.receiveQty).toLowerCase().includes(q) ||
+                String(row.totalBill).toLowerCase().includes(q)
+            );
+        });
+    };
+
+    const fetchSupplierHistory = async (supplierName) => {
+        setHistoryLoading(true);
+        try {
+            const [cogRes, stockRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/cost-of-goods`),
+                axios.get(`${API_BASE_URL}/api/stock`)
+            ]);
+
+            const cogData = Array.isArray(cogRes.data) ? cogRes.data : [];
+            const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
+
+            const targetSupplier = (supplierName || '').trim().toLowerCase();
+
+            // Decrypt/normalize stock data if needed
+            const validStock = stockData.map(item => {
+                try {
+                    const d = item.data ? decryptData(item.data) : item;
+                    const status = (d.status || '').toLowerCase();
+                    if (status.includes('requested') || status.includes('rejected')) return null;
+                    return { ...d, _id: item._id };
+                } catch {
+                    return null;
+                }
+            }).filter(Boolean);
+
+            // Filter Cost of Goods for this supplier
+            const supplierCog = cogData.filter(cog => 
+                (cog.supplier || '').trim().toLowerCase() === targetSupplier
+            );
+
+            // Map each COG record to a history row with receive quantity from stock
+            const rows = supplierCog.map(cog => {
+                const cleanLc = (cog.lcNo || '').trim().toLowerCase();
+                const cleanInv = (cog.invoiceNo || '').trim().toLowerCase();
+                const cleanProd = (cog.product || '').trim().toLowerCase();
+                const cleanBrand = (cog.brand || '').trim().toLowerCase();
+
+                // Find matching stock records for this COG record
+                const matchingStock = validStock.filter(st => {
+                    const stLc = (st.lcNo || '').trim().toLowerCase();
+                    const stInv = (st.invoiceNo || '').trim().toLowerCase();
+                    const stProd = (st.productName || st.product || '').trim().toLowerCase();
+                    const stBrand = (st.brand || '').trim().toLowerCase();
+
+                    if (cleanLc && stLc && cleanLc !== stLc) return false;
+                    if (cleanInv && stInv && cleanInv !== stInv) return false;
+                    if (cleanProd && stProd && cleanProd !== stProd) return false;
+                    if (cleanBrand && stBrand && cleanBrand !== stBrand) return false;
+                    return true;
+                });
+
+                const receiveQty = matchingStock.reduce((sum, st) => sum + (parseFloat(st.quantity) || 0), 0);
+                const invQty = parseFloat(cog.quantity) || 0;
+                const totalBill = parseFloat(
+                    cog.netBill !== undefined && cog.netBill !== null && cog.netBill !== ''
+                        ? cog.netBill
+                        : (cog.totalBill !== undefined && cog.totalBill !== null && cog.totalBill !== ''
+                            ? cog.totalBill
+                            : (cog.amount || 0))
+                ) || 0;
+                const currency = (cog.country === 'CHINA' || cog.country === 'China') ? 'USD' : 'RS';
+
+                return {
+                    _id: cog._id,
+                    date: cog.date || cog.createdAt,
+                    invoiceNo: cog.invoiceNo || '-',
+                    lcNo: cog.lcNo || '-',
+                    product: cog.product || '-',
+                    brand: cog.brand || '-',
+                    invoiceQty: invQty,
+                    receiveQty: receiveQty,
+                    totalBill: totalBill,
+                    currency: currency,
+                    rawCog: cog
+                };
+            });
+
+            // If any stock records have this supplier directly and weren't in COG
+            const existingKeys = new Set(rows.map(r => `${r.lcNo}_${r.invoiceNo}_${r.product}_${r.brand}`.toLowerCase()));
+            validStock.forEach(st => {
+                if ((st.supplier || '').trim().toLowerCase() === targetSupplier) {
+                    const key = `${st.lcNo || '-'}_${st.invoiceNo || '-'}_${st.productName || st.product || '-'}_${st.brand || '-'}`.toLowerCase();
+                    if (!existingKeys.has(key)) {
+                        existingKeys.add(key);
+                        rows.push({
+                            _id: st._id,
+                            date: st.date || st.createdAt,
+                            invoiceNo: st.invoiceNo || '-',
+                            lcNo: st.lcNo || '-',
+                            product: st.productName || st.product || '-',
+                            brand: st.brand || '-',
+                            invoiceQty: parseFloat(st.invoiceQty) || 0,
+                            receiveQty: parseFloat(st.quantity) || 0,
+                            totalBill: 0,
+                            currency: 'RS',
+                            rawCog: null
+                        });
+                    }
+                }
+            });
+
+            rows.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+            setHistoryRecords(rows);
+        } catch (error) {
+            console.error('Error fetching supplier history:', error);
+            setHistoryRecords([]);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    const requestHistorySort = (key) => {
+        const direction = (historySortConfig.key === key && historySortConfig.direction === 'asc') ? 'desc' : 'asc';
+        setHistorySortConfig({ key, direction });
+    };
 
     // Close exporter dropdown on outside click
     useEffect(() => {
@@ -140,7 +519,7 @@ const Supplier = ({
                 const selected = filtered[highlightedExporterIndex];
                 toggleExporterSelection(selected.name);
                 setExporterSearchQuery('');
-            } else if (filtered.length === 1) {
+            } else if (filtered.length > 0) {
                 toggleExporterSelection(filtered[0].name);
                 setExporterSearchQuery('');
             }
@@ -685,77 +1064,575 @@ const Supplier = ({
                 );
             })()}
 
-            {/* Supplier Details Modal */}
+            {/* Supplier Details & History Modal */}
             {viewData && createPortal(
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in">
-                        {/* Header */}
-                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
-                            <h3 className="text-white font-bold text-lg">Supplier Profile</h3>
-                            <button 
-                                onClick={() => setViewData(null)}
-                                className="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors"
-                            >
-                                <XIcon className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto text-left">
-                            <div>
-                                <h4 className="text-xl font-bold text-gray-900">{viewData.name}</h4>
-                                <span className={`mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${viewData.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                                    {viewData.status}
-                                </span>
+                <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
+                    <div 
+                        className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" 
+                        onClick={() => {
+                            setViewData(null);
+                            setHistorySearchQuery('');
+                            setExpandedHistoryIdx(null);
+                        }}
+                    ></div>
+                    <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-300 z-10 overflow-hidden">
+                        {/* Modal Header */}
+                        <div className="px-4 sm:px-8 pt-3 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl gap-3 flex-shrink-0 z-50 relative">
+                            <div className="flex-shrink-0 min-w-0">
+                                <h3 className="text-base sm:text-xl font-bold text-gray-900 leading-tight">Supplier History</h3>
+                                <p className="text-xs sm:text-sm font-semibold text-gray-600 truncate mt-0.5">{viewData.name}</p>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4">
+                            {/* Center Search bar */}
+                            <div className="hidden lg:flex flex-1 max-w-xl mx-auto flex-col items-center gap-4">
+                                <div className="w-full max-w-md relative group">
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Search by LC No, Invoice, Product or Brand..."
+                                        value={historySearchQuery}
+                                        onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                        className="block w-full pl-10 pr-9 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                                    />
+                                    {historySearchQuery && (
+                                        <button
+                                            onClick={() => setHistorySearchQuery('')}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full"
+                                        >
+                                            <XIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
 
-                                <div className="col-span-2">
-                                    <span className="text-xs font-bold text-gray-400 uppercase">Exporters</span>
-                                    <div className="flex flex-wrap gap-1.5 mt-1">
-                                        {(() => {
-                                            const expList = Array.isArray(viewData.exporters) && viewData.exporters.length > 0
-                                                ? viewData.exporters
-                                                : (viewData.exporter ? viewData.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
-                                            if (expList.length === 0) return <p className="font-semibold text-gray-800">-</p>;
-                                            return expList.map((expName, idx) => (
-                                                <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                                                    {expName}
-                                                </span>
-                                            ));
-                                        })()}
+                            {/* Right: Filter, Report, Close */}
+                            <div className="flex items-center gap-2">
+                                <div className="relative">
+                                    <button
+                                        ref={historyFilterButtonRef}
+                                        onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
+                                        className={`flex items-center justify-center sm:gap-2 w-9 h-9 sm:w-auto sm:h-10 sm:px-4 rounded-xl transition-all border ${
+                                            showHistoryFilterPanel || isFilterActive
+                                                ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || isFilterActive ? 'text-white' : 'text-gray-400'}`} />
+                                        <span className="hidden sm:block text-sm font-medium">Filter</span>
+                                    </button>
+
+                                    {/* Mobile Filter Overlay Backdrop */}
+                                    {showHistoryFilterPanel && (
+                                        <div 
+                                            className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[55] lg:hidden"
+                                            onClick={() => setShowHistoryFilterPanel(false)}
+                                        />
+                                    )}
+
+                                    {/* Filter Dropdown Panel */}
+                                    {showHistoryFilterPanel && (
+                                        <div
+                                            ref={historyFilterPanelRef}
+                                            className="fixed inset-x-4 top-24 lg:absolute lg:inset-auto lg:right-0 lg:mt-3 w-auto lg:w-[360px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto lg:overflow-visible max-h-[70vh] text-left"
+                                        >
+                                            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+                                                <h4 className="font-bold text-gray-900 text-sm">Advanced Filters</h4>
+                                                <button
+                                                    onClick={() => {
+                                                        setHistoryFilters({
+                                                            quickRange: 'all',
+                                                            startDate: '',
+                                                            endDate: '',
+                                                            product: '',
+                                                            brand: '',
+                                                            lcNo: ''
+                                                        });
+                                                    }}
+                                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                                                >
+                                                    Reset All
+                                                </button>
+                                            </div>
+
+                                            <div className="space-y-3.5">
+                                                {/* Quick Range */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                            <button
+                                                                key={range}
+                                                                type="button"
+                                                                onClick={() => setHistoryFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
+                                                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                                                                    historyFilters.quickRange === range
+                                                                        ? 'bg-blue-600 text-white shadow-sm'
+                                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                                }`}
+                                                            >
+                                                                {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Date Range */}
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <CustomDatePicker
+                                                        label="FROM DATE"
+                                                        value={historyFilters.startDate}
+                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'all' }))}
+                                                        compact={true}
+                                                        labelClassName="text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+                                                    />
+                                                    <CustomDatePicker
+                                                        label="TO DATE"
+                                                        value={historyFilters.endDate}
+                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'all' }))}
+                                                        compact={true}
+                                                        rightAlign={true}
+                                                        labelClassName="text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+                                                    />
+                                                </div>
+
+                                                {/* Product Filter */}
+                                                <SearchableFilterSelect
+                                                    label="Product"
+                                                    value={historyFilters.product}
+                                                    onChange={(val) => setHistoryFilters(prev => ({ ...prev, product: val }))}
+                                                    options={availableProducts}
+                                                    placeholder="All Products"
+                                                />
+
+                                                {/* Brand Filter */}
+                                                <SearchableFilterSelect
+                                                    label="Brand"
+                                                    value={historyFilters.brand}
+                                                    onChange={(val) => setHistoryFilters(prev => ({ ...prev, brand: val }))}
+                                                    options={availableBrands}
+                                                    placeholder="All Brands"
+                                                />
+
+                                                {/* LC No Filter */}
+                                                <SearchableFilterSelect
+                                                    label="LC No"
+                                                    value={historyFilters.lcNo}
+                                                    onChange={(val) => setHistoryFilters(prev => ({ ...prev, lcNo: val }))}
+                                                    options={availableLcs}
+                                                    placeholder="All LC Numbers"
+                                                />
+
+                                                <button
+                                                    onClick={() => setShowHistoryFilterPanel(false)}
+                                                    className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
+                                                >
+                                                    Apply Filters
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Report Button */}
+                                <button
+                                    onClick={() => generateSupplierProfileReportPDF(viewData, getFilteredHistory(), historyFilters)}
+                                    className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-10 sm:px-4 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm"
+                                >
+                                    <FileTextIcon className="w-4 h-4" />
+                                    <span className="hidden sm:block text-sm font-medium ml-2">Report</span>
+                                </button>
+
+                                {/* Close Button */}
+                                <button 
+                                    onClick={() => {
+                                        setViewData(null);
+                                        setHistorySearchQuery('');
+                                        setExpandedHistoryIdx(null);
+                                    }} 
+                                    className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
+                                >
+                                    <XIcon className="w-6 h-6 text-gray-400" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Mobile Search Row (hidden on lg+) */}
+                        <div className="lg:hidden px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                    <SearchIcon className="h-4 w-4 text-gray-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search by LC No, Invoice, Product, Brand..."
+                                    value={historySearchQuery}
+                                    onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                    className="block w-full pl-10 pr-9 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                />
+                                {historySearchQuery && (
+                                    <button
+                                        onClick={() => setHistorySearchQuery('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full"
+                                    >
+                                        <XIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 min-h-0 text-left">
+                            {/* Supplier Profile Info Card */}
+                            <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-2xl border border-gray-100 p-5 shadow-sm space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="md:col-span-2">
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Associated Exporters</span>
+                                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                            {(() => {
+                                                const expList = Array.isArray(viewData.exporters) && viewData.exporters.length > 0
+                                                    ? viewData.exporters
+                                                    : (viewData.exporter ? viewData.exporter.split(',').map(s => s.trim()).filter(Boolean) : []);
+                                                if (expList.length === 0) return <p className="font-semibold text-gray-800 text-sm">—</p>;
+                                                return expList.map((expName, idx) => (
+                                                    <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                                                        {expName}
+                                                    </span>
+                                                ));
+                                            })()}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Contact Person</span>
+                                        <p className="font-semibold text-gray-800 mt-1 text-sm">{viewData.contactPerson || '—'}</p>
+                                    </div>
+
+                                    <div>
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Phone</span>
+                                        <p className="font-semibold text-gray-800 mt-1 text-sm font-mono">{viewData.phone || '—'}</p>
+                                    </div>
+
+                                    <div>
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Email</span>
+                                        <p className="font-semibold text-gray-800 mt-1 text-sm truncate" title={viewData.email}>{viewData.email || '—'}</p>
+                                    </div>
+
+                                    <div className="md:col-span-3">
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Address</span>
+                                        <p className="text-gray-700 mt-1 text-sm whitespace-pre-wrap">{viewData.address || '—'}</p>
                                     </div>
                                 </div>
-                                <div>
-                                    <span className="text-xs font-bold text-gray-400 uppercase">Phone</span>
-                                    <p className="font-semibold text-gray-800 mt-0.5">{viewData.phone || '-'}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <span className="text-xs font-bold text-gray-400 uppercase">Email</span>
-                                    <p className="font-semibold text-gray-800 mt-0.5">{viewData.email || '-'}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <span className="text-xs font-bold text-gray-400 uppercase">Contact Person</span>
-                                    <p className="font-semibold text-gray-800 mt-0.5">{viewData.contactPerson || '-'}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <span className="text-xs font-bold text-gray-400 uppercase">Address</span>
-                                    <p className="text-gray-700 mt-0.5 whitespace-pre-wrap">{viewData.address || '-'}</p>
-                                </div>
+
+                                {/* KPI Metrics Bar */}
+                                {(() => {
+                                    const filtered = getFilteredHistory();
+                                    const totalInv = filtered.reduce((s, r) => s + (parseFloat(r.invoiceQty) || 0), 0);
+                                    const totalRec = filtered.reduce((s, r) => s + (parseFloat(r.receiveQty) || 0), 0);
+                                    const totalBill = filtered.reduce((s, r) => s + (parseFloat(r.totalBill) || 0), 0);
+
+                                    return (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-gray-200/60">
+                                            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Entries</span>
+                                                <p className="text-lg font-black text-gray-900 mt-0.5">{filtered.length}</p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                                                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Total Invoice QTY</span>
+                                                <p className="text-lg font-black text-blue-700 mt-0.5">{Math.round(totalInv).toLocaleString('en-US')} <span className="text-xs font-semibold text-gray-400">KG</span></p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Total Receive QTY</span>
+                                                <p className="text-lg font-black text-emerald-700 mt-0.5">{Math.round(totalRec).toLocaleString('en-US')} <span className="text-xs font-semibold text-gray-400">KG</span></p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                                                <span className="text-[10px] font-bold text-purple-500 uppercase tracking-wider">Total Bill</span>
+                                                <p className="text-lg font-black text-purple-700 mt-0.5">
+                                                    {totalBill > 0 ? totalBill.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
+                            {/* Transactions Table Section */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center gap-2">
+                                        <span>Transactions & Receive Details</span>
+                                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full font-semibold">
+                                            {getFilteredHistory().length}
+                                        </span>
+                                    </h4>
+                                </div>
 
-                        </div>
+                                {historyLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-16">
+                                        <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                                        <p className="text-xs text-gray-400 mt-2 font-medium">Loading supplier history from COG & LC Receive...</p>
+                                    </div>
+                                ) : (() => {
+                                    const filtered = getFilteredHistory();
 
-                        {/* Footer */}
-                        <div className="border-t border-gray-100 px-6 py-4 bg-gray-50 flex justify-end">
-                            <button 
-                                onClick={() => setViewData(null)}
-                                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 active:scale-95 transition-all text-sm"
-                            >
-                                Close Profile
-                            </button>
+                                    const sorted = [...filtered].sort((a, b) => {
+                                        if (!historySortConfig.key) return 0;
+                                        const { key, direction } = historySortConfig;
+                                        let valA = a[key];
+                                        let valB = b[key];
+                                        if (key === 'date') {
+                                            valA = new Date(valA || 0).getTime();
+                                            valB = new Date(valB || 0).getTime();
+                                        } else if (typeof valA === 'number' && typeof valB === 'number') {
+                                            // numeric
+                                        } else {
+                                            valA = (valA || '').toString().toLowerCase();
+                                            valB = (valB || '').toString().toLowerCase();
+                                        }
+                                        if (valA < valB) return direction === 'asc' ? -1 : 1;
+                                        if (valA > valB) return direction === 'asc' ? 1 : -1;
+                                        return 0;
+                                    });
+
+                                    const totalInv = sorted.reduce((s, r) => s + (parseFloat(r.invoiceQty) || 0), 0);
+                                    const totalRec = sorted.reduce((s, r) => s + (parseFloat(r.receiveQty) || 0), 0);
+                                    const totalBill = sorted.reduce((s, r) => s + (parseFloat(r.totalBill) || 0), 0);
+
+                                    if (sorted.length === 0) {
+                                        return (
+                                            <div className="bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 py-12 text-center text-gray-400">
+                                                <BoxIcon className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                                <p className="text-sm font-semibold text-gray-600">No transactions found</p>
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    {historySearchQuery || isFilterActive ? 'Try clearing your search query or filters' : 'No cost of goods or receive records found for this supplier'}
+                                                </p>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <>
+                                            {/* Desktop Table */}
+                                            <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-x-auto shadow-sm">
+                                                <table className="w-full text-left text-sm border-collapse" style={{ minWidth: '50rem' }}>
+                                                    <thead className="bg-slate-50/70 border-b border-gray-100">
+                                                        <tr>
+                                                            <th 
+                                                                onClick={() => requestHistorySort('date')}
+                                                                className="px-4 py-3.5 text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100/60 transition-colors whitespace-nowrap"
+                                                            >
+                                                                <div className="flex items-center gap-1">
+                                                                    Date
+                                                                    <SortIcon config={historySortConfig} columnKey="date" />
+                                                                </div>
+                                                            </th>
+                                                            <th 
+                                                                onClick={() => requestHistorySort('invoiceNo')}
+                                                                className="px-4 py-3.5 text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100/60 transition-colors whitespace-nowrap"
+                                                            >
+                                                                <div className="flex items-center gap-1">
+                                                                    Invoice
+                                                                    <SortIcon config={historySortConfig} columnKey="invoiceNo" />
+                                                                </div>
+                                                            </th>
+                                                            <th 
+                                                                onClick={() => requestHistorySort('lcNo')}
+                                                                className="px-4 py-3.5 text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100/60 transition-colors whitespace-nowrap"
+                                                            >
+                                                                <div className="flex items-center gap-1">
+                                                                    LC No
+                                                                    <SortIcon config={historySortConfig} columnKey="lcNo" />
+                                                                </div>
+                                                            </th>
+                                                            <th 
+                                                                onClick={() => requestHistorySort('product')}
+                                                                className="px-4 py-3.5 text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100/60 transition-colors whitespace-nowrap"
+                                                            >
+                                                                <div className="flex items-center gap-1">
+                                                                    Product
+                                                                    <SortIcon config={historySortConfig} columnKey="product" />
+                                                                </div>
+                                                            </th>
+                                                            <th 
+                                                                onClick={() => requestHistorySort('brand')}
+                                                                className="px-4 py-3.5 text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100/60 transition-colors whitespace-nowrap"
+                                                            >
+                                                                <div className="flex items-center gap-1">
+                                                                    Brand
+                                                                    <SortIcon config={historySortConfig} columnKey="brand" />
+                                                                </div>
+                                                            </th>
+                                                            <th 
+                                                                onClick={() => requestHistorySort('invoiceQty')}
+                                                                className="px-4 py-3.5 text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-widest text-right cursor-pointer hover:bg-gray-100/60 transition-colors whitespace-nowrap"
+                                                            >
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    Invoice QTY
+                                                                    <SortIcon config={historySortConfig} columnKey="invoiceQty" />
+                                                                </div>
+                                                            </th>
+                                                            <th 
+                                                                onClick={() => requestHistorySort('receiveQty')}
+                                                                className="px-4 py-3.5 text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-widest text-right cursor-pointer hover:bg-gray-100/60 transition-colors whitespace-nowrap"
+                                                            >
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    Receive Qty
+                                                                    <SortIcon config={historySortConfig} columnKey="receiveQty" />
+                                                                </div>
+                                                            </th>
+                                                            <th 
+                                                                onClick={() => requestHistorySort('totalBill')}
+                                                                className="px-4 py-3.5 text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-widest text-right cursor-pointer hover:bg-gray-100/60 transition-colors whitespace-nowrap"
+                                                            >
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    Total Bill
+                                                                    <SortIcon config={historySortConfig} columnKey="totalBill" />
+                                                                </div>
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-50 font-medium">
+                                                        {sorted.map((row, idx) => (
+                                                            <tr key={row._id || idx} className="hover:bg-blue-50/30 transition-colors">
+                                                                <td className="px-4 py-3.5 text-xs text-gray-600 whitespace-nowrap font-mono">
+                                                                    {formatDate(row.date)}
+                                                                </td>
+                                                                <td className="px-4 py-3.5 text-xs font-black text-gray-900 whitespace-nowrap">
+                                                                    {row.invoiceNo || '—'}
+                                                                </td>
+                                                                <td className="px-4 py-3.5 text-xs font-black text-blue-600 whitespace-nowrap uppercase tracking-tight">
+                                                                    {row.lcNo || '—'}
+                                                                </td>
+                                                                <td className="px-4 py-3.5 text-xs font-bold text-gray-800">
+                                                                    {row.product || '—'}
+                                                                </td>
+                                                                <td className="px-4 py-3.5 text-xs">
+                                                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                                                                        {row.brand || '—'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3.5 text-xs text-right font-bold text-gray-900 whitespace-nowrap">
+                                                                    {row.invoiceQty ? `${Math.round(row.invoiceQty).toLocaleString('en-US')} ` : '0 '}
+                                                                    <span className="text-[10px] text-gray-400 font-semibold">KG</span>
+                                                                </td>
+                                                                <td className="px-4 py-3.5 text-xs text-right font-bold text-emerald-600 whitespace-nowrap">
+                                                                    {row.receiveQty ? `${Math.round(row.receiveQty).toLocaleString('en-US')} ` : '0 '}
+                                                                    <span className="text-[10px] text-emerald-500/70 font-semibold">KG</span>
+                                                                </td>
+                                                                <td className="px-4 py-3.5 text-xs text-right font-black text-purple-700 whitespace-nowrap">
+                                                                    {row.totalBill ? (
+                                                                        <span>
+                                                                            {row.totalBill.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                            <span className="text-[10px] text-gray-400 font-semibold ml-1">{row.currency}</span>
+                                                                        </span>
+                                                                    ) : '—'}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot className="bg-gradient-to-r from-blue-50/50 via-slate-50 to-indigo-50/50 border-t border-gray-100 font-bold">
+                                                        <tr>
+                                                            <td colSpan={5} className="px-4 py-3.5 text-gray-600 text-xs uppercase tracking-wider font-black">
+                                                                Grand Total ({sorted.length} records)
+                                                            </td>
+                                                            <td className="px-4 py-3.5 text-right text-blue-700 text-xs font-black">
+                                                                {Math.round(totalInv).toLocaleString('en-US')} <span className="text-[10px] font-semibold text-blue-500">KG</span>
+                                                            </td>
+                                                            <td className="px-4 py-3.5 text-right text-emerald-700 text-xs font-black">
+                                                                {Math.round(totalRec).toLocaleString('en-US')} <span className="text-[10px] font-semibold text-emerald-500">KG</span>
+                                                            </td>
+                                                            <td className="px-4 py-3.5 text-right text-purple-800 text-xs font-black">
+                                                                {totalBill > 0 ? totalBill.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+
+                                            {/* Mobile Card List View */}
+                                            <div className="block md:hidden space-y-3">
+                                                {sorted.map((row, idx) => {
+                                                    const isExpanded = expandedHistoryIdx === idx;
+                                                    return (
+                                                        <div 
+                                                            key={row._id || idx}
+                                                            className={`bg-white rounded-xl border transition-all duration-200 overflow-hidden ${
+                                                                isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'
+                                                            }`}
+                                                        >
+                                                            {/* Card Toggle Header */}
+                                                            <div 
+                                                                className="flex justify-between items-center p-3.5 cursor-pointer select-none active:bg-gray-50 transition-colors"
+                                                                onClick={() => setExpandedHistoryIdx(isExpanded ? null : idx)}
+                                                            >
+                                                                <div className="flex-1 min-w-0 pr-3">
+                                                                    <div className="flex items-center gap-1.5 text-xs text-left min-w-0 overflow-hidden">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0">{formatDate(row.date)}</span>
+                                                                        <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                                        <span className="font-bold text-gray-800 truncate" title={row.product}>{row.product || '—'}</span>
+                                                                        <span className="text-gray-300 font-bold shrink-0">•</span>
+                                                                        <span className="font-black text-blue-600 truncate shrink-0" title={row.lcNo}>{row.lcNo || '—'}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 mt-1 text-[11px]">
+                                                                        <span className="text-gray-500 font-medium">Inv: {row.invoiceNo || '—'}</span>
+                                                                        <span className="text-gray-300">•</span>
+                                                                        <span className="font-bold text-emerald-600">Rec: {row.receiveQty ? Math.round(row.receiveQty).toLocaleString('en-US') : 0} KG</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                                    {isExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Expandable Details */}
+                                                            {isExpanded && (
+                                                                <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/50 border-t border-gray-100 text-xs text-left animate-in slide-in-from-top-2 duration-200">
+                                                                    <div className="grid grid-cols-[110px_8px_1fr] gap-y-2 pt-2.5 items-baseline">
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice No</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-800 text-[11px]">{row.invoiceNo || '—'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-blue-600 text-[11px] uppercase">{row.lcNo || '—'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Product</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-900 text-[11px]">{row.product || '—'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-purple-600 text-[11px]">{row.brand || '—'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice QTY</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-gray-900 text-[11px]">
+                                                                            {row.invoiceQty ? `${Math.round(row.invoiceQty).toLocaleString('en-US')} KG` : '0 KG'}
+                                                                        </span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Receive QTY</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-emerald-700 text-[11px]">
+                                                                            {row.receiveQty ? `${Math.round(row.receiveQty).toLocaleString('en-US')} KG` : '0 KG'}
+                                                                        </span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Bill</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-bold text-purple-700 text-[11px]">
+                                                                            {row.totalBill ? `${row.totalBill.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${row.currency}` : '—'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
+                            </div>
                         </div>
                     </div>
                 </div>,

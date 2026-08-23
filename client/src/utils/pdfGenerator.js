@@ -7378,4 +7378,584 @@ export const generateProfitLossPDF = async (params) => {
     }
 };
 
+export const generateSupplierProfileReportPDF = async (supplier, records, filters = {}) => {
+    try {
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // Load company logo (same as Stock Report)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        // --- Header (identical to Stock Report) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill (#f97316)
+        doc.setTextColor(249, 115, 22);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - 50, y, 100, 7, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text("SUPPLIER TRANSACTION REPORT", pageWidth / 2, y + 5, { align: 'center' });
+
+        y += 9;
+
+        const expList = Array.isArray(supplier?.exporters) && supplier.exporters.length > 0
+            ? supplier.exporters.join(', ')
+            : (supplier?.exporter || '-');
+        const exporterTagText = expList;
+
+        // Center: Exporter Pill Tag
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        const tagTW = doc.getTextWidth(exporterTagText);
+        const pillW = Math.min(tagTW + 14, pageWidth - margin * 2);
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 6, 1.5, 1.5, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(exporterTagText, pageWidth / 2, y + 4.2, { align: 'center' });
+
+        // Right Side: Printed on & Active Filters
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 4.2, { align: 'right' });
+
+        let rightFilterY = y + 11;
+        if (filters?.product) {
+            doc.text(`Product: ${filters.product}`, pageWidth - margin, rightFilterY, { align: 'right' });
+            rightFilterY += 4.5;
+        }
+        if (filters?.brand) {
+            doc.text(`Brand: ${filters.brand}`, pageWidth - margin, rightFilterY, { align: 'right' });
+            rightFilterY += 4.5;
+        }
+        if (filters?.lcNo) {
+            doc.text(`LC No: ${filters.lcNo}`, pageWidth - margin, rightFilterY, { align: 'right' });
+            rightFilterY += 4.5;
+        }
+
+        // Left Side: Date Range (top of Supplier) & Supplier Details
+        let yPos = y + 11;
+        const labelX = margin;
+        const colonX = margin + 22;
+        const valX = margin + 25;
+
+        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0);
+
+        // 1. Date Range on Top of Supplier
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range", labelX, yPos);
+        doc.text(":", colonX, yPos);
+        doc.setFont('helvetica', 'normal');
+        const startStr = formatDate(filters?.startDate) === '-' ? 'Start' : formatDate(filters?.startDate);
+        const endStr = formatDate(filters?.endDate) === '-' ? 'Present' : formatDate(filters?.endDate);
+        doc.text(`${startStr} to ${endStr}`, valX, yPos);
+
+        // 2. Supplier Row
+        yPos += 5;
+        doc.setFont('helvetica', 'bold');
+        doc.text("Supplier", labelX, yPos);
+        doc.text(":", colonX, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(supplier?.name || '-', valX, yPos);
+
+        // 3. Contact Person
+        if (supplier?.contactPerson) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Contact", labelX, yPos);
+            doc.text(":", colonX, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(supplier.contactPerson, valX, yPos);
+        }
+
+        // 4. Phone
+        if (supplier?.phone) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Phone", labelX, yPos);
+            doc.text(":", colonX, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(supplier.phone, valX, yPos);
+        }
+
+        const startTableY = Math.max(yPos, rightFilterY) + 4;
+
+        const tableHeaders = [
+            ['Date', 'Invoice No', 'LC No', 'Product', 'Brand', 'Invoice Qty (KG)', 'Receive Qty (KG)', 'Total Bill']
+        ];
+
+        let totalInv = 0;
+        let totalRec = 0;
+        let totalBill = 0;
+
+        const tableRows = (records || []).map(r => {
+            const invQty = parseFloat(r.invoiceQty) || 0;
+            const recQty = parseFloat(r.receiveQty) || 0;
+            const bill = parseFloat(r.totalBill) || 0;
+
+            totalInv += invQty;
+            totalRec += recQty;
+            totalBill += bill;
+
+            return [
+                formatDate(r.date),
+                r.invoiceNo || '-',
+                r.lcNo || '-',
+                r.product || '-',
+                r.brand || '-',
+                invQty > 0 ? `${Math.round(invQty).toLocaleString()} KG` : '0 KG',
+                recQty > 0 ? `${Math.round(recQty).toLocaleString()} KG` : '0 KG',
+                bill > 0 ? `${bill.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${r.currency || ''}` : '-'
+            ];
+        });
+
+        const footerRow = [
+            { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totalInv ? `${Math.round(totalInv).toLocaleString('en-US')} KG` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totalRec ? `${Math.round(totalRec).toLocaleString('en-US')} KG` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totalBill ? `${totalBill.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—', styles: { halign: 'right', fontStyle: 'bold' } }
+        ];
+
+        autoTable(doc, {
+            startY: startTableY,
+            head: tableHeaders,
+            body: tableRows,
+            foot: [footerRow],
+            theme: 'grid',
+            margin: { left: margin, right: margin },
+            styles: {
+                fontSize: 9,
+                cellPadding: 1.5,
+                textColor: [0, 0, 0],
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.1
+            },
+            footStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 26, halign: 'center' },
+                1: { cellWidth: 36, halign: 'center' },
+                2: { cellWidth: 36, halign: 'center' },
+                3: { cellWidth: 50 },
+                4: { cellWidth: 40 },
+                5: { cellWidth: 33, halign: 'right' },
+                6: { cellWidth: 33, halign: 'right' },
+                7: { cellWidth: 33, halign: 'right' }
+            }
+        });
+
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text('M/S ANI ENTERPRISE - SUPPLIER TRANSACTION REPORT', margin, pageHeight - 6);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (err) {
+        console.error("Error generating Supplier Profile Report PDF:", err);
+        alert(`Failed to generate Supplier Report PDF: ${err.message}`);
+    }
+};
+
+export const generateExporterProfileReportPDF = async (exporter, records, filters = {}) => {
+    try {
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // Load company logo
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        // --- Header ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        doc.setTextColor(249, 115, 22);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - 50, y, 100, 7, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text("EXPORTER TRANSACTION REPORT", pageWidth / 2, y + 5, { align: 'center' });
+
+        y += 14;
+
+        // Center: Filter LC No Tag (if filtered by LC)
+        if (filters?.lcNo) {
+            const lcTagText = `LC NO: ${filters.lcNo}`;
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'bold');
+            const tagTW = doc.getTextWidth(lcTagText);
+            const pillW = Math.min(tagTW + 14, pageWidth - margin * 2);
+            doc.setFillColor(241, 245, 249);
+            doc.setDrawColor(203, 213, 225);
+            doc.setLineWidth(0.3);
+            doc.roundedRect((pageWidth / 2) - (pillW / 2), y - 3, pillW, 6, 1.5, 1.5, 'FD');
+            doc.setTextColor(30, 41, 59);
+            doc.text(lcTagText, pageWidth / 2, y + 1.2, { align: 'center' });
+        }
+
+        // Right Side: Printed on & Active Filters
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y, { align: 'right' });
+
+        let rightFilterY = y + 5;
+        if (filters?.supplier) {
+            doc.text(`Supplier: ${filters.supplier}`, pageWidth - margin, rightFilterY, { align: 'right' });
+            rightFilterY += 4.5;
+        }
+        if (filters?.product) {
+            doc.text(`Product: ${filters.product}`, pageWidth - margin, rightFilterY, { align: 'right' });
+            rightFilterY += 4.5;
+        }
+        if (filters?.brand) {
+            doc.text(`Brand: ${filters.brand}`, pageWidth - margin, rightFilterY, { align: 'right' });
+            rightFilterY += 4.5;
+        }
+        if (filters?.port) {
+            doc.text(`Port: ${filters.port}`, pageWidth - margin, rightFilterY, { align: 'right' });
+            rightFilterY += 4.5;
+        }
+
+        // Left Side: Date Range & Exporter Details
+        let yPos = y;
+        const labelX = margin;
+        const colonX = margin + 22;
+        const valX = margin + 25;
+
+        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0);
+
+        // 1. Date Range
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range", labelX, yPos);
+        doc.text(":", colonX, yPos);
+        doc.setFont('helvetica', 'normal');
+        const startStr = formatDate(filters?.startDate) === '-' ? 'Start' : formatDate(filters?.startDate);
+        const endStr = formatDate(filters?.endDate) === '-' ? 'Present' : formatDate(filters?.endDate);
+        doc.text(`${startStr} to ${endStr}`, valX, yPos);
+
+        // 2. Exporter Name
+        yPos += 5;
+        doc.setFont('helvetica', 'bold');
+        doc.text("Exporter", labelX, yPos);
+        doc.text(":", colonX, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(exporter?.name || '-', valX, yPos);
+
+        // 3. Contact Person
+        if (exporter?.contactPerson) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Contact", labelX, yPos);
+            doc.text(":", colonX, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(exporter.contactPerson, valX, yPos);
+        }
+
+        // 4. Phone
+        if (exporter?.phone) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Phone", labelX, yPos);
+            doc.text(":", colonX, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(exporter.phone, valX, yPos);
+        }
+
+        // 5. Address
+        if (exporter?.address) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Address", labelX, yPos);
+            doc.text(":", colonX, yPos);
+            doc.setFont('helvetica', 'normal');
+            const addrLines = doc.splitTextToSize(exporter.address, 160);
+            doc.text(addrLines, valX, yPos);
+            yPos += (addrLines.length - 1) * 4.2;
+        }
+
+        const startTableY = Math.max(yPos, rightFilterY) + 6;
+
+        const tableHeaders = [
+            ['Date', 'Invoice No', 'LC No', 'Supplier', 'Port', 'Product', 'Brand', 'Total Bill', 'Truck', 'Bag', 'Qty (KG)', 'Rate (TK)', 'Total (TK)', 'Balance (TK)']
+        ];
+
+        let totalBillSum = 0;
+        let totalBagSum = 0;
+        let totalQtySum = 0;
+        let totalAmountSum = 0;
+        let runningBalance = 0;
+
+        const tableRows = (records || []).map(r => {
+            const rowTotal = (parseFloat(r.rate) || 0) * (parseFloat(r.qty) || 0);
+            runningBalance += rowTotal;
+            const bill = parseFloat(r.totalBill) || 0;
+            const bag = parseFloat(r.bag) || 0;
+            const qty = parseFloat(r.qty) || 0;
+
+            totalBillSum += bill;
+            totalBagSum += bag;
+            totalQtySum += qty;
+            totalAmountSum += rowTotal;
+
+            return [
+                formatDate(r.date),
+                r.invoiceNo || '-',
+                r.lcNo || '-',
+                r.supplier || '-',
+                r.port || '-',
+                r.product || '-',
+                r.brand || '-',
+                bill > 0 ? `${bill.toLocaleString('en-IN', { maximumFractionDigits: 2 })} ${r.currency || ''}` : '-',
+                r.truck || '-',
+                bag > 0 ? Math.round(bag).toLocaleString('en-US') : '-',
+                qty > 0 ? Math.round(qty).toLocaleString('en-US') : '-',
+                r.rate ? `${parseFloat(r.rate).toLocaleString('en-IN')}` : '-',
+                rowTotal > 0 ? `${rowTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-',
+                (r.source !== 'sale' && runningBalance > 0) ? `${runningBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-'
+            ];
+        });
+
+        const footerRow = [
+            { content: 'GRAND TOTAL', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totalBillSum ? `${totalBillSum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: '—', styles: { halign: 'center', fontStyle: 'bold' } },
+            { content: totalBagSum ? `${Math.round(totalBagSum).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totalQtySum ? `${Math.round(totalQtySum).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: '—', styles: { halign: 'center', fontStyle: 'bold' } },
+            { content: totalAmountSum ? `${totalAmountSum.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totalAmountSum ? `${totalAmountSum.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—', styles: { halign: 'right', fontStyle: 'bold' } }
+        ];
+
+        autoTable(doc, {
+            startY: startTableY,
+            head: tableHeaders,
+            body: tableRows,
+            foot: [footerRow],
+            theme: 'grid',
+            margin: { left: margin, right: margin },
+            styles: {
+                fontSize: 7.5,
+                cellPadding: 1.2,
+                textColor: [0, 0, 0],
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.1
+            },
+            footStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 18, halign: 'center' },
+                1: { cellWidth: 24, halign: 'center' },
+                2: { cellWidth: 22, halign: 'center' },
+                3: { cellWidth: 25 },
+                4: { cellWidth: 14, halign: 'center' },
+                5: { cellWidth: 22 },
+                6: { cellWidth: 22 },
+                7: { cellWidth: 25, halign: 'right' },
+                8: { cellWidth: 12, halign: 'center' },
+                9: { cellWidth: 14, halign: 'right' },
+                10: { cellWidth: 18, halign: 'right' },
+                11: { cellWidth: 18, halign: 'right' },
+                12: { cellWidth: 26, halign: 'right' },
+                13: { cellWidth: 27, halign: 'right' }
+            }
+        });
+
+        // Page Numbers Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text('M/S ANI ENTERPRISE - EXPORTER TRANSACTION REPORT', margin, pageHeight - 6);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (err) {
+        console.error("Error generating Exporter Profile Report PDF:", err);
+        alert(`Failed to generate Exporter Report PDF: ${err.message}`);
+    }
+};
+
 

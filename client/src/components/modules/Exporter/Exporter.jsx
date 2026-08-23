@@ -1,10 +1,147 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, PlusIcon } from '../../Icons';
+import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, PlusIcon, FunnelIcon, FileTextIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
+import { decryptData } from '../../../utils/encryption';
+import { generateExporterProfileReportPDF } from '../../../utils/pdfGenerator';
+import CustomDatePicker from '../../shared/CustomDatePicker';
 import './Exporter.css';
 import { hasPermission } from '../../../utils/permissionHelper';
+
+const SearchableFilterSelect = ({ label, value, onChange, options = [], placeholder = 'Search...' }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
+    const dropdownRef = useRef(null);
+
+    const filteredOptions = options.filter(opt =>
+        String(opt || '').toLowerCase().includes(search.toLowerCase())
+    );
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setIsOpen(false);
+                setSearch('');
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        setHighlightedIndex(0);
+    }, [search, isOpen]);
+
+    const handleKeyDown = (e) => {
+        if (!isOpen) {
+            if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                setIsOpen(true);
+                e.preventDefault();
+            }
+            return;
+        }
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev < filteredOptions.length - 1 ? prev + 1 : 0));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev > 0 ? prev - 1 : filteredOptions.length - 1));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (filteredOptions.length > 0) {
+                const selected = filteredOptions[highlightedIndex] !== undefined ? filteredOptions[highlightedIndex] : filteredOptions[0];
+                onChange(selected);
+                setIsOpen(false);
+                setSearch('');
+            }
+        } else if (e.key === 'Escape') {
+            setIsOpen(false);
+            setSearch('');
+        }
+    };
+
+    return (
+        <div className="space-y-1.5" ref={dropdownRef}>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">{label}</label>
+            <div className="relative">
+                <div
+                    tabIndex={0}
+                    onKeyDown={handleKeyDown}
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs cursor-pointer hover:bg-gray-100/70 transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                >
+                    <span className={`truncate ${value ? 'text-gray-800 font-semibold' : 'text-gray-400'}`}>
+                        {value || placeholder}
+                    </span>
+                    <div className="flex items-center gap-1">
+                        {value && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onChange('');
+                                }}
+                                className="p-0.5 text-gray-400 hover:text-gray-600 rounded-full"
+                            >
+                                <XIcon className="w-3 h-3" />
+                            </button>
+                        )}
+                        <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                </div>
+
+                {isOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2 space-y-1.5 animate-in fade-in zoom-in duration-100">
+                        <div className="relative">
+                            <input
+                                autoFocus
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Search..."
+                                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-500 focus:bg-white transition-all"
+                            />
+                        </div>
+                        <div className="max-h-40 overflow-y-auto space-y-0.5">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onChange('');
+                                    setIsOpen(false);
+                                    setSearch('');
+                                }}
+                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors ${!value ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                All ({label}s)
+                            </button>
+                            {filteredOptions.map((opt, idx) => (
+                                <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => {
+                                        onChange(opt);
+                                        setIsOpen(false);
+                                        setSearch('');
+                                    }}
+                                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors ${value === opt ? 'bg-blue-50 text-blue-600 font-semibold' : highlightedIndex === idx ? 'bg-gray-100 text-gray-800' : 'text-gray-600 hover:bg-gray-50'}`}
+                                >
+                                    {opt}
+                                </button>
+                            ))}
+                            {filteredOptions.length === 0 && (
+                                <div className="px-2 py-2 text-center text-xs text-gray-400">No results found</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 const Exporter = ({
     isSelectionMode,
@@ -61,9 +198,21 @@ const Exporter = ({
             fetchExportHistory(viewData.name);
             setHistorySearchQuery('');
             setExpandedHistoryIdx(null); // Reset expansion on new view
+            setShowHistoryFilterPanel(false);
+            setHistoryFilters({
+                quickRange: 'all',
+                startDate: '',
+                endDate: '',
+                supplier: '',
+                product: '',
+                brand: '',
+                lcNo: '',
+                port: ''
+            });
         } else {
             document.body.style.overflow = 'auto';
             setHistoryRecords([]);
+            setShowHistoryFilterPanel(false);
         }
 
         return () => {
@@ -86,13 +235,95 @@ const Exporter = ({
     const fetchExportHistory = async (exporterName) => {
         setHistoryLoading(true);
         try {
-            const [stockRes, salesRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`)
+            const [stockRes, salesRes, cogRes, lcRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/stock`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/sales`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/cost-of-goods`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/lc-management`).catch(() => ({ data: [] }))
             ]);
 
-            const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
-            const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
+            // Safe item parser for encrypted or unencrypted data
+            const parseItem = (item) => {
+                if (!item) return {};
+                let d = item;
+                if (item.data) {
+                    if (typeof item.data === 'string') {
+                        try {
+                            const dec = decryptData(item.data);
+                            if (dec && typeof dec === 'object') d = dec;
+                        } catch (e) {}
+                    } else if (typeof item.data === 'object') {
+                        d = item.data;
+                    }
+                }
+                return { ...item, ...d, _id: item._id || d._id };
+            };
+
+            const rawStockData = Array.isArray(stockRes.data) ? stockRes.data : [];
+            const rawSalesData = Array.isArray(salesRes.data) ? salesRes.data : [];
+            const rawCogData = Array.isArray(cogRes.data) ? cogRes.data : [];
+            const rawLcData = Array.isArray(lcRes.data) ? lcRes.data : [];
+
+            const stockData = rawStockData.map(parseItem);
+            const salesData = rawSalesData.map(parseItem);
+            const cogData = rawCogData.map(parseItem);
+            const lcData = rawLcData.map(parseItem);
+
+            // Build lookups from LC Management
+            const lcMap = {};
+            lcData.forEach(lc => {
+                const cleanLc = (lc.lcNo || '').trim().toLowerCase();
+                if (cleanLc) {
+                    lcMap[cleanLc] = {
+                        supplier: lc.supplier || lc.supplierName || '',
+                        invoiceNo: lc.invoiceNo || lc.invoice || '',
+                        exporter: lc.exporterName || lc.exporter || ''
+                    };
+                }
+            });
+
+            // Helper to calculate total bill from COG
+            const getCogTotalBill = (cog) => {
+                if (!cog) return 0;
+                if (cog.totalBill !== undefined && cog.totalBill !== null && cog.totalBill !== '' && !isNaN(parseFloat(cog.totalBill))) {
+                    return parseFloat(cog.totalBill);
+                }
+                if (cog.netBill !== undefined && cog.netBill !== null && cog.netBill !== '' && !isNaN(parseFloat(cog.netBill))) {
+                    return parseFloat(cog.netBill);
+                }
+                const amt = parseFloat(cog.amount) || 0;
+                const indTruck = parseFloat(cog.indTruckFare) || 0;
+                const truckChange = parseFloat(cog.truckChangeFare) || 0;
+                const slof = parseFloat(cog.slofCf) || 0;
+                const total = amt + indTruck + truckChange + slof;
+                return total > 0 ? total : amt;
+            };
+
+            // Build lookups from Cost of Goods
+            const cogMap = {};
+            cogData.forEach(cog => {
+                const cleanLc = (cog.lcNo || '').trim().toLowerCase();
+                const cleanProd = (cog.product || cog.productName || '').trim().toLowerCase();
+                const cleanBrand = (cog.brand || '').trim().toLowerCase();
+
+                const totalBill = getCogTotalBill(cog);
+                const currency = (cog.country === 'CHINA' || cog.country === 'China') ? 'USD' : (cog.currency || 'RS');
+
+                const cogObj = {
+                    supplier: cog.supplier || cog.supplierName || '',
+                    invoiceNo: cog.invoiceNo || cog.invoice || '',
+                    exporter: cog.exporter || cog.exporterName || '',
+                    totalBill: totalBill,
+                    currency: currency
+                };
+
+                if (cleanLc) {
+                    if (cleanProd && cleanBrand) cogMap[`${cleanLc}_${cleanProd}_${cleanBrand}`] = cogObj;
+                    if (cleanProd && !cogMap[`${cleanLc}_${cleanProd}`]) cogMap[`${cleanLc}_${cleanProd}`] = cogObj;
+                    if (cleanBrand && !cogMap[`${cleanLc}_${cleanBrand}`]) cogMap[`${cleanLc}_${cleanBrand}`] = cogObj;
+                    if (!cogMap[cleanLc]) cogMap[cleanLc] = cogObj;
+                }
+            });
 
             const rows = [];
             const targetExporter = (exporterName || '').toLowerCase().trim();
@@ -102,17 +333,45 @@ const Exporter = ({
                 const status = (record.status || '').toLowerCase();
                 if (status.includes('requested') || status.includes('rejected')) return;
 
-                if ((record.exporter || '').toLowerCase().trim() === targetExporter) {
+                const cleanLc = (record.lcNo || '').trim().toLowerCase();
+                const cleanProd = (record.productName || record.product || '').trim().toLowerCase();
+                const cleanBrand = (record.brand || '').trim().toLowerCase();
+
+                const cogMatch = cogMap[`${cleanLc}_${cleanProd}_${cleanBrand}`] ||
+                    cogMap[`${cleanLc}_${cleanProd}`] ||
+                    cogMap[`${cleanLc}_${cleanBrand}`] ||
+                    cogMap[cleanLc] || {};
+
+                const lcMatch = lcMap[cleanLc] || {};
+
+                const exp = (record.exporter || record.exporterName || cogMatch.exporter || lcMatch.exporter || '').toLowerCase().trim();
+                if (exp === targetExporter) {
+                    const resolvedInvoiceNo = cogMatch.invoiceNo || '-';
+
+                    const resolvedSupplier = (cogMatch.supplier && cogMatch.supplier !== '-')
+                        ? cogMatch.supplier
+                        : (lcMatch.supplier && lcMatch.supplier !== '-')
+                            ? lcMatch.supplier
+                            : (record.supplier && record.supplier !== '-')
+                                ? record.supplier
+                                : (record.supplierName && record.supplierName !== '-')
+                                    ? record.supplierName
+                                    : '-';
+
                     rows.push({
-                        date: record.date,
-                        lcNo: record.lcNo,
-                        port: record.port,
-                        product: record.productName,
-                        brand: record.brand,
-                        rate: record.purchasedPrice,
-                        bag: !isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (record.inHousePacket || 0),
-                        qty: !isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (record.inHouseQuantity || 0),
-                        truck: record.truckNo || '-',
+                        date: record.date || record.createdAt,
+                        invoiceNo: resolvedInvoiceNo,
+                        supplier: resolvedSupplier,
+                        lcNo: record.lcNo || '-',
+                        port: record.port || '-',
+                        product: record.productName || record.product || '-',
+                        brand: record.brand || '-',
+                        totalBill: cogMatch.totalBill || 0,
+                        currency: cogMatch.currency || 'RS',
+                        rate: record.purchasedPrice || record.rate || record.price || 0,
+                        bag: !isNaN(parseFloat(record.packet)) ? parseFloat(record.packet) : (!isNaN(parseFloat(record.bag)) ? parseFloat(record.bag) : (record.inHousePacket || 0)),
+                        qty: !isNaN(parseFloat(record.quantity)) ? parseFloat(record.quantity) : (!isNaN(parseFloat(record.qty)) ? parseFloat(record.qty) : (record.inHouseQuantity || 0)),
+                        truck: record.truckNo || record.truck || '-',
                         source: 'stock'
                     });
                 }
@@ -121,19 +380,48 @@ const Exporter = ({
             // 2. Process Sales (Border Sale)
             salesData.forEach(sale => {
                 const sTypeLow = (sale.saleType || '').toLowerCase();
-                if ((sTypeLow === 'border' || sTypeLow === 'border sale') &&
-                    (sale.exporter || '').toLowerCase().trim() === targetExporter) {
+                const cleanLc = (sale.lcNo || '').trim().toLowerCase();
+                const lcMatch = lcMap[cleanLc] || {};
+                const sExp = (sale.exporter || sale.exporterName || lcMatch.exporter || '').toLowerCase().trim();
+
+                if ((sTypeLow === 'border' || sTypeLow === 'border sale') && sExp === targetExporter) {
                     if (sale.items && Array.isArray(sale.items)) {
                         sale.items.forEach(item => {
+                            const cleanProd = (item.productName || item.product || '').trim().toLowerCase();
                             if (item.brandEntries && Array.isArray(item.brandEntries)) {
                                 item.brandEntries.forEach(be => {
+                                    const cleanBrand = (be.brand || '').trim().toLowerCase();
+
+                                    const cogMatch = cogMap[`${cleanLc}_${cleanProd}_${cleanBrand}`] ||
+                                        cogMap[`${cleanLc}_${cleanProd}`] ||
+                                        cogMap[`${cleanLc}_${cleanBrand}`] ||
+                                        cogMap[cleanLc] || {};
+
+                                    const resolvedInvoiceNo = cogMatch.invoiceNo || '-';
+
+                                    const resolvedSupplier = (cogMatch.supplier && cogMatch.supplier !== '-')
+                                        ? cogMatch.supplier
+                                        : (lcMatch.supplier && lcMatch.supplier !== '-')
+                                            ? lcMatch.supplier
+                                            : (sale.supplier && sale.supplier !== '-')
+                                                ? sale.supplier
+                                                : (sale.supplierName && sale.supplierName !== '-')
+                                                    ? sale.supplierName
+                                                    : (item.supplier && item.supplier !== '-')
+                                                        ? item.supplier
+                                                        : '-';
+
                                     rows.push({
-                                        date: sale.date,
-                                        lcNo: sale.lcNo,
-                                        port: sale.port,
-                                        product: item.productName || item.product,
-                                        brand: be.brand,
-                                        rate: 0, 
+                                        date: sale.date || sale.createdAt,
+                                        invoiceNo: resolvedInvoiceNo,
+                                        supplier: resolvedSupplier,
+                                        lcNo: sale.lcNo || '-',
+                                        port: sale.port || '-',
+                                        product: item.productName || item.product || '-',
+                                        brand: be.brand || '-',
+                                        totalBill: cogMatch.totalBill || 0,
+                                        currency: cogMatch.currency || 'RS',
+                                        rate: be.rate || be.purchasedPrice || 0, 
                                         bag: be.bag || be.packet || '-',
                                         qty: be.quantity || 0,
                                         truck: be.truck || sale.truck || '-',
@@ -190,23 +478,28 @@ const Exporter = ({
         }));
     };
 
-    const handleSubmit = async (e) => {
+    const handleFormSubmit = async (e) => {
         e.preventDefault();
-        if (isBorderManager) {
-            alert('Forbidden: Border managers are not allowed to add or edit exporters');
-            return;
-        }
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
+            const payload = { ...formData };
             const url = editingId
                 ? `${API_BASE_URL}/api/exporters/${editingId}`
                 : `${API_BASE_URL}/api/exporters`;
-            if (editingId) await axios.put(url, formData);
-            else await axios.post(url, formData);
+            if (editingId) {
+                await axios.put(url, payload);
+            } else {
+                await axios.post(url, payload);
+            }
             setSubmitStatus('success');
             fetchExporters();
-            setTimeout(() => { setShowForm(false); setEditingId(null); resetForm(); setSubmitStatus(null); }, 2000);
+            setTimeout(() => {
+                setShowForm(false);
+                setEditingId(null);
+                resetForm();
+                setSubmitStatus(null);
+            }, 2000);
         } catch (error) {
             console.error('Error saving exporter:', error);
             setSubmitStatus('error');
@@ -216,7 +509,23 @@ const Exporter = ({
     };
 
     const resetForm = () => {
-        setFormData({ name: '', address: '', contactPerson: '', email: '', phone: '', bin: '', tin: '', irc: '', status: 'Active', signature: '' });
+        setFormData({
+            name: '',
+            address: '',
+            contactPerson: '',
+            email: '',
+            phone: '',
+            bin: '',
+            tin: '',
+            irc: '',
+            bankName: '',
+            branchName: '',
+            accountNumber: '',
+            routingNumber: '',
+            swiftCode: '',
+            status: 'Active',
+            signature: ''
+        });
         setEditingId(null);
         setSubmitStatus(null);
     };
@@ -231,6 +540,11 @@ const Exporter = ({
             bin: exporter.bin || '',
             tin: exporter.tin || '',
             irc: exporter.irc || '',
+            bankName: exporter.bankName || '',
+            branchName: exporter.branchName || '',
+            accountNumber: exporter.accountNumber || '',
+            routingNumber: exporter.routingNumber || '',
+            swiftCode: exporter.swiftCode || '',
             status: exporter.status || 'Active',
             signature: exporter.signature || ''
         });
@@ -273,22 +587,130 @@ const Exporter = ({
         });
     };
 
-    const filteredHistory = historyRecords.filter(row => {
-        const q = historySearchQuery.toLowerCase();
-        if (!q) return true;
-        return (
-            (row.date || '').toLowerCase().includes(q) ||
-            (row.lcNo || '').toLowerCase().includes(q) ||
-            (row.port || '').toLowerCase().includes(q) ||
-            (row.product || '').toLowerCase().includes(q) ||
-            (row.brand || '').toLowerCase().includes(q) ||
-            String(row.truck || '').toLowerCase().includes(q)
-        );
+    const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
+    const historyFilterPanelRef = useRef(null);
+    const historyFilterButtonRef = useRef(null);
+
+    const [historyFilters, setHistoryFilters] = useState({
+        quickRange: 'all',
+        startDate: '',
+        endDate: '',
+        supplier: '',
+        product: '',
+        brand: '',
+        lcNo: '',
+        port: ''
     });
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (
+                showHistoryFilterPanel &&
+                historyFilterPanelRef.current &&
+                !historyFilterPanelRef.current.contains(e.target) &&
+                !historyFilterButtonRef.current?.contains(e.target)
+            ) {
+                setShowHistoryFilterPanel(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showHistoryFilterPanel]);
+
+    const availableSuppliers = [...new Set(historyRecords.map(r => r.supplier).filter(s => s && s !== '-'))].sort();
+    const availableProducts = [...new Set(historyRecords.map(r => r.product).filter(p => p && p !== '-'))].sort();
+    const availableBrands = [...new Set(historyRecords.map(r => r.brand).filter(b => b && b !== '-'))].sort();
+    const availableLcs = [...new Set(historyRecords.map(r => r.lcNo).filter(l => l && l !== '-'))].sort();
+    const availablePorts = [...new Set(historyRecords.map(r => r.port).filter(p => p && p !== '-'))].sort();
+
+    const isFilterActive = 
+        historyFilters.quickRange !== 'all' ||
+        historyFilters.startDate !== '' ||
+        historyFilters.endDate !== '' ||
+        historyFilters.supplier !== '' ||
+        historyFilters.product !== '' ||
+        historyFilters.brand !== '' ||
+        historyFilters.lcNo !== '' ||
+        historyFilters.port !== '';
+
+    const getFilteredHistory = () => {
+        return historyRecords.filter(row => {
+            // Quick Range
+            if (historyFilters.quickRange && historyFilters.quickRange !== 'all') {
+                const rowDate = new Date(row.date);
+                const now = new Date();
+                if (historyFilters.quickRange === 'weekly') {
+                    const d = new Date();
+                    d.setDate(now.getDate() - 7);
+                    if (rowDate < d || rowDate > now) return false;
+                } else if (historyFilters.quickRange === 'monthly') {
+                    const d = new Date();
+                    d.setMonth(now.getMonth() - 1);
+                    if (rowDate < d || rowDate > now) return false;
+                } else if (historyFilters.quickRange === 'yearly') {
+                    const d = new Date();
+                    d.setFullYear(now.getFullYear() - 1);
+                    if (rowDate < d || rowDate > now) return false;
+                }
+            }
+
+            // Date Range
+            if (historyFilters.startDate) {
+                const rDate = (row.date || '').slice(0, 10);
+                if (rDate < historyFilters.startDate) return false;
+            }
+            if (historyFilters.endDate) {
+                const rDate = (row.date || '').slice(0, 10);
+                if (rDate > historyFilters.endDate) return false;
+            }
+
+            // Supplier
+            if (historyFilters.supplier && (row.supplier || '').toLowerCase() !== historyFilters.supplier.toLowerCase()) {
+                return false;
+            }
+
+            // Product
+            if (historyFilters.product && (row.product || '').toLowerCase() !== historyFilters.product.toLowerCase()) {
+                return false;
+            }
+
+            // Brand
+            if (historyFilters.brand && (row.brand || '').toLowerCase() !== historyFilters.brand.toLowerCase()) {
+                return false;
+            }
+
+            // LC No
+            if (historyFilters.lcNo && (row.lcNo || '').toLowerCase() !== historyFilters.lcNo.toLowerCase()) {
+                return false;
+            }
+
+            // Port
+            if (historyFilters.port && (row.port || '').toLowerCase() !== historyFilters.port.toLowerCase()) {
+                return false;
+            }
+
+            // Search Query
+            const q = (historySearchQuery || '').toLowerCase().trim();
+            if (!q) return true;
+            return (
+                (row.date || '').toLowerCase().includes(q) ||
+                (row.invoiceNo || '').toLowerCase().includes(q) ||
+                (row.supplier || '').toLowerCase().includes(q) ||
+                (row.lcNo || '').toLowerCase().includes(q) ||
+                (row.port || '').toLowerCase().includes(q) ||
+                (row.product || '').toLowerCase().includes(q) ||
+                (row.brand || '').toLowerCase().includes(q) ||
+                String(row.truck || '').toLowerCase().includes(q)
+            );
+        });
+    };
+
+    const filteredHistory = getFilteredHistory();
 
     const totalBag = filteredHistory.reduce((s, r) => s + (parseFloat(r.bag) || 0), 0);
     const totalQty = filteredHistory.reduce((s, r) => s + (parseFloat(r.qty) || 0), 0);
     const totalAmount = filteredHistory.reduce((s, r) => s + (parseFloat(r.rate) || 0) * (parseFloat(r.qty) || 0), 0);
+    const totalBillSum = filteredHistory.reduce((s, r) => s + (parseFloat(r.totalBill) || 0), 0);
 
     return (
         <div className="exporter-container">
@@ -634,44 +1056,263 @@ const Exporter = ({
             {/* Export History Modal */}
             {viewData && createPortal(
                 <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-6xl w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
+                    <div 
+                        className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" 
+                        onClick={() => {
+                            setViewData(null);
+                            setHistorySearchQuery('');
+                            setExpandedHistoryIdx(null);
+                        }}
+                    ></div>
+                    <div className="relative bg-white/95 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl max-w-[95vw] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-300 z-10 overflow-hidden">
                         {/* Modal Header */}
-                        <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
-                            <div className="flex-1 text-left min-w-0 pr-8 md:pr-0">
-                                <h3 className="text-lg md:text-xl font-bold text-gray-900 truncate">{viewData.name}</h3>
-                                <div className="text-xs text-gray-500 mt-1 space-y-0.5">
-                                    <p>BIN: {viewData.bin} | TIN: {viewData.tin} | IRC: {viewData.irc}</p>
-                                    {viewData.address && (
-                                        <p className="text-gray-400 font-medium">{viewData.address}</p>
-                                    )}
-                                </div>
+                        <div className="px-4 sm:px-8 pt-3 pb-4 sm:pt-4 sm:pb-6 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-3xl gap-3 flex-shrink-0 z-50 relative">
+                            <div className="flex-shrink-0 min-w-0">
+                                <h3 className="text-base sm:text-xl font-bold text-gray-900 leading-tight">Exporter History</h3>
+                                <p className="text-xs sm:text-sm font-semibold text-gray-600 truncate mt-0.5">{viewData.name}</p>
                             </div>
 
-                            {/* Search bar */}
-                            <div className="flex-1 w-full md:max-w-sm md:mx-auto">
-                                <div className="relative group">
+                            {/* Center Search bar */}
+                            <div className="hidden lg:flex flex-1 max-w-xl mx-auto flex-col items-center gap-4">
+                                <div className="w-full max-w-md relative group">
                                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                         <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="Search export history..."
+                                        placeholder="Search by LC No, Product, Port, Brand..."
                                         value={historySearchQuery}
                                         onChange={(e) => setHistorySearchQuery(e.target.value)}
-                                        className="block w-full pl-10 pr-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        className="block w-full pl-10 pr-9 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-[13px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
                                     />
+                                    {historySearchQuery && (
+                                        <button
+                                            onClick={() => setHistorySearchQuery('')}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full"
+                                        >
+                                            <XIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
-                            {/* Close button */}
-                            <button onClick={() => setViewData(null)} className="absolute right-4 top-4 md:static p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
-                                <XIcon className="w-5 h-5" />
-                            </button>
+                            {/* Right: Filter, Close */}
+                            <div className="flex items-center gap-2">
+                                <div className="relative">
+                                    <button
+                                        ref={historyFilterButtonRef}
+                                        onClick={() => setShowHistoryFilterPanel(!showHistoryFilterPanel)}
+                                        className={`flex items-center justify-center sm:gap-2 w-9 h-9 sm:w-auto sm:h-10 sm:px-4 rounded-xl transition-all border ${
+                                            showHistoryFilterPanel || isFilterActive
+                                                ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || isFilterActive ? 'text-white' : 'text-gray-400'}`} />
+                                        <span className="hidden sm:block text-sm font-medium">Filter</span>
+                                    </button>
+
+                                    {/* Mobile Filter Overlay Backdrop */}
+                                    {showHistoryFilterPanel && (
+                                        <div 
+                                            className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[55] lg:hidden"
+                                            onClick={() => setShowHistoryFilterPanel(false)}
+                                        />
+                                    )}
+
+                                    {/* Filter Dropdown Panel */}
+                                    {showHistoryFilterPanel && (
+                                        <div
+                                            ref={historyFilterPanelRef}
+                                            className="fixed inset-x-4 top-24 lg:absolute lg:inset-auto lg:right-0 lg:mt-3 w-auto lg:w-[360px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[60] p-5 animate-in fade-in zoom-in duration-200 overflow-y-auto lg:overflow-visible max-h-[70vh] text-left"
+                                        >
+                                            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+                                                <h4 className="font-bold text-gray-900 text-sm">Advanced Filters</h4>
+                                                <button
+                                                    onClick={() => {
+                                                        setHistoryFilters({
+                                                            quickRange: 'all',
+                                                            startDate: '',
+                                                            endDate: '',
+                                                            supplier: '',
+                                                            product: '',
+                                                            brand: '',
+                                                            lcNo: '',
+                                                            port: ''
+                                                        });
+                                                    }}
+                                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
+                                                >
+                                                    Reset All
+                                                </button>
+                                            </div>
+
+                                            <div className="space-y-3.5">
+                                                {/* Quick Range */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                            <button
+                                                                key={range}
+                                                                type="button"
+                                                                onClick={() => setHistoryFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
+                                                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                                                                    historyFilters.quickRange === range
+                                                                        ? 'bg-blue-600 text-white shadow-sm'
+                                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                                }`}
+                                                            >
+                                                                {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Date Range */}
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <CustomDatePicker
+                                                        label="FROM DATE"
+                                                        value={historyFilters.startDate}
+                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'all' }))}
+                                                        compact={true}
+                                                        labelClassName="text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+                                                    />
+                                                    <CustomDatePicker
+                                                        label="TO DATE"
+                                                        value={historyFilters.endDate}
+                                                        onChange={(e) => setHistoryFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'all' }))}
+                                                        compact={true}
+                                                        rightAlign={true}
+                                                        labelClassName="text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+                                                    />
+                                                </div>
+
+                                                {/* Supplier Filter */}
+                                                <SearchableFilterSelect
+                                                    label="Supplier"
+                                                    value={historyFilters.supplier}
+                                                    onChange={(val) => setHistoryFilters(prev => ({ ...prev, supplier: val }))}
+                                                    options={availableSuppliers}
+                                                    placeholder="All Suppliers"
+                                                />
+
+                                                {/* Product Filter */}
+                                                <SearchableFilterSelect
+                                                    label="Product"
+                                                    value={historyFilters.product}
+                                                    onChange={(val) => setHistoryFilters(prev => ({ ...prev, product: val }))}
+                                                    options={availableProducts}
+                                                    placeholder="All Products"
+                                                />
+
+                                                {/* Brand Filter */}
+                                                <SearchableFilterSelect
+                                                    label="Brand"
+                                                    value={historyFilters.brand}
+                                                    onChange={(val) => setHistoryFilters(prev => ({ ...prev, brand: val }))}
+                                                    options={availableBrands}
+                                                    placeholder="All Brands"
+                                                />
+
+                                                {/* LC No Filter */}
+                                                <SearchableFilterSelect
+                                                    label="LC No"
+                                                    value={historyFilters.lcNo}
+                                                    onChange={(val) => setHistoryFilters(prev => ({ ...prev, lcNo: val }))}
+                                                    options={availableLcs}
+                                                    placeholder="All LC Numbers"
+                                                />
+
+                                                {/* Port Filter */}
+                                                <SearchableFilterSelect
+                                                    label="Port"
+                                                    value={historyFilters.port}
+                                                    onChange={(val) => setHistoryFilters(prev => ({ ...prev, port: val }))}
+                                                    options={availablePorts}
+                                                    placeholder="All Ports"
+                                                />
+
+                                                <button
+                                                    onClick={() => setShowHistoryFilterPanel(false)}
+                                                    className="w-full py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-all mt-2"
+                                                >
+                                                    Apply Filters
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Report Button */}
+                                <button
+                                    onClick={() => generateExporterProfileReportPDF(viewData, getFilteredHistory(), historyFilters)}
+                                    className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-10 sm:px-4 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm"
+                                >
+                                    <FileTextIcon className="w-4 h-4" />
+                                    <span className="hidden sm:block text-sm font-medium ml-2">Report</span>
+                                </button>
+
+                                <button 
+                                    onClick={() => {
+                                        setViewData(null);
+                                        setHistorySearchQuery('');
+                                        setExpandedHistoryIdx(null);
+                                    }} 
+                                    className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
+                                >
+                                    <XIcon className="w-6 h-6 text-gray-400" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Mobile Search Row (hidden on lg+) */}
+                        <div className="lg:hidden px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                    <SearchIcon className="h-4 w-4 text-gray-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search by LC No, Product, Port..."
+                                    value={historySearchQuery}
+                                    onChange={(e) => setHistorySearchQuery(e.target.value)}
+                                    className="block w-full pl-10 pr-9 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-xs placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                />
+                                {historySearchQuery && (
+                                    <button
+                                        onClick={() => setHistorySearchQuery('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full"
+                                    >
+                                        <XIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Modal Body */}
-                        <div className="flex-1 overflow-auto p-4 md:p-8 min-h-0">
+                        <div className="flex-1 overflow-auto p-4 md:p-6 min-h-0 space-y-4 text-left">
+                            {/* Exporter Info Card */}
+                            {(viewData.bin || viewData.tin || viewData.irc || viewData.address) && (
+                                <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-2xl border border-gray-100 p-4 shadow-sm">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                        {(viewData.bin || viewData.tin || viewData.irc) && (
+                                            <div>
+                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Registration Info</span>
+                                                <p className="text-xs font-semibold text-gray-800 mt-0.5">
+                                                    BIN: {viewData.bin || '-'} | TIN: {viewData.tin || '-'} | IRC: {viewData.irc || '-'}
+                                                </p>
+                                            </div>
+                                        )}
+                                        {viewData.address && (
+                                            <div className="md:col-span-3">
+                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Address</span>
+                                                <p className="text-xs font-semibold text-gray-800 mt-0.5">{viewData.address}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                             {historyLoading ? (
                                 <div className="flex items-center justify-center py-16">
                                     <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -680,14 +1321,17 @@ const Exporter = ({
                                 <div className="space-y-4">
                                     {/* Desktop Table View */}
                                     <div className="hidden md:block bg-gray-50 rounded-xl border border-gray-200 overflow-x-auto">
-                                        <table className="w-full text-left text-sm" style={{ minWidth: '45rem' }}>
+                                        <table className="w-full text-left text-sm" style={{ minWidth: '55rem' }}>
                                             <thead className="bg-white border-b border-gray-200">
                                                 <tr>
                                                     <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">Date</th>
+                                                    <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">Invoice No</th>
                                                     <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">LC No</th>
+                                                    <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">Supplier</th>
                                                     <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">Port</th>
                                                     <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">Product</th>
                                                     <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide whitespace-nowrap">Brand</th>
+                                                    <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide text-right whitespace-nowrap">Total Bill</th>
                                                     <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide text-center whitespace-nowrap">Truck</th>
                                                     <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide text-right whitespace-nowrap">Bag</th>
                                                     <th className="px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide text-right whitespace-nowrap">Qty</th>
@@ -707,10 +1351,15 @@ const Exporter = ({
                                                                 return (
                                                                     <tr key={idx} className="hover:bg-white transition-colors">
                                                                         <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{formatDate(row.date)}</td>
+                                                                        <td className="px-4 py-3 font-bold text-gray-900 whitespace-nowrap">{row.invoiceNo || '-'}</td>
                                                                         <td className="px-4 py-3 font-semibold text-blue-600 whitespace-nowrap">{row.lcNo || '-'}</td>
+                                                                        <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{row.supplier || '-'}</td>
                                                                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.port || '-'}</td>
                                                                         <td className="px-4 py-3 font-medium text-gray-800">{row.product || '-'}</td>
                                                                         <td className="px-4 py-3 text-purple-700 font-medium">{row.brand || '-'}</td>
+                                                                        <td className="px-4 py-3 text-right font-bold text-gray-800 whitespace-nowrap">
+                                                                            {row.totalBill > 0 ? `${row.currency === 'USD' ? '$' : '₹'}${row.totalBill.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '-'}
+                                                                        </td>
                                                                         <td className="px-4 py-3 text-center text-gray-600">{row.truck || '-'}</td>
                                                                         <td className="px-4 py-3 text-right font-semibold text-gray-800">{row.bag ? Math.round(parseFloat(row.bag)).toLocaleString('en-US') : '-'}</td>
                                                                         <td className="px-4 py-3 text-right font-semibold text-gray-800">{row.qty ? Math.round(parseFloat(row.qty)).toLocaleString('en-US') : '-'}</td>
@@ -722,7 +1371,9 @@ const Exporter = ({
                                                             });
                                                         })()}
                                                         <tr className="bg-blue-50 border-t-2 border-blue-200 font-bold">
-                                                            <td colSpan={6} className="px-4 py-3 text-blue-700 text-xs uppercase tracking-wide">Grand Total</td>
+                                                            <td colSpan={7} className="px-4 py-3 text-blue-700 text-xs uppercase tracking-wide">Grand Total</td>
+                                                            <td className="px-4 py-3 text-right text-purple-800 font-bold">{totalBillSum > 0 ? `₹${totalBillSum.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '-'}</td>
+                                                            <td className="px-4 py-3"></td>
                                                             <td className="px-4 py-3 text-right text-blue-800">{Math.round(totalBag).toLocaleString('en-US')}</td>
                                                             <td className="px-4 py-3 text-right text-blue-800">{Math.round(totalQty).toLocaleString('en-US')}</td>
                                                             <td></td>
@@ -732,7 +1383,7 @@ const Exporter = ({
                                                     </>
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan="11" className="px-4 py-12 text-center text-gray-400">
+                                                        <td colSpan="14" className="px-4 py-12 text-center text-gray-400">
                                                             <div className="flex flex-col items-center">
                                                                 <BoxIcon className="w-8 h-8 mb-2 opacity-20" />
                                                                 <p>No export history available</p>
@@ -779,6 +1430,14 @@ const Exporter = ({
                                                                 {isExpanded && (
                                                                     <div className="px-4 pb-4 pt-1 space-y-2 bg-gray-50/30 border-t border-gray-100/50 text-xs text-left animate-in slide-in-from-top-4 duration-300">
                                                                         <div className="grid grid-cols-[125px_8px_1fr] gap-y-2 pt-3 text-xs items-baseline">
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Invoice No</span>
+                                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                            <span className="font-bold text-gray-900 truncate text-[11px]">{row.invoiceNo || '-'}</span>
+
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Supplier</span>
+                                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                            <span className="font-semibold text-gray-800 uppercase truncate text-[11px]">{row.supplier || '-'}</span>
+
                                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Port</span>
                                                                             <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                                             <span className="font-semibold text-gray-700 uppercase truncate text-[11px]">{row.port || '-'}</span>
@@ -786,6 +1445,12 @@ const Exporter = ({
                                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Brand</span>
                                                                             <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                                             <span className="font-bold text-purple-600 uppercase truncate text-[11px]">{row.brand || '-'}</span>
+
+                                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Bill</span>
+                                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                            <span className="font-bold text-gray-900 text-[11px]">
+                                                                                {row.totalBill > 0 ? `${row.currency === 'USD' ? '$' : '₹'}${row.totalBill.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '-'}
+                                                                            </span>
 
                                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
                                                                             <span className="text-gray-400 font-bold text-[10px]">:</span>
