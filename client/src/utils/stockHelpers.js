@@ -716,7 +716,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (!brandObj._salesResolved) {
             salesRecords.forEach(sale => {
                 const sStatus = (sale.status || '').toLowerCase();
-                const isOrderSale = (sale.saleType || '').toLowerCase() === 'order' ||
+                const sType = (sale.saleType || '').toLowerCase();
+                const isBorderSale = sType === 'border' || (sale.invoiceNo || '').toUpperCase().startsWith('BS') || sale.isBorderSale === true;
+                if (isBorderSale) return; // Exclude Border sales from Warehouse Stock
+                const isOrderSale = sType === 'order' ||
                     (sale.invoiceNo || sale.orderNo || '').toUpperCase().startsWith('ORD') ||
                     sale.isOrderEntry === true;
                 if (sStatus === 'rejected' || sStatus === 'cancelled') return;
@@ -918,6 +921,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     salesRecords.forEach(sale => {
         const sStatus = (sale.status || '').toLowerCase();
         const sType = (sale.saleType || '').toLowerCase();
+        const isBorderSale = sType === 'border' || (sale.invoiceNo || '').toUpperCase().startsWith('BS') || sale.isBorderSale === true;
+        if (isBorderSale) return; // Exclude Border sales from Warehouse Stock
         const inv = (sale.invoiceNo || sale.orderNo || '').trim().toUpperCase();
         const isOrderSale = sType === 'order' || inv.startsWith('ORD') || sale.isOrderEntry === true;
         if (sStatus === 'rejected' || sStatus === 'cancelled') return;

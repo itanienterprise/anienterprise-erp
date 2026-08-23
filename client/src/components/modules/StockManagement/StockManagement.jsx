@@ -679,10 +679,11 @@ const StockManagement = ({
             const status = (sale.status || '').toLowerCase();
             if (status && (status.includes('rejected') || status.includes('deleted'))) return false;
 
-            // Exclude order entries from the Sale history tab
+            // Exclude order and border entries from the Sale history tab
             const sTypeLow = (sale.saleType || '').toLowerCase().trim();
             const invUpper = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
             if (sTypeLow === 'order' || invUpper.startsWith('ORD') || sale.isOrderEntry === true) return false;
+            if (sTypeLow === 'border' || invUpper.startsWith('BS') || sale.isBorderSale === true) return false;
 
             const matchingItems = (sale.items || []).filter(item =>
                 (item.productName || '').trim().toLowerCase() === productName
@@ -1162,7 +1163,9 @@ const StockManagement = ({
 
                     (salesRecords || []).forEach(sale => {
                         const sStatus = (sale.status || '').toLowerCase();
+                        const sType = (sale.saleType || '').toLowerCase();
                         if (sStatus !== 'accepted') return;
+                        if (sType === 'border' || (sale.invoiceNo || '').toUpperCase().startsWith('BS') || sale.isBorderSale === true) return;
                         if (sale.items) {
                             sale.items.forEach(saleItem => {
                                 if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
@@ -1241,7 +1244,9 @@ const StockManagement = ({
 
                     (salesRecords || []).forEach(sale => {
                         const sStatus = (sale.status || '').toLowerCase();
+                        const sType = (sale.saleType || '').toLowerCase();
                         if (sStatus !== 'accepted') return;
+                        if (sType === 'border' || (sale.invoiceNo || '').toUpperCase().startsWith('BS') || sale.isBorderSale === true) return;
                         if (sale.items) {
                             sale.items.forEach(saleItem => {
                                 if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
@@ -1389,7 +1394,9 @@ const StockManagement = ({
                                 let whSalePkt = 0;
                                 (salesRecords || []).forEach(sale => {
                                     const sStatus = (sale.status || '').toLowerCase();
+                                    const sType = (sale.saleType || '').toLowerCase();
                                     if (sStatus !== 'accepted') return;
+                                    if (sType === 'border' || (sale.invoiceNo || '').toUpperCase().startsWith('BS') || sale.isBorderSale === true) return;
                                     if (sale.items) {
                                         sale.items.forEach(saleItem => {
                                             if ((saleItem.productName || '').trim().toLowerCase() === targetProd) {
