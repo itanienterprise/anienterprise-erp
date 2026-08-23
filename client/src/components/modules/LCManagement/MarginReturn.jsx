@@ -14,12 +14,15 @@ import {
     RotateCcwIcon,
     DownloadIcon,
     ChevronDownIcon,
-    ChevronUpIcon
+    ChevronUpIcon,
+    FunnelIcon,
+    BarChartIcon
 } from '../../Icons';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { formatDate } from '../../../utils/helpers';
 import { getLCHistoryTimeline, getMilestoneTotalDollar } from './LCManagement';
+import { generateMarginReturnReportPDF } from '../../../utils/pdfGenerator';
 
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -34,9 +37,34 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
 
     // Filter & Search states
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedMonth, setSelectedMonth] = useState('');
-    const [selectedLcFilter, setSelectedLcFilter] = useState('');
     const [expandedRecordIdx, setExpandedRecordIdx] = useState(null);
+
+    const initialMarginReturnFilterState = {
+        startDate: '',
+        endDate: '',
+        lcNo: '',
+        bankName: '',
+        importerName: ''
+    };
+    const [marginReturnFilters, setMarginReturnFilters] = useState(initialMarginReturnFilterState);
+    const [showFilterPanel, setShowFilterPanel] = useState(false);
+    const filterPanelRef = useRef(null);
+    const filterButtonRef = useRef(null);
+    const lcFilterRef = useRef(null);
+    const bankFilterRef = useRef(null);
+    const importerFilterRef = useRef(null);
+
+    const initialFilterDropdownState = {
+        lcNo: false,
+        bankName: false,
+        importerName: false
+    };
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState(initialFilterDropdownState);
+    const [filterSearchInputs, setFilterSearchInputs] = useState({
+        lcSearch: '',
+        bankSearch: '',
+        importerSearch: ''
+    });
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -83,6 +111,73 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // Close Filter Panel when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                showFilterPanel &&
+                filterPanelRef.current &&
+                !filterPanelRef.current.contains(event.target) &&
+                filterButtonRef.current &&
+                !filterButtonRef.current.contains(event.target)
+            ) {
+                setShowFilterPanel(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showFilterPanel]);
+
+    // Close Filter Dropdowns when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            const openKey = Object.keys(filterDropdownOpen).find(key => filterDropdownOpen[key]);
+            if (!openKey) return;
+
+            let refsToCheck = [];
+            if (openKey === 'lcNo') refsToCheck = [lcFilterRef];
+            else if (openKey === 'bankName') refsToCheck = [bankFilterRef];
+            else if (openKey === 'importerName') refsToCheck = [importerFilterRef];
+
+            const isOutside = refsToCheck.every(ref => !ref.current || !ref.current.contains(event.target));
+            if (isOutside) {
+                setFilterDropdownOpen(initialFilterDropdownState);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [filterDropdownOpen]);
+
+    const getFilteredOptions = (type) => {
+        let options = [];
+        let search = '';
+
+        switch (type) {
+            case 'marginReturnFilterLc':
+                options = [...new Set([...marginReturns.map(m => m.lcNo), ...lcRecords.map(l => l.lcNo)].filter(Boolean))].sort();
+                search = filterSearchInputs.lcSearch;
+                break;
+            case 'marginReturnFilterBank':
+                options = [...new Set([...banks.map(b => b.name), ...lcRecords.map(l => l.bankName || l.bank), ...marginReturns.map(m => m.bankName)].filter(Boolean))].sort();
+                search = filterSearchInputs.bankSearch;
+                break;
+            case 'marginReturnFilterImporter':
+                options = [...new Set([...lcRecords.map(l => l.importerName || l.importer), ...marginReturns.map(m => m.importerName)].filter(Boolean))].sort();
+                search = filterSearchInputs.importerSearch;
+                break;
+            default:
+                return [];
+        }
+
+        return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+    };
+
+    const handleGenerateReport = () => {
+        generateMarginReturnReportPDF(filteredRecords, marginReturnFilters, totals, lcMarginMap, searchQuery);
+    };
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -462,18 +557,33 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
     // Filtered Return Records
     const filteredRecords = useMemo(() => {
         return marginReturns.filter(item => {
-            const matchesSearch = !searchQuery.trim() ||
-                (item.lcNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (item.importerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (item.bankName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (item.remarks || '').toLowerCase().includes(searchQuery.toLowerCase());
+            const lcDetails = lcMarginMap[item.lcId] || {};
+            const itemBank = item.bankName || lcDetails.bankName || '';
+            const itemImporter = item.importerName || lcDetails.importerName || '';
+            const itemProduct = lcDetails.productName || item.productName || '';
 
-            const matchesMonth = !selectedMonth || (item.returnDate || '').startsWith(selectedMonth);
-            const matchesLc = !selectedLcFilter || item.lcId === selectedLcFilter || item.lcNo === selectedLcFilter;
+            // Search Query Filter
+            if (searchQuery.trim()) {
+                const q = searchQuery.toLowerCase();
+                const matchesSearch =
+                    (item.lcNo || '').toLowerCase().includes(q) ||
+                    itemImporter.toLowerCase().includes(q) ||
+                    itemBank.toLowerCase().includes(q) ||
+                    itemProduct.toLowerCase().includes(q) ||
+                    (item.remarks || '').toLowerCase().includes(q);
+                if (!matchesSearch) return false;
+            }
 
-            return matchesSearch && matchesMonth && matchesLc;
+            // Advanced Filters
+            if (marginReturnFilters.startDate && item.returnDate && item.returnDate < marginReturnFilters.startDate) return false;
+            if (marginReturnFilters.endDate && item.returnDate && item.returnDate > marginReturnFilters.endDate) return false;
+            if (marginReturnFilters.lcNo && (item.lcNo || '').trim().toLowerCase() !== marginReturnFilters.lcNo.toLowerCase()) return false;
+            if (marginReturnFilters.bankName && itemBank.trim().toLowerCase() !== marginReturnFilters.bankName.toLowerCase()) return false;
+            if (marginReturnFilters.importerName && itemImporter.trim().toLowerCase() !== marginReturnFilters.importerName.toLowerCase()) return false;
+
+            return true;
         });
-    }, [marginReturns, searchQuery, selectedMonth, selectedLcFilter]);
+    }, [marginReturns, searchQuery, marginReturnFilters, lcMarginMap]);
 
     // Open Modal for Add
     const handleOpenAddModal = () => {
@@ -645,6 +755,179 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                     />
                 </div>
                 <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto z-[60]">
+                    {/* Filter Button & Panel */}
+                    <div className="relative">
+                        <button
+                            ref={filterButtonRef}
+                            onClick={() => setShowFilterPanel(!showFilterPanel)}
+                            className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showFilterPanel || Object.values(marginReturnFilters).some(v => v !== '') ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <FunnelIcon className={`w-4 h-4 ${(showFilterPanel || (marginReturnFilters && Object.values(marginReturnFilters).some(v => v !== ''))) ? 'text-white' : 'text-gray-400'}`} />
+                            <span className="text-sm font-medium">Filter</span>
+                        </button>
+
+                        {/* Floating Filter Panel */}
+                        {showFilterPanel && (
+                            <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:inset-auto md:right-0 md:mt-3 w-auto md:w-[400px] bg-white/95 backdrop-blur-2xl border border-gray-100 rounded-2xl shadow-2xl z-[60] p-4 md:p-6 animate-in fade-in zoom-in duration-200 text-left">
+                                <div className="flex items-center justify-between mb-6 pb-2 border-b border-gray-50">
+                                    <h4 className="font-extrabold text-gray-900 text-lg">Advance Filter</h4>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setMarginReturnFilters(initialMarginReturnFilterState);
+                                            setFilterSearchInputs({
+                                                lcSearch: '',
+                                                bankSearch: '',
+                                                importerSearch: ''
+                                            });
+                                            setFilterDropdownOpen(initialFilterDropdownState);
+                                            setShowFilterPanel(false);
+                                        }}
+                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                                    >
+                                        RESET ALL
+                                    </button>
+                                </div>
+
+                                <div className="space-y-5">
+                                    {/* Date Range Row */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <CustomDatePicker
+                                            label="From Date"
+                                            value={marginReturnFilters.startDate}
+                                            onChange={(e) => setMarginReturnFilters({ ...marginReturnFilters, startDate: e.target.value })}
+                                            compact={true}
+                                        />
+                                        <CustomDatePicker
+                                            label="To Date"
+                                            value={marginReturnFilters.endDate}
+                                            onChange={(e) => setMarginReturnFilters({ ...marginReturnFilters, endDate: e.target.value })}
+                                            compact={true}
+                                        />
+                                    </div>
+
+                                    {/* LC Filter */}
+                                    <div className="space-y-1.5 relative" ref={lcFilterRef}>
+                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">LC No</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={filterSearchInputs.lcSearch}
+                                                onChange={(e) => {
+                                                    setFilterSearchInputs({ ...filterSearchInputs, lcSearch: e.target.value });
+                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true });
+                                                }}
+                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, lcNo: true })}
+                                                placeholder={marginReturnFilters.lcNo || "Search LC No..."}
+                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${marginReturnFilters.lcNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                            />
+                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                {marginReturnFilters.lcNo && (
+                                                    <button type="button" onClick={() => { setMarginReturnFilters({ ...marginReturnFilters, lcNo: '' }); setFilterSearchInputs({ ...filterSearchInputs, lcSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                        <XIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        {filterDropdownOpen.lcNo && (() => {
+                                            const filtered = getFilteredOptions('marginReturnFilterLc') || [];
+                                            return filtered.length > 0 ? (
+                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                    {filtered.map(opt => (
+                                                        <button key={opt} type="button" onClick={() => { setMarginReturnFilters({ ...marginReturnFilters, lcNo: opt }); setFilterSearchInputs({ ...filterSearchInputs, lcSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium">{opt}</button>
+                                                    ))}
+                                                </div>
+                                            ) : null;
+                                        })()}
+                                    </div>
+
+                                    {/* Bank Filter */}
+                                    <div className="space-y-1.5 relative" ref={bankFilterRef}>
+                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Bank</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={filterSearchInputs.bankSearch}
+                                                onChange={(e) => {
+                                                    setFilterSearchInputs({ ...filterSearchInputs, bankSearch: e.target.value });
+                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, bankName: true });
+                                                }}
+                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, bankName: true })}
+                                                placeholder={marginReturnFilters.bankName || "Search Bank..."}
+                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${marginReturnFilters.bankName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                            />
+                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                {marginReturnFilters.bankName && (
+                                                    <button type="button" onClick={() => { setMarginReturnFilters({ ...marginReturnFilters, bankName: '' }); setFilterSearchInputs({ ...filterSearchInputs, bankSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                        <XIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        {filterDropdownOpen.bankName && (() => {
+                                            const filtered = getFilteredOptions('marginReturnFilterBank') || [];
+                                            return filtered.length > 0 ? (
+                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                    {filtered.map(opt => (
+                                                        <button key={opt} type="button" onClick={() => { setMarginReturnFilters({ ...marginReturnFilters, bankName: opt }); setFilterSearchInputs({ ...filterSearchInputs, bankSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium">{opt}</button>
+                                                    ))}
+                                                </div>
+                                            ) : null;
+                                        })()}
+                                    </div>
+
+                                    {/* Importer Filter */}
+                                    <div className="space-y-1.5 relative" ref={importerFilterRef}>
+                                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Importer</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={filterSearchInputs.importerSearch}
+                                                onChange={(e) => {
+                                                    setFilterSearchInputs({ ...filterSearchInputs, importerSearch: e.target.value });
+                                                    setFilterDropdownOpen({ ...initialFilterDropdownState, importerName: true });
+                                                }}
+                                                onFocus={() => setFilterDropdownOpen({ ...initialFilterDropdownState, importerName: true })}
+                                                placeholder={marginReturnFilters.importerName || "Search Importer..."}
+                                                className={`w-full px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm hover:border-gray-200 pr-10 ${marginReturnFilters.importerName ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-300'}`}
+                                            />
+                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                {marginReturnFilters.importerName && (
+                                                    <button type="button" onClick={() => { setMarginReturnFilters({ ...marginReturnFilters, importerName: '' }); setFilterSearchInputs({ ...filterSearchInputs, importerSearch: '' }); }} className="text-gray-400 hover:text-gray-600">
+                                                        <XIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        {filterDropdownOpen.importerName && (() => {
+                                            const filtered = getFilteredOptions('marginReturnFilterImporter') || [];
+                                            return filtered.length > 0 ? (
+                                                <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                                    {filtered.map(opt => (
+                                                        <button key={opt} type="button" onClick={() => { setMarginReturnFilters({ ...marginReturnFilters, importerName: opt }); setFilterSearchInputs({ ...filterSearchInputs, importerSearch: '' }); setFilterDropdownOpen(initialFilterDropdownState); }} className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 transition-colors font-medium">{opt}</button>
+                                                    ))}
+                                                </div>
+                                            ) : null;
+                                        })()}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Report Button */}
+                    <button
+                        type="button"
+                        onClick={handleGenerateReport}
+                        className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 h-[40px] shadow-sm transform active:scale-95 md:hover:scale-105"
+                    >
+                        <BarChartIcon className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm font-medium">Report</span>
+                    </button>
+
                     {canAdd && (
                         <button
                             onClick={handleOpenAddModal}

@@ -8375,4 +8375,214 @@ export const generateLCExpenseReportPDF = (expenses = [], filters = {}, searchQu
     }
 };
 
+export const generateMarginReturnReportPDF = (records = [], filters = {}, totals = {}, lcMarginMap = {}, searchQuery = '') => {
+    try {
+        const doc = new jsPDF('l', 'mm', 'a4');
+
+        const formatDate = (dateString) => {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        // --- Header ---
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+
+        // Separator
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 32, pageWidth - margin, 32);
+
+        // Report Title
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 45, 29, 90, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("MARGIN RETURN REPORT", pageWidth / 2, 34, { align: 'center' });
+
+        // --- Info Section ---
+        let yPos = 44;
+        doc.setFontSize(9);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text("Total Records:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text((records.length || 0).toString(), margin + 25, yPos);
+
+        const printDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.setFont('helvetica', 'bold');
+        doc.text("Printed on:", pageWidth - margin - 50, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(printDateStr, pageWidth - margin - 28, yPos);
+
+        if (filters?.startDate || filters?.endDate) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Date Range:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
+        }
+
+        if (filters?.lcNo) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 25, yPos);
+        }
+
+        if (filters?.bankName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Bank:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.bankName, margin + 25, yPos);
+        }
+
+        if (filters?.importerName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Importer:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.importerName, margin + 25, yPos);
+        }
+
+        // --- Table Data (Ascending by Date) ---
+        const sortedRecords = [...records].sort((a, b) => new Date(a.returnDate || a.createdAt || 0) - new Date(b.returnDate || b.createdAt || 0));
+
+        let grandTotal = 0;
+        const tableRows = sortedRecords.map((r, idx) => {
+            const lcDetails = lcMarginMap[r.lcId] || {};
+            const amt = parseFloat(r.returnAmount) || 0;
+            grandTotal += amt;
+
+            return [
+                idx + 1,
+                formatDate(r.returnDate),
+                String(r.lcNo || '-').trim(),
+                String(r.importerName || lcDetails.importerName || '-').trim(),
+                String(lcDetails.productName || r.productName || '-').trim(),
+                String(r.bankName || lcDetails.bankName || '-').trim(),
+                String(lcDetails.bankBranch || r.bankBranch || '-').trim(),
+                String(lcDetails.accountNo || r.accountNo || '-').trim(),
+                amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                String(r.remarks || '-').trim()
+            ];
+        });
+
+        const tableHeaders = [
+            ['SL', 'Date', 'LC No', 'Importer', 'Product', 'Bank', 'Branch', 'A/C No', 'Return Amount (Tk)', 'Remarks']
+        ];
+
+        const footerRow = [
+            { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: '', styles: { halign: 'left' } }
+        ];
+
+        autoTable(doc, {
+            startY: yPos + 4,
+            head: tableHeaders,
+            body: tableRows,
+            foot: [footerRow],
+            showFoot: 'lastPage',
+            theme: 'grid',
+            styles: {
+                fontSize: 8.5,
+                cellPadding: 1.5,
+                textColor: [0, 0, 0],
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                fontSize: 8.5,
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.1
+            },
+            footStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                fontSize: 8.5,
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 10, halign: 'center', valign: 'middle' }, // SL
+                1: { cellWidth: 20, halign: 'center', valign: 'middle' }, // Date
+                2: { cellWidth: 26, halign: 'center', valign: 'middle', fontStyle: 'bold' }, // LC No
+                3: { cellWidth: 32, halign: 'left', valign: 'middle' },   // Importer
+                4: { cellWidth: 32, halign: 'left', valign: 'middle' },   // Product
+                5: { cellWidth: 20, halign: 'left', valign: 'middle' },   // Bank
+                6: { cellWidth: 20, halign: 'left', valign: 'middle' },   // Branch
+                7: { cellWidth: 26, halign: 'left', valign: 'middle' },   // A/C No
+                8: { cellWidth: 34, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Return Amount
+                9: { cellWidth: 57, halign: 'left', valign: 'middle' }    // Remarks
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // Signatures at bottom
+        let finalY = doc.lastAutoTable.finalY + 18;
+        if (finalY + 25 > pageHeight) {
+            doc.addPage();
+            finalY = 20;
+        }
+
+        const sigWidth = 45;
+        const sigY = finalY + 15;
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.setLineDashPattern([1, 1], 0);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.line(pageWidth / 2 - sigWidth / 2, sigY, pageWidth / 2 + sigWidth / 2, sigY);
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setLineDashPattern([], 0);
+        doc.text("Prepared By", margin + (sigWidth / 2), sigY + 5, { align: 'center' });
+        doc.text("Checked By", pageWidth / 2, sigY + 5, { align: 'center' });
+        doc.text("Authorized Signature", pageWidth - margin - (sigWidth / 2), sigY + 5, { align: 'center' });
+
+        // Page numbering
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text('M/S ANI ENTERPRISE - MARGIN RETURN REPORT', margin, pageHeight - 6);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (err) {
+        console.error("Error generating Margin Return Report PDF:", err);
+        alert(`Failed to generate Margin Return Report PDF: ${err.message}`);
+    }
+};
+
 
