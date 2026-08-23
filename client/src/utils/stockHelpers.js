@@ -122,8 +122,123 @@ export const calculatePktRemainder = (totalQty, pktSize) => {
     }
 };
 
+// Helper to reconcile LC breakdown in Price Report mode against true brand-level remaining stock
+export const reconcilePriceReportBrandList = (brandList) => {
+    if (!Array.isArray(brandList)) return [];
+
+    // Group entries by quality and brand to determine true total stock
+    const brandGroups = {};
+    brandList.forEach(b => {
+        const cleanBrand = (b.brand || 'No Brand').trim();
+        const cleanQuality = (b.quality || '-').trim();
+        const key = `${cleanQuality.toLowerCase()}_${cleanBrand.toLowerCase()}`;
+        if (!brandGroups[key]) {
+            brandGroups[key] = {
+                brand: cleanBrand,
+                quality: cleanQuality,
+                totalClosing: 0,
+                entries: []
+            };
+        }
+        const closing = (b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0));
+        brandGroups[key].totalClosing += closing;
+
+        // Consolidate duplicate LC/Price entries within the brand
+        const cleanLc = (b.lcNo || '').trim();
+        const price = safeParse(b.purchasedPrice ?? b.rate);
+
+        const existingIdx = brandGroups[key].entries.findIndex(e => {
+            const eLc = (e.lcNo || '').trim().toLowerCase();
+            const ePrice = safeParse(e.purchasedPrice ?? e.rate);
+            return eLc === cleanLc.toLowerCase() && Math.abs(ePrice - price) < 0.001;
+        });
+
+        if (existingIdx >= 0) {
+            const existing = brandGroups[key].entries[existingIdx];
+            existing.openingQuantity = (existing.openingQuantity || 0) + (b.openingQuantity || 0);
+            existing.openingPacket = (existing.openingPacket || 0) + (b.openingPacket || 0);
+            existing.periodArrivalQuantity = (existing.periodArrivalQuantity || 0) + (b.periodArrivalQuantity || 0);
+            existing.periodArrivalPacket = (existing.periodArrivalPacket || 0) + (b.periodArrivalPacket || 0);
+            existing.saleQuantity = (existing.saleQuantity || 0) + (b.saleQuantity || 0);
+            existing.salePacket = (existing.salePacket || 0) + (b.salePacket || 0);
+            existing.orderQuantity = (existing.orderQuantity || 0) + (b.orderQuantity || 0);
+            existing.orderPacket = (existing.orderPacket || 0) + (b.orderPacket || 0);
+            existing.sweepedQuantity = (existing.sweepedQuantity || 0) + (b.sweepedQuantity || 0);
+            existing.sweepedPacket = (existing.sweepedPacket || 0) + (b.sweepedPacket || 0);
+            existing.damageQuantity = (existing.damageQuantity || 0) + (b.damageQuantity || 0);
+            existing.damagePacket = (existing.damagePacket || 0) + (b.damagePacket || 0);
+            existing.inHouseQuantity = (existing.inHouseQuantity || 0) + (b.inHouseQuantity || 0);
+            existing.inHousePacket = (existing.inHousePacket || 0) + (b.inHousePacket || 0);
+            existing.closingQuantity = (existing.closingQuantity || 0) + (b.closingQuantity || 0);
+            existing.closingPacket = (existing.closingPacket || 0) + (b.closingPacket || 0);
+        } else {
+            brandGroups[key].entries.push({ ...b });
+        }
+    });
+
+    const result = [];
+
+    Object.values(brandGroups).forEach(group => {
+        const trueInHouse = Math.max(0, group.totalClosing);
+        if (trueInHouse <= 0.001) {
+            // Brand is out of stock - no entries should appear in Price report
+            return;
+        }
+
+        // Keep entries that represent actual stock arrival / positive stock
+        const validEntries = group.entries.filter(e => 
+            (e.openingQuantity || 0) > 0 || (e.inHouseQuantity || 0) > 0 || (e.closingQuantity || 0) > 0
+        );
+
+        if (validEntries.length === 0) return;
+
+        // Sort entries by date (FIFO: oldest arrivals first)
+        const sortedEntries = [...validEntries].sort((a, b) => {
+            const dateA = a.date || a.createdAt || '';
+            const dateB = b.date || b.createdAt || '';
+            return dateA.localeCompare(dateB);
+        });
+
+        const currentLcSum = sortedEntries.reduce((sum, e) => sum + Math.max(0, e.inHouseQuantity || 0), 0);
+        let excessToDeduct = Math.max(0, currentLcSum - trueInHouse);
+
+        for (const entry of sortedEntries) {
+            const currentQty = Math.max(0, entry.inHouseQuantity || 0);
+            const deduct = Math.min(currentQty, excessToDeduct);
+            excessToDeduct -= deduct;
+            const remainingQty = currentQty - deduct;
+
+            if (remainingQty > 0.001) {
+                const pktSize = entry.packetSize || 30;
+                const { whole, remainder } = calculatePktRemainder(remainingQty, pktSize);
+                const inHousePacket = whole + (remainder / pktSize);
+
+                result.push({
+                    ...entry,
+                    inHouseQuantity: remainingQty,
+                    closingQuantity: remainingQty,
+                    inHousePacket: inHousePacket,
+                    closingPacket: inHousePacket,
+                    saleableQuantity: Math.max(0, remainingQty - (entry.orderQuantity || 0)),
+                    saleablePacket: Math.max(0, inHousePacket - (entry.orderPacket || 0))
+                });
+            }
+        }
+    });
+
+    return result.sort((a, b) => {
+        const qCmp = (a.quality || '-').localeCompare(b.quality || '-');
+        if (qCmp !== 0) return qCmp;
+        const bCmp = (a.brand || '').localeCompare(b.brand || '');
+        if (bCmp !== 0) return bCmp;
+        return (a.lcNo || '').localeCompare(b.lcNo || '');
+    });
+};
+
 export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = []) => {
-    const isWhFilter = stockFilters.warehouse &&
+    const isPriceReport = Boolean(stockFilters && (stockFilters.reportType === 'price' || stockFilters.showRate === true));
+
+    const isWhFilter = stockFilters && stockFilters.warehouse &&
         typeof stockFilters.warehouse === 'string' &&
         stockFilters.warehouse.trim() !== '' &&
         stockFilters.warehouse.trim().toLowerCase() !== 'all' &&
@@ -179,7 +294,9 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             });
 
             const displayRecords = Object.values(combinedProductsMap).map(prod => {
-                const groupedBrands = getGroupedBrandList(prod.brandList);
+                const groupedBrands = isPriceReport
+                    ? reconcilePriceReportBrandList(prod.brandList)
+                    : getGroupedBrandList(prod.brandList);
                 const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
                 const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
                 const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
@@ -203,7 +320,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     orderQuantity: orderQty,
                     orderPacket: orderPkt,
                 };
-            }).sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
+            }).filter(prod => prod && prod.brandList && prod.brandList.length > 0).sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
 
             let tOpeningQty = 0; let tSaleQty = 0; let tInHouseQty = 0; let tShortageQty = 0; let tDamageQty = 0;
             const tOpeningPkt = { whole: 0, remainder: 0 };
@@ -258,7 +375,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             };
         }
     }
-    const isPriceReport = stockFilters && stockFilters.reportType === 'price';
 
     const resolveQuality = (pName, bName) => {
         if (!products || !Array.isArray(products)) return '-';
@@ -1054,20 +1170,30 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             };
         });
 
-        // Group by quality and brand name
-        brandList = getGroupedBrandList(brandList);
+        // In Price Report / Show Rate mode, reconcile LC entries against true brand stock; otherwise group by quality and brand name
+        brandList = isPriceReport
+            ? reconcilePriceReportBrandList(brandList)
+            : getGroupedBrandList(brandList);
 
         brandList = brandList.sort((a, b) => {
             const qCmp = (a.quality || '-').localeCompare(b.quality || '-');
             if (qCmp !== 0) return qCmp;
-            return a.brand.localeCompare(b.brand);
+            const bCmp = (a.brand || '').localeCompare(b.brand || '');
+            if (bCmp !== 0) return bCmp;
+            return (a.lcNo || '').localeCompare(b.lcNo || '');
         }).filter(b => {
             const closing = Math.abs(b.closingQuantity !== undefined ? b.closingQuantity : (b.inHouseQuantity || 0));
             const order = Math.abs(b.orderQuantity || 0);
             const saleable = Math.abs(b.saleableQuantity || 0);
+            const opening = Math.abs(b.openingQuantity || 0);
+            const sale = Math.abs(b.saleQuantity || 0);
 
-            // If closing, order, and saleable are 0, do not show
-            if (closing <= 0.001 && order <= 0.001 && saleable <= 0.001) {
+            if (isPriceReport && !stockFilters?._isSubCall) {
+                return (b.inHouseQuantity || 0) > 0.001;
+            }
+
+            // If closing, order, saleable, opening, and sale are 0, do not show
+            if (closing <= 0.001 && order <= 0.001 && saleable <= 0.001 && opening <= 0.001 && sale <= 0.001) {
                 return false;
             }
             return true;
@@ -1154,7 +1280,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             }
         }
 
-        if (isPriceReport) {
+        if (isPriceReport && !stockFilters?._isSubCall) {
             // In Price Report mode, keep all LC entries with positive remaining stock
             filteredBrands = filteredBrands.filter(b => (b.inHouseQuantity || 0) > 0.001);
         } else {

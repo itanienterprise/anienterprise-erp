@@ -2323,8 +2323,8 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        return calculateStockData(stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products, damages);
-    }, [stockRecords, stockFilters, stockSearchQuery, warehouseData, salesRecords, products, damages]);
+        return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate }, stockSearchQuery, warehouseData, salesRecords, products, damages);
+    }, [stockRecords, stockFilters, effectiveShowRate, stockSearchQuery, warehouseData, salesRecords, products, damages]);
 
     const isStockGroupSelected = (productName) => {
         const groupItems = stockRecords.filter(r => r.productName === productName);
@@ -3330,14 +3330,18 @@ const StockManagement = ({
                         ) : (
                             stockData.displayRecords
                                 .filter(group => !expandedProducts || group.productName === expandedProducts)
+                                .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => (b.inHouseQuantity || 0) > 0.001)))
                                 .map((group, gIdx) => {
                                     const isExpanded = expandedProducts === group.productName;
+                                    const effectiveBrandList = effectiveShowRate
+                                        ? group.brandList.filter(b => (b.inHouseQuantity || 0) > 0.001)
+                                        : group.brandList;
 
                                     // Calculate brand spans for this group's brandList
                                     const brandSpans = [];
-                                    group.brandList.forEach((ent, i) => {
+                                    effectiveBrandList.forEach((ent, i) => {
                                         const bName = (ent.brand || 'No Brand').trim().toLowerCase();
-                                        const prevB = i > 0 ? (group.brandList[i - 1].brand || 'No Brand').trim().toLowerCase() : null;
+                                        const prevB = i > 0 ? (effectiveBrandList[i - 1].brand || 'No Brand').trim().toLowerCase() : null;
                                         if (bName === prevB) {
                                             brandSpans.push({ name: bName, span: 0 });
                                             let parentIdx = i - 1;
@@ -3378,7 +3382,7 @@ const StockManagement = ({
 
                                                     {/* Brands List Mobile */}
                                                     <div className="space-y-3 pl-2 border-l-2 border-blue-100">
-                                                        {group.brandList.map((brand, bIdx) => {
+                                                        {effectiveBrandList.map((brand, bIdx) => {
                                                             const brandId = `${group.productName}-${brand.brand}`;
                                                             const isBrandExpanded = expandedBrands === brandId;
 
@@ -3503,12 +3507,17 @@ const StockManagement = ({
                                 ) : (
                                     stockData.displayRecords
                                         .filter(group => !expandedProducts || group.productName === expandedProducts)
+                                        .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => (b.inHouseQuantity || 0) > 0.001)))
                                         .map((group, gIdx) => {
+                                            const effectiveBrandList = effectiveShowRate
+                                                ? group.brandList.filter(b => (b.inHouseQuantity || 0) > 0.001)
+                                                : group.brandList;
+
                                             // Calculate brand spans for this group's brandList
                                             const brandSpans = [];
-                                            group.brandList.forEach((ent, i) => {
+                                            effectiveBrandList.forEach((ent, i) => {
                                                 const bName = (ent.brand || 'No Brand').trim().toLowerCase();
-                                                const prevB = i > 0 ? (group.brandList[i - 1].brand || 'No Brand').trim().toLowerCase() : null;
+                                                const prevB = i > 0 ? (effectiveBrandList[i - 1].brand || 'No Brand').trim().toLowerCase() : null;
                                                 if (bName === prevB) {
                                                     brandSpans.push({ name: bName, span: 0 });
                                                     let parentIdx = i - 1;
@@ -3528,7 +3537,7 @@ const StockManagement = ({
                                                     </td>
                                                     <td className="px-6 py-4 align-top" colSpan="8">
                                                         <div className="space-y-3">
-                                                            {group.brandList.map((brand, bIdx) => {
+                                                            {effectiveBrandList.map((brand, bIdx) => {
                                                                 let startIdx = bIdx;
                                                                 while (startIdx > 0 && brandSpans[startIdx]?.span === 0) {
                                                                     startIdx--;
