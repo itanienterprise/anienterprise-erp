@@ -9,7 +9,7 @@ import {
 } from '../../Icons';
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
-import { generateLCManagementReportPDF } from '../../../utils/pdfGenerator';
+import { generateLCManagementReportPDF, generateLCBillReportPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getCogNetBillBdt } from '../../../utils/lcValueUtils';
@@ -4958,8 +4958,20 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const [piList, setPiList] = useState([]);
     const [piRecordsRaw, setPiRecordsRaw] = useState([]);
     const [productItems, setProductItems] = useState([]);
+    const [showReportDropdown, setShowReportDropdown] = useState(false);
+    const reportDropdownRef = useRef(null);
 
     const rowRefs = useRef({});
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (reportDropdownRef.current && !reportDropdownRef.current.contains(event.target)) {
+                setShowReportDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         if (isRequestedNotif) {
@@ -7596,6 +7608,105 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         );
     };
 
+    const generateBillReport = () => {
+        const sortedRecords = getSortedRecords();
+        const cleanLc = (no) => String(no || '').trim().toLowerCase();
+
+        const reportData = sortedRecords.map(record => {
+            const lcNoClean = cleanLc(record.lcNo);
+
+            let displayProducts = '-';
+            if (record.productsList && record.productsList.length > 0) {
+                displayProducts = record.productsList.map(p => p.productName || p.product).filter(Boolean).join(', ');
+            } else if (record.productName || record.product) {
+                displayProducts = record.productName || record.product;
+            }
+
+            // 1. Bank Charges
+            const origBankBill = (record.marginPaid !== undefined || record.marginBill !== undefined)
+                ? (parseFloat(record.bankBill) || 0)
+                : (parseFloat(record.totalBankBill || record.bankBill) || 0);
+
+            const amndBankBills = (record.amendments || []).reduce((sum, a) => {
+                if (a.amendmentNo === 'Original LC') return sum;
+                const isNew = a.amendmentMarginPaid !== undefined || a.amendmentMarginBill !== undefined;
+                const amt = isNew ? (parseFloat(a.amendmentBankBill) || 0) : (parseFloat(a.totalAmendmentBankBill || a.amendmentBill || a.amendmentBankBill) || 0);
+                return sum + amt;
+            }, 0);
+
+            const customBankBills = lcExpenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.type === 'bill' && e.expenseHead === 'Bank Charges')
+                .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+            const totalBankCharges = origBankBill + amndBankBills + customBankBills;
+
+            // 2. Margin Bill
+            const origMarginBill = parseFloat(record.marginBill) || parseFloat(record.totalAmount) || 0;
+
+            const amndMarginBills = (record.amendments || []).reduce((sum, a) => {
+                if (a.amendmentNo === 'Original LC') return sum;
+                return sum + (parseFloat(a.amendmentMarginBill) || 0);
+            }, 0);
+
+            const customMarginBills = lcExpenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.type === 'bill' && e.expenseHead === 'Margin Bill')
+                .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+            const totalMarginBill = origMarginBill + amndMarginBills + customMarginBills;
+
+            // 3. C&F Bill
+            const arrivalCnfCosts = allStockRecords
+                .filter(s => cleanLc(s.lcNo) === lcNoClean && (s.status || '').toLowerCase() !== 'rejected' && (s.bdCnF || s.indianCnF))
+                .reduce((sum, s) => sum + (parseFloat(s.bdCnFCost) || 0) + (parseFloat(s.indianCnFCost) || 0), 0);
+
+            const customCnfBills = lcExpenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.type === 'bill' && (e.expenseHead === 'C&F Commission' || e.expenseHead === 'C&F Bill'))
+                .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+            const totalCnfBill = arrivalCnfCosts + customCnfBills;
+
+            // 4. Other Bills
+            const origInsuranceBill = parseFloat(record.grossPremium || record.netPremium) || 0;
+
+            const customOtherBills = lcExpenses
+                .filter(e => cleanLc(e.lcNo) === lcNoClean && e.type === 'bill' && !['Bank Charges', 'Margin Bill', 'C&F Commission', 'C&F Bill'].includes(e.expenseHead))
+                .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+            const totalOtherBill = origInsuranceBill + customOtherBills;
+
+            // Total Bill & Paid Bill
+            const totalBill = totalBankCharges + totalMarginBill + totalCnfBill + totalOtherBill;
+            const paidBill = getLcTotalPaidExpense(record);
+
+            return {
+                date: record.openingDate || record.createdAt,
+                lcNo: record.lcNo,
+                importer: record.importer || record.importerName || '-',
+                exporter: record.exporter || record.exporterName || '-',
+                bank: record.bankName || record.bank || '-',
+                product: displayProducts,
+                bankCharges: totalBankCharges,
+                marginBill: totalMarginBill,
+                cnfBill: totalCnfBill,
+                other: totalOtherBill,
+                totalBill: totalBill,
+                paidBill: paidBill,
+                remarks: record.remarks || '-'
+            };
+        });
+
+        const totals = {
+            totalBankCharges: reportData.reduce((s, r) => s + r.bankCharges, 0),
+            totalMarginBill: reportData.reduce((s, r) => s + r.marginBill, 0),
+            totalCnfBill: reportData.reduce((s, r) => s + r.cnfBill, 0),
+            totalOther: reportData.reduce((s, r) => s + r.other, 0),
+            totalBill: reportData.reduce((s, r) => s + r.totalBill, 0),
+            totalPaidBill: reportData.reduce((s, r) => s + r.paidBill, 0)
+        };
+
+        generateLCBillReportPDF(reportData, totals, searchQuery, lcFilters);
+    };
+
     const amendmentDisplayProducts = selectedPiForAmendment
         ? mapPiProductsToLc(selectedPiForAmendment)
         : (selectedLcForAmendment?.productsList && selectedLcForAmendment.productsList.length > 0
@@ -7897,13 +8008,57 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                             )}
                         </div>
 
-                        <button
-                            onClick={generatePDFReport}
-                            className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all h-[40px] shadow-sm transform active:scale-95 md:hover:scale-105"
-                        >
-                            <BarChartIcon className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-medium">Report</span>
-                        </button>
+                        {/* Report Dropdown Button & Menu */}
+                        <div className="relative" ref={reportDropdownRef}>
+                            <button
+                                type="button"
+                                onClick={() => setShowReportDropdown(!showReportDropdown)}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl border h-[40px] shadow-sm transition-all transform active:scale-95 md:hover:scale-105 ${showReportDropdown ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-blue-500/10' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                <BarChartIcon className={`w-4 h-4 ${showReportDropdown ? 'text-blue-600' : 'text-gray-400'}`} />
+                                <span className="text-sm font-medium">Report</span>
+                                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${showReportDropdown ? 'rotate-180 text-blue-600' : 'text-gray-400'}`} />
+                            </button>
+
+                            {/* Dropdown Menu */}
+                            {showReportDropdown && (
+                                <div className="absolute right-0 mt-2 w-64 bg-white/95 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-2xl z-[70] p-1.5 animate-in fade-in zoom-in duration-200 text-left">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowReportDropdown(false);
+                                            generatePDFReport();
+                                        }}
+                                        className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-left hover:bg-blue-50/80 group transition-all"
+                                    >
+                                        <div className="w-9 h-9 rounded-xl bg-blue-50 group-hover:bg-blue-600 flex items-center justify-center transition-colors shadow-sm">
+                                            <FileTextIcon className="w-4 h-4 text-blue-600 group-hover:text-white transition-colors" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-800 group-hover:text-blue-700 transition-colors">General Report</p>
+                                            <p className="text-[11px] text-gray-400 font-medium leading-tight">LC status, quantities & balances</p>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowReportDropdown(false);
+                                            generateBillReport();
+                                        }}
+                                        className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-left hover:bg-emerald-50/80 group transition-all mt-1"
+                                    >
+                                        <div className="w-9 h-9 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 flex items-center justify-center transition-colors shadow-sm">
+                                            <DollarSignIcon className="w-4 h-4 text-emerald-600 group-hover:text-white transition-colors" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-800 group-hover:text-emerald-700 transition-colors">Bill Report</p>
+                                            <p className="text-[11px] text-gray-400 font-medium leading-tight">Bank, Margin, C&F & other bills</p>
+                                        </div>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
 
                         {canManage && (
                             <>

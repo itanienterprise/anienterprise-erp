@@ -6062,6 +6062,220 @@ export const generateLCManagementReportPDF = (reportData, totals, searchQuery = 
     }
 };
 
+export const generateLCBillReportPDF = (reportData, totals, searchQuery = '', filters = {}) => {
+    try {
+        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 5;
+
+        // Header info
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
+        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+
+        // Separator line
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, 32, pageWidth - margin, 32);
+
+        // Report Title Box
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0);
+        doc.rect(pageWidth / 2 - 35, 29, 70, 8, 'FD');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text("LC BILL REPORT", pageWidth / 2, 34, { align: 'center' });
+
+        // Info row
+        let yPos = 47;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0);
+        const currentDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        doc.text(`Printed on: ${currentDateStr}`, pageWidth - margin, yPos, { align: 'right' });
+
+        // Date Range
+        doc.setFont('helvetica', 'bold');
+        doc.text("Date Range:", margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
+        doc.text(`${start} to ${end}`, margin + 25, yPos);
+
+        // Search Query
+        if (searchQuery) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Search:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`"${searchQuery}"`, margin + 25, yPos);
+        }
+
+        // Importer
+        if (filters.importerName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Importer:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.importerName, margin + 25, yPos);
+        }
+
+        // Exporter
+        if (filters.exporterName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Exporter:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.exporterName, margin + 25, yPos);
+        }
+
+        // Port
+        if (filters.port) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Port:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.port, margin + 25, yPos);
+        }
+
+        // Product
+        if (filters.productName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Product:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.productName, margin + 25, yPos);
+        }
+
+        // Bank
+        if (filters.bankName) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("Bank:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.bankName, margin + 25, yPos);
+        }
+
+        // Data Preparation
+        const tableHeaders = [
+            ['Date', 'LC No', 'Importer', 'Exporter', 'Bank', 'Product', 'Bank Charges', 'Margin Bill', 'C&F Bill', 'Other', 'Total Bill', 'Paid Bill', 'Remarks']
+        ];
+
+        const tableRows = reportData.map(record => [
+            formatDate(record.date),
+            String(record.lcNo || '-').trim(),
+            String(record.importer || '-').trim(),
+            String(record.exporter || '-').trim(),
+            String(record.bank || '-').trim(),
+            String(record.product || '-').trim(),
+            record.bankCharges > 0 ? `${Math.round(record.bankCharges).toLocaleString('en-US')}` : '—',
+            record.marginBill > 0 ? `${Math.round(record.marginBill).toLocaleString('en-US')}` : '—',
+            record.cnfBill > 0 ? `${Math.round(record.cnfBill).toLocaleString('en-US')}` : '—',
+            record.other > 0 ? `${Math.round(record.other).toLocaleString('en-US')}` : '—',
+            record.totalBill > 0 ? `${Math.round(record.totalBill).toLocaleString('en-US')}` : '—',
+            record.paidBill > 0 ? `${Math.round(record.paidBill).toLocaleString('en-US')}` : '—',
+            String(record.remarks || '-').trim()
+        ]);
+
+        const footerRow = [
+            { content: 'GRAND TOTAL', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.totalBankCharges > 0 ? `${Math.round(totals.totalBankCharges).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.totalMarginBill > 0 ? `${Math.round(totals.totalMarginBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.totalCnfBill > 0 ? `${Math.round(totals.totalCnfBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.totalOther > 0 ? `${Math.round(totals.totalOther).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.totalBill > 0 ? `${Math.round(totals.totalBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totals.totalPaidBill > 0 ? `${Math.round(totals.totalPaidBill).toLocaleString('en-US')}` : '—', styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: '', styles: { halign: 'center' } }
+        ];
+
+        autoTable(doc, {
+            startY: yPos + 10,
+            head: tableHeaders,
+            body: tableRows,
+            foot: [footerRow],
+            showFoot: 'lastPage',
+            theme: 'grid',
+            styles: {
+                fontSize: 8.5,
+                cellPadding: 1.2,
+                textColor: [0, 0, 0],
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                valign: 'middle'
+            },
+            headStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                halign: 'center',
+                valign: 'middle',
+                lineWidth: 0.1
+            },
+            footStyles: {
+                fillColor: [245, 245, 245],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold',
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { cellWidth: 18, halign: 'center', valign: 'middle' }, // Date
+                1: { cellWidth: 23, halign: 'center', valign: 'middle', fontStyle: 'bold' }, // LC No
+                2: { cellWidth: 22, overflow: "hidden", valign: 'middle' }, // Importer
+                3: { cellWidth: 22, overflow: "hidden", valign: 'middle' }, // Exporter
+                4: { cellWidth: 15, overflow: "hidden", valign: 'middle' }, // Bank
+                5: { cellWidth: 24, halign: 'left', valign: 'middle' },   // Product
+                6: { cellWidth: 23, halign: 'right', valign: 'middle' },  // Bank Charges
+                7: { cellWidth: 24, halign: 'right', valign: 'middle' },  // Margin Bill
+                8: { cellWidth: 23, halign: 'right', valign: 'middle' },  // C&F Bill
+                9: { cellWidth: 20, halign: 'right', valign: 'middle' },  // Other
+                10: { cellWidth: 24, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Total Bill
+                11: { cellWidth: 24, halign: 'right', valign: 'middle', fontStyle: 'bold' }, // Paid Bill
+                12: { cellWidth: 25, halign: 'left', valign: 'middle' }   // Remarks
+            },
+            margin: { left: margin, right: margin }
+        });
+
+        // Signatures at the end
+        let finalY = doc.lastAutoTable.finalY + 15;
+        if (finalY + 25 > pageHeight) {
+            doc.addPage();
+            finalY = 20;
+        }
+
+        const sigWidth = 45;
+        const sigY = finalY + 15;
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.setLineDashPattern([1, 1], 0);
+
+        // Left signature
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.setFontSize(7.5);
+        doc.setTextColor(0);
+        doc.text("PREPARED BY", margin + sigWidth / 2, sigY + 5, { align: 'center' });
+
+        // Right signature
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, sigY + 5, { align: 'center' });
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (error) {
+        console.error("LC Bill Report PDF Error:", error);
+        alert(`Failed to generate PDF: ${error.message}`);
+    }
+};
+
 export const generateCostOfGoodsReportPDF = (records, filters = {}) => {
     try {
         const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
