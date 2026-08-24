@@ -5628,6 +5628,19 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                         const piPort = targetSource.port || targetSource.portOfDischarge || targetSource.portOfLoading;
                         if (piPort) newState.port = piPort;
 
+                        if (selectedPi.bankName) newState.bankName = selectedPi.bankName;
+                        if (selectedPi.bankBranch) newState.bankBranch = selectedPi.bankBranch;
+                        if (selectedPi.bankAccount) newState.bankAccount = selectedPi.bankAccount;
+                        if (selectedPi.bankMargin !== undefined && selectedPi.bankMargin !== '') newState.bankMargin = selectedPi.bankMargin;
+                        if (selectedPi.lcBillEnabled !== undefined) newState.lcBillEnabled = selectedPi.lcBillEnabled;
+                        if (selectedPi.bankLcCommission !== undefined && selectedPi.bankLcCommission !== '') newState.bankLcCommission = selectedPi.bankLcCommission;
+                        if (selectedPi.bankVatOnCommission !== undefined && selectedPi.bankVatOnCommission !== '') newState.bankVatOnCommission = selectedPi.bankVatOnCommission;
+                        if (selectedPi.bankSwiftCharge !== undefined && selectedPi.bankSwiftCharge !== '') newState.bankSwiftCharge = selectedPi.bankSwiftCharge;
+                        if (selectedPi.bankVatOnSwiftCharge !== undefined && selectedPi.bankVatOnSwiftCharge !== '') newState.bankVatOnSwiftCharge = selectedPi.bankVatOnSwiftCharge;
+                        if (selectedPi.bankLcApplicationForm !== undefined && selectedPi.bankLcApplicationForm !== '') newState.bankLcApplicationForm = selectedPi.bankLcApplicationForm;
+                        if (selectedPi.bankMpCharge !== undefined && selectedPi.bankMpCharge !== '') newState.bankMpCharge = selectedPi.bankMpCharge;
+                        if (selectedPi.bankStampCharge !== undefined && selectedPi.bankStampCharge !== '') newState.bankStampCharge = selectedPi.bankStampCharge;
+
                         const ipNums = getPiIpNumbers(targetSource);
                         newState.ipNumbers = ipNums;
                         newState.ipNo = ipNums[0] || '';

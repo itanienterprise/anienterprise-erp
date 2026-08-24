@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { appendBankApplicationPage } from './islbankApplicationGenerator';
 
 // Helper function to convert number to words for USD
 const numberToWordsUSD = (amount) => {
@@ -921,6 +922,9 @@ export const generatePIPDF = (record) => {
         doc.setFontSize(11);
         doc.text("Buyer", pageWidth - margin - 30, y + 26, { align: 'center' });
     }
+
+    // Append Bank Application Page as Page 2 (just like Packing List & TR)
+    appendBankApplicationPage(doc, record);
 
     // Opening in new tab instead of direct download
     const pdfOutput = doc.output('blob');

@@ -5,6 +5,7 @@ import {
 } from '../../Icons';
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
+import { generateBankApplicationPDF } from '../../../utils/islbankApplicationGenerator';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
@@ -143,6 +144,18 @@ function PI({
         portOfLoading: 'ANY PLACE OF INDIA',
         portOfDischarge: '',
         indianBank: 'ICICI BANK LTD. KOLKATA.',
+        bankName: '',
+        bankBranch: '',
+        bankAccount: '',
+        bankMargin: '',
+        lcBillEnabled: true,
+        bankLcCommission: '',
+        bankVatOnCommission: '',
+        bankSwiftCharge: '',
+        bankVatOnSwiftCharge: '',
+        bankLcApplicationForm: '',
+        bankMpCharge: '',
+        bankStampCharge: '',
         buyerOrderNo: '',
         buyerOrderDate: '',
         otherReferences: '',
@@ -177,6 +190,8 @@ function PI({
     const exporterRef = useRef(null);
     const productRef = useRef(null);
     const bankRef = useRef(null);
+    const issuingBankRef = useRef(null);
+    const branchRef = useRef(null);
     const portLoadingRef = useRef(null);
     const portDischargeRef = useRef(null);
     const preCarriageRef = useRef(null);
@@ -1089,6 +1104,49 @@ function PI({
         setFormData(prev => {
             const updated = { ...prev, [field]: value };
 
+            if (field === 'bankName') {
+                updated.bankName = value;
+                if (!value) {
+                    updated.bankBranch = '';
+                    updated.bankAccount = '';
+                    updated.bankLcCommission = '';
+                    updated.bankVatOnCommission = '';
+                    updated.bankSwiftCharge = '';
+                    updated.bankVatOnSwiftCharge = '';
+                    updated.bankLcApplicationForm = '';
+                    updated.bankMpCharge = '';
+                    updated.bankStampCharge = '';
+                }
+            }
+
+            if (field === 'bankBranch') {
+                if (value) {
+                    const selectedBank = banks.find(b => (b.bankName || '').trim().toUpperCase() === (updated.bankName || prev.bankName || '').trim().toUpperCase());
+                    const selectedBranch = selectedBank?.branches?.find(br => br.branch === value);
+                    if (selectedBranch) {
+                        updated.bankBranch = value;
+                        updated.bankAccount = selectedBranch.accountNo || '';
+                        updated.bankLcCommission = selectedBranch.lcCommission || '';
+                        updated.bankVatOnCommission = selectedBranch.vatOnCommission || '';
+                        updated.bankSwiftCharge = selectedBranch.swiftCharge || '';
+                        updated.bankVatOnSwiftCharge = selectedBranch.vatOnSwiftCharge || '';
+                        updated.bankLcApplicationForm = selectedBranch.lcApplicationForm || '';
+                        updated.bankMpCharge = selectedBranch.mpCharge || '';
+                        updated.bankStampCharge = selectedBranch.stampCharge || '';
+                    }
+                } else {
+                    updated.bankBranch = '';
+                    updated.bankAccount = '';
+                    updated.bankLcCommission = '';
+                    updated.bankVatOnCommission = '';
+                    updated.bankSwiftCharge = '';
+                    updated.bankVatOnSwiftCharge = '';
+                    updated.bankLcApplicationForm = '';
+                    updated.bankMpCharge = '';
+                    updated.bankStampCharge = '';
+                }
+            }
+
             if (field === 'certification') {
                 setCertSearch('');
                 const currentCert = prev.certification || '';
@@ -1464,6 +1522,38 @@ function PI({
             }
             setSubmitStatus('success');
             showToast(editingId ? 'PI updated successfully!' : 'PI created successfully!', 'success');
+
+            // Automatically generate PI PDF and Bank Application Letter PDF
+            try {
+                const enrichedForPdf = { ...submissionData };
+                if (!enrichedForPdf.exporterAddress || !enrichedForPdf.exporterEmail || !enrichedForPdf.exporterSignature) {
+                    const exp = exporters?.find(e => e.name === enrichedForPdf.exporterName);
+                    if (exp) {
+                        enrichedForPdf.exporterAddress = enrichedForPdf.exporterAddress || exp.address;
+                        enrichedForPdf.exporterContact = enrichedForPdf.exporterContact || exp.phone;
+                        enrichedForPdf.exporterEmail = enrichedForPdf.exporterEmail || exp.email;
+                        enrichedForPdf.exporterSignature = enrichedForPdf.exporterSignature || exp.signature;
+                        enrichedForPdf.exporterSeal = enrichedForPdf.exporterSeal || exp.seal;
+                    }
+                }
+                if (!enrichedForPdf.partyAddress || !enrichedForPdf.partyEmail || !enrichedForPdf.partySignature) {
+                    const imp = importers?.find(i => i.name === enrichedForPdf.partyName);
+                    if (imp) {
+                        enrichedForPdf.partyAddress = enrichedForPdf.partyAddress || imp.address;
+                        enrichedForPdf.partyContact = enrichedForPdf.partyContact || imp.phone;
+                        enrichedForPdf.partyEmail = enrichedForPdf.partyEmail || imp.email;
+                        enrichedForPdf.partySignature = enrichedForPdf.partySignature || imp.signature;
+                    }
+                }
+                if (enrichedForPdf.invoiceStyle === 'Style 2 AAS' || enrichedForPdf.invoiceStyle === 'Style 3') {
+                    generatePI2PDF(enrichedForPdf);
+                } else {
+                    generatePIPDF(enrichedForPdf);
+                }
+            } catch (pdfErr) {
+                console.error('Error auto-generating PDF:', pdfErr);
+            }
+
             setTimeout(() => {
                 setShowForm(false);
                 resetForm();
@@ -1505,6 +1595,18 @@ function PI({
             portOfLoading: 'ANY PLACE OF INDIA',
             portOfDischarge: '',
             indianBank: 'ICICI BANK LTD. KOLKATA.',
+            bankName: '',
+            bankBranch: '',
+            bankAccount: '',
+            bankMargin: '',
+            lcBillEnabled: true,
+            bankLcCommission: '',
+            bankVatOnCommission: '',
+            bankSwiftCharge: '',
+            bankVatOnSwiftCharge: '',
+            bankLcApplicationForm: '',
+            bankMpCharge: '',
+            bankStampCharge: '',
             buyerOrderNo: '',
             buyerOrderDate: '',
             otherReferences: '',
@@ -1585,6 +1687,18 @@ function PI({
             portOfLoading: record.portOfLoading || '',
             portOfDischarge: record.portOfDischarge || '',
             indianBank: record.indianBank || '',
+            bankName: record.bankName || '',
+            bankBranch: record.bankBranch || '',
+            bankAccount: record.bankAccount || record.accountNo || '',
+            bankMargin: record.bankMargin || '',
+            lcBillEnabled: record.lcBillEnabled !== undefined ? record.lcBillEnabled : true,
+            bankLcCommission: record.bankLcCommission || '',
+            bankVatOnCommission: record.bankVatOnCommission || '',
+            bankSwiftCharge: record.bankSwiftCharge || '',
+            bankVatOnSwiftCharge: record.bankVatOnSwiftCharge || '',
+            bankLcApplicationForm: record.bankLcApplicationForm || '',
+            bankMpCharge: record.bankMpCharge || '',
+            bankStampCharge: record.bankStampCharge || '',
             buyerOrderNo: record.buyerOrderNo || '',
             buyerOrderDate: record.buyerOrderDate || '',
             otherReferences: record.otherReferences || '',
@@ -3754,6 +3868,146 @@ function PI({
                             </div>
                         </div>
 
+                        {/* --- Bank Details Section --- */}
+                        <div className="col-span-1 md:col-span-3 mb-2 mt-4 bg-blue-50/30 border-l-4 border-blue-500 px-4 py-2 rounded-r-xl">
+                            <h3 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Bank Details</h3>
+                        </div>
+
+                        <div className="col-span-1 md:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {/* Issuing Bank Dropdown Input */}
+                            <div className="space-y-1.5 text-left relative dropdown-container" ref={issuingBankRef}>
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Issuing Bank</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="bankName"
+                                        value={formData.bankName || ''}
+                                        onChange={handleInputChange}
+                                        onFocus={() => { setActiveDropdown('bankName'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'bankName', banks.filter(b => {
+                                            const bName = typeof b === 'string' ? b : (b?.bankName || '');
+                                            const searchVal = typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '');
+                                            return !searchVal || bName.toLowerCase().includes(searchVal.toLowerCase());
+                                        }), 'bankName')}
+                                        placeholder="Select Bank"
+                                        autoComplete="off"
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                        {formData.bankName && (
+                                            <button type="button" onClick={() => handleDropdownSelect('bankName', '')} className="text-gray-400 hover:text-gray-600">
+                                                <XIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                    </div>
+                                </div>
+                                {activeDropdown === 'bankName' && (
+                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                        {banks.filter(b => {
+                                            const bName = typeof b === 'string' ? b : (b?.bankName || '');
+                                            const searchVal = typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '');
+                                            return !searchVal || bName.toLowerCase().includes(searchVal.toLowerCase());
+                                        }).map((bank, idx) => {
+                                            const bName = typeof bank === 'string' ? bank : (bank?.bankName || '');
+                                            const searchVal = typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '');
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankName', bName); }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${searchVal === bName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {bName}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Branch Dropdown Input */}
+                            <div className="space-y-1.5 text-left relative dropdown-container" ref={branchRef}>
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Branch</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="bankBranch"
+                                        value={formData.bankBranch || ''}
+                                        onChange={handleInputChange}
+                                        onFocus={() => { setActiveDropdown('bankBranch'); setHighlightedIndex(-1); }}
+                                        onKeyDown={(e) => {
+                                            const selectedBank = banks.find(b => (b.bankName || '').trim().toUpperCase() === (formData.bankName || '').trim().toUpperCase());
+                                            const branchesList = selectedBank?.branches || [];
+                                            const options = branchesList.filter(br => !formData.bankBranch || br.branch.toLowerCase().includes(formData.bankBranch.toLowerCase())).map(br => br.branch);
+                                            handleDropdownKeyDown(e, 'bankBranch', options, 'bankBranch');
+                                        }}
+                                        placeholder="Select Branch"
+                                        autoComplete="off"
+                                        className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium pr-10"
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                        {formData.bankBranch && (
+                                            <button type="button" onClick={() => handleDropdownSelect('bankBranch', '')} className="text-gray-400 hover:text-gray-600">
+                                                <XIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
+                                    </div>
+                                </div>
+                                {activeDropdown === 'bankBranch' && (() => {
+                                    const selectedBank = banks.find(b => (b.bankName || '').trim().toUpperCase() === (formData.bankName || '').trim().toUpperCase());
+                                    const branchesList = selectedBank?.branches || [];
+                                    const filteredBranches = branchesList.filter(br => !formData.bankBranch || br.branch.toLowerCase().includes(formData.bankBranch.toLowerCase()));
+                                    return (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {filteredBranches.map((br, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankBranch', br.branch); }}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.bankBranch === br.branch ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                >
+                                                    {br.branch}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* Account Input */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Account</label>
+                                <input
+                                    type="text"
+                                    name="bankAccount"
+                                    value={formData.bankAccount || ''}
+                                    onChange={handleInputChange}
+                                    placeholder="Account Number"
+                                    className="w-full px-4 py-2.5 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                />
+                            </div>
+
+                            {/* Margin (%) */}
+                            <div className="space-y-1.5 text-left">
+                                <label className="text-sm font-semibold text-gray-600 ml-1">Margin</label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        name="bankMargin"
+                                        value={formData.bankMargin || ''}
+                                        onChange={handleInputChange}
+                                        placeholder="0"
+                                        className="w-full px-4 py-2.5 pr-8 bg-white/50 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* --- Advanced/Detailed Sections --- */}
                         <div className="md:col-span-3 space-y-2">
                             <label className="text-sm font-medium text-gray-700">Description of Goods</label>
@@ -5275,6 +5529,40 @@ function PI({
                                                     >
                                                         <PDFIcon className="w-4 h-4 text-white" />
                                                         <span>Print PI PDF</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const enriched = {
+                                                                ...viewHistoryRecord,
+                                                                ...activeRevision,
+                                                                piNumber: `${viewHistoryRecord.piNumber}${activeRevision.reviseNo !== 'Original PI' ? ' (REVISED)' : ''}`
+                                                            };
+                                                            if (!enriched.exporterAddress || !enriched.exporterEmail || !enriched.exporterSignature) {
+                                                                const exp = exporters?.find(e => e.name === enriched.exporterName);
+                                                                if (exp) {
+                                                                    enriched.exporterAddress = enriched.exporterAddress || exp.address;
+                                                                    enriched.exporterContact = enriched.exporterContact || exp.phone;
+                                                                    enriched.exporterEmail = enriched.exporterEmail || exp.email;
+                                                                    enriched.exporterSignature = enriched.exporterSignature || exp.signature;
+                                                                    enriched.exporterSeal = enriched.exporterSeal || exp.seal;
+                                                                }
+                                                            }
+                                                            if (!enriched.partyAddress || !enriched.partyEmail || !enriched.partySignature) {
+                                                                const imp = importers?.find(i => i.name === enriched.partyName);
+                                                                if (imp) {
+                                                                    enriched.partyAddress = enriched.partyAddress || imp.address;
+                                                                    enriched.partyContact = enriched.partyContact || imp.phone;
+                                                                    enriched.partyEmail = enriched.partyEmail || imp.email;
+                                                                    enriched.partySignature = enriched.partySignature || imp.signature;
+                                                                }
+                                                            }
+                                                            generateBankApplicationPDF(enriched);
+                                                        }}
+                                                        className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                                                    >
+                                                        <FileTextIcon className="w-4 h-4 text-white" />
+                                                        <span>Bank Application</span>
                                                     </button>
                                                     {canManage && (
                                                         <button

@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { appendBankApplicationPage } from './islbankApplicationGenerator';
 
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
@@ -829,6 +830,9 @@ export const generatePI2PDF = (record) => {
     doc.text("Signature.", sigImageX + (sigImageWidth / 2), sigLineY + 4, { align: 'center' });
 
     doc.line(margin, boxBottom, pageWidth - margin, boxBottom);
+
+    // Append Bank Application Page as Page 2
+    appendBankApplicationPage(doc, record);
 
     // Open in new tab
     const pdfOutput = doc.output('blob');
