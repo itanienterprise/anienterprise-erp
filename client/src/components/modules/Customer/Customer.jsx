@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTransactions, getItemTimestamp } from '../../../utils/helpers';
-import { generateSaleInvoicePDF, generateCustomerHistoryPDF } from '../../../utils/pdfGenerator';
+import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceiptPDF } from '../../../utils/pdfGenerator';
 import { api } from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -483,6 +483,38 @@ const Customer = ({
 
     const getCustomerFinalBalance = (c) => {
         return computeCustomerBalance(c, { salesRecords, purchasesList, purchaseReceivesList });
+    };
+
+    const handleDownloadMoneyReceipt = (payment) => {
+        const customer = viewData;
+        const paidAmount = parseFloat(payment.amount) || 0;
+        const balanceDue = customer ? Math.max(0, getCustomerFinalBalance(customer)) : 0;
+        const previousBalance = balanceDue + paidAmount;
+
+        const tableItems = payment.items && payment.items.length > 0 ? payment.items : [{
+            id: payment._id || payment.id,
+            method: payment.method,
+            bankName: payment.bankName,
+            accountNo: payment.accountNo,
+            branch: payment.branch,
+            receiveBy: payment.receiveBy,
+            place: payment.place,
+            amount: paidAmount
+        }];
+
+        const receiptData = {
+            ...payment,
+            companyName: customer?.companyName || payment.companyName || '',
+            customerName: customer?.customerName || payment.customerName || '',
+            customerId: customer?.customerId || payment.customerId || '',
+            address: customer?.address || customer?.location || payment.address || '',
+            phone: customer?.phone || payment.phone || '',
+            amount: paidAmount,
+            previousBalance: payment.previousBalance !== undefined ? payment.previousBalance : previousBalance,
+            balanceDue: payment.balanceDue !== undefined ? payment.balanceDue : balanceDue,
+            items: tableItems
+        };
+        generateMoneyReceiptPDF(receiptData);
     };
 
     const sortData = (data) => {
@@ -3128,7 +3160,7 @@ const Customer = ({
                                                                             <SortIcon config={historySortConfig} columnKey="amount" />
                                                                         </div>
                                                                     </th>
-                                                                    <th className="px-4 py-3 font-semibold text-gray-600 text-left">Status</th>
+                                                                    <th className="px-4 py-3 font-semibold text-gray-600 text-center">Action</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
@@ -3150,15 +3182,20 @@ const Customer = ({
                                                                                 {payment.accountNo || '-'}
                                                                             </td>
                                                                             <td className="px-4 py-3 text-left font-bold text-gray-900">
-                                                                                <div className="flex flex-col items-end">
+                                                                                <div className="flex flex-col items-start">
                                                                                     <span>৳{parseFloat(payment.amount).toLocaleString('en-IN')}</span>
                                                                                     {payment.reference && <span className="text-[9px] text-blue-500 font-normal">Ref: {payment.reference}</span>}
                                                                                 </div>
                                                                             </td>
-                                                                            <td className="px-4 py-3 text-left">
-                                                                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold">
-                                                                                    {payment.status || 'Received'}
-                                                                                </span>
+                                                                            <td className="px-4 py-3 text-center">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleDownloadMoneyReceipt(payment)}
+                                                                                    className="p-1.5 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded-lg transition-colors inline-flex items-center justify-center"
+                                                                                    title="Download Money Receipt"
+                                                                                >
+                                                                                    <FileTextIcon className="w-4 h-4" />
+                                                                                </button>
                                                                             </td>
                                                                         </tr>
                                                                     ))
@@ -3189,14 +3226,8 @@ const Customer = ({
                                                                                     <div className="text-sm font-black text-gray-900">{payment.method}</div>
                                                                                 </div>
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <span className={`customer-status-badge ${payment.status === 'Completed' || payment.status === 'Received' || !payment.status ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                                                        {isExpanded ? (
-                                                                                            <span className="shrink-0">{payment.status || 'Received'}</span>
-                                                                                        ) : (
-                                                                                            <span className="font-bold">
-                                                                                                ৳{parseFloat(payment.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                                                                                            </span>
-                                                                                        )}
+                                                                                    <span className="font-bold text-emerald-600">
+                                                                                        ৳{parseFloat(payment.amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                                                                     </span>
                                                                                 </div>
                                                                             </div>
@@ -3240,6 +3271,18 @@ const Customer = ({
                                                                                             Ref: {payment.reference}
                                                                                         </div>
                                                                                     )}
+                                                                                    <div className="pt-2 border-t border-gray-100 flex gap-2">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                handleDownloadMoneyReceipt(payment);
+                                                                                            }}
+                                                                                            className="flex-1 flex items-center justify-center gap-2 py-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                                                                        >
+                                                                                            <FileTextIcon className="w-3.5 h-3.5" /> Money Receipt
+                                                                                        </button>
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
