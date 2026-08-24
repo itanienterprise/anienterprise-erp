@@ -673,14 +673,16 @@ function PI({
 
                 // Sum unique border sales for this LC matching the product name
                 allSalesRecords.forEach(s => {
-                    const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                        cleanLc(s.lcNumber) === lcNoClean ||
-                        cleanLc(s.lc_no) === lcNoClean ||
-                        (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                    const matchesLc = !!lcNoClean && (
+                        (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                        (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                        (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                        (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                    );
                     const status = (s.status || '').toLowerCase();
                     const isValidStatus = !status.includes('rejected') && status !== 'requested';
                     const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                    const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer)) || (matchesLc && !!(s.port || s.importer));
+                    const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                     if (matchesLc && isValidStatus && isBorder) {
                         let productSaleQty = 0;
                         if (s.items && s.items.length > 0) {

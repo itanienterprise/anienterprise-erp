@@ -648,12 +648,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
     const relatedSales = allSalesRecords
         .filter(s => {
-            const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                cleanLc(s.lcNumber) === lcNoClean ||
-                cleanLc(s.lc_no) === lcNoClean ||
-                (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+            const matchesLc = !!lcNoClean && (
+                (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+            );
             const sTypeLow = (s.saleType || '').toLowerCase().trim();
-            const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer)) || (matchesLc && !!(s.port || s.importer));
+            const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
             const status = (s.status || '').toLowerCase();
             const isValidStatus = !status.includes('rejected') && status !== 'requested';
             return matchesLc && isValidStatus && isBorder;
@@ -808,15 +810,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
         const borderSaleQtyKg = allSalesRecords
             .filter(s => {
-                const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                    cleanLc(s.lcNumber) === lcNoClean ||
-                    cleanLc(s.lc_no) === lcNoClean ||
-                    (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                const matchesLc = !!lcNoClean && (
+                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                );
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = sTypeLow.includes('border') ||
-                    (s.invoiceNo || '').startsWith('BS') ||
-                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                    (matchesLc && !!(s.port || s.importer));
+                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                 const status = (s.status || '').toLowerCase();
                 const isValidStatus = !status.includes('rejected') && status !== 'requested';
                 return matchesLc && isValidStatus && isBorder;
@@ -894,15 +895,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
             const bQty = allSalesRecords
                 .filter(s => {
-                    const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                        cleanLc(s.lcNumber) === lcNoClean ||
-                        cleanLc(s.lc_no) === lcNoClean ||
-                        (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                    const matchesLc = !!lcNoClean && (
+                        (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                        (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                        (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                        (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                    );
                     const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                    const isBorder = sTypeLow.includes('border') ||
-                        (s.invoiceNo || '').startsWith('BS') ||
-                        (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                        (matchesLc && !!(s.port || s.importer));
+                    const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                     const status = (s.status || '').toLowerCase();
                     const isValidStatus = !status.includes('rejected') && status !== 'requested';
                     return matchesLc && isValidStatus && isBorder;
@@ -3981,12 +3981,13 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
 
     if (!record) return null;
 
+    const dynamicBillValue = getAdjustedLcValues ? (getAdjustedLcValues({ ...record, billValueUsd: '' })?.billValueUsd || 0) : 0;
     const currentBillValue = adj?.billValueUsd || 0;
 
     const [newTotalDollar, setNewTotalDollar] = useState(() => {
         return record.billValueUsd !== undefined && record.billValueUsd !== null && record.billValueUsd !== ''
             ? String(record.billValueUsd)
-            : '';
+            : (dynamicBillValue > 0 ? String(dynamicBillValue.toFixed(2)) : '');
     });
 
     const currentRate = parseFloat(record.dollarRate) || 0;
@@ -4016,8 +4017,8 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
 
             if (isReset) {
                 const tempRec = { ...record, billValueUsd: '' };
-                const dynamicBillValue = getAdjustedLcValues(tempRec).billValueUsd || 0;
-                const resetBdt = dynamicBillValue * parsedNewRate;
+                const dynamicVal = getAdjustedLcValues(tempRec).billValueUsd || 0;
+                const resetBdt = dynamicVal * parsedNewRate;
 
                 updatedRecord = {
                     ...record,
@@ -4089,8 +4090,8 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
                             <span className="text-xs font-black text-gray-800 truncate block">{record.importerName || 'N/A'}</span>
                         </div>
                         <div>
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Current Bill Value</span>
-                            <span className="text-xs font-black text-blue-600 block">${currentBillValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Calculated Bill Value</span>
+                            <span className="text-xs font-black text-blue-600 block">${(dynamicBillValue || currentBillValue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div>
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Current Dollar Rate</span>
@@ -4105,9 +4106,20 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
                     {/* Inputs */}
                     <div className="space-y-4">
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                Bill Value ($)
-                            </label>
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Bill Value ($)
+                                </label>
+                                {dynamicBillValue > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setNewTotalDollar(String(dynamicBillValue.toFixed(2)))}
+                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline transition-colors"
+                                    >
+                                        Auto (${dynamicBillValue.toFixed(2)})
+                                    </button>
+                                )}
+                            </div>
                             <div className="relative">
                                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">$</span>
                                 <input
@@ -4116,7 +4128,7 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
                                     min="0"
                                     value={newTotalDollar}
                                     onChange={(e) => setNewTotalDollar(e.target.value)}
-                                    placeholder="e.g. 98700.00"
+                                    placeholder="e.g. 94984.79"
                                     autoFocus
                                     className="w-full pl-9 pr-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
                                 />
@@ -6932,15 +6944,14 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
         const borderSaleQtyKg = allSalesRecords
             .filter(s => {
-                const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                    cleanLc(s.lcNumber) === lcNoClean ||
-                    cleanLc(s.lc_no) === lcNoClean ||
-                    (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                const matchesLc = !!lcNoClean && (
+                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                );
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = sTypeLow.includes('border') ||
-                    (s.invoiceNo || '').startsWith('BS') ||
-                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                    (matchesLc && !!(s.port || s.importer));
+                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                 const status = (s.status || '').toLowerCase();
                 const isValidStatus = !status.includes('rejected') && status !== 'requested';
                 return matchesLc && isValidStatus && isBorder;
@@ -7027,15 +7038,14 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             // Border Sales
             const bQty = allSalesRecords
                 .filter(s => {
-                    const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                        cleanLc(s.lcNumber) === lcNoClean ||
-                        cleanLc(s.lc_no) === lcNoClean ||
-                        (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                    const matchesLc = !!lcNoClean && (
+                        (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                        (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                        (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                        (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                    );
                     const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                    const isBorder = sTypeLow.includes('border') ||
-                        (s.invoiceNo || '').startsWith('BS') ||
-                        (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                        (matchesLc && !!(s.port || s.importer));
+                    const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                     const status = (s.status || '').toLowerCase();
                     const isValidStatus = !status.includes('rejected') && status !== 'requested';
                     return matchesLc && isValidStatus && isBorder;
@@ -7305,12 +7315,14 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
             const totalBorderSales = (allSalesRecords || [])
                 .filter(s => {
-                    const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                        cleanLc(s.lcNumber) === lcNoClean ||
-                        cleanLc(s.lc_no) === lcNoClean ||
-                        (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                    const matchesLc = !!lcNoClean && (
+                        (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                        (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                        (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                        (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                    );
                     const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                    const isBorder = sTypeLow.includes('border') || (s.invoiceNo || '').startsWith('BS') || (!s.saleType && !!(s.lcNo || s.port || s.importer)) || (matchesLc && !!(s.port || s.importer));
+                    const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                     const status = (s.status || '').toLowerCase();
                     return matchesLc && !status.includes('rejected') && status !== 'requested' && isBorder;
                 })
@@ -10430,15 +10442,14 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
                                         const borderSaleQtyKg = allSalesRecords
                                             .filter(s => {
-                                                const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                                                    cleanLc(s.lcNumber) === lcNoClean ||
-                                                    cleanLc(s.lc_no) === lcNoClean ||
-                                                    (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                                                const matchesLc = !!lcNoClean && (
+                                                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                                                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                                                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                                                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                                                );
                                                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                                                const isBorder = sTypeLow.includes('border') ||
-                                                    (s.invoiceNo || '').startsWith('BS') ||
-                                                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                                                    (matchesLc && !!(s.port || s.importer));
+                                                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                                                 const status = (s.status || '').toLowerCase();
                                                 const isValidStatus = !status.includes('rejected') && status !== 'requested';
                                                 return matchesLc && isValidStatus && isBorder;
@@ -11181,15 +11192,14 @@ style={
                                 // Border Sale: From allSalesRecords where lcNo matches and is a Border Sale
                                 const borderSaleQtyKg = allSalesRecords
                                     .filter(s => {
-                                        const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                                            cleanLc(s.lcNumber) === lcNoClean ||
-                                            cleanLc(s.lc_no) === lcNoClean ||
-                                            (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                                        const matchesLc = !!lcNoClean && (
+                                            (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                                            (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                                            (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                                            (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                                        );
                                         const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                                        const isBorder = sTypeLow.includes('border') ||
-                                            (s.invoiceNo || '').startsWith('BS') ||
-                                            (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                                            (matchesLc && !!(s.port || s.importer));
+                                        const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                                         const status = (s.status || '').toLowerCase();
                                         const isValidStatus = !status.includes('rejected') && status !== 'requested';
                                         return matchesLc && isValidStatus && isBorder;

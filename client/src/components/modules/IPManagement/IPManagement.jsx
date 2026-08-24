@@ -300,15 +300,14 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
 
         const borderSaleQtyKg = allSalesRecords
             .filter(s => {
-                const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                    cleanLc(s.lcNumber) === lcNoClean ||
-                    cleanLc(s.lc_no) === lcNoClean ||
-                    (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                const matchesLc = !!lcNoClean && (
+                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                );
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = sTypeLow.includes('border') ||
-                    (s.invoiceNo || '').startsWith('BS') ||
-                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                    (matchesLc && !!(s.port || s.importer));
+                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                 const status = (s.status || '').toLowerCase();
                 const isValidStatus = !status.includes('rejected') && status !== 'requested';
                 return matchesLc && isValidStatus && isBorder;
@@ -601,14 +600,20 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                                     <td className="px-5 py-3.5 text-sm font-medium whitespace-nowrap">{formatDate(state.amendmentDate || state.openingDate || lc.openingDate)}</td>
                                                     <td className={`px-5 py-3.5 text-sm font-medium whitespace-nowrap ${isLastState ? 'text-red-500' : 'text-red-400'}`}>{formatDate(state.expiryDate)}</td>
                                                     <td className="px-5 py-3.5 text-sm whitespace-nowrap">
-                                                        <span className={`font-black ${isLastState ? 'text-blue-600' : 'text-blue-400'}`}>
-                                                            {lc.lcNo || '-'}
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className={`font-black ${isLastState ? 'text-blue-600' : 'text-blue-400'}`}>
+                                                                {lc.lcNo || '-'}
+                                                            </span>
                                                             {!isOriginalState && (
-                                                                <span className={`text-[11px] font-bold ml-1.5 ${isLastState ? 'text-amber-600' : 'text-amber-500/80'}`}>
-                                                                    ({state.amendmentNo})
+                                                                <span className={`self-start px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide border ${
+                                                                    isLastState 
+                                                                        ? 'bg-amber-50 text-amber-600 border-amber-200/60' 
+                                                                        : 'bg-gray-100 text-gray-500 border-gray-200/60'
+                                                                }`}>
+                                                                    {state.amendmentNo}
                                                                 </span>
                                                             )}
-                                                        </span>
+                                                        </div>
                                                     </td>
                                                     <td className="px-5 py-3.5 text-sm font-medium uppercase">{lc.bankName || '-'}</td>
                                                     <td className="px-5 py-3.5 text-sm font-medium text-right whitespace-nowrap">
@@ -755,17 +760,23 @@ const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords =
                                             {/* Card Top: LC No & Status */}
                                             <div className="flex justify-between items-center mb-3">
                                                 <div className="flex flex-col min-w-0 flex-1">
-                                                    <div className="flex items-center min-w-0">
-                                                        <span className={`w-[48px] text-[11px] font-black uppercase tracking-widest shrink-0 whitespace-nowrap ${isLastState ? 'text-blue-500' : 'text-blue-400'}`}>LC No.</span>
-                                                        <span className={`font-bold mx-2 ${isLastState ? 'text-blue-500' : 'text-blue-400'}`}>-</span>
-                                                        <span className={`text-sm font-black tracking-tight truncate ${isLastState ? 'text-gray-900' : 'text-gray-500'}`}>
-                                                            {lc.lcNo || '-'}
+                                                    <div className="flex items-start min-w-0">
+                                                        <span className={`w-[48px] text-[11px] font-black uppercase tracking-widest shrink-0 whitespace-nowrap pt-0.5 ${isLastState ? 'text-blue-500' : 'text-blue-400'}`}>LC No.</span>
+                                                        <span className={`font-bold mx-2 pt-0.5 ${isLastState ? 'text-blue-500' : 'text-blue-400'}`}>-</span>
+                                                        <div className="flex flex-col gap-0.5 min-w-0">
+                                                            <span className={`text-sm font-black tracking-tight truncate ${isLastState ? 'text-gray-900' : 'text-gray-500'}`}>
+                                                                {lc.lcNo || '-'}
+                                                            </span>
                                                             {!isOriginalState && (
-                                                                <span className={`text-[11px] font-bold ml-1.5 ${isLastState ? 'text-amber-600' : 'text-amber-500/80'}`}>
-                                                                    ({state.amendmentNo})
+                                                                <span className={`self-start px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide border ${
+                                                                    isLastState 
+                                                                        ? 'bg-amber-50 text-amber-600 border-amber-200/60' 
+                                                                        : 'bg-gray-100 text-gray-500 border-gray-200/60'
+                                                                }`}>
+                                                                    {state.amendmentNo}
                                                                 </span>
                                                             )}
-                                                        </span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${statusClass}`}>
@@ -1201,15 +1212,14 @@ function IPManagement({
 
         const borderSaleQtyKg = (allSalesRecords || [])
             .filter(s => {
-                const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                    cleanLc(s.lcNumber) === lcNoClean ||
-                    cleanLc(s.lc_no) === lcNoClean ||
-                    (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                const matchesLc = !!lcNoClean && (
+                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                );
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = sTypeLow.includes('border') ||
-                    (s.invoiceNo || '').startsWith('BS') ||
-                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                    (matchesLc && !!(s.port || s.importer));
+                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                 const status = (s.status || '').toLowerCase();
                 const isValidStatus = !status.includes('rejected') && status !== 'requested';
                 return matchesLc && isValidStatus && isBorder;

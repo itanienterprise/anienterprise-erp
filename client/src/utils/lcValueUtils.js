@@ -187,18 +187,17 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
 
     const borderSaleQtyKg = allSalesRecords
         .filter(s => {
-            const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                cleanLc(s.lcNumber) === lcNoClean ||
-                cleanLc(s.lc_no) === lcNoClean ||
-                (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
-            const sTypeLow = (s.saleType || '').toLowerCase().trim();
-            const isBorder = sTypeLow.includes('border') ||
-                (s.invoiceNo || '').startsWith('BS') ||
-                (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                (matchesLc && !!(s.port || s.importer));
-            const status = (s.status || '').toLowerCase();
-            const isValidStatus = !status.includes('rejected') && status !== 'requested';
-            return matchesLc && isValidStatus && isBorder;
+            const matchesLc = !!lcNoClean && (
+            (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+            (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+            (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+            (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+        );
+        const sTypeLow = (s.saleType || '').toLowerCase().trim();
+        const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
+        const status = (s.status || '').toLowerCase();
+        const isValidStatus = !status.includes('rejected') && status !== 'requested';
+        return matchesLc && isValidStatus && isBorder;
         })
         .reduce((sum, s) => {
             const itemSubtotal = (s.items || []).reduce((iSum, item) => {
@@ -279,15 +278,14 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
 
         const bQty = allSalesRecords
             .filter(s => {
-                const matchesLc = cleanLc(s.lcNo) === lcNoClean ||
-                    cleanLc(s.lcNumber) === lcNoClean ||
-                    cleanLc(s.lc_no) === lcNoClean ||
-                    (s.items && s.items.some(i => cleanLc(i.lcNo) === lcNoClean || (i.brandEntries && i.brandEntries.some(b => cleanLc(b.lcNo) === lcNoClean))));
+                const matchesLc = !!lcNoClean && (
+                    (s.lcNo && cleanLc(s.lcNo) === lcNoClean) ||
+                    (s.lcNumber && cleanLc(s.lcNumber) === lcNoClean) ||
+                    (s.lc_no && cleanLc(s.lc_no) === lcNoClean) ||
+                    (s.items && s.items.some(i => (i.lcNo && cleanLc(i.lcNo) === lcNoClean) || (i.brandEntries && i.brandEntries.some(b => b.lcNo && cleanLc(b.lcNo) === lcNoClean))))
+                );
                 const sTypeLow = (s.saleType || '').toLowerCase().trim();
-                const isBorder = sTypeLow.includes('border') ||
-                    (s.invoiceNo || '').startsWith('BS') ||
-                    (!s.saleType && !!(s.lcNo || s.port || s.importer)) ||
-                    (matchesLc && !!(s.port || s.importer));
+                const isBorder = (sTypeLow === 'border' || sTypeLow === 'border sale' || (s.invoiceNo || '').toUpperCase().startsWith('BS') || s.isBorderSale === true) && sTypeLow !== 'general' && sTypeLow !== 'warehouse';
                 const status = (s.status || '').toLowerCase();
                 const isValidStatus = !status.includes('rejected') && status !== 'requested';
                 return matchesLc && isValidStatus && isBorder;
