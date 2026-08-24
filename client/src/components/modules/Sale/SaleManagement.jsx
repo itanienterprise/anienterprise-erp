@@ -5823,7 +5823,7 @@ const SaleManagement = ({
                                                     toggleRowExpansion(sale._id);
                                                 }
                                             }}
-                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${isMultiple ? 'cursor-pointer' : ''} ${highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
+                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-top ${isMultiple ? 'cursor-pointer' : ''} ${highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
                                         ref={el => { if (sale.invoiceNo) rowRefs.current[sale.invoiceNo] = el; }}
                                                     style={highlightId && (String(sale._id) === String(highlightId) || (sale.invoiceNo && String(sale.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                         >
@@ -6337,7 +6337,7 @@ const SaleManagement = ({
                                                                     </button>
                                                                     {activePdfDropdown === sale._id && (
                                                                         <div
-                                                                            className="absolute right-0 bottom-full mb-1.5 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+                                                                            className="absolute right-0 top-full mt-1.5 w-32 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-[100] animate-in fade-in zoom-in-95 duration-100"
                                                                             onClick={(e) => e.stopPropagation()}
                                                                         >
                                                                             <button
