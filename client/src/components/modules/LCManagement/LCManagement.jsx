@@ -1055,13 +1055,21 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     let remainingMarginPaid = totalMarginPayments;
     let lastMarginBillIdx = -1;
 
+    const activeTotalAmount = (adj.adjustedTotalAmount > 0)
+        ? adj.adjustedTotalAmount
+        : (parseFloat(data.marginBill) || parseFloat(data.totalAmount) || 0);
+
+    const dynamicBills = calculateBankBills({
+        ...data,
+        totalAmount: activeTotalAmount
+    });
+
     // 1. Margin Bill (Original)
-    const marginBillAmt = parseFloat(data.marginBill) || parseFloat(data.totalAmount) || 0;
+    const marginBillAmt = parseFloat(dynamicBills.marginBill) || activeTotalAmount || 0;
     if (marginBillAmt > 0) {
-        const origMarginPaidBase = parseFloat(data.marginPaid) || (() => {
-            const total = parseFloat(data.totalAmount) || 0;
+        const origMarginPaidBase = parseFloat(dynamicBills.marginPaid) || (() => {
             const margin = parseFloat(data.bankMargin) || 0;
-            return total * (margin / 100);
+            return marginBillAmt * (margin / 100);
         })();
 
         const paidForOrig = Math.min(remainingMarginPaid, Math.max(0, marginBillAmt - origMarginPaidBase));
@@ -1089,8 +1097,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
     }
 
     // 2. Bank Bill (Original)
-    const isNewBilling = data.marginPaid !== undefined || data.marginBill !== undefined;
-    const bankBillAmt = isNewBilling ? (parseFloat(data.bankBill) || 0) : (parseFloat(data.totalBankBill || data.bankBill) || 0);
+    const bankBillAmt = parseFloat(dynamicBills.bankBill) || (parseFloat(data.totalBankBill || data.bankBill) || 0);
     if (bankBillAmt > 0) {
         const paid = Math.min(remainingBankPaid, bankBillAmt);
         remainingBankPaid -= paid;
@@ -5265,6 +5272,10 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const [expandedLcKey, setExpandedLcKey] = useState(null);
     const [expandedCardKey, setExpandedCardKey] = useState(null);
     const getLcTotalPaidExpense = (record) => {
+        const adj = getAdjustedLcValues ? getAdjustedLcValues(record) : null;
+        const activeTotal = (adj?.adjustedTotalAmount > 0) ? adj.adjustedTotalAmount : (parseFloat(record.totalAmount) || 0);
+        const dynamicBills = calculateBankBills({ ...record, totalAmount: activeTotal });
+
         // 1. Paid LC expenses (excluding bills)
         const paidExpenses = lcExpenses
             .filter(exp => exp.lcNo === record.lcNo && exp.type !== 'bill')
@@ -5276,10 +5287,9 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             .reduce((sum, p) => sum + (parseFloat(p.amount) || 0) + (parseFloat(p.adjustedAmount) || 0), 0);
 
         // 3. Margin paid (original)
-        const marginPaidAmt = parseFloat(record.marginPaid) || (() => {
-            const total = parseFloat(record.totalAmount) || 0;
+        const marginPaidAmt = parseFloat(dynamicBills.marginPaid) || (() => {
             const margin = parseFloat(record.bankMargin) || 0;
-            return total * (margin / 100);
+            return activeTotal * (margin / 100);
         })();
 
         let total = paidExpenses + paidInsurance + marginPaidAmt;
