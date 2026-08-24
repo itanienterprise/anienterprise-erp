@@ -1841,8 +1841,9 @@ export const generateWarehouseReportPDF = (displayGroups, filters, totals) => {
     }
 };
 
-export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
+export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 'invoice') => {
     try {
+        const isChallan = docType === 'challan';
         const isBorderSale = (sale.invoiceNo || '').startsWith('BS');
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.width;
@@ -2039,17 +2040,13 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             const currentInv = (sale.invoiceNo || '').trim().toUpperCase();
             const currentOrd = (sale.orderNo || '').trim().toUpperCase();
 
-            // All history transactions sorted chronologically
             const allHistory = [...sHistory, ...pHistory, ...ptcHistory, ...puHistory].sort(compareTransactions);
 
-            // Filter only transactions occurring strictly BEFORE the current sale invoice
             const prevTransactions = allHistory.filter(item => {
                 const hInv = (item.invoiceNo || item.orderNo || '').trim().toUpperCase();
-                // Exclude all line items belonging to the current sale invoice
                 if (currentInv && hInv === currentInv) return false;
                 if (currentOrd && hInv === currentOrd) return false;
 
-                // Compare timestamp/order with the current sale
                 return compareTransactions(item, sale) < 0;
             });
 
@@ -2077,14 +2074,12 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             previousBalance = calculatedPrevBalance;
         }
 
-        // --- Background Patterns (Organic Waves / Decorative Circles) ---
         doc.setFillColor(255, 247, 237);
         doc.circle(0, 0, 35, 'F');
         doc.circle(pageWidth, pageHeight, 45, 'F');
         doc.setFillColor(254, 215, 170);
         doc.circle(0, pageHeight, 30, 'F');
 
-        // Load company logo and centered watermark
         const { logoImg, watermarkImg } = await new Promise((resolve) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
@@ -2096,12 +2091,11 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
                 ctx.drawImage(img, 0, 0);
                 const normal = canvas.toDataURL('image/png');
 
-                // Generate translucent watermark
                 const wmCanvas = document.createElement('canvas');
                 wmCanvas.width = img.width;
                 wmCanvas.height = img.height;
                 const wmCtx = wmCanvas.getContext('2d');
-                wmCtx.globalAlpha = 0.15; // increased visibility watermark opacity
+                wmCtx.globalAlpha = 0.15;
                 wmCtx.drawImage(img, 0, 0);
                 const wm = wmCanvas.toDataURL('image/png');
 
@@ -2111,7 +2105,6 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             img.src = '/logo.png';
         });
 
-        // --- Centered Logo Watermark (shifted slightly up) ---
         if (watermarkImg) {
             const wmSize = 95;
             const wmX = (pageWidth - wmSize) / 2;
@@ -2119,7 +2112,6 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             doc.addImage(watermarkImg, 'PNG', wmX, wmY, wmSize, wmSize);
         }
 
-        // --- Header (identical to Stock Report) ---
         if (logoImg) {
             doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
         } else {
@@ -2144,21 +2136,18 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             doc.setFont('helvetica', 'bold');
         }
 
-        // 1. Subtle drop shadow behind text
         doc.setTextColor(210, 210, 210);
         if (typeof doc.setTextRenderingMode === 'function') {
-            doc.setTextRenderingMode(0); // fill only
+            doc.setTextRenderingMode(0);
         }
         doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
 
-        // 2. Main text: Clean orange fill
-        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        doc.setTextColor(249, 115, 22);
         if (typeof doc.setTextRenderingMode === 'function') {
-            doc.setTextRenderingMode(0); // fill only
+            doc.setTextRenderingMode(0);
         }
         doc.text("ANI ENTERPRISE", xPos, headerYPos);
 
-        // Address (right aligned)
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(0, 0, 0);
@@ -2169,19 +2158,16 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             "Email: anienterprise051@gmail.com"
         ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
 
-        // Orange divider line
         let y = margin + 20;
         doc.setDrawColor(249, 115, 22);
         doc.setLineWidth(0.6);
         doc.line(margin, y, pageWidth - margin, y);
 
-        // --- Body Section ---
         y += 8;
         doc.setFontSize(12);
         doc.setTextColor(0, 0, 0);
         doc.setFont('helvetica', 'bold');
 
-        // Helper for dotted lines
         const drawDottedLine = (x1, y1, x2) => {
             doc.setDrawColor(200);
             doc.setLineWidth(0.1);
@@ -2193,15 +2179,15 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         const labelWidth = 40;
         const rightColStart = margin + 105;
 
-        // --- 2. Boxed Title ---
-        doc.setFillColor(249, 115, 22); // Orange color
-        doc.roundedRect((pageWidth / 2) - 35, y - 5, 70, 8, 2, 2, 'F');
+        const titleText = isChallan ? "DELIVERY CHALLAN" : "SALES INVOICE";
+        const titleBoxWidth = isChallan ? 75 : 70;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - (titleBoxWidth / 2), y - 5, titleBoxWidth, 8, 2, 2, 'F');
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
-        doc.text("SALES INVOICE", pageWidth / 2, y + 0.5, { align: 'center' });
+        doc.text(titleText, pageWidth / 2, y + 0.5, { align: 'center' });
 
-        // --- 2a. Customer Type Tag (Centered under Title Box) ---
         let custTypeLabel = "General Customer";
         const cType = (customer?.customerType || sale.customerType || "").toLowerCase();
         if (cType.includes("party") || sale.isParty) {
@@ -2215,16 +2201,16 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         const tagW = tagTextWidth + 8;
         const tagH = 5.2;
         const tagX = (pageWidth / 2) - (tagW / 2);
-        const tagY = y + 5.5; // clean gap below the Sales Invoice box
+        const tagY = y + 5.5;
 
         if (isParty) {
-            doc.setFillColor(254, 243, 199); // amber-100
-            doc.setDrawColor(245, 158, 11);  // amber-500
-            doc.setTextColor(180, 83, 9);    // amber-700
+            doc.setFillColor(254, 243, 199);
+            doc.setDrawColor(245, 158, 11);
+            doc.setTextColor(180, 83, 9);
         } else {
-            doc.setFillColor(239, 246, 255); // blue-50
-            doc.setDrawColor(191, 219, 254); // blue-200
-            doc.setTextColor(29, 78, 216);   // blue-700
+            doc.setFillColor(239, 246, 255);
+            doc.setDrawColor(191, 219, 254);
+            doc.setTextColor(29, 78, 216);
         }
         doc.setLineWidth(0.2);
         doc.roundedRect(tagX, tagY, tagW, tagH, 1.5, 1.5, 'FD');
@@ -2232,7 +2218,6 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 
         let nextY = tagY + tagH;
 
-        // --- 2b. Challan No Tag (Centered at bottom of Customer Type Tag) ---
         const challanVal = (sale.challanNo || sale.chNo || '').toString().trim();
         if (challanVal) {
             const challanText = `CH. No : ${challanVal}`;
@@ -2245,24 +2230,22 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             const chX = (pageWidth / 2) - (chW / 2);
             const chY = nextY + 2.2;
 
-            doc.setFillColor(241, 245, 249); // ash / slate-100
-            doc.setDrawColor(148, 163, 184); // slate-400
-            doc.setTextColor(51, 65, 85);   // slate-700 / dark ash
+            doc.setFillColor(241, 245, 249);
+            doc.setDrawColor(148, 163, 184);
+            doc.setTextColor(51, 65, 85);
             doc.setLineWidth(0.2);
             doc.roundedRect(chX, chY, chW, chH, 1.5, 1.5, 'FD');
             doc.text(challanText, pageWidth / 2, chY + 3.7, { align: 'center' });
             nextY = chY + chH;
         }
 
-        // Reset colors to black for invoice details
         doc.setTextColor(0, 0, 0);
         doc.setDrawColor(0, 0, 0);
 
         y = nextY + 8;
 
-        // Line 1: Date (Left) | Invoice No & Truck No (Right)
         doc.setFont('helvetica', 'bold');
-        doc.text("Invoice Date", margin, y);
+        doc.text(isChallan ? "Challan Date" : "Invoice Date", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
         doc.text(formatDate(sale.date), margin + labelWidth, y);
@@ -2290,7 +2273,6 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         drawDottedLine(rightColStart + 24, y + 1, pageWidth - margin);
 
         y += 12;
-        // Line 2: Company Name (Left) | Customer ID (Right)
         doc.setFont('helvetica', 'bold');
         doc.text("Company Name", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
@@ -2306,16 +2288,14 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
 
         y += 12;
-        // Line 3: Address (Full Width)
         doc.setFont('helvetica', 'bold');
-        doc.text("Address", margin, y);
+        doc.text(isChallan ? "Delivery Address" : "Address", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
         doc.setFont('helvetica', 'normal');
         doc.text(sale.address || "-", margin + labelWidth, y);
         drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
 
         y += 12;
-        // Line 4: Contact No & LC No
         doc.setFont('helvetica', 'bold');
         doc.text("Contact No", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
@@ -2331,7 +2311,6 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
         }
 
-        // Dedicated Line for Truck No if too long for Line 1
         if (truckVal && !fitsOnLine1) {
             y += 12;
             doc.setFont('helvetica', 'bold');
@@ -2345,7 +2324,6 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 
         y += 14;
 
-        // --- 4. Items Table ---
         const tableRows = [];
         let items = sale.items || [];
 
@@ -2367,6 +2345,25 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             }
 
             const unitSuffix = isBagUom ? ' BAG' : '';
+
+            if (isChallan) {
+                if (hasReturns) {
+                    return [
+                        sl,
+                        productName,
+                        brandName,
+                        purchaseQuantity.toLocaleString('en-US') + unitSuffix,
+                        returnQuantity.toLocaleString('en-US') + unitSuffix,
+                        netQuantity.toLocaleString('en-US') + unitSuffix
+                    ];
+                }
+                return [
+                    sl,
+                    productName,
+                    brandName,
+                    netQuantity.toLocaleString('en-US') + unitSuffix
+                ];
+            }
 
             if (hasReturns) {
                 return [
@@ -2436,29 +2433,49 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             });
         }
 
-        const tableHead = hasReturns
-            ? [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Purchase', 'Return', 'Net Qty', 'Rate', 'Total Amount']]
-            : [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Quantity', 'Rate', 'Total Amount']];
+        const tableHead = isChallan
+            ? (hasReturns
+                ? [['SN', 'Product Description', isBorderSale ? 'Truck' : 'Brand', 'Purchase Qty', 'Return Qty', 'Delivered Qty']]
+                : [['SN', 'Product Description', isBorderSale ? 'Truck' : 'Brand', 'Quantity']])
+            : (hasReturns
+                ? [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Purchase', 'Return', 'Net Qty', 'Rate', 'Total Amount']]
+                : [['SN', 'Product Name', isBorderSale ? 'Truck' : 'Brand', 'Quantity', 'Rate', 'Total Amount']]);
 
-        const columnStyles = hasReturns
-            ? {
-                0: { cellWidth: 8 },
-                1: { cellWidth: 35 },
-                2: { cellWidth: 35 },
-                3: { halign: 'center', cellWidth: 20 },
-                4: { halign: 'center', cellWidth: 20 },
-                5: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
-                6: { halign: 'right', cellWidth: 22 },
-                7: { halign: 'right', fontStyle: 'bold' },
-            }
-            : {
-                0: { halign: 'center', cellWidth: 14 },
-                1: { halign: 'left', cellWidth: 40 },
-                2: { halign: isBorderSale ? 'center' : 'left', cellWidth: 40 },
-                3: { halign: 'center', cellWidth: 25 },
-                4: { halign: 'right', cellWidth: 33 },
-                5: { halign: 'right', cellWidth: 38 }
-            };
+        const columnStyles = isChallan
+            ? (hasReturns
+                ? {
+                    0: { halign: 'center', cellWidth: 14 },
+                    1: { halign: 'left', cellWidth: 48 },
+                    2: { halign: isBorderSale ? 'center' : 'left', cellWidth: 48 },
+                    3: { halign: 'center', cellWidth: 26 },
+                    4: { halign: 'center', cellWidth: 26 },
+                    5: { halign: 'center', cellWidth: 28, fontStyle: 'bold' }
+                }
+                : {
+                    0: { halign: 'center', cellWidth: 16 },
+                    1: { halign: 'left', cellWidth: 64 },
+                    2: { halign: isBorderSale ? 'center' : 'left', cellWidth: 65 },
+                    3: { halign: 'center', cellWidth: 45, fontStyle: 'bold' }
+                })
+            : (hasReturns
+                ? {
+                    0: { cellWidth: 8 },
+                    1: { cellWidth: 35 },
+                    2: { cellWidth: 35 },
+                    3: { halign: 'center', cellWidth: 20 },
+                    4: { halign: 'center', cellWidth: 20 },
+                    5: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+                    6: { halign: 'right', cellWidth: 22 },
+                    7: { halign: 'right', fontStyle: 'bold' },
+                }
+                : {
+                    0: { halign: 'center', cellWidth: 14 },
+                    1: { halign: 'left', cellWidth: 40 },
+                    2: { halign: isBorderSale ? 'center' : 'left', cellWidth: 40 },
+                    3: { halign: 'center', cellWidth: 25 },
+                    4: { halign: 'right', cellWidth: 33 },
+                    5: { halign: 'right', cellWidth: 38 }
+                });
 
         autoTable(doc, {
             startY: y,
@@ -2483,75 +2500,116 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             margin: { left: margin, right: margin },
         });
 
-        // --- 5. Summary Section ---
         let finalY = doc.lastAutoTable.finalY + 10;
-
-        const subtotal = tableRows.reduce((sum, row) => {
-            const amtStr = row[row.length - 1].replace(/,/g, '');
-            return sum + (parseFloat(amtStr) || 0);
-        }, 0);
-
-        const discount = parseFloat(sale.discount || 0);
-        const invoiceTotal = subtotal - discount;
-        const paidAmount = parseFloat(sale.paidAmount || 0);
-        const currentBalance = invoiceTotal - paidAmount;
-        const totalBalance = currentBalance + previousBalance;
-
-        // Left Side: In Words
-        const boxWidth = contentWidth - 65;
-        doc.setFillColor(241, 245, 249);
-        doc.roundedRect(margin, finalY, boxWidth, 16, 4, 4, 'F');
-        doc.setFontSize(14);
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('helvetica', 'bold');
-        doc.text("TK.   " + invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), margin + (boxWidth / 2), finalY + 6, { align: 'center' });
-        const amountWords = numberToWords(invoiceTotal);
-        doc.setFontSize(8.5);
-        doc.setFont('helvetica', 'normal');
-        doc.text("In Words : " + amountWords, margin + (boxWidth / 2), finalY + 12, { align: 'center' });
-
-
-        // Right Side: Summary Table
-        const summaryBoxWidth = 35;
-        const summaryX = pageWidth - margin - summaryBoxWidth;
-        const rowHeight = 7;
         let sumY = finalY;
 
-        const drawSummaryRow = (label, value, isBold = false) => {
-            doc.setDrawColor(200);
-            doc.setLineWidth(0.1);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(9);
-            doc.text(label + " :", summaryX - 2, sumY + 4.5, { align: 'right' });
-
-            // Box
-            if (isBold) {
-                doc.setFillColor(249, 115, 22);
-                doc.rect(summaryX, sumY, summaryBoxWidth, rowHeight, 'F');
-            } else {
-                doc.setFillColor(255, 255, 255);
-                doc.rect(summaryX, sumY, summaryBoxWidth, rowHeight, 'S');
+        if (isChallan) {
+            let totalDeliveredQty = 0;
+            items.forEach(item => {
+                const bEntries = item.brandEntries || [];
+                if (bEntries.length > 0) {
+                    bEntries.forEach(be => {
+                        totalDeliveredQty += parseFloat(item.uom === 'BAG' ? be.bag : be.quantity) || 0;
+                    });
+                } else {
+                    totalDeliveredQty += parseFloat(item.uom === 'BAG' ? item.bag : item.quantity) || 0;
+                }
+            });
+            if (totalDeliveredQty === 0) {
+                totalDeliveredQty = parseFloat(sale.quantity || sale.bag || 0);
             }
 
-            doc.setFont('helvetica', isBold ? 'bold' : 'normal');
-            doc.setTextColor(isBold ? 255 : 0, isBold ? 255 : 0, isBold ? 255 : 0);
-            doc.text(value, summaryX + summaryBoxWidth - 2, sumY + 4.5, { align: 'right' });
+            const rightBoxW = 55;
+            const leftBoxW = contentWidth - rightBoxW - 6;
+            const boxH = 16;
 
-            sumY += rowHeight;
-            doc.setTextColor(0, 0, 0); // reset
-        };
+            // Left side: Delivery Note Box
+            doc.setFillColor(241, 245, 249);
+            doc.roundedRect(margin, finalY, leftBoxW, boxH, 3, 3, 'F');
+            doc.setFontSize(9.5);
+            doc.setTextColor(30, 41, 59);
+            doc.setFont('helvetica', 'bold');
+            doc.text("DELIVERY & RECEIPT NOTE", margin + 8, finalY + 6);
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(71, 85, 105);
+            doc.text("Received the goods listed above in sound condition and correct quantity.", margin + 8, finalY + 11.5);
 
-        drawSummaryRow("Discount", discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-        drawSummaryRow("Invoice Total", invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-        drawSummaryRow("Truck Fare", paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-        drawSummaryRow("Balance", currentBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true);
-        drawSummaryRow("Previous Balance", previousBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-        drawSummaryRow("Total Balance", totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true);
+            // Right side: Total Quantity Card
+            const rightBoxX = pageWidth - margin - rightBoxW;
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(rightBoxX, finalY, rightBoxW, boxH, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            doc.text("TOTAL QUANTITY", rightBoxX + (rightBoxW / 2), finalY + 5.5, { align: 'center' });
+            doc.setFontSize(12);
+            doc.text(totalDeliveredQty.toLocaleString('en-US') + (sale.uom === 'BAG' ? ' BAG' : ' KG'), rightBoxX + (rightBoxW / 2), finalY + 12, { align: 'center' });
+            
+            doc.setTextColor(0, 0, 0); // reset to black
+            sumY = finalY + boxH + 5;
+        } else {
+            const subtotal = tableRows.reduce((sum, row) => {
+                const amtStr = row[row.length - 1].replace(/,/g, '');
+                return sum + (parseFloat(amtStr) || 0);
+            }, 0);
 
-        // --- 6. Footer / Signatures ---
-        const sigY = Math.max(sumY + 20, finalY + 45);
+            const discount = parseFloat(sale.discount || 0);
+            const invoiceTotal = subtotal - discount;
+            const paidAmount = parseFloat(sale.paidAmount || 0);
+            const currentBalance = invoiceTotal - paidAmount;
+            const totalBalance = currentBalance + previousBalance;
 
-        // Resolve Employees Map & Display Name Helper
+            const boxWidth = contentWidth - 65;
+            doc.setFillColor(241, 245, 249);
+            doc.roundedRect(margin, finalY, boxWidth, 16, 4, 4, 'F');
+            doc.setFontSize(14);
+            doc.setTextColor(0, 0, 0);
+            doc.setFont('helvetica', 'bold');
+            doc.text("TK.   " + invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), margin + (boxWidth / 2), finalY + 6, { align: 'center' });
+            const amountWords = numberToWords(invoiceTotal);
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'normal');
+            doc.text("In Words : " + amountWords, margin + (boxWidth / 2), finalY + 12, { align: 'center' });
+
+            const summaryBoxWidth = 35;
+            const summaryX = pageWidth - margin - summaryBoxWidth;
+            const rowHeight = 7;
+            sumY = finalY;
+
+            const drawSummaryRow = (label, value, isBold = false) => {
+                doc.setDrawColor(200);
+                doc.setLineWidth(0.1);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(9);
+                doc.text(label + " :", summaryX - 2, sumY + 4.5, { align: 'right' });
+
+                if (isBold) {
+                    doc.setFillColor(249, 115, 22);
+                    doc.rect(summaryX, sumY, summaryBoxWidth, rowHeight, 'F');
+                } else {
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(summaryX, sumY, summaryBoxWidth, rowHeight, 'S');
+                }
+
+                doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+                doc.setTextColor(isBold ? 255 : 0, isBold ? 255 : 0, isBold ? 255 : 0);
+                doc.text(value, summaryX + summaryBoxWidth - 2, sumY + 4.5, { align: 'right' });
+
+                sumY += rowHeight;
+                doc.setTextColor(0, 0, 0);
+            };
+
+            drawSummaryRow("Discount", discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            drawSummaryRow("Invoice Total", invoiceTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            drawSummaryRow("Truck Fare", paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            drawSummaryRow("Balance", currentBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true);
+            drawSummaryRow("Previous Balance", previousBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            drawSummaryRow("Total Balance", totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true);
+        }
+
+        const sigY = Math.min(pageHeight - 22, Math.max(sumY + 20, finalY + 40));
+
         let employeesMap = {};
         try {
             const empRes = await api.get('/api/employees').catch(() => []);
@@ -2615,6 +2673,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 
         doc.setDrawColor(180);
         doc.setLineWidth(0.5);
+        doc.setTextColor(0, 0, 0); // Guarantee black text for all signature labels & names
 
         // Signature 1: PREPARED BY
         doc.line(margin, sigY, margin + 40, sigY);
@@ -2649,6 +2708,10 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         console.error("Invoice PDF Generation Error:", error);
         alert(`Failed to generate Invoice PDF: ${error.message}`);
     }
+};
+
+export const generateSaleChallanPDF = async (sale, allCustomers = []) => {
+    return generateSaleInvoicePDF(sale, allCustomers, 'challan');
 };
 
 

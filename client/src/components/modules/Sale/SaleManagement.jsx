@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, ReceiptIcon, BarChartIcon, TrendingUpIcon, DollarSignIcon, FileTextIcon, CheckIcon } from '../../Icons';
-import { generateSaleInvoicePDF } from '../../../utils/pdfGenerator';
+import { generateSaleInvoicePDF, generateSaleChallanPDF } from '../../../utils/pdfGenerator';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
@@ -23,6 +23,22 @@ const SaleManagement = ({
     selectedItems,
     setSelectedItems,
     toggleSelection,
+    isAllSelected,
+    toggleSelectAll,
+    setTotalCount,
+    setPaginationDetails,
+    onSaveSuccess,
+    triggerReset,
+    currentUser,
+    addNotification,
+    hasLoadedOnce,
+    setHasLoadedOnce,
+    activeTab,
+    searchTerm = '',
+    onSearchChange,
+    customFilters = {},
+    onFilterChange,
+    onSortChange,
     isLongPressTriggered,
     onDeleteConfirm,
     startLongPress,
@@ -32,8 +48,6 @@ const SaleManagement = ({
     setSalesReportSearchQuery,
     saleFilters,
     setSaleFilters,
-    currentUser,
-    addNotification,
     refreshPendingIndicators,
     fetchSalesGlobal,
     highlightId, isRequestedNotif
@@ -44,6 +58,7 @@ const SaleManagement = ({
     const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [employeesMap, setEmployeesMap] = useState({});
+    const [activePdfDropdown, setActivePdfDropdown] = useState(null);
 
     const fetchEmployees = async () => {
         try {
@@ -973,10 +988,13 @@ const SaleManagement = ({
                     setActiveFilterDropdown(null);
                 }
             }
+            if (activePdfDropdown && !event.target.closest('.sale-pdf-dropdown-container')) {
+                setActivePdfDropdown(null);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [showSaleFilterPanel, activeFilterDropdown]);
+    }, [showSaleFilterPanel, activeFilterDropdown, activePdfDropdown]);
 
     // Scroll Lock when Filter Panel is active
     useEffect(() => {
@@ -5730,7 +5748,51 @@ const SaleManagement = ({
                                                                 {canViewSale(sale) && (
                                                                     <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                                 )}
-                                                                <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
+                                                                {saleType === 'General' ? (
+                                                                    <div className="relative inline-block sale-pdf-dropdown-container">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setActivePdfDropdown(activePdfDropdown === sale._id ? null : sale._id);
+                                                                            }}
+                                                                            className={`transition-colors ${activePdfDropdown === sale._id ? 'text-emerald-600' : 'text-gray-400 hover:text-emerald-600'}`}
+                                                                            title="Download PDF"
+                                                                        >
+                                                                            <FileTextIcon className="w-5 h-5" />
+                                                                        </button>
+                                                                        {activePdfDropdown === sale._id && (
+                                                                            <div
+                                                                                className="absolute right-0 top-full mt-1.5 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            >
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setActivePdfDropdown(null);
+                                                                                        generateSaleInvoicePDF(sale, customers);
+                                                                                    }}
+                                                                                    className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors"
+                                                                                >
+                                                                                    <FileTextIcon className="w-4 h-4 text-emerald-600" />
+                                                                                    <span>Invoice</span>
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setActivePdfDropdown(null);
+                                                                                        generateSaleChallanPDF(sale, customers);
+                                                                                    }}
+                                                                                    className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors border-t border-gray-50"
+                                                                                >
+                                                                                    <ReceiptIcon className="w-4 h-4 text-blue-600" />
+                                                                                    <span>Challan</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
+                                                                )}
                                                                 {canUserEditSale(sale) && (
                                                                     <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                                 )}
@@ -6066,7 +6128,51 @@ const SaleManagement = ({
                                                             {canViewSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                             )}
-                                                            <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
+                                                            {saleType === 'General' ? (
+                                                                <div className="relative inline-block sale-pdf-dropdown-container">
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActivePdfDropdown(activePdfDropdown === sale._id ? null : sale._id);
+                                                                        }}
+                                                                        className={`transition-colors ${activePdfDropdown === sale._id ? 'text-emerald-600' : 'text-gray-400 hover:text-emerald-600'}`}
+                                                                        title="Download PDF"
+                                                                    >
+                                                                        <FileTextIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                    {activePdfDropdown === sale._id && (
+                                                                        <div
+                                                                            className="absolute right-0 top-full mt-1.5 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        >
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setActivePdfDropdown(null);
+                                                                                    generateSaleInvoicePDF(sale, customers);
+                                                                                }}
+                                                                                className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors"
+                                                                            >
+                                                                                <FileTextIcon className="w-4 h-4 text-emerald-600" />
+                                                                                <span>Invoice</span>
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setActivePdfDropdown(null);
+                                                                                    generateSaleChallanPDF(sale, customers);
+                                                                                }}
+                                                                                className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors border-t border-gray-50"
+                                                                            >
+                                                                                <ReceiptIcon className="w-4 h-4 text-blue-600" />
+                                                                                <span>Challan</span>
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
+                                                            )}
                                                             {canUserEditSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
                                                             )}
@@ -6217,7 +6323,51 @@ const SaleManagement = ({
                                                             {canUserEditSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
                                                             )}
-                                                            <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
+                                                            {saleType === 'General' ? (
+                                                                <div className="relative inline-block sale-pdf-dropdown-container">
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActivePdfDropdown(activePdfDropdown === sale._id ? null : sale._id);
+                                                                        }}
+                                                                        className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"
+                                                                        title="Download PDF"
+                                                                    >
+                                                                        <FileTextIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                    {activePdfDropdown === sale._id && (
+                                                                        <div
+                                                                            className="absolute right-0 bottom-full mb-1.5 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        >
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setActivePdfDropdown(null);
+                                                                                    generateSaleInvoicePDF(sale, customers);
+                                                                                }}
+                                                                                className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors"
+                                                                            >
+                                                                                <FileTextIcon className="w-3.5 h-3.5 text-emerald-600" />
+                                                                                <span>Invoice</span>
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setActivePdfDropdown(null);
+                                                                                    generateSaleChallanPDF(sale, customers);
+                                                                                }}
+                                                                                className="w-full px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors border-t border-gray-50"
+                                                                            >
+                                                                                <ReceiptIcon className="w-3.5 h-3.5 text-blue-600" />
+                                                                                <span>Challan</span>
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg transition-colors hover:bg-emerald-100"><FileTextIcon className="w-4 h-4" /></button>
+                                                            )}
                                                             {canUserDeleteSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="p-2 bg-red-50 text-red-600 rounded-lg transition-colors hover:bg-red-100"><TrashIcon className="w-4 h-4" /></button>
                                                             )}
