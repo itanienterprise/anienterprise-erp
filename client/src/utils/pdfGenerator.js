@@ -2201,7 +2201,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         doc.setTextColor(255, 255, 255);
         doc.text("SALES INVOICE", pageWidth / 2, y + 0.5, { align: 'center' });
 
-        // --- 2b. Customer Type Tag (Centered with gap under Title Box) ---
+        // --- 2a. Customer Type Tag (Centered under Title Box) ---
         let custTypeLabel = "General Customer";
         const cType = (customer?.customerType || sale.customerType || "").toLowerCase();
         if (cType.includes("party") || sale.isParty) {
@@ -2230,13 +2230,37 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         doc.roundedRect(tagX, tagY, tagW, tagH, 1.5, 1.5, 'FD');
         doc.text(custTypeLabel, pageWidth / 2, tagY + 3.7, { align: 'center' });
 
+        let nextY = tagY + tagH;
+
+        // --- 2b. Challan No Tag (Centered at bottom of Customer Type Tag) ---
+        const challanVal = (sale.challanNo || sale.chNo || '').toString().trim();
+        if (challanVal) {
+            const challanText = `CH. No : ${challanVal}`;
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            const chTextWidth = doc.getTextWidth(challanText);
+            const maxChTagW = pageWidth - (margin * 2) - 20;
+            const chW = Math.min(maxChTagW, chTextWidth + 8);
+            const chH = 5.2;
+            const chX = (pageWidth / 2) - (chW / 2);
+            const chY = nextY + 2.2;
+
+            doc.setFillColor(241, 245, 249); // ash / slate-100
+            doc.setDrawColor(148, 163, 184); // slate-400
+            doc.setTextColor(51, 65, 85);   // slate-700 / dark ash
+            doc.setLineWidth(0.2);
+            doc.roundedRect(chX, chY, chW, chH, 1.5, 1.5, 'FD');
+            doc.text(challanText, pageWidth / 2, chY + 3.7, { align: 'center' });
+            nextY = chY + chH;
+        }
+
         // Reset colors to black for invoice details
         doc.setTextColor(0, 0, 0);
         doc.setDrawColor(0, 0, 0);
 
-        y = tagY + tagH + 8;
+        y = nextY + 8;
 
-        // Line 1: Date (Left) | Invoice No (Right)
+        // Line 1: Date (Left) | Invoice No & Truck No (Right)
         doc.setFont('helvetica', 'bold');
         doc.text("Invoice Date", margin, y);
         doc.text(":", margin + labelWidth - 5, y);
@@ -2247,8 +2271,23 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         doc.setFont('helvetica', 'bold');
         doc.text("Invoice No :", rightColStart, y);
         doc.setFont('helvetica', 'normal');
-        doc.text(sale.invoiceNo || "-", rightColStart + 28, y);
-        drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
+        const invText = sale.invoiceNo || "-";
+        doc.text(invText, rightColStart + 24, y);
+
+        const truckVal = (sale.truckNo || sale.truck || '').toString().trim();
+        const invTextWidth = doc.getTextWidth(invText);
+        const truckInlineStart = rightColStart + 24 + invTextWidth + 4;
+        const availInlineWidth = (pageWidth - margin) - (truckInlineStart + 18);
+        const truckTextWidth = truckVal ? doc.getTextWidth(truckVal) : 0;
+        const fitsOnLine1 = truckVal && (truckTextWidth <= availInlineWidth);
+
+        if (fitsOnLine1) {
+            doc.setFont('helvetica', 'bold');
+            doc.text("Truck No :", truckInlineStart, y);
+            doc.setFont('helvetica', 'normal');
+            doc.text(truckVal, truckInlineStart + 18, y);
+        }
+        drawDottedLine(rightColStart + 24, y + 1, pageWidth - margin);
 
         y += 12;
         // Line 2: Company Name (Left) | Customer ID (Right)
@@ -2292,24 +2331,16 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
             drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
         }
 
-        const isPartySale = cType.includes("party") || sale.isParty;
-        if (!isBorderSale && isPartySale && (sale.challanNo || sale.truckNo)) {
+        // Dedicated Line for Truck No if too long for Line 1
+        if (truckVal && !fitsOnLine1) {
             y += 12;
-            if (sale.challanNo) {
-                doc.setFont('helvetica', 'bold');
-                doc.text("Challan No", margin, y);
-                doc.text(":", margin + labelWidth - 5, y);
-                doc.setFont('helvetica', 'normal');
-                doc.text(sale.challanNo, margin + labelWidth, y);
-                drawDottedLine(margin + labelWidth, y + 1, rightColStart - 5);
-            }
-            if (sale.truckNo) {
-                doc.setFont('helvetica', 'bold');
-                doc.text("Truck No :", rightColStart, y);
-                doc.setFont('helvetica', 'normal');
-                doc.text(sale.truckNo, rightColStart + 28, y);
-                drawDottedLine(rightColStart + 28, y + 1, pageWidth - margin);
-            }
+            doc.setFont('helvetica', 'bold');
+            doc.text("Truck No", margin, y);
+            doc.text(":", margin + labelWidth - 5, y);
+            doc.setFont('helvetica', 'normal');
+            const splitTrucks = doc.splitTextToSize(truckVal, (pageWidth - margin) - (margin + labelWidth));
+            doc.text(splitTrucks, margin + labelWidth, y);
+            drawDottedLine(margin + labelWidth, y + 1, pageWidth - margin);
         }
 
         y += 14;
@@ -2577,7 +2608,10 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         const preparedByName = getFormattedName(sale.requestedByUsername || sale.createdByUsername, sale.requestedBy || sale.createdByName || sale.createdBy || sale.requestedByUsername || sale.entryBy || "-");
         const verifiedByName = orderCreator 
             ? getFormattedName(orderCreator, orderCreator) 
-            : getFormattedName(sale.acceptedByUsername || sale.approvedByUsername, sale.acceptedBy || sale.approvedByName || sale.approvedBy || sale.rejectedBy || "-");
+            : "-";
+        const isApproved = (sale.status || '').toLowerCase() !== 'requested';
+        const rawApproved = sale.acceptedBy || sale.approvedByName || sale.approvedBy || sale.acceptedByUsername || sale.approvedByUsername || "";
+        const approvedByName = (isApproved && rawApproved) ? getFormattedName(sale.acceptedByUsername || sale.approvedByUsername, rawApproved) : "";
 
         doc.setDrawColor(180);
         doc.setLineWidth(0.5);
@@ -2599,6 +2633,11 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
 
         // Signature 3: AUTHORIZED SIGNATURE
         doc.line(pageWidth - margin - 40, sigY, pageWidth - margin, sigY);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        if (approvedByName) {
+            doc.text(approvedByName, pageWidth - margin - 20, sigY - 2, { align: 'center' });
+        }
         doc.setFont('helvetica', 'bold');
         doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - 20, sigY + 5, { align: 'center' });
 
