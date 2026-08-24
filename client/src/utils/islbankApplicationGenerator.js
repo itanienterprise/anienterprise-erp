@@ -71,8 +71,8 @@ export const renderIslamiBankApplication = (doc, record) => {
 
     const qtyNum = parseFloat(record.grandTotalQuantity || 0);
     const formattedQuantity = qtyNum > 0
-        ? `${qtyNum.toLocaleString('en-US')} KGS`
-        : (record.grandTotalQuantity ? `${record.grandTotalQuantity} KGS` : '.................... KGS');
+        ? `${qtyNum.toLocaleString('en-US')} kg`
+        : (record.grandTotalQuantity ? `${record.grandTotalQuantity} kg` : '.................... kg');
 
     const productsList = record.productsList && record.productsList.length > 0
         ? record.productsList
