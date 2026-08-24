@@ -5351,11 +5351,29 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const isDuplicateCoverNote = useMemo(() => {
         if (!formData.marineCoverNote || !formData.marineCoverNote.trim()) return false;
         const cleanNum = formData.marineCoverNote.trim().toLowerCase();
+
+        // If in edit mode and the cover note is unchanged from the record being edited, it is not a duplicate
+        if (editingRecord && (editingRecord.marineCoverNote || '').trim().toLowerCase() === cleanNum) {
+            return false;
+        }
+
+        const currentEditId = String(editingId || editingRecord?._id || editingRecord?.id || '');
+        const currentEditLcNo = String(editingRecord?.lcNo || formData.lcNo || '').replace(/\D/g, '');
+
         return (lcRecords || []).some(r => {
             const num = (r.marineCoverNote || '').trim().toLowerCase();
-            return num && num === cleanNum && r._id !== editingId;
+            if (!num || num !== cleanNum) return false;
+
+            const rId = String(r._id || r.id || '');
+            const rLcNo = String(r.lcNo || '').replace(/\D/g, '');
+
+            // Skip the current record being edited (by ID or LC number)
+            if (currentEditId && rId && currentEditId === rId) return false;
+            if (currentEditLcNo && rLcNo && currentEditLcNo === rLcNo) return false;
+
+            return true;
         });
-    }, [formData.marineCoverNote, lcRecords, editingId]);
+    }, [formData.marineCoverNote, lcRecords, editingId, editingRecord, formData.lcNo]);
 
     const informativeQuantities = useMemo(() => {
         const selectedPi = piRecordsRaw.find(pi => pi.piNumber === formData.piNo);
