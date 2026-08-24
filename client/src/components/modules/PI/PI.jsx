@@ -341,6 +341,23 @@ function PI({
         };
     };
 
+    const checkIsLcDone = (rec) => {
+        if (!rec || !rec.piNumber || !lcRecords || lcRecords.length === 0) return false;
+        const cleanPi = String(rec.piNumber).replace(' (REVISED)', '').trim().toLowerCase();
+        if (!cleanPi) return false;
+        return lcRecords.some(lc => {
+            const mainPi = String(lc.piNo || lc.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
+            if (mainPi && mainPi === cleanPi) return true;
+            if (Array.isArray(lc.amendments)) {
+                return lc.amendments.some(a => {
+                    const amdPi = String(a.piNo || a.piNumber || '').replace(' (REVISED)', '').trim().toLowerCase();
+                    return amdPi && amdPi === cleanPi;
+                });
+            }
+            return false;
+        });
+    };
+
     useEffect(() => {
         fetchRecords();
         fetchEmployees();
@@ -2118,11 +2135,16 @@ function PI({
             const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
                 (record.productsList && record.productsList.some(p => (p.productName || '').toLowerCase().includes(query)));
             const entryByName = getEntryByName(record.entryBy || record.createdBy || record.userId, record.entryByName || record.createdByName);
+            const isLcDone = checkIsLcDone(record);
+            const computedStatus = isLcDone ? 'lc done' : ((!record.ipNumber && (!record.ipNumbers || record.ipNumbers.length === 0)) ? 'ip missing' : (record.status || '').toLowerCase());
             const matchesSearch = (record.piNumber || '').toLowerCase().includes(query) ||
+                (record.ipNumber || '').toLowerCase().includes(query) ||
+                (record.ipNumbers && record.ipNumbers.some(ip => String(ip).toLowerCase().includes(query))) ||
                 (record.partyName || '').toLowerCase().includes(query) ||
                 (record.exporterName || '').toLowerCase().includes(query) ||
                 (record.entryBy || '').toLowerCase().includes(query) ||
                 (entryByName || '').toLowerCase().includes(query) ||
+                computedStatus.includes(query) ||
                 matchesProduct;
             if (!matchesSearch) return false;
         }
@@ -3511,33 +3533,6 @@ function PI({
                         </div>
 
 
-                        {editingId && (
-                            <>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">Marks & No.</label>
-                                    <input
-                                        type="text"
-                                        name="marksNo"
-                                        value={formData.marksNo}
-                                        onChange={handleInputChange}
-                                        placeholder="CONTAINER/MARKS"
-                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">No. & Kind of Package</label>
-                                    <input
-                                        type="text"
-                                        name="noKindPackage"
-                                        value={formData.noKindPackage}
-                                        onChange={handleInputChange}
-                                        placeholder="e.g. 500 BAGS"
-                                        className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    />
-                                </div>
-                            </>
-                        )}
 
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-blue-700 font-bold">Grand Total Quantity</label>
@@ -4478,6 +4473,7 @@ function PI({
                                     <tr className="bg-gray-50/80">
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Date</th>
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">PI Number</th>
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">IP Number</th>
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Importer</th>
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Exporter</th>
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Port</th>
@@ -4495,7 +4491,7 @@ function PI({
                                     {isLoading ? (
                                         Array(3).fill(0).map((_, i) => (
                                             <tr key={i} className="animate-pulse">
-                                                <td colSpan={10 + (canShowEntryBy ? 1 : 0)} className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                                <td colSpan={11 + (canShowEntryBy ? 1 : 0)} className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                             </tr>
                                         ))
                                     ) : filteredRecords.length > 0 ? (
@@ -4511,6 +4507,13 @@ function PI({
                                             const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
                                             const hasMultipleProducts = record.productsList && record.productsList.length > 1;
                                             const entryInfo = getPiEntryDetails(record);
+                                            const isLcDone = checkIsLcDone(record);
+                                            const ipList = (() => {
+                                                const rawIps = (record.revisions && record.revisions.length > 0 && record.revisions[record.revisions.length - 1].ipNumbers && record.revisions[record.revisions.length - 1].ipNumbers.length > 0)
+                                                    ? record.revisions[record.revisions.length - 1].ipNumbers
+                                                    : (record.ipNumbers && record.ipNumbers.length > 0 ? record.ipNumbers : (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []));
+                                                return (rawIps || []).map(s => String(s).trim()).filter(Boolean);
+                                            })();
 
                                             return (
                                                 <tr key={record._id} className={`hover:bg-gray-50/50 transition-colors ${highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (record.piNumber) rowRefs.current[record.piNumber] = el; }}
@@ -4519,6 +4522,21 @@ function PI({
                                                     <td className="px-2 py-3.5 text-sm font-bold text-blue-600 whitespace-nowrap">
                                                         {record.piNumber}
                                                         {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
+                                                    </td>
+                                                    <td className="px-2 py-3.5 text-sm font-semibold text-gray-700 whitespace-nowrap">
+                                                        {ipList.length > 0 ? (
+                                                            <div className="flex flex-col gap-1">
+                                                                {ipList.map((ip, idx) => (
+                                                                    <div key={idx} className="whitespace-nowrap font-semibold text-gray-800" title={ip}>
+                                                                        {ip}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border bg-red-50 text-red-700 border-red-200">
+                                                                IP MISSING
+                                                            </span>
+                                                        )}
                                                     </td>
                                                     <td className="px-2 py-3.5 text-sm text-gray-700 font-semibold whitespace-nowrap">{record.partyName}</td>
                                                     <td className="px-2 py-3.5 text-sm text-gray-700 font-semibold whitespace-nowrap">{record.exporterName}</td>
@@ -4559,14 +4577,28 @@ function PI({
                                                             <span>{totalQty.toLocaleString('en-US')} kg</span>
                                                         )}
                                                     </td>
-                                                    <td className="px-2 py-3.5 text-sm text-blue-700 font-bold whitespace-nowrap">${parseFloat(record.grandTotal).toLocaleString()}</td>
+                                                    <td className="px-2 py-3.5 text-sm text-blue-700 font-bold whitespace-nowrap">${parseFloat(record.grandTotal || 0).toLocaleString()}</td>
                                                     <td className="px-2 py-3.5 whitespace-nowrap">
-                                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                            record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
-                                                                'bg-amber-50 text-amber-600 border-amber-100'
-                                                            }`}>
-                                                            {record.status}
-                                                        </span>
+                                                        <div className="flex flex-col items-start gap-1">
+                                                            {isLcDone && (
+                                                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border bg-blue-50 text-blue-700 border-blue-200">
+                                                                    LC Done
+                                                                </span>
+                                                            )}
+                                                            {ipList.length === 0 && (
+                                                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border bg-red-50 text-red-700 border-red-200">
+                                                                    IP MISSING
+                                                                </span>
+                                                            )}
+                                                            {!isLcDone && ipList.length > 0 && (
+                                                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                                    record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
+                                                                        'bg-amber-50 text-amber-600 border-amber-100'
+                                                                    }`}>
+                                                                    {record.status}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     {canShowEntryBy && (
                                                         <td className="px-2 py-3.5 whitespace-nowrap text-center">
@@ -4661,7 +4693,7 @@ function PI({
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan="10" className="px-2 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
+                                            <td colSpan={11 + (canShowEntryBy ? 1 : 0)} className="px-2 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -4693,6 +4725,13 @@ function PI({
                                 const displayPort = record.port || record.portOfLoading || record.portOfDischarge || 'N/A';
                                 const hasMultipleProducts = record.productsList && record.productsList.length > 1;
                                 const entryInfo = getPiEntryDetails(record);
+                                const isLcDone = checkIsLcDone(record);
+                                const ipList = (() => {
+                                    const rawIps = (record.revisions && record.revisions.length > 0 && record.revisions[record.revisions.length - 1].ipNumbers && record.revisions[record.revisions.length - 1].ipNumbers.length > 0)
+                                        ? record.revisions[record.revisions.length - 1].ipNumbers
+                                        : (record.ipNumbers && record.ipNumbers.length > 0 ? record.ipNumbers : (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []));
+                                    return (rawIps || []).map(s => String(s).trim()).filter(Boolean);
+                                })();
 
                                 return (
                                     <div
@@ -4711,17 +4750,50 @@ function PI({
                                                         {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
                                                     </span>
                                                 </div>
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                    record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
-                                                        'bg-amber-50 text-amber-700 border-amber-100'
-                                                    }`}>
-                                                    {record.status}
-                                                </span>
+                                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                                    {isLcDone && (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-blue-50 text-blue-700 border-blue-200">
+                                                            LC Done
+                                                        </span>
+                                                    )}
+                                                    {ipList.length === 0 && (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 bg-red-50 text-red-700 border-red-200">
+                                                            IP MISSING
+                                                        </span>
+                                                    )}
+                                                    {!isLcDone && ipList.length > 0 && (
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shrink-0 ${record.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                            record.status === 'Closed' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
+                                                                'bg-amber-50 text-amber-700 border-amber-100'
+                                                            }`}>
+                                                            {record.status}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             {/* Expandable Details */}
                                             {isExpanded && (
                                                 <div className="space-y-2.5 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                    <div className="flex items-start">
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0 mt-0.5">IP Number</span>
+                                                        <span className="text-gray-400 font-bold mx-2 mt-0.5">-</span>
+                                                        <div className="flex-1 text-sm font-bold text-gray-800">
+                                                            {ipList.length > 0 ? (
+                                                                <div className="flex flex-col gap-1">
+                                                                    {ipList.map((ip, idx) => (
+                                                                        <div key={idx} className="whitespace-nowrap">
+                                                                            {ip}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border bg-red-50 text-red-700 border-red-200">
+                                                                    IP MISSING
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                     <div className="flex items-center">
                                                         <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>
                                                         <span className="text-gray-400 font-bold mx-2">-</span>
