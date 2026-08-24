@@ -726,7 +726,12 @@ const OrderManagement = ({
                 items: formData.items,
                 totalAmount: totalAmount,
                 isEdited: (editingId && !isAdminUser && isAcceptedEdit) ? true : false,
-                isOrderEntry: true
+                isOrderEntry: true,
+                requestedBy: editingId ? (originalData?.requestedBy || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || ''),
+                requestedByUsername: editingId ? (originalData?.requestedByUsername || currentUser?.username || '') : (currentUser?.username || ''),
+                createdByName: editingId ? (originalData?.createdByName || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || ''),
+                createdByUsername: editingId ? (originalData?.createdByUsername || currentUser?.username || '') : (currentUser?.username || ''),
+                createdBy: editingId ? (originalData?.createdBy || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || '')
             };
 
             if (editingId) {

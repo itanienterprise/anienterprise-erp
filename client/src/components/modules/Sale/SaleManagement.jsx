@@ -2294,9 +2294,18 @@ const SaleManagement = ({
             const grandTotal = Math.max(0, subtotal - disc);
             const due = Math.max(0, grandTotal - paid);
 
+            const ordRequestedBy = order.requestedBy || order.createdByName || order.createdBy || order.requestedByUsername || order.createdByUsername || '';
+            const ordRequestedByUsername = order.requestedByUsername || order.createdByUsername || '';
+            const ordCreatedByName = order.createdByName || order.requestedBy || order.createdBy || '';
+            const ordCreatedBy = order.createdBy || order.createdByName || order.requestedBy || '';
+
             setFormData(prev => ({
                 ...prev,
                 orderNo: ordId,
+                orderRequestedBy: ordRequestedBy,
+                orderRequestedByUsername: ordRequestedByUsername,
+                orderCreatedByName: ordCreatedByName,
+                orderCreatedBy: ordCreatedBy,
                 companyName: comp,
                 customerName: custName,
                 contact: phone,

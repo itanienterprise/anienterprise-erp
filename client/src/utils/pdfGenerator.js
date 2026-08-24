@@ -2520,6 +2520,65 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         // --- 6. Footer / Signatures ---
         const sigY = Math.max(sumY + 20, finalY + 45);
 
+        // Resolve Employees Map & Display Name Helper
+        let employeesMap = {};
+        try {
+            const empRes = await api.get('/api/employees').catch(() => []);
+            const empList = Array.isArray(empRes) ? empRes : (Array.isArray(empRes?.data) ? empRes.data : []);
+            empList.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data && typeof emp.data === 'object') {
+                    d = { ...emp.data, _id: emp._id };
+                }
+                const empName = (d.name || d.nameEn || d.employeeName || d.username || '').trim();
+                if (d.employeeId) employeesMap[d.employeeId.trim()] = empName;
+                if (d.username) employeesMap[d.username.trim()] = empName;
+                if (d._id) employeesMap[d._id.toString()] = empName;
+            });
+        } catch (e) {
+            console.warn('Could not fetch employees for invoice:', e);
+        }
+
+        const getFormattedName = (code, name) => {
+            const cleanCode = (code || '').toString().trim();
+            const cleanName = (name || '').toString().trim();
+            if (cleanName && !cleanName.startsWith('E-') && !cleanName.startsWith('A-') && cleanName !== cleanCode) {
+                return cleanName;
+            }
+            if (cleanCode && employeesMap[cleanCode]) {
+                return employeesMap[cleanCode];
+            }
+            if (cleanName && employeesMap[cleanName]) {
+                return employeesMap[cleanName];
+            }
+            return cleanName || cleanCode || '';
+        };
+
+        // Determine Who Created the Order for VERIFIED BY
+        let orderCreator = sale.orderCreatedByName || sale.orderCreatedBy || sale.orderRequestedBy || sale.orderRequestedByUsername || sale.order?.requestedBy || sale.order?.createdByName || sale.order?.createdBy || sale.order?.requestedByUsername;
+
+        if (!orderCreator && (sale.orderNo || sale.orderId)) {
+            const targetOrdNo = (sale.orderNo || sale.orderId || '').toString().trim().toUpperCase();
+            try {
+                const salesRes = await api.get('/api/sales').catch(() => []);
+                const allSales = Array.isArray(salesRes) ? salesRes : (Array.isArray(salesRes?.data) ? salesRes.data : []);
+                const matchedOrder = allSales.find(s => {
+                    const sInv = (s.invoiceNo || s.orderNo || '').toString().trim().toUpperCase();
+                    return sInv === targetOrdNo;
+                });
+                if (matchedOrder) {
+                    orderCreator = matchedOrder.requestedBy || matchedOrder.requestedByUsername || matchedOrder.createdByName || matchedOrder.createdByUsername || matchedOrder.createdBy || matchedOrder.orderCreatedByName || matchedOrder.orderCreatedBy;
+                }
+            } catch (e) {
+                console.warn('Could not fetch matched order for verified by:', e);
+            }
+        }
+
+        const preparedByName = getFormattedName(sale.requestedByUsername || sale.createdByUsername, sale.requestedBy || sale.createdByName || sale.createdBy || sale.requestedByUsername || sale.entryBy || "-");
+        const verifiedByName = orderCreator 
+            ? getFormattedName(orderCreator, orderCreator) 
+            : getFormattedName(sale.acceptedByUsername || sale.approvedByUsername, sale.acceptedBy || sale.approvedByName || sale.approvedBy || sale.rejectedBy || "-");
+
         doc.setDrawColor(180);
         doc.setLineWidth(0.5);
 
@@ -2527,14 +2586,14 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = []) => {
         doc.line(margin, sigY, margin + 40, sigY);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.text(sale.requestedBy || sale.requestedByUsername || "-", margin + 20, sigY - 2, { align: 'center' });
+        doc.text(preparedByName || "-", margin + 20, sigY - 2, { align: 'center' });
         doc.setFont('helvetica', 'bold');
         doc.text("PREPARED BY", margin + 20, sigY + 5, { align: 'center' });
 
         // Signature 2: VERIFIED BY
         doc.line((pageWidth / 2) - 20, sigY, (pageWidth / 2) + 20, sigY);
         doc.setFont('helvetica', 'normal');
-        doc.text(sale.acceptedBy || sale.rejectedBy || "-", pageWidth / 2, sigY - 2, { align: 'center' });
+        doc.text(verifiedByName || "-", pageWidth / 2, sigY - 2, { align: 'center' });
         doc.setFont('helvetica', 'bold');
         doc.text("VERIFIED BY", pageWidth / 2, sigY + 5, { align: 'center' });
 

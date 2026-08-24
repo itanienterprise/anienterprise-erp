@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTransactions, getItemTimestamp } from '../../../utils/helpers';
-import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceiptPDF } from '../../../utils/pdfGenerator';
+import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceiptPDF, generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
 import { api } from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -515,6 +515,70 @@ const Customer = ({
             items: tableItems
         };
         generateMoneyReceiptPDF(receiptData);
+    };
+
+    const handleDownloadSaleInvoice = (item) => {
+        const items = item.items && item.items.length > 0 ? item.items : [{
+            product: item.product_original || item.product,
+            productName: item.product_original || item.product,
+            quantity: parseFloat(item.quantity_original || item.quantity) || 0,
+            qty: parseFloat(item.quantity_original || item.quantity) || 0,
+            rate: parseFloat(item.rate_original || item.rate) || 0,
+            unitPrice: parseFloat(item.rate_original || item.rate) || 0,
+            amount: parseFloat(item.amount) || 0,
+            brand: item.brand,
+            lcNo: item.lcNo
+        }];
+
+        const saleObject = {
+            ...item,
+            date: item.date,
+            invoiceNo: item.invoiceNo || item.lcNo,
+            customerId: viewData?._id,
+            customerName: viewData?.customerName,
+            companyName: viewData?.companyName,
+            address: viewData?.address || viewData?.location || '',
+            contact: viewData?.phone,
+            customerType: viewData?.customerType,
+            items: items,
+            totalAmount: parseFloat(item.amount) || 0,
+            discount: parseFloat(item.discount) || 0,
+            paid: parseFloat(item.paid) || 0,
+            status: item.status || 'Completed'
+        };
+        generateSaleInvoicePDF(saleObject, customers && customers.length > 0 ? customers : [viewData]);
+    };
+
+    const handleDownloadPayoutVoucher = (payment) => {
+        const customer = viewData;
+        const paidAmount = parseFloat(payment.amount) || 0;
+        const dueBal = customer ? Math.max(0, getCustomerFinalBalance(customer)) : 0;
+        const prevBal = dueBal + paidAmount;
+
+        const tableItems = payment.items && payment.items.length > 0 ? payment.items : [{
+            id: payment._id || payment.id,
+            method: payment.method,
+            bankName: payment.bankName,
+            accountNo: payment.accountNo,
+            branch: payment.branch,
+            receiveBy: payment.receiveBy || payment.paidBy,
+            place: payment.place,
+            amount: paidAmount
+        }];
+
+        const receiptData = {
+            ...payment,
+            companyName: customer?.companyName || payment.companyName || '',
+            customerName: customer?.customerName || payment.customerName || '',
+            customerId: customer?.customerId || payment.customerId || '',
+            address: customer?.address || customer?.location || payment.address || '',
+            phone: customer?.phone || payment.phone || '',
+            amount: paidAmount,
+            previousBalance: payment.previousBalance !== undefined ? payment.previousBalance : prevBal,
+            balanceDue: payment.balanceDue !== undefined ? payment.balanceDue : dueBal,
+            items: tableItems
+        };
+        generatePayToCustomerVoucherPDF(receiptData);
     };
 
     const sortData = (data) => {
@@ -3363,6 +3427,7 @@ const Customer = ({
                                                                         <SortIcon config={historySortConfig} columnKey="balance" />
                                                                     </div>
                                                                 </th>
+                                                                <th className="px-4 py-3 font-semibold text-gray-600 text-center">Action</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -3372,6 +3437,7 @@ const Customer = ({
                                                                         Opening Balance
                                                                     </td>
                                                                     <td className="px-4 py-3 text-left font-black text-orange-600">৳{openingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                    <td className="px-4 py-3 text-center"></td>
                                                                 </tr>
                                                             )}
                                                             {combinedHistory && combinedHistory.length > 0 ? (
@@ -3498,11 +3564,43 @@ const Customer = ({
                                                                             {parseFloat(item.discount || 0) > 0 ? `৳${parseFloat(item.discount).toLocaleString('en-IN')}` : '—'}
                                                                         </td>
                                                                         <td className="px-4 py-3 text-left font-black text-orange-600 text-xs">৳{item.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                        <td className="px-4 py-3 text-center">
+                                                                            {item.type === 'sale' && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleDownloadSaleInvoice(item)}
+                                                                                    className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-colors inline-flex items-center justify-center"
+                                                                                    title="Download Sale Invoice"
+                                                                                >
+                                                                                    <FileTextIcon className="w-4 h-4" />
+                                                                                </button>
+                                                                            )}
+                                                                            {item.type === 'payment' && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleDownloadMoneyReceipt(item)}
+                                                                                    className="p-1.5 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded-lg transition-colors inline-flex items-center justify-center"
+                                                                                    title="Download Money Receipt"
+                                                                                >
+                                                                                    <FileTextIcon className="w-4 h-4" />
+                                                                                </button>
+                                                                            )}
+                                                                            {item.type === 'payToCustomer' && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleDownloadPayoutVoucher(item)}
+                                                                                    className="p-1.5 hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 rounded-lg transition-colors inline-flex items-center justify-center"
+                                                                                    title="Download Payout Voucher"
+                                                                                >
+                                                                                    <FileTextIcon className="w-4 h-4" />
+                                                                                </button>
+                                                                            )}
+                                                                        </td>
                                                                     </tr>
                                                                 ))
                                                             ) : (
                                                                 <tr>
-                                                                    <td colSpan="9" className="px-4 py-12 text-left text-gray-400 font-medium italic">No ledger entries found</td>
+                                                                    <td colSpan="10" className="px-4 py-12 text-left text-gray-400 font-medium italic">No ledger entries found</td>
                                                                 </tr>
                                                             )}
                                                         </tbody>
@@ -3603,6 +3701,18 @@ const Customer = ({
                                                                                             <span className="font-bold text-left whitespace-pre-wrap">{item.rate_display || (parseFloat(item.rate || 0) > 0 ? `৳${parseFloat(item.rate).toLocaleString('en-IN')}` : '—')}</span>
                                                                                         </div>
                                                                                         <div className="flex justify-between"><span className="text-gray-500">Paid:</span><span className="font-bold text-emerald-600">৳{parseFloat(item.paid || 0).toLocaleString('en-IN')}</span></div>
+                                                                                        <div className="pt-2 border-t border-gray-100 flex gap-2">
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    handleDownloadSaleInvoice(item);
+                                                                                                }}
+                                                                                                className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                                                                            >
+                                                                                                <FileTextIcon className="w-3.5 h-3.5" /> Print Invoice
+                                                                                            </button>
+                                                                                        </div>
                                                                                     </>
                                                                                 ) : (
                                                                                     <>
@@ -3615,6 +3725,32 @@ const Customer = ({
                                                                                                 <span className="font-black text-pink-600">৳{parseFloat(item.discount).toLocaleString('en-IN')}</span>
                                                                                             </div>
                                                                                         )}
+                                                                                        <div className="pt-2 border-t border-gray-100 flex gap-2">
+                                                                                            {item.type === 'payment' && (
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        handleDownloadMoneyReceipt(item);
+                                                                                                    }}
+                                                                                                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                                                                                >
+                                                                                                    <FileTextIcon className="w-3.5 h-3.5" /> Money Receipt
+                                                                                                </button>
+                                                                                            )}
+                                                                                            {item.type === 'payToCustomer' && (
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        handleDownloadPayoutVoucher(item);
+                                                                                                    }}
+                                                                                                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                                                                                                >
+                                                                                                    <FileTextIcon className="w-3.5 h-3.5" /> Payout Voucher
+                                                                                                </button>
+                                                                                            )}
+                                                                                        </div>
                                                                                     </>
                                                                                 )}
                                                                             </div>
