@@ -742,7 +742,8 @@ export const generatePI2PDF = (record) => {
     doc.line(margin, totalY, pageWidth - margin, totalY);
 
     const amountLabel = "Amount Chargeable (In Word's) USD ";
-    const wordsVal = numberToWordsUSD(parseFloat(record.grandTotal || 0));
+    let wordsVal = numberToWordsUSD(parseFloat(record.grandTotal || 0));
+    wordsVal = wordsVal.replace(/^(?:US\s*Dollar\s*:?|USD\s*:?)\s*/i, '');
     const wordsWrapWidth = amountColX - margin - 4;
 
     doc.setFont("helvetica", "normal");

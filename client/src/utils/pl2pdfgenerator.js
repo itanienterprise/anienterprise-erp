@@ -110,9 +110,9 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const isPiRevised = (pi?.revisions && pi.revisions.length > 0) || (record.piNumber || '').includes('(REVISED)');
 
     const getCertBlockFontSize = (productCount) => {
-        if (productCount <= 1) return 7.0;
-        if (productCount === 2) return 7.2;
-        return 6.2;
+        if (productCount <= 1) return 6.8;
+        if (productCount === 2) return 6.2;
+        return 5.6;
     };
 
     const getDescriptionBlockHeight = (fSize, maxWidth = 0) => {
@@ -156,7 +156,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         const bankBin = '000321414-0101';
 
         let curY = 0;
-        const lineSpacing = fSize < 7 ? fSize * 0.38 : fSize * 0.46;
+        const lineSpacing = fSize * 0.38;
 
         const addWrapped = (text) => {
             const lines = maxWidth > 0 ? doc.splitTextToSize(text, maxWidth) : [text];
@@ -302,7 +302,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
         doc.setFontSize(fSize);
         let curY = startY;
-        const lineSpacing = fSize < 7 ? fSize * 0.38 : fSize * 0.46;
+        const lineSpacing = fSize * 0.38;
 
         const drawWrapped = (text, bold = true) => {
             doc.setFont('helvetica', bold ? 'bold' : 'normal');
@@ -802,7 +802,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         : { top: 1.5, left: 1.5, right: 1.5, bottom: 1.5 };
     const productRowHeight = (count, withFreight) => {
         if (count === 1) return undefined;
-        return withFreight ? 18 : 16;
+        return withFreight ? 16 : 14;
     };
     const numericCellStyleBase = {
         halign: 'center',
@@ -819,7 +819,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled);
         let rowHeight = productRowHeight(numProducts, hasFreight);
         if (rowHeight && hasDoubleHsCode) {
-            rowHeight += 5;
+            rowHeight += 3;
         }
 
         firstRowIndexForProduct.push(tableBody.length);
@@ -844,35 +844,42 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             const descTextHeight = getDescriptionBlockHeight(certFontSize, 108);
             const firstIndHsEnabled = prod.showIndHsCode !== false && pi?.productsList?.[0]?.showIndHsCode !== false;
             const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[0]?.hsCodeInd) && firstIndHsEnabled);
-            const offsetToDesc = -1 + 7.5 + (hasDoubleHsCode ? 5 : 0) + (showSafta ? 16.5 : 0) + 8;
+            const offsetToDesc = -1 + 7.5 + (hasDoubleHsCode ? 4 : 0) + (showSafta ? 16.5 : 0) + 6;
             if (record.productsImage) {
                 try {
                     const imgProps = doc.getImageProperties(record.productsImage);
-                    const imgWidth = 108;
-                    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-                    bottomPadding = imgHeight + 5;
-                    singleRowMinHeight = offsetToDesc + descTextHeight + imgHeight + 5;
+                    const cellW = 108;
+                    const maxAvailableForSingleRow = Math.max(35, pageHeight - margin - 22 - y - 8);
+                    const maxImgH = Math.max(15, maxAvailableForSingleRow - offsetToDesc - descTextHeight - 6);
+                    let imgW = cellW;
+                    let imgH = (imgProps.height * imgW) / imgProps.width;
+                    if (imgH > maxImgH) {
+                        imgH = maxImgH;
+                        imgW = (imgProps.width * imgH) / imgProps.height;
+                    }
+                    bottomPadding = imgH + 6;
+                    singleRowMinHeight = Math.min(maxAvailableForSingleRow, offsetToDesc + descTextHeight + imgH + 6);
                 } catch (e) {
                     console.error('Error calculating productsImage bottomPadding:', e);
-                    bottomPadding = 80;
-                    singleRowMinHeight = offsetToDesc + descTextHeight + 80 + 5;
+                    bottomPadding = 40;
+                    singleRowMinHeight = offsetToDesc + descTextHeight + 40 + 6;
                 }
             } else if (record.productsText) {
                 try {
                     doc.setFont("helvetica", "normal");
                     doc.setFontSize(8);
                     const textLines = doc.splitTextToSize(record.productsText, 108);
-                    const textHeight = textLines.length * 4;
-                    bottomPadding = textHeight + 5;
-                    singleRowMinHeight = offsetToDesc + descTextHeight + textHeight + 5;
+                    const textHeight = textLines.length * 3.5;
+                    bottomPadding = textHeight + 6;
+                    singleRowMinHeight = offsetToDesc + descTextHeight + textHeight + 6;
                 } catch (e) {
                     console.error('Error calculating productsText bottomPadding:', e);
-                    bottomPadding = 40;
-                    singleRowMinHeight = offsetToDesc + descTextHeight + 40 + 5;
+                    bottomPadding = 30;
+                    singleRowMinHeight = offsetToDesc + descTextHeight + 30 + 6;
                 }
             } else {
-                bottomPadding = showSafta ? 15 : 50;
-                singleRowMinHeight = showSafta ? offsetToDesc + descTextHeight + 15 : offsetToDesc + descTextHeight + 50;
+                bottomPadding = showSafta ? 15 : 40;
+                singleRowMinHeight = showSafta ? offsetToDesc + descTextHeight + 15 : offsetToDesc + descTextHeight + 40;
             }
         }
 
@@ -928,26 +935,44 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     if (productsList.length > 1) {
         const descColWidth = contentWidth - 76;
         const descFontSize = certFontSize;
-        let exactDescHeight = getDescriptionBlockHeight(descFontSize, descColWidth - 6) + 5;
-        let descRowHeight = exactDescHeight + 4;
+        const topPadding = 4;
+        let exactDescHeight = getDescriptionBlockHeight(descFontSize, descColWidth - 6);
+        let descRowHeight = topPadding + exactDescHeight + 4;
         if (record.productsImage) {
             try {
                 const imgProps = doc.getImageProperties(record.productsImage);
-                const imgWidth = descColWidth - 6;
-                const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-                descRowHeight = exactDescHeight + imgHeight + 5;
+                const cellW = descColWidth - 6;
+                let productsRowsHeight = 0;
+                productsList.forEach((prod, pIdx) => {
+                    const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
+                    const indHsEnabled = prod.showIndHsCode !== false && pi?.productsList?.[pIdx]?.showIndHsCode !== false;
+                    const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled);
+                    let rH = productRowHeight(numProducts, hasFreight);
+                    if (rH && hasDoubleHsCode) rH += 3;
+                    productsRowsHeight += (rH || 14);
+                });
+                const tableHeaderHeight = 8;
+                const maxAvailableForDescRow = Math.max(35, pageHeight - margin - 22 - y - tableHeaderHeight - productsRowsHeight);
+                const maxImgH = Math.max(15, maxAvailableForDescRow - (topPadding + exactDescHeight) - 6);
+                let imgW = cellW;
+                let imgH = (imgProps.height * imgW) / imgProps.width;
+                if (imgH > maxImgH) {
+                    imgH = maxImgH;
+                    imgW = (imgProps.width * imgH) / imgProps.height;
+                }
+                descRowHeight = Math.min(maxAvailableForDescRow, topPadding + exactDescHeight + imgH + 6);
             } catch (e) {
-                descRowHeight = exactDescHeight + 50;
+                descRowHeight = exactDescHeight + 35;
             }
         } else if (record.productsText) {
             try {
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(8);
                 const textLines = doc.splitTextToSize(record.productsText, descColWidth - 6);
-                const textHeight = textLines.length * 4;
-                descRowHeight = exactDescHeight + textHeight + 5;
+                const textHeight = textLines.length * 3.5;
+                descRowHeight = topPadding + exactDescHeight + textHeight + 6;
             } catch (e) {
-                descRowHeight = exactDescHeight + 30;
+                descRowHeight = exactDescHeight + 25;
             }
         }
         tableBody.push([
@@ -972,7 +997,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     autoTable(doc, {
         startY: y,
         rowPageBreak: 'avoid',
-        margin: { left: margin, right: margin },
+        pageBreak: 'avoid',
+        margin: { left: margin, right: margin, top: margin, bottom: margin },
         theme: 'grid',
         tableLineColor: [0, 0, 0],
         tableLineWidth: 0.1,
@@ -1118,15 +1144,24 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 }
 
                 if (productsList.length === 1) {
-                    let descY = drawY + 8;
+                    let descY = drawY + 6;
                     let endY = drawDescriptionBlock(cellX + 3, descY, certFontSize, cellWidth - 6);
 
                     if (record.productsImage) {
                         try {
                             const imgProps = doc.getImageProperties(record.productsImage);
-                            const imgWidth = cellWidth - 6;
-                            const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-                            doc.addImage(record.productsImage, imgProps.fileType || 'PNG', cellX + 3, endY + 2, imgWidth, imgHeight);
+                            const cellW = cellWidth - 6;
+                            const cellBottom = data.cell.y + data.cell.height;
+                            const remainingCellH = cellBottom - (endY + 2) - 3;
+                            const maxImgH = Math.max(10, remainingCellH);
+                            let imgW = cellW;
+                            let imgH = (imgProps.height * imgW) / imgProps.width;
+                            if (imgH > maxImgH) {
+                                imgH = maxImgH;
+                                imgW = (imgProps.width * imgH) / imgProps.height;
+                            }
+                            const imgX = cellX + 3 + (cellW - imgW) / 2;
+                            doc.addImage(record.productsImage, imgProps.fileType || 'PNG', imgX, endY + 2, imgW, imgH);
                         } catch (e) {
                             console.error('Error drawing productsImage in single-row cell:', e);
                         }
@@ -1136,7 +1171,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                             doc.setFontSize(8);
                             const textLines = doc.splitTextToSize(record.productsText, cellWidth - 6);
                             textLines.forEach((line, idx) => {
-                                doc.text(line, cellX + 3, endY + 4 + (idx * 4));
+                                doc.text(line, cellX + 3, endY + 4 + (idx * 3.5));
                             });
                         } catch (e) {
                             console.error('Error drawing productsText in single-row cell:', e);
@@ -1152,15 +1187,25 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 const cellX = data.cell.x;
                 const cellY = data.cell.y;
                 const cellWidth = data.cell.width;
-                let descY = cellY + 5;
+                const cellHeight = data.cell.height;
+                let descY = cellY + 4;
                 let endY = drawDescriptionBlock(cellX + 3, descY, certFontSize, cellWidth - 6);
 
                 if (record.productsImage) {
                     try {
                         const imgProps = doc.getImageProperties(record.productsImage);
-                        const imgWidth = cellWidth - 6;
-                        const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-                        doc.addImage(record.productsImage, imgProps.fileType || 'PNG', cellX + 3, endY - 2, imgWidth, imgHeight);
+                        const cellW = cellWidth - 6;
+                        const cellBottom = cellY + cellHeight;
+                        const remainingCellH = cellBottom - (endY + 2) - 3;
+                        const maxImgH = Math.max(10, remainingCellH);
+                        let imgW = cellW;
+                        let imgH = (imgProps.height * imgW) / imgProps.width;
+                        if (imgH > maxImgH) {
+                            imgH = maxImgH;
+                            imgW = (imgProps.width * imgH) / imgProps.height;
+                        }
+                        const imgX = cellX + 3 + (cellW - imgW) / 2;
+                        doc.addImage(record.productsImage, imgProps.fileType || 'PNG', imgX, endY + 2, imgW, imgH);
                     } catch (e) {
                         console.error('Error drawing productsImage in multi-row cell:', e);
                     }
@@ -1170,7 +1215,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                         doc.setFontSize(8);
                         const textLines = doc.splitTextToSize(record.productsText, cellWidth - 6);
                         textLines.forEach((line, idx) => {
-                            doc.text(line, cellX + 3, endY + 2 + (idx * 4));
+                            doc.text(line, cellX + 3, endY + 2 + (idx * 3.5));
                         });
                     } catch (e) {
                         console.error('Error drawing productsText in multi-row cell:', e);
@@ -1209,7 +1254,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     y = doc.lastAutoTable.finalY;
 
     // Ensure all content fits on the page by checking remaining space for the footer
-    const footerMinSpace = 28; // minimum space needed for Amount Chargeable + Declaration + Signature
+    const footerMinSpace = 18; // minimum space needed for Amount Chargeable + Declaration + Signature
     if (pageHeight - margin - y < footerMinSpace) {
         doc.addPage();
         // Redraw page border for the new page
@@ -1236,7 +1281,8 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const totalY = y;
 
     const amountLabel = "Amount Chargeable (In words) USD ";
-    const wordsVal = String(record.totalAmountWords || numberToWordsUSD(grandTotal)).replace(/\s+/g, ' ').trim();
+    let wordsVal = String(record.totalAmountWords || numberToWordsUSD(grandTotal)).replace(/\s+/g, ' ').trim();
+    wordsVal = wordsVal.replace(/^(?:US\s*Dollar\s*:?|USD\s*:?)\s*/i, '');
     const declText = "We declare that this invoice-cum-packing list shows the actual price and details of the goods described and that all particulars are true and correct.\nWe do certify that we have no local agent in Bangladesh and the quoted price is net and no commission is payable.";
     const declTextWidth = sigColX - margin - 8;
 

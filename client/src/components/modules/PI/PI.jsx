@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, FileTextIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, FileTextIcon, CheckIcon
 } from '../../Icons';
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
@@ -33,6 +33,7 @@ function PI({
     const canAdd = hasPermission(currentUser, 'pi', 'add');
     const canEdit = hasPermission(currentUser, 'pi', 'edit');
     const canDelete = hasPermission(currentUser, 'pi', 'delete');
+    const canDeleteRevision = hasPermission(currentUser, 'pi', 'deleteRevision');
     const canShowEntryBy = hasPermission(currentUser, 'pi', 'showEntryBy');
     const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
@@ -41,6 +42,8 @@ function PI({
     const [records, setRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showDeleteRevisionConfirm, setShowDeleteRevisionConfirm] = useState(false);
+    const [deleteRevisionStatus, setDeleteRevisionStatus] = useState(null);
 
     const rowRefs = useRef({});
     useEffect(() => {
@@ -2241,6 +2244,96 @@ function PI({
             showToast('Failed to save PI revision', 'error');
         } finally {
             setIsReviseSaving(false);
+        }
+    };
+
+    const handleDeleteRevision = async (record, revision) => {
+        if (!canDeleteRevision) {
+            showToast('Forbidden: You do not have permission to delete PI revisions', 'error');
+            return false;
+        }
+        if (!record || !revision) return false;
+
+        try {
+            const currentRevisions = Array.isArray(record.revisions) ? [...record.revisions] : [];
+            const updatedRevisions = currentRevisions.filter(r => String(r.reviseNo) !== String(revision.reviseNo));
+
+            const remainingActualRevisions = updatedRevisions.filter(r => r.reviseNo !== 'Original PI');
+            const originalRevision = currentRevisions.find(r => r.reviseNo === 'Original PI');
+
+            let updatedPiData;
+
+            if (remainingActualRevisions.length > 0) {
+                const latestRev = remainingActualRevisions[remainingActualRevisions.length - 1];
+                const latestIps = latestRev.ipNumbers || [];
+
+                updatedPiData = {
+                    ...record,
+                    ipNumbers: latestIps,
+                    ipNumber: latestIps.join(', '),
+                    validityDate: latestRev.validityDate,
+                    placeOfReceipt: latestRev.placeOfReceipt,
+                    portOfLoading: latestRev.portOfLoading,
+                    portOfDischarge: latestRev.portOfDischarge,
+                    certification: latestRev.certification,
+                    packingType: latestRev.packingType || '',
+                    productsList: latestRev.productsList || [],
+                    grandTotal: latestRev.grandTotal,
+                    grandTotalQuantity: latestRev.grandTotalQuantity,
+                    remarks: latestRev.remarks || '',
+                    piRevision: `${latestRev.reviseNo} DATE: ${formatDate(latestRev.reviseDate)}`,
+                    lastRevisedAt: latestRev.createdAt || new Date().toISOString(),
+                    revisions: updatedRevisions
+                };
+            } else {
+                if (originalRevision) {
+                    const origIps = originalRevision.ipNumbers || [];
+                    updatedPiData = {
+                        ...record,
+                        ipNumbers: origIps,
+                        ipNumber: origIps.join(', '),
+                        validityDate: originalRevision.validityDate && originalRevision.validityDate !== 'N/A (Historical)' ? originalRevision.validityDate : record.validityDate,
+                        placeOfReceipt: originalRevision.placeOfReceipt && originalRevision.placeOfReceipt !== 'N/A (Historical)' ? originalRevision.placeOfReceipt : record.placeOfReceipt,
+                        portOfLoading: originalRevision.portOfLoading && originalRevision.portOfLoading !== 'N/A (Historical)' ? originalRevision.portOfLoading : record.portOfLoading,
+                        portOfDischarge: originalRevision.portOfDischarge && originalRevision.portOfDischarge !== 'N/A (Historical)' ? originalRevision.portOfDischarge : record.portOfDischarge,
+                        certification: originalRevision.certification && originalRevision.certification !== 'N/A (Historical)' ? originalRevision.certification : record.certification,
+                        packingType: originalRevision.packingType && originalRevision.packingType !== 'N/A (Historical)' ? originalRevision.packingType : (record.packingType || ''),
+                        productsList: originalRevision.productsList || getPiProductsList(record),
+                        grandTotal: originalRevision.grandTotal !== 'N/A' ? originalRevision.grandTotal : record.grandTotal,
+                        grandTotalQuantity: originalRevision.grandTotalQuantity !== 'N/A' ? originalRevision.grandTotalQuantity : record.grandTotalQuantity,
+                        remarks: originalRevision.remarks && originalRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? originalRevision.remarks : (record.remarks || ''),
+                        piRevision: '',
+                        revisions: []
+                    };
+                } else {
+                    updatedPiData = {
+                        ...record,
+                        piRevision: '',
+                        revisions: []
+                    };
+                }
+            }
+
+            await axios.put(`${API_BASE_URL}/api/pi/${record._id}`, updatedPiData);
+
+            setRecords(prev => prev.map(r => r._id === record._id ? updatedPiData : r));
+            if (viewHistoryRecord && viewHistoryRecord._id === record._id) {
+                setViewHistoryRecord(updatedPiData);
+            }
+
+            if (addNotification) {
+                addNotification(
+                    'PI Revision Deleted',
+                    `Revision ${revision.reviseNo} for PI No: ${record.piNumber} was deleted by ${currentUser?.name || currentUser?.username}.`,
+                    ['Admin', 'Incharge', 'Border Manager', 'LC Manager']
+                );
+            }
+            showToast('PI Revision deleted successfully!', 'success');
+            return true;
+        } catch (error) {
+            console.error('Error deleting PI revision:', error);
+            showToast(`Failed to delete PI revision: ${error.response?.data?.message || error.message}`, 'error');
+            return false;
         }
     };
 
@@ -5566,6 +5659,16 @@ function PI({
                                                         <FileTextIcon className="w-4 h-4 text-white" />
                                                         <span>Bank Application</span>
                                                     </button>
+                                                    {!activeRevision.isOriginal && canDeleteRevision && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowDeleteRevisionConfirm(true)}
+                                                            className="px-6 py-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 border border-red-200 shadow-sm"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4 text-red-500" />
+                                                            <span>Delete Revised PI</span>
+                                                        </button>
+                                                    )}
                                                     {canManage && (
                                                         <button
                                                             type="button"
@@ -5612,6 +5715,90 @@ function PI({
                                 </div>
                             </div>
                         </div>
+
+                        {/* Delete Revision Confirmation Modal Card */}
+                        {showDeleteRevisionConfirm && (
+                            <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                                <div 
+                                    className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
+                                    onClick={() => {
+                                        if (deleteRevisionStatus !== 'loading') {
+                                            setShowDeleteRevisionConfirm(false);
+                                            setDeleteRevisionStatus(null);
+                                        }
+                                    }}
+                                />
+                                <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-300 z-10">
+                                    {deleteRevisionStatus === 'success' ? (
+                                        <div className="p-12 text-center">
+                                            <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-in zoom-in duration-500">
+                                                <CheckIcon className="w-10 h-10 text-emerald-500" />
+                                            </div>
+                                            <h3 className="text-xl font-black text-gray-900 mb-2">Deleted!</h3>
+                                            <p className="text-sm text-gray-500">The PI revision has been removed.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="p-8 text-center">
+                                            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-3">
+                                                <TrashIcon className="w-8 h-8 text-red-500" />
+                                            </div>
+                                            <h3 className="text-xl font-black text-gray-900 mb-2">Delete Revised PI?</h3>
+                                            <p className="text-sm text-gray-500 mb-8 leading-relaxed">
+                                                Are you sure you want to delete <span className="font-bold text-gray-800">{activeRevision.reviseNo || 'this revision'}</span> for PI <span className="font-bold text-blue-600">{viewHistoryRecord.piNumber}</span>? This action cannot be undone.
+                                            </p>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowDeleteRevisionConfirm(false);
+                                                        setDeleteRevisionStatus(null);
+                                                    }}
+                                                    className="py-3.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-2xl transition-all active:scale-95"
+                                                    disabled={deleteRevisionStatus === 'loading'}
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        setDeleteRevisionStatus('loading');
+                                                        try {
+                                                            const deleted = await handleDeleteRevision(viewHistoryRecord, activeRevision);
+                                                            if (deleted) {
+                                                                setDeleteRevisionStatus('success');
+                                                                setTimeout(() => {
+                                                                    setShowDeleteRevisionConfirm(false);
+                                                                    setDeleteRevisionStatus(null);
+                                                                    setActiveHistoryIndex(0);
+                                                                }, 1200);
+                                                            } else {
+                                                                setDeleteRevisionStatus('error');
+                                                                setTimeout(() => setDeleteRevisionStatus(null), 3000);
+                                                            }
+                                                        } catch (err) {
+                                                            setDeleteRevisionStatus('error');
+                                                            setTimeout(() => setDeleteRevisionStatus(null), 3000);
+                                                        }
+                                                    }}
+                                                    className="py-3.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl shadow-lg shadow-red-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                    disabled={deleteRevisionStatus === 'loading'}
+                                                >
+                                                    {deleteRevisionStatus === 'loading' ? (
+                                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                    ) : (
+                                                        'Delete Now'
+                                                    )}
+                                                </button>
+                                            </div>
+                                            {deleteRevisionStatus === 'error' && (
+                                                <p className="text-center text-xs font-bold text-red-500 mt-4 animate-bounce">Failed to delete revision. Please try again.</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>,
                     document.body
                 );

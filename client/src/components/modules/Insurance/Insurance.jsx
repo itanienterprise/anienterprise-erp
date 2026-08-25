@@ -44,6 +44,53 @@ const getLcInsuranceStatus = (lc, payments) => {
     return 'not paid';
 };
 
+const getLcCoverNote = (lc) => {
+    return lc?.marineCoverNote || lc?.coverNoteNo || lc?.coverNote || '-';
+};
+
+const getLcRevisedCoverNotes = (lc) => {
+    if (!lc) return [];
+    const notes = [];
+    if (lc.revisedCoverNoteNo) notes.push(String(lc.revisedCoverNoteNo).trim());
+    if (lc.revisedCoverNote && !notes.includes(String(lc.revisedCoverNote).trim())) notes.push(String(lc.revisedCoverNote).trim());
+    if (lc.addnNo && !notes.includes(String(lc.addnNo).trim())) notes.push(String(lc.addnNo).trim());
+    if (lc.amendments && lc.amendments.length > 0) {
+        lc.amendments.forEach(a => {
+            const num = a.addnNo || a.revisedCoverNoteNo || a.revisedCoverNote;
+            if (num) {
+                const s = String(num).trim();
+                if (s && !notes.includes(s)) {
+                    notes.push(s);
+                }
+            }
+        });
+    }
+    return notes;
+};
+
+const getLcAmendmentDates = (lc) => {
+    if (!lc) return [];
+    const dates = [];
+    if (lc.amendments && lc.amendments.length > 0) {
+        lc.amendments.forEach(a => {
+            const rawDate = a.amendmentDate || a.addnDate || a.date;
+            if (rawDate && a.amendmentNo !== 'Original LC') {
+                const formatted = formatDate(rawDate);
+                if (formatted && formatted !== '-' && !dates.includes(formatted)) {
+                    dates.push(formatted);
+                }
+            }
+        });
+    }
+    if (dates.length === 0 && (lc.amendmentDate || lc.addnDate)) {
+        const formatted = formatDate(lc.amendmentDate || lc.addnDate);
+        if (formatted && formatted !== '-' && !dates.includes(formatted)) {
+            dates.push(formatted);
+        }
+    }
+    return dates;
+};
+
 const Insurance = ({ onDeleteConfirm }) => {
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const canAdd = hasPermission(currentUser, 'insurance', 'add');
@@ -329,11 +376,17 @@ const Insurance = ({ onDeleteConfirm }) => {
         };
     }, [insuranceTotals, insuranceRecords, insurancePayments]);
 
-    // Helper: unique LC numbers in this insurance company's payments
+    // Helper: unique LC numbers in this insurance company's history
     const getUniqueHistoryLcOptions = () => {
         if (!viewData) return [];
-        const allLcs = viewData.history.map(p => (p.lcNo || '').trim()).filter(Boolean);
-        return [...new Set(allLcs)].sort();
+        if (activeHistoryTab === 'payments') {
+            const allLcs = viewData.history.map(p => (p.lcNo || '').trim()).filter(Boolean);
+            return [...new Set(allLcs)].sort();
+        } else {
+            const companyLcs = insuranceTotals[viewData.companyName]?.lcs || [];
+            const allLcs = companyLcs.map(lc => (lc.lcNo || '').trim()).filter(Boolean);
+            return [...new Set(allLcs)].sort();
+        }
     };
 
     // Filtered History for Modal (with date + lcNo filters applied)
@@ -373,9 +426,15 @@ const Insurance = ({ onDeleteConfirm }) => {
                 // Search query
                 const q = historySearchQuery.toLowerCase();
                 if (!q) return true;
+                const cn = getLcCoverNote(lc);
+                const rcnList = getLcRevisedCoverNotes(lc);
+                const amdDates = getLcAmendmentDates(lc);
                 return (
                     (lc.lcNo || '').toLowerCase().includes(q) ||
-                    (lc.exporterName || '').toLowerCase().includes(q)
+                    (lc.exporterName || '').toLowerCase().includes(q) ||
+                    (cn !== '-' && cn.toLowerCase().includes(q)) ||
+                    rcnList.some(r => r.toLowerCase().includes(q)) ||
+                    amdDates.some(d => d.toLowerCase().includes(q))
                 );
             }).sort((a, b) => new Date(a.openingDate) - new Date(b.openingDate));
         }
@@ -1180,6 +1239,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                 <tr>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">LC Date</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">LC Number</th>
+                                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Cover Note No</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Beneficiary</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Gross Premium</th>
                                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Net Premium</th>
@@ -1230,12 +1290,27 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                         </tr>
                                                     ) : (
                                                         <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                                                            <td className="px-6 py-4 text-xs font-medium text-gray-600">{formatDate(item.openingDate)}</td>
-                                                            <td className="px-6 py-4 text-xs font-bold text-blue-600">{item.lcNo}</td>
-                                                            <td className="px-6 py-4 text-xs text-gray-700 truncate max-w-[200px]">{item.exporterName}</td>
-                                                            <td className="px-6 py-4 text-xs font-black text-blue-600 text-right">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-US')}</td>
-                                                            <td className="px-6 py-4 text-xs font-black text-rose-600 text-right">৳{parseFloat(item.netPremium || 0).toLocaleString('en-US')}</td>
-                                                            <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</td>
+                                                            <td className="px-6 py-4 text-xs font-medium whitespace-nowrap">
+                                                                <div className="text-gray-600 font-medium">{formatDate(item.openingDate)}</div>
+                                                                {getLcAmendmentDates(item).map((amdDate, aIdx) => (
+                                                                    <div key={aIdx} className="text-[11px] font-semibold text-amber-600 mt-0.5">
+                                                                        {amdDate}
+                                                                    </div>
+                                                                ))}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-xs font-bold text-blue-600 whitespace-nowrap">{item.lcNo}</td>
+                                                            <td className="px-6 py-4 text-xs whitespace-nowrap">
+                                                                <div className="font-bold text-gray-800">{getLcCoverNote(item)}</div>
+                                                                {getLcRevisedCoverNotes(item).map((rcn, rIdx) => (
+                                                                    <div key={rIdx} className="text-[11px] font-semibold text-amber-600 mt-0.5">
+                                                                        {rcn}
+                                                                    </div>
+                                                                ))}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-xs text-gray-700 truncate max-w-[200px]" title={item.exporterName}>{item.exporterName}</td>
+                                                            <td className="px-6 py-4 text-xs font-black text-blue-600 text-right whitespace-nowrap">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-US')}</td>
+                                                            <td className="px-6 py-4 text-xs font-black text-rose-600 text-right whitespace-nowrap">৳{parseFloat(item.netPremium || 0).toLocaleString('en-US')}</td>
+                                                            <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right whitespace-nowrap">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</td>
                                                             <td className="px-6 py-4 text-xs text-center whitespace-nowrap">
                                                                 {(() => {
                                                                     const status = getLcInsuranceStatus(item, insurancePayments);
@@ -1270,7 +1345,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                     );
                                                 })
                                             ) : (
-                                                <tr><td colSpan={activeHistoryTab === 'payments' ? 9 : 7} className="px-6 py-12 text-center text-gray-400 text-sm italic">No records found matching your search.</td></tr>
+                                                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400 text-sm italic">No records found matching your search.</td></tr>
                                             )}
                                         </tbody>
                                     </table>
@@ -1397,6 +1472,31 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                                     </>
                                                                 ) : (
                                                                     <>
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cover Note No</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <div className="text-[11px] truncate">
+                                                                            <span className="font-semibold text-gray-700">{getLcCoverNote(item)}</span>
+                                                                            {getLcRevisedCoverNotes(item).map((rcn, rIdx) => (
+                                                                                <div key={rIdx} className="text-[10px] font-semibold text-amber-600 mt-0.5">
+                                                                                    {rcn}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+
+                                                                        {getLcAmendmentDates(item).length > 0 && (
+                                                                            <>
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amendment Date</span>
+                                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                                <div className="text-[11px] truncate">
+                                                                                    {getLcAmendmentDates(item).map((amdDate, aIdx) => (
+                                                                                        <div key={aIdx} className="font-semibold text-amber-600">
+                                                                                            {amdDate}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Beneficiary</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                                         <span className="font-semibold text-gray-700 truncate text-[11px]">{item.exporterName || '-'}</span>

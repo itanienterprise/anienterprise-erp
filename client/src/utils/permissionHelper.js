@@ -33,7 +33,8 @@ export const MODULES_LIST = [
         key: 'pi',
         label: 'PI Management',
         specialLabels: [
-            { key: 'showEntryBy', label: 'Entry By' }
+            { key: 'showEntryBy', label: 'Entry By' },
+            { key: 'deleteRevision', label: 'Delete Revised PI' }
         ]
     },
     {

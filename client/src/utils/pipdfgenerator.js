@@ -743,7 +743,8 @@ export const generatePIPDF = (record) => {
     // Total Row & Amount in Words (Same row)
     const totalY = y;
 
-    const wordsVal = numberToWordsUSD(parseFloat(record.grandTotal || 0));
+    let wordsVal = numberToWordsUSD(parseFloat(record.grandTotal || 0));
+    wordsVal = wordsVal.replace(/^(?:US\s*Dollar\s*:?|USD\s*:?)\s*/i, '');
     const labelText = "Amount Chargeable in words: US Dollar: ";
     const maxWordWidth = pageWidth - margin - 70 - (margin + 2); // 190 - 70 - 2 = 118
 
