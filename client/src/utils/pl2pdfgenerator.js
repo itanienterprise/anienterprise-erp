@@ -108,11 +108,17 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     const certification = record.certification || pi?.certification || '';
     const showSafta = certification && certification.toLowerCase().includes('safta');
     const isPiRevised = (pi?.revisions && pi.revisions.length > 0) || (record.piNumber || '').includes('(REVISED)');
+    const hasImage = !!record.productsImage;
 
     const getCertBlockFontSize = (productCount) => {
-        if (productCount <= 1) return 6.8;
-        if (productCount === 2) return 6.2;
-        return 5.6;
+        if (hasImage) {
+            if (productCount <= 1) return 6.8;
+            if (productCount === 2) return 6.2;
+            return 5.6;
+        }
+        if (productCount <= 1) return 8.2;
+        if (productCount === 2) return 7.6;
+        return 7.0;
     };
 
     const getDescriptionBlockHeight = (fSize, maxWidth = 0) => {
@@ -156,7 +162,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         const bankBin = '000321414-0101';
 
         let curY = 0;
-        const lineSpacing = fSize * 0.38;
+        const lineSpacing = hasImage ? fSize * 0.38 : fSize * 0.42;
 
         const addWrapped = (text) => {
             const lines = maxWidth > 0 ? doc.splitTextToSize(text, maxWidth) : [text];
@@ -302,7 +308,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
         doc.setFontSize(fSize);
         let curY = startY;
-        const lineSpacing = fSize * 0.38;
+        const lineSpacing = hasImage ? fSize * 0.38 : fSize * 0.42;
 
         const drawWrapped = (text, bold = true) => {
             doc.setFont('helvetica', bold ? 'bold' : 'normal');
@@ -1406,9 +1412,15 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
             }
         }
 
-        const amndNoMatch = record.lcAmendment.match(/(?:AMENDMENT|ADDN)\s*NO-?\s*([^\s]+)/i);
-        const amndDateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
-        const amndNo = amndNoMatch ? amndNoMatch[1] : '';
+        let amndNo = '';
+        const amndNoMatch = record.lcAmendment.match(/(?:AMENDMENT|ADDN)\s*(?:NO)?[:\.\-\s]+([A-Za-z0-9\/\-_]+)/i);
+        if (amndNoMatch) {
+            const rawNo = amndNoMatch[1].replace(/^[-:\s]+|[-:\s]+$/g, '');
+            if (rawNo && rawNo.toUpperCase() !== 'DATE') {
+                amndNo = rawNo;
+            }
+        }
+        const amndDateMatch = record.lcAmendment.match(/DATE[:\.\s]+([^\s]+)/i);
         const amndDate = amndDateMatch ? amndDateMatch[1] : '';
         if (amndNo) {
             trAmendmentLine = `AMENDMENT NO - ${amndNo}${amndDate ? ` DATE: ${amndDate}` : ''}`;

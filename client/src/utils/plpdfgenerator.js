@@ -632,9 +632,15 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
             }
         }
 
-        const amndNoMatch = record.lcAmendment.match(/(?:AMENDMENT|ADDN)\s*NO-?\s*([^\s]+)/i);
-        const amndDateMatch = record.lcAmendment.match(/DATE:\s*([^\s]+)/i);
-        const amndNo = amndNoMatch ? amndNoMatch[1] : '';
+        let amndNo = '';
+        const amndNoMatch = record.lcAmendment.match(/(?:AMENDMENT|ADDN)\s*(?:NO)?[:\.\-\s]+([A-Za-z0-9\/\-_]+)/i);
+        if (amndNoMatch) {
+            const rawNo = amndNoMatch[1].replace(/^[-:\s]+|[-:\s]+$/g, '');
+            if (rawNo && rawNo.toUpperCase() !== 'DATE') {
+                amndNo = rawNo;
+            }
+        }
+        const amndDateMatch = record.lcAmendment.match(/DATE[:\.\s]+([^\s]+)/i);
         const amndDate = amndDateMatch ? amndDateMatch[1] : '';
         if (amndNo) {
             trAmendmentLine = `AMENDMENT NO - ${amndNo}${amndDate ? ` DATE: ${amndDate}` : ''}`;
