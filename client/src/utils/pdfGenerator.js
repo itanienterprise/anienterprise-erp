@@ -8746,4 +8746,430 @@ export const generateMarginReturnReportPDF = (records = [], filters = {}, totals
     }
 };
 
+export const generateInsuranceHistoryReportPDF = async ({
+    companyName = '',
+    policyType = '',
+    email = '',
+    activeTab = 'lcs',
+    records = [],
+    aggregates = {},
+    filters = {},
+    lcRecords = [],
+    insurancePayments = [],
+    getLcCoverNote = () => '-',
+    getLcRevisedCoverNotes = () => [],
+    getLcAmendmentDates = () => [],
+    getLcInsuranceStatus = () => 'not paid'
+}) => {
+    try {
+        const doc = new jsPDF('l', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 10;
+
+        const formatD = (d) => {
+            if (!d) return '-';
+            const dt = new Date(d);
+            if (isNaN(dt.getTime())) return String(d);
+            const day = String(dt.getDate()).padStart(2, '0');
+            const month = String(dt.getMonth() + 1).padStart(2, '0');
+            const year = dt.getFullYear();
+            return `${day}/${month}/${year}`;
+        };
+
+        // Load company logo (same as stock report)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        // Logo
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // Drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // Main brand title (Orange)
+        doc.setTextColor(249, 115, 22);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0);
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
+
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
+
+        // Title badge (centered over divider line like Stock Report)
+        const reportTitle = activeTab === 'payments' ? 'INSURANCE PAYMENT HISTORY REPORT' : 'INSURANCE LC HISTORY REPORT';
+        const titleBoxWidth = 90;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - (titleBoxWidth / 2), y - 4, titleBoxWidth, 8, 2, 2, 'F');
+        doc.setFontSize(10.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text(reportTitle, pageWidth / 2, y + 1.2, { align: 'center' });
+
+        // Centered Date Range Pill (matching Stock Report)
+        y += 8;
+        const startStr = formatD(filters?.startDate) === '-' ? 'Start' : formatD(filters?.startDate);
+        const endStr = formatD(filters?.endDate) === '-' ? 'Present' : formatD(filters?.endDate);
+        const dateRangeStr = (filters?.startDate || filters?.endDate)
+            ? `Date: ${startStr} — ${endStr}`
+            : `Date: All Time`;
+
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        const filterTW = doc.getTextWidth(dateRangeStr);
+        const datePillW = Math.min(filterTW + 14, pageWidth - margin * 2);
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth / 2) - (datePillW / 2), y, datePillW, 6, 1.5, 1.5, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(dateRangeStr, pageWidth / 2, y + 4.2, { align: 'center' });
+
+        // Right Side: Printed On
+        const printDateStr = formatD(new Date());
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${printDateStr}`, pageWidth - margin, y + 4.2, { align: 'right' });
+
+        // Centered Company Badge (Orange pill matching Stock Report WAREHOUSE: ... tag)
+        y += 8;
+        const compLabel = (companyName || '').toUpperCase();
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        const compTW = doc.getTextWidth(compLabel);
+        const compPillW = compTW + 16;
+        const compBoxX = (pageWidth - compPillW) / 2;
+
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect(compBoxX, y, compPillW, 6.5, 1.5, 1.5, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text(compLabel, pageWidth / 2, y + 4.5, { align: 'center' });
+
+        // Left Side: Filter LC No (after company name badge)
+        if (filters?.lcNo) {
+            y += 6.5;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.setTextColor(0, 0, 0);
+            doc.text("LC No", margin, y + 1);
+            doc.text(":", margin + 14, y + 1);
+            doc.setFont('helvetica', 'normal');
+            doc.text(String(filters.lcNo), margin + 18, y + 1);
+        }
+
+        // 2 Summary Boxes (One for Premium, One for Return) - Reduced width & centered
+        let yPos = y + 8;
+        const boxW = 95;
+        const boxGap = 8;
+        const totalBoxesW = (boxW * 2) + boxGap;
+        const startX = (pageWidth - totalBoxesW) / 2;
+        const boxH = 17.5;
+
+        const pBoxX = startX;
+        const rBoxX = startX + boxW + boxGap;
+
+        // --- Box 1: Premium Summary ---
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.2);
+        doc.rect(pBoxX, yPos, boxW, boxH, 'FD');
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+
+        const pRows = [
+            { label: 'TOTAL PREMIUM', val: (aggregates?.totalPremium || 0).toLocaleString('en-IN') },
+            { label: 'PAID PREMIUM', val: (aggregates?.paidPremium || 0).toLocaleString('en-IN') },
+            { label: 'PREMIUM BALANCE', val: (aggregates?.premiumBalance || 0).toLocaleString('en-IN') }
+        ];
+
+        pRows.forEach((r, i) => {
+            const rowY = yPos + 4.8 + (i * 4.8);
+            doc.text(r.label, pBoxX + 5, rowY);
+            doc.text(":", pBoxX + 44, rowY);
+            doc.text(r.val, pBoxX + 48, rowY);
+        });
+
+        // --- Box 2: Return Summary ---
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.2);
+        doc.rect(rBoxX, yPos, boxW, boxH, 'FD');
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+
+        const rRows = [
+            { label: 'RETURN AMOUNT', val: (aggregates?.returnAmount || 0).toLocaleString('en-IN') },
+            { label: 'PAID RETURN', val: (aggregates?.paidReturn || 0).toLocaleString('en-IN') },
+            { label: 'RETURN BALANCE', val: (aggregates?.returnBalance || 0).toLocaleString('en-IN') }
+        ];
+
+        rRows.forEach((r, i) => {
+            const rowY = yPos + 4.8 + (i * 4.8);
+            doc.text(r.label, rBoxX + 5, rowY);
+            doc.text(":", rBoxX + 44, rowY);
+            doc.text(r.val, rBoxX + 48, rowY);
+        });
+
+        // Table building
+        const tableRows = [];
+        if (activeTab === 'payments') {
+            let sumGross = 0;
+            let sumReturn = 0;
+            let sumPaid = 0;
+            let sumAdj = 0;
+
+            records.forEach((p, idx) => {
+                const lc = (lcRecords || []).find(l => l.lcNo === p.lcNo);
+                const paidVal = p.type === 'Return Collection' ? 0 : (parseFloat(p.amount) || 0);
+                const adjVal = parseFloat(p.adjustedAmount) || 0;
+                const grossVal = lc ? (parseFloat(lc.grossPremium) || 0) : 0;
+                const returnVal = (p.isAdjustReturn || p.type === 'Return Collection')
+                    ? (lc ? (parseFloat(lc.expectedReturnAmount) || 0) : 0)
+                    : 0;
+
+                sumGross += grossVal;
+                sumReturn += returnVal;
+                sumPaid += paidVal;
+                sumAdj += adjVal;
+
+                tableRows.push([
+                    idx + 1,
+                    formatD(p.date),
+                    p.lcNo || '-',
+                    p.method || '-',
+                    (p.reference || '').trim() || '-',
+                    grossVal > 0 ? grossVal.toLocaleString('en-IN') : '-',
+                    returnVal > 0 ? returnVal.toLocaleString('en-IN') : '0.00',
+                    paidVal.toLocaleString('en-IN'),
+                    adjVal > 0 ? adjVal.toLocaleString('en-IN') : '-',
+                    p.status || 'Adjusted'
+                ]);
+            });
+
+            tableRows.push([
+                { content: 'TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: sumGross.toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: sumReturn.toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: sumPaid.toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: sumAdj.toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } }
+            ]);
+
+            autoTable(doc, {
+                startY: yPos + boxH + 4,
+                head: [['SL', 'Date', 'LC No', 'Method', 'Reference', 'Gross Premium', 'Return Amount', 'Paid', 'Adjusted', 'Status']],
+                body: tableRows,
+                theme: 'grid',
+                styles: {
+                    fontSize: 9,
+                    cellPadding: 1.5,
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.1,
+                    textColor: [0, 0, 0],
+                    valign: 'middle'
+                },
+                headStyles: {
+                    fillColor: [245, 245, 245],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    fontSize: 9,
+                    halign: 'center'
+                },
+                columnStyles: {
+                    0: { cellWidth: 8, halign: 'center' },
+                    1: { cellWidth: 22, halign: 'center' },
+                    2: { cellWidth: 32, halign: 'left' },
+                    3: { cellWidth: 24, halign: 'center' },
+                    4: { cellWidth: 30, halign: 'left' },
+                    5: { cellWidth: 34, halign: 'right' },
+                    6: { cellWidth: 34, halign: 'right' },
+                    7: { cellWidth: 32, halign: 'right' },
+                    8: { cellWidth: 32, halign: 'right' },
+                    9: { cellWidth: 24, halign: 'center' }
+                },
+                margin: { left: margin, right: margin }
+            });
+        } else {
+            let sumGross = 0;
+            let sumNet = 0;
+            let sumExp = 0;
+
+            records.forEach((lc, idx) => {
+                const grossVal = parseFloat(lc.grossPremium) || 0;
+                const netVal = parseFloat(lc.netPremium) || 0;
+                const expVal = parseFloat(lc.expectedReturnAmount) || 0;
+
+                sumGross += grossVal;
+                sumNet += netVal;
+                sumExp += expVal;
+
+                // Dates column
+                const openD = formatD(lc.openingDate);
+                const amndDates = getLcAmendmentDates(lc);
+                const dateLines = [openD, ...amndDates].filter(Boolean).join('\n');
+
+                // Cover note column
+                const cn = getLcCoverNote(lc);
+                const rcnList = getLcRevisedCoverNotes(lc);
+                const cnLines = [cn, ...rcnList].filter(Boolean).join('\n');
+
+                const status = getLcInsuranceStatus(lc, insurancePayments);
+
+                tableRows.push([
+                    idx + 1,
+                    dateLines,
+                    lc.lcNo || '-',
+                    cnLines,
+                    lc.exporterName || '-',
+                    grossVal > 0 ? grossVal.toLocaleString('en-IN') : '-',
+                    netVal > 0 ? netVal.toLocaleString('en-IN') : '-',
+                    expVal > 0 ? expVal.toLocaleString('en-IN') : '-',
+                    status.toUpperCase()
+                ]);
+            });
+
+            tableRows.push([
+                { content: 'TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: sumGross.toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: sumNet.toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: sumExp.toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } }
+            ]);
+
+            autoTable(doc, {
+                startY: yPos + boxH + 4,
+                head: [['SL', 'LC Date', 'LC Number', 'Cover Note No', 'Beneficiary', 'Gross Premium', 'Net Premium', 'Exp. Return', 'Status']],
+                body: tableRows,
+                theme: 'grid',
+                styles: {
+                    fontSize: 9,
+                    cellPadding: 1.5,
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.1,
+                    textColor: [0, 0, 0],
+                    valign: 'middle'
+                },
+                headStyles: {
+                    fillColor: [245, 245, 245],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    fontSize: 9,
+                    halign: 'center'
+                },
+                columnStyles: {
+                    0: { cellWidth: 8, halign: 'center' },
+                    1: { cellWidth: 25, halign: 'center' },
+                    2: { cellWidth: 30, halign: 'left' },
+                    3: { cellWidth: 54, halign: 'left' },
+                    4: { cellWidth: 52, halign: 'left', overflow: 'ellipsize' },
+                    5: { cellWidth: 28, halign: 'right' },
+                    6: { cellWidth: 28, halign: 'right' },
+                    7: { cellWidth: 28, halign: 'right' },
+                    8: { cellWidth: 24, halign: 'center' }
+                },
+                margin: { left: margin, right: margin }
+            });
+        }
+
+        // Signatures
+        let finalY = doc.lastAutoTable.finalY + 14;
+        if (finalY + 22 > pageHeight) {
+            doc.addPage();
+            finalY = 20;
+        }
+
+        const sigWidth = 45;
+        const sigY = finalY + 12;
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.5);
+        doc.setLineDashPattern([1, 1], 0);
+
+        doc.line(margin, sigY, margin + sigWidth, sigY);
+        doc.line(pageWidth / 2 - sigWidth / 2, sigY, pageWidth / 2 + sigWidth / 2, sigY);
+        doc.line(pageWidth - margin - sigWidth, sigY, pageWidth - margin, sigY);
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setLineDashPattern([], 0);
+        doc.text("Prepared By", margin + (sigWidth / 2), sigY + 4.5, { align: 'center' });
+        doc.text("Checked By", pageWidth / 2, sigY + 4.5, { align: 'center' });
+        doc.text("Authorized Signature", pageWidth - margin - (sigWidth / 2), sigY + 4.5, { align: 'center' });
+
+        // Page numbering
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(`M/S ANI ENTERPRISE - ${companyName.toUpperCase()} REPORT`, margin, pageHeight - 5);
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+        }
+
+        const pdfOutput = doc.output('blob');
+        const blobURL = URL.createObjectURL(pdfOutput);
+        window.open(blobURL, '_blank');
+    } catch (err) {
+        console.error("Error generating Insurance History Report PDF:", err);
+        alert(`Failed to generate Insurance History Report PDF: ${err.message}`);
+    }
+};
+
 

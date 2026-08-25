@@ -5,6 +5,7 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { generateInsuranceHistoryReportPDF } from '../../../utils/pdfGenerator';
 const getLcInsuranceStatus = (lc, payments) => {
     const lcNo = lc.lcNo;
     const lcPayments = payments.filter(p => p.lcNo === lcNo);
@@ -330,10 +331,37 @@ const Insurance = ({ onDeleteConfirm }) => {
     }, [lcRecords]);
 
     const displayRecords = useMemo(() => {
-        return insuranceRecords.filter(item =>
-            (item.companyName || '').toLowerCase().includes(searchQuery.toLowerCase())
-        ).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    }, [insuranceRecords, searchQuery]);
+        const q = searchQuery.toLowerCase().trim();
+        if (!q) {
+            return [...insuranceRecords].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        }
+
+        return insuranceRecords.filter(item => {
+            const matchesDirect = (item.companyName || '').toLowerCase().includes(q) ||
+                (item.policyType || '').toLowerCase().includes(q) ||
+                (item.email || '').toLowerCase().includes(q) ||
+                (item.phone || '').toLowerCase().includes(q) ||
+                (item.address || '').toLowerCase().includes(q);
+
+            if (matchesDirect) return true;
+
+            const companyLcs = insuranceTotals[item.companyName]?.lcs ||
+                lcRecords.filter(l => (l.insuranceCo || '').trim().toLowerCase() === (item.companyName || '').trim().toLowerCase());
+
+            return companyLcs.some(lc => {
+                const cn = getLcCoverNote(lc);
+                const rcnList = getLcRevisedCoverNotes(lc);
+                const amdDates = getLcAmendmentDates(lc);
+                return (
+                    (lc.lcNo || '').toLowerCase().includes(q) ||
+                    (lc.exporterName || '').toLowerCase().includes(q) ||
+                    (cn !== '-' && cn.toLowerCase().includes(q)) ||
+                    rcnList.some(r => r.toLowerCase().includes(q)) ||
+                    amdDates.some(d => d.toLowerCase().includes(q))
+                );
+            });
+        }).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    }, [insuranceRecords, searchQuery, insuranceTotals, lcRecords]);
 
     const globalAggregates = useMemo(() => {
         let totalPremium = 0;
@@ -403,13 +431,19 @@ const Insurance = ({ onDeleteConfirm }) => {
                 // LC No filter
                 if (historyFilters.lcNo && !(item.lcNo || '').toLowerCase().includes(historyFilters.lcNo.toLowerCase())) return false;
                 // Search query
-                const q = historySearchQuery.toLowerCase();
+                const q = historySearchQuery.toLowerCase().trim();
                 if (!q) return true;
+                const lc = lcRecords.find(l => l.lcNo === item.lcNo);
+                const cn = lc ? getLcCoverNote(lc) : '';
+                const rcnList = lc ? getLcRevisedCoverNotes(lc) : [];
                 return (
                     (item.method || '').toLowerCase().includes(q) ||
                     (item.reference || '').toLowerCase().includes(q) ||
                     (item.type || '').toLowerCase().includes(q) ||
-                    (item.lcNo || '').toLowerCase().includes(q)
+                    (item.lcNo || '').toLowerCase().includes(q) ||
+                    (cn !== '-' && cn.toLowerCase().includes(q)) ||
+                    rcnList.some(r => r.toLowerCase().includes(q)) ||
+                    (lc?.exporterName || '').toLowerCase().includes(q)
                 );
             }).sort((a, b) => new Date(a.date) - new Date(b.date));
         } else {
@@ -424,7 +458,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                 // LC No filter
                 if (historyFilters.lcNo && !(lc.lcNo || '').toLowerCase().includes(historyFilters.lcNo.toLowerCase())) return false;
                 // Search query
-                const q = historySearchQuery.toLowerCase();
+                const q = historySearchQuery.toLowerCase().trim();
                 if (!q) return true;
                 const cn = getLcCoverNote(lc);
                 const rcnList = getLcRevisedCoverNotes(lc);
@@ -438,7 +472,33 @@ const Insurance = ({ onDeleteConfirm }) => {
                 );
             }).sort((a, b) => new Date(a.openingDate) - new Date(b.openingDate));
         }
-    }, [viewData, historySearchQuery, activeHistoryTab, insuranceTotals, historyFilters]);
+    }, [viewData, historySearchQuery, activeHistoryTab, insuranceTotals, historyFilters, lcRecords]);
+
+    const handlePrintHistoryReport = async () => {
+        if (!viewData) return;
+        await generateInsuranceHistoryReportPDF({
+            companyName: viewData.companyName,
+            policyType: viewData.policyType,
+            email: viewData.email,
+            activeTab: activeHistoryTab,
+            records: filteredHistory,
+            aggregates: viewData.aggregates ? {
+                totalPremium: viewData.aggregates.totalPremium,
+                paidPremium: viewData.paidPremium,
+                premiumBalance: viewData.premiumBalance,
+                returnAmount: viewData.aggregates.returnAmount,
+                paidReturn: viewData.paidReturn,
+                returnBalance: viewData.returnBalance
+            } : {},
+            filters: historyFilters,
+            lcRecords,
+            insurancePayments,
+            getLcCoverNote,
+            getLcRevisedCoverNotes,
+            getLcAmendmentDates,
+            getLcInsuranceStatus
+        });
+    };
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -455,7 +515,7 @@ const Insurance = ({ onDeleteConfirm }) => {
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search by company or policy..."
+                                placeholder="Search by company, LC No, cover note..."
                                 autoComplete="off"
                                 className="h-10 block w-full pl-10 pr-4 bg-white/50 border border-gray-200 rounded-xl text-sm text-center md:text-left placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
                                 value={searchQuery}
@@ -959,7 +1019,7 @@ const Insurance = ({ onDeleteConfirm }) => {
             {viewData && createPortal(
                 <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setViewData(null)}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-[1200px] flex flex-col max-h-[90vh] animate-in zoom-in duration-300">
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-[1450px] 2xl:max-w-[1600px] flex flex-col max-h-[90vh] animate-in zoom-in duration-300">
 
                         {/* Desktop Header */}
                         <div className="hidden md:flex px-6 py-5 border-b border-gray-100 flex-row items-center justify-between gap-4 bg-white rounded-t-2xl flex-shrink-0">
@@ -1011,6 +1071,14 @@ const Insurance = ({ onDeleteConfirm }) => {
                                     <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
                                 </button>
 
+                                <button
+                                    onClick={handlePrintHistoryReport}
+                                    className="w-10 h-10 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 hover:border-blue-200 hover:bg-blue-50/30 text-gray-600 hover:text-blue-600 active:scale-95 shadow-sm"
+                                    title="Print / Export Report"
+                                >
+                                    <PrinterIcon className="w-4 h-4 text-gray-500 hover:text-blue-600 transition-colors" />
+                                </button>
+
                                 <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded-xl transition-all">
                                     <XIcon className="w-6 h-6" />
                                 </button>
@@ -1054,6 +1122,14 @@ const Insurance = ({ onDeleteConfirm }) => {
                                         }`}
                                     >
                                         <FunnelIcon className={`w-4 h-4 ${showHistoryFilterPanel || Object.values(historyFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                    </button>
+
+                                    <button
+                                        onClick={handlePrintHistoryReport}
+                                        className="w-11 h-11 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 hover:border-blue-200 text-gray-600 shrink-0 active:scale-95 shadow-sm"
+                                        title="Print / Export Report"
+                                    >
+                                        <PrinterIcon className="w-4 h-4 text-gray-500" />
                                     </button>
                                 </div>
 
