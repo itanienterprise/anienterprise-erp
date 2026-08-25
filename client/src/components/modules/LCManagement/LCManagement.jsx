@@ -5898,7 +5898,10 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 .map(p => p.piNumber);
             setPiList([...new Set(validPis)]);
 
-            setProductItems(Array.isArray(prodRes.data) ? prodRes.data : []);
+            const validProdNames = Array.isArray(prodRes.data)
+                ? [...new Set(prodRes.data.map(p => (typeof p === 'string' ? p : p.ipName || p.name)).filter(Boolean))]
+                : [];
+            setProductItems(validProdNames);
             setAllStockRecords(Array.isArray(stockRes.data) ? stockRes.data : []);
             setAllSalesRecords(Array.isArray(saleRes.data) ? saleRes.data : []);
             setPorts(Array.isArray(portRes.data) ? portRes.data : []);
