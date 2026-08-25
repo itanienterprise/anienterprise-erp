@@ -670,8 +670,15 @@ function LCReceive({
     const canEditRequestedStock = (entry) => {
         if (!currentUser) return false;
         if (canEdit) return true;
-        const owner = entry?.entries?.[0]?.requestedByUsername || entry?.requestedByUsername;
-        return owner === currentUser.username;
+        const ownerUsername = entry?.entries?.[0]?.requestedByUsername || entry?.requestedByUsername;
+        const ownerName = entry?.entries?.[0]?.requestedBy || entry?.requestedBy;
+        const curUser = (currentUser.username || '').trim().toLowerCase();
+        const curName = (currentUser.name || '').trim().toLowerCase();
+
+        if (ownerUsername && ownerUsername.trim().toLowerCase() === curUser) return true;
+        if (ownerName && (ownerName.trim().toLowerCase() === curUser || (curName && ownerName.trim().toLowerCase() === curName))) return true;
+
+        return false;
     };
     const exporterRef = useRef(null);
     const indCnfRef = useRef(null);
@@ -1521,7 +1528,16 @@ function LCReceive({
     const handleStockSubmit = async (e) => {
         e.preventDefault();
         const isEditing = !!editingId;
-        const hasAccess = isEditing ? canEdit : canAdd;
+        const isRequested = (stockFormData.status || '').toLowerCase().includes('requested');
+        const curUser = (currentUser?.username || '').trim().toLowerCase();
+        const curName = (currentUser?.name || '').trim().toLowerCase();
+        const reqUser = (stockFormData.requestedByUsername || '').trim().toLowerCase();
+        const reqName = (stockFormData.requestedBy || '').trim().toLowerCase();
+        const isOwner = isRequested && (
+            (reqUser && (reqUser === curUser || (curName && reqUser === curName))) ||
+            (reqName && (reqName === curUser || (curName && reqName === curName)))
+        );
+        const hasAccess = isEditing ? (canEdit || isOwner) : canAdd;
         if (!hasAccess) {
             alert(`Forbidden: You do not have permission to ${isEditing ? 'edit' : 'add'} LC Receive records`);
             return;
@@ -4382,9 +4398,9 @@ function LCReceive({
                                                                 />
                                                             </td>
                                                         )}
-                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(entry.date)}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.lcNo || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600 align-top whitespace-nowrap">
+                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900 align-middle">{formatDate(entry.date)}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.lcNo || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle whitespace-nowrap">
                                                             {(() => {
                                                                 const invoiceNos = [...new Set((entry.entries || []).map(e => e.invoiceNo).filter(Boolean))];
                                                                 return invoiceNos.length > 0
@@ -4394,39 +4410,39 @@ function LCReceive({
                                                                     : <span>-</span>;
                                                             })()}
                                                         </td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.port || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">{entry.importer || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.exporter || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.indianCnF || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.bdCnF || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600">{entry.billOfEntry || '-'}</td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600 align-top">
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.port || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap align-middle">{entry.importer || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.exporter || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.indianCnF || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.bdCnF || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.billOfEntry || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600 align-middle">
                                                         {uniqueEntries.map((item, idx) => (
                                                             <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0 truncate max-w-xs">{item.productName || '-'}</div>
                                                         ))}
                                                     </td>
-                                                    <td className="px-6 py-4 text-sm text-gray-600 align-top">
+                                                    <td className="px-6 py-4 text-sm text-gray-600 align-middle">
                                                         {uniqueEntries.map((item, idx) => (
                                                             <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{item.truckNo || '0'}</div>
                                                         ))}
                                                     </td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 align-top">
+                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 align-middle">
                                                         {uniqueEntries.map((item, idx) => (
                                                             <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{Math.round(item.quantity)}</div>
                                                         ))}
                                                     </td>
                                                     {isRequestedOnly && (
-                                                        <td className="px-6 py-4 text-sm text-gray-600 align-top whitespace-nowrap">
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle whitespace-nowrap">
                                                             <span className="font-semibold text-gray-800">{formatRequestedBy(entry.requestedBy || entry.entries[0]?.requestedBy, entry.requestedByUsername || entry.entries[0]?.requestedByUsername)}</span>
                                                         </td>
                                                     )}
-                                                    <td className="px-6 py-4 text-right">
+                                                    <td className="px-6 py-4 text-right align-middle">
                                                         <div className="flex items-center justify-end space-x-3">
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details">
                                                                 <EyeIcon className="w-5 h-5" />
                                                             </button>
 
-                                                            {entry.entries[0]?.status === 'Requested' ? (
+                                                            {(entry.entries?.[0]?.status || entry.status || '').toLowerCase() === 'requested' ? (
                                                                 <>
                                                                     {canEditRequestedStock(entry) && (
                                                                          <button onClick={(e) => { e.stopPropagation(); handleEditInternal('stock', entry); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
@@ -4586,7 +4602,7 @@ function LCReceive({
                                                                 <EyeIcon className="w-4 h-4" />
                                                             </button>
 
-                                                            {entry.entries[0]?.status === 'Requested' ? (
+                                                            {(entry.entries?.[0]?.status || entry.status || '').toLowerCase() === 'requested' ? (
                                                                 <>
                                                                     {canEditRequestedStock(entry) && (
                                                                          <button

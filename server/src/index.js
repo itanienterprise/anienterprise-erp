@@ -797,9 +797,14 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
     }
 
     if (existingData && existingData.status === 'Requested') {
-      const ownerUsername = existingData.requestedByUsername;
-      const currentUsername = userSession ? userSession.username : null;
-      if (!hasDeletePermission && currentUsername !== ownerUsername) {
+      const ownerUser = (existingData.requestedByUsername || '').trim().toLowerCase();
+      const ownerName = (existingData.requestedBy || '').trim().toLowerCase();
+      const curUser = (userSession?.username || '').trim().toLowerCase();
+      const curName = (userSession?.name || '').trim().toLowerCase();
+      const isOwner = (ownerUser && (ownerUser === curUser || (curName && ownerUser === curName))) ||
+                      (ownerName && (ownerName === curUser || (curName && ownerName === curName)));
+
+      if (!hasDeletePermission && !isOwner) {
         return res.status(403).json({ message: 'Forbidden: Only the owner of the requested stock entry or an authorized user can delete it.' });
       }
     } else {
@@ -850,9 +855,14 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
           return res.status(403).json({ message: 'Forbidden: You do not have permission to approve/reject requested entries.' });
         }
       } else {
-        const ownerUsername = existingData.requestedByUsername;
-        const currentUsername = userSession ? userSession.username : null;
-        if (!hasEditPermission && currentUsername !== ownerUsername) {
+        const ownerUser = (existingData.requestedByUsername || '').trim().toLowerCase();
+        const ownerName = (existingData.requestedBy || '').trim().toLowerCase();
+        const curUser = (userSession?.username || '').trim().toLowerCase();
+        const curName = (userSession?.name || '').trim().toLowerCase();
+        const isOwner = (ownerUser && (ownerUser === curUser || (curName && ownerUser === curName))) ||
+                        (ownerName && (ownerName === curUser || (curName && ownerName === curName)));
+
+        if (!hasEditPermission && !isOwner) {
           return res.status(403).json({ message: 'Forbidden: Only the owner of the requested stock entry can edit it.' });
         }
       }
