@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { PlusIcon, XIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, EyeIcon } from '../../Icons';
+import { PlusIcon, XIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, EyeIcon, SearchIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import StockHistoryModal from '../../shared/StockHistoryModal';
@@ -20,6 +20,7 @@ const ProductManagement = ({
     const [showProductForm, setShowProductForm] = useState(false);
     const [viewData, setViewData] = useState(null);
     const [editingId, setEditingId] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const canAdd = hasPermission(currentUser, 'product', 'add');
     const canEdit = hasPermission(currentUser, 'product', 'edit');
@@ -27,6 +28,48 @@ const ProductManagement = ({
     const cannotDelete = !canDelete;
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null);
+
+    const filteredProducts = useMemo(() => {
+        if (!products || !Array.isArray(products)) return [];
+        if (!searchQuery.trim()) return products;
+
+        const query = searchQuery.toLowerCase().trim();
+
+        return products
+            .map(product => {
+                const nameMatch = (product.name || '').toLowerCase().includes(query);
+                const ipNameMatch = (product.ipName || '').toLowerCase().includes(query);
+                const hsCodeMatch = (product.hsCode || '').toLowerCase().includes(query);
+                const hsCodeIndMatch = (product.hsCodeInd || '').toLowerCase().includes(query);
+                const categoryMatch = (product.category || '').toLowerCase().includes(query);
+                const descMatch = (product.description || '').toLowerCase().includes(query);
+
+                const matchingBrands = (product.brands || []).filter(b =>
+                    (b.brand || '').toLowerCase().includes(query) ||
+                    (b.quality || '').toLowerCase().includes(query)
+                );
+                const singleBrandMatch = (product.brand || '').toLowerCase().includes(query);
+
+                const isProductLevelMatch = nameMatch || ipNameMatch || hsCodeMatch || hsCodeIndMatch || categoryMatch || descMatch;
+                const isBrandMatch = matchingBrands.length > 0 || singleBrandMatch;
+
+                if (!isProductLevelMatch && !isBrandMatch) {
+                    return null;
+                }
+
+                // If matched specifically by brand (and not by product-level fields), filter brands to only matching brands
+                let displayBrands = product.brands;
+                if (isBrandMatch && !isProductLevelMatch && matchingBrands.length > 0) {
+                    displayBrands = matchingBrands;
+                }
+
+                return {
+                    ...product,
+                    brands: displayBrands
+                };
+            })
+            .filter(Boolean);
+    }, [products, searchQuery]);
     const [productFormData, setProductFormData] = useState({
         hsCode: '',
         hsCodeInd: '',
@@ -116,30 +159,31 @@ const ProductManagement = ({
     };
 
     const handleProductEdit = (product) => {
+        const fullProduct = (products || []).find(p => p._id === product._id) || product;
         setProductFormData({
-            hsCode: product.hsCode || '',
-            hsCodeInd: product.hsCodeInd || '',
-            ipName: product.ipName || '',
-            name: product.name || '',
-            category: product.category || '',
-            cnfOther: product.cnfOther || (product.cnf && product.other ? `${product.cnf} / ${product.other}` : product.cnf || product.other || ''),
-            uom: product.uom || product.unit || 'kg',
-            brands: product.brands && product.brands.length > 0
-                ? product.brands.map(b => ({
+            hsCode: fullProduct.hsCode || '',
+            hsCodeInd: fullProduct.hsCodeInd || '',
+            ipName: fullProduct.ipName || '',
+            name: fullProduct.name || '',
+            category: fullProduct.category || '',
+            cnfOther: fullProduct.cnfOther || (fullProduct.cnf && fullProduct.other ? `${fullProduct.cnf} / ${fullProduct.other}` : fullProduct.cnf || fullProduct.other || ''),
+            uom: fullProduct.uom || fullProduct.unit || 'kg',
+            brands: fullProduct.brands && fullProduct.brands.length > 0
+                ? fullProduct.brands.map(b => ({
                     brand: b.brand || '',
                     quality: b.quality || '',
                     packetSize: b.packetSize || '',
                     purchasedPrice: b.purchasedPrice || ''
                 }))
                 : [{
-                    brand: product.brand || '',
-                    quality: product.quality || '',
-                    packetSize: product.packetSize || '',
-                    purchasedPrice: product.purchasedPrice || ''
+                    brand: fullProduct.brand || '',
+                    quality: fullProduct.quality || '',
+                    packetSize: fullProduct.packetSize || '',
+                    purchasedPrice: fullProduct.purchasedPrice || ''
                 }],
-            description: product.description || ''
+            description: fullProduct.description || ''
         });
-        setEditingId(product._id);
+        setEditingId(fullProduct._id);
         setShowProductForm(true);
     };
 
@@ -160,18 +204,47 @@ const ProductManagement = ({
 
     return (
         <div className="product-management space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-xl md:text-2xl font-bold text-gray-800">Products Management</h2>
-                {!showProductForm && (
-                    <button
-                        onClick={() => setShowProductForm(true)}
-                        className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 text-sm md:text-base"
-                    >
-                        <span className="text-lg font-light mr-1 md:mr-2">+</span>
-                        <span className="hidden sm:inline">Add New Product</span>
-                        <span className="sm:hidden">Add</span>
-                    </button>
-                )}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="w-full md:w-auto md:shrink-0 text-center md:text-left">
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-800">Products Management</h2>
+                </div>
+
+                {/* Center Aligned Search Bar */}
+                <div className="flex-1 w-full max-w-none md:max-w-md mx-auto">
+                    <div className="w-full relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <SearchIcon className="h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search by Product, Brand, HS Code..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="block w-full pl-10 pr-10 py-2 bg-white/50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all outline-none"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <XIcon className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="w-full md:w-auto flex justify-end">
+                    {!showProductForm && (
+                        <button
+                            onClick={() => setShowProductForm(true)}
+                            className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 text-sm md:text-base"
+                        >
+                            <span className="text-lg font-light mr-1 md:mr-2">+</span>
+                            <span className="hidden sm:inline">Add New Product</span>
+                            <span className="sm:hidden">Add</span>
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Add/Edit Modal */}
@@ -390,7 +463,7 @@ const ProductManagement = ({
             )}
 
             <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                {products.length > 0 ? (
+                {filteredProducts.length > 0 ? (
                     <>
                         {/* ─── Desktop Table (md and above) ─── */}
                         <div className="hidden md:block overflow-x-auto">
@@ -412,7 +485,7 @@ const ProductManagement = ({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {products.map((product) => (
+                                    {filteredProducts.map((product) => (
                                         <tr key={product._id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4 text-sm text-gray-600 font-mono align-top">{product.hsCode || '-'}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600 font-mono align-top">{product.hsCodeInd || '-'}</td>
@@ -445,7 +518,7 @@ const ProductManagement = ({
                                             <td className="px-6 py-4 text-sm text-gray-600 align-top">{product.category || '-'}</td>
                                             <td className="px-6 py-4 text-center align-top">
                                                 <div className="flex items-center justify-center space-x-3">
-                                                    <button onClick={() => setViewData(product)} className="text-gray-400 hover:text-blue-600 transition-colors">
+                                                    <button onClick={() => setViewData((products || []).find(p => p._id === product._id) || product)} className="text-gray-400 hover:text-blue-600 transition-colors">
                                                         <EyeIcon className="w-5 h-5" />
                                                     </button>
                                                     <button onClick={() => handleProductEdit(product)} className="text-gray-400 hover:text-blue-600 transition-colors">
@@ -455,7 +528,7 @@ const ProductManagement = ({
                                                          <button onClick={() => handleProductDelete(product._id)} className="text-gray-400 hover:text-red-600 transition-colors">
                                                              <TrashIcon className="w-5 h-5" />
                                                          </button>
-                                                     )}
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -466,7 +539,7 @@ const ProductManagement = ({
 
                         {/* ─── Mobile Cards (below md) ─── */}
                         <div className="md:hidden divide-y divide-gray-100">
-                            {products.map((product) => {
+                            {filteredProducts.map((product) => {
                                 const isExpanded = expandedCard === product._id;
                                 return (
                                     <div
@@ -499,7 +572,7 @@ const ProductManagement = ({
                                                 {isExpanded && (
                                                     <>
                                                         <button
-                                                            onClick={(e) => { e.stopPropagation(); setViewData(product); }}
+                                                            onClick={(e) => { e.stopPropagation(); setViewData((products || []).find(p => p._id === product._id) || product); }}
                                                             className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
                                                         >
                                                             <EyeIcon className="w-4 h-4" />
@@ -586,8 +659,12 @@ const ProductManagement = ({
                         <div className="p-4 bg-gray-50 rounded-full mb-4">
                             <BoxIcon className="w-8 h-8 text-gray-400" />
                         </div>
-                        <p className="text-gray-500 font-medium">No products found</p>
-                        <p className="text-sm text-gray-400 mt-1">Click "Add New Product" to create a product</p>
+                        <p className="text-gray-500 font-medium">
+                            {searchQuery ? `No products matching "${searchQuery}"` : 'No products found'}
+                        </p>
+                        <p className="text-sm text-gray-400 mt-1">
+                            {searchQuery ? 'Try searching for a different keyword' : 'Click "Add New Product" to create a product'}
+                        </p>
                     </div>
                 )}
             </div>

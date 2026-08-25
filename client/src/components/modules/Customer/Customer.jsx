@@ -12,6 +12,7 @@ import './Customer.css';
 const Customer = ({
     currentUser,
     salesRecords = [],
+    fetchSalesGlobal,
     isSelectionMode,
     setIsSelectionMode,
     selectedItems,
@@ -348,6 +349,9 @@ const Customer = ({
             }
             setSubmitStatus('success');
             fetchCustomers();
+            if (typeof fetchSalesGlobal === 'function') {
+                fetchSalesGlobal();
+            }
             setTimeout(() => {
                 setShowForm(false);
                 setEditingId(null);

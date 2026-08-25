@@ -972,25 +972,174 @@ apiRouter.delete('/api/customers/:id', async (req, res) => {
 apiRouter.put('/api/customers/:id', async (req, res) => {
   try {
     // req.body is already decrypted by the security middleware
+    const oldRecord = await Customer.findById(req.params.id);
+    if (!oldRecord) return res.status(404).json({ message: 'Customer not found' });
+    let oldData = {};
+    try {
+      oldData = decryptData(oldRecord.data) || {};
+    } catch (e) {}
+
+    const newCompanyName = (req.body.companyName || '').trim();
+    const newCustomerName = (req.body.customerName || '').trim();
+    const newPhone = (req.body.phone || '').trim();
+    const newAddress = (req.body.address || req.body.location || '').trim();
+    const newCustomerType = (req.body.customerType || '').trim();
+    const newCustomerId = (req.body.customerId || '').trim();
+
+    // Ensure customer's internal history records stay synchronized with new customer details
+    if (req.body.salesHistory && Array.isArray(req.body.salesHistory)) {
+      req.body.salesHistory = req.body.salesHistory.map(h => ({
+        ...h,
+        companyName: newCompanyName || h.companyName,
+        customerName: newCustomerName || h.customerName,
+        phone: newPhone || h.phone,
+        customerPhone: newPhone || h.customerPhone,
+        address: newAddress || h.address,
+        location: newAddress || h.location,
+        customerType: newCustomerType || h.customerType
+      }));
+    }
+
     const encryptedData = encryptData(req.body);
     const updatedRecord = await Customer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'Customer not found' });
 
-    // Propagate companyName and customerName changes to related sales
+    // Propagate companyName, customerName, phone, address, and customerType to related sales
     const sales = await Sale.find();
     for (const s of sales) {
       let d = decryptData(s.data);
       if (d && d.data && typeof d.data === 'string' && !d.invoiceNo) {
         try { d = decryptData(d.data); } catch (e) { }
       }
+      if (!d) continue;
 
-      if (d.customerId === req.params.id || (d.customer && d.customer._id === req.params.id)) {
-        if (d.companyName !== req.body.companyName || d.customerName !== req.body.customerName) {
-          d.companyName = req.body.companyName;
-          d.customerName = req.body.customerName;
+      const isMatch =
+        d.customerId === req.params.id ||
+        (oldData && oldData.customerId && d.customerId === oldData.customerId) ||
+        (newCustomerId && d.customerId === newCustomerId) ||
+        (d.customer && (
+          d.customer._id === req.params.id ||
+          (oldData && oldData.customerId && d.customer.customerId === oldData.customerId) ||
+          (newCustomerId && d.customer.customerId === newCustomerId)
+        )) ||
+        (oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase()) ||
+        (oldData && oldData.customerName && d.customerName && d.customerName.trim().toLowerCase() === oldData.customerName.trim().toLowerCase());
+
+      if (isMatch) {
+        let changed = false;
+        if (newCompanyName && d.companyName !== newCompanyName) {
+          d.companyName = newCompanyName;
+          changed = true;
+        }
+        if (newCustomerName && d.customerName !== newCustomerName) {
+          d.customerName = newCustomerName;
+          changed = true;
+        }
+        if (newPhone && (d.phone !== newPhone || d.customerPhone !== newPhone)) {
+          d.phone = newPhone;
+          d.customerPhone = newPhone;
+          changed = true;
+        }
+        if (newAddress && (d.address !== newAddress || d.customerAddress !== newAddress || d.location !== newAddress)) {
+          d.address = newAddress;
+          d.customerAddress = newAddress;
+          d.location = newAddress;
+          changed = true;
+        }
+        if (newCustomerType && d.customerType !== newCustomerType) {
+          d.customerType = newCustomerType;
+          changed = true;
+        }
+        if (req.body.uom && d.uom !== req.body.uom) {
+          d.uom = req.body.uom;
+          changed = true;
+        }
+        if (d.customer) {
+          d.customer = {
+            ...d.customer,
+            _id: req.params.id,
+            customerId: newCustomerId || d.customer.customerId,
+            companyName: newCompanyName || d.customer.companyName,
+            customerName: newCustomerName || d.customer.customerName,
+            phone: newPhone || d.customer.phone,
+            address: newAddress || d.customer.address,
+            location: newAddress || d.customer.location,
+            customerType: newCustomerType || d.customer.customerType
+          };
+          changed = true;
+        }
+        if (d.customerId !== req.params.id) {
+          d.customerId = req.params.id;
+          changed = true;
+        }
+
+        if (changed) {
           s.data = encryptData(d);
           await s.save();
         }
+      }
+    }
+
+    // Propagate changes to related returns
+    const returns = await Return.find();
+    for (const r of returns) {
+      let d = decryptData(r.data);
+      if (d && d.data && typeof d.data === 'string') {
+        try { d = decryptData(d.data); } catch (e) { }
+      }
+      if (!d) continue;
+
+      const isMatch =
+        d.customerId === req.params.id ||
+        (oldData && oldData.customerId && d.customerId === oldData.customerId) ||
+        (newCustomerId && d.customerId === newCustomerId) ||
+        (oldData && oldData.companyName && d.companyName && d.companyName.trim().toLowerCase() === oldData.companyName.trim().toLowerCase()) ||
+        (oldData && oldData.customerName && d.customerName && d.customerName.trim().toLowerCase() === oldData.customerName.trim().toLowerCase());
+
+      if (isMatch) {
+        let changed = false;
+        if (newCompanyName && d.companyName !== newCompanyName) {
+          d.companyName = newCompanyName;
+          changed = true;
+        }
+        if (newCustomerName && d.customerName !== newCustomerName) {
+          d.customerName = newCustomerName;
+          changed = true;
+        }
+        if (newPhone && (d.phone !== newPhone || d.customerPhone !== newPhone)) {
+          d.phone = newPhone;
+          d.customerPhone = newPhone;
+          changed = true;
+        }
+        if (newAddress && (d.address !== newAddress || d.customerAddress !== newAddress)) {
+          d.address = newAddress;
+          d.customerAddress = newAddress;
+          changed = true;
+        }
+        if (d.customerId !== req.params.id) {
+          d.customerId = req.params.id;
+          changed = true;
+        }
+        if (changed) {
+          r.data = encryptData(d);
+          await r.save();
+        }
+      }
+    }
+
+    // Propagate to LCGatePass
+    const gatePasses = await LCGatePass.find();
+    for (const gp of gatePasses) {
+      let d = decryptData(gp.data);
+      if (!d) continue;
+      const isMatch =
+        d.customerId === req.params.id ||
+        (oldData && oldData.companyName && d.party && d.party.trim().toLowerCase() === oldData.companyName.trim().toLowerCase());
+
+      if (isMatch && newCompanyName && d.party !== newCompanyName) {
+        d.party = newCompanyName;
+        gp.data = encryptData(d);
+        await gp.save();
       }
     }
 

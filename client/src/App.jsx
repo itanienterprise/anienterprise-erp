@@ -1908,6 +1908,7 @@ function App() {
             key={refreshKey}
             currentUser={currentUser}
             salesRecords={salesRecords}
+            fetchSalesGlobal={fetchSales}
             isSelectionMode={isSelectionMode}
             setIsSelectionMode={setIsSelectionMode}
             selectedItems={selectedItems}
