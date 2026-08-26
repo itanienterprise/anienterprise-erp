@@ -23,6 +23,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { formatDate } from '../../../utils/helpers';
 import { getLCHistoryTimeline, getMilestoneTotalDollar } from './LCManagement';
 import { generateMarginReturnReportPDF } from '../../../utils/pdfGenerator';
+import { isProductMatch } from '../../../utils/lcValueUtils';
 
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -300,7 +301,6 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
         };
 
         const getProductReceivedQtyKg = (pName) => {
-            const cleanPName = (pName || '').trim().toLowerCase();
             const receiptsMap = {};
             allStockRecords
                 .filter(s => {
@@ -316,14 +316,14 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
 
                     if (s.entries && s.entries.length > 0) {
                         const matchingEntries = s.entries.filter(item => {
-                            const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
-                            return !cleanPName || itemPName === cleanPName;
+                            const itemPName = item.productName || s.productName || s.product || '';
+                            return !pName || isProductMatch(pName, itemPName);
                         });
                         const itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
                         receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
                     } else {
-                        const rootPName = (s.productName || s.product || '').trim().toLowerCase();
-                        if (!cleanPName || !rootPName || rootPName === cleanPName) {
+                        const rootPName = s.productName || s.product || '';
+                        if (!pName || isProductMatch(pName, rootPName)) {
                             const itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
                             if (!receiptsMap[key]) {
                                 receiptsMap[key] = itemQty;
@@ -350,15 +350,23 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                     return matchesLc && isValidStatus && isBorder;
                 })
                 .reduce((sum, s) => {
-                    const matchingItems = (s.items || []).filter(item => {
-                        const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
-                        return !cleanPName || !itemPName || itemPName === cleanPName;
-                    });
-                    const itemSubtotal = matchingItems.reduce((iSum, item) => {
-                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                        return iSum + (brandSubtotal || parseNum(item.quantity));
-                    }, 0);
-                    return sum + (itemSubtotal || parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
+                    if (s.items && s.items.length > 0) {
+                        const matchingItems = s.items.filter(item => {
+                            const itemPName = item.productName || s.productName || s.product || '';
+                            return !pName || isProductMatch(pName, itemPName);
+                        });
+                        const itemSubtotal = matchingItems.reduce((iSum, item) => {
+                            const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                            return iSum + (brandSubtotal || parseNum(item.quantity));
+                        }, 0);
+                        return sum + itemSubtotal;
+                    } else {
+                        const rootPName = s.productName || s.product || '';
+                        if (!pName || isProductMatch(pName, rootPName)) {
+                            return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
+                        }
+                        return sum;
+                    }
                 }, 0);
 
             return rQty + bQty;
@@ -371,8 +379,28 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
 
         let billValueUsd = parseFloat(record.billValueUsd) || 0;
         if (billValueUsd === 0 && origProducts.length > 0) {
+            const productRecMap = origProducts.map(p => ({
+                product: p,
+                recKg: getProductReceivedQtyKg(p.productName)
+            }));
+            const totalProdRecKg = productRecMap.reduce((sum, item) => sum + item.recKg, 0);
+
             origProducts.forEach(p => {
-                const pRecQtyKg = getProductReceivedQtyKg(p.productName);
+                let pRecQtyKg = 0;
+                const pQtyKg = (parseFloat(p.quantity) || 0) * 1000;
+                if (totalProdRecKg > 0) {
+                    const foundRec = productRecMap.find(item => item.product === p)?.recKg || 0;
+                    if (hasCustomReceive && totalReceivedQtyKg > 0 && totalProdRecKg > 0) {
+                        pRecQtyKg = foundRec * (totalReceivedQtyKg / totalProdRecKg);
+                    } else {
+                        pRecQtyKg = foundRec;
+                    }
+                } else if (totalReceivedQtyKg > 0 && openingQtyKg > 0) {
+                    pRecQtyKg = totalReceivedQtyKg * (pQtyKg / openingQtyKg);
+                } else if (totalReceivedQtyKg > 0) {
+                    pRecQtyKg = totalReceivedQtyKg / origProducts.length;
+                }
+
                 const pRecQtyTons = pRecQtyKg / 1000;
                 let pRate = getRatePerTon(p.rate);
                 let pFreight = getFreightPerTon(p.freight);

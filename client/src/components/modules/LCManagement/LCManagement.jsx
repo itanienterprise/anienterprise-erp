@@ -12,7 +12,7 @@ import { decryptData } from '../../../utils/encryption';
 import { generateLCManagementReportPDF, generateLCBillReportPDF } from '../../../utils/pdfGenerator';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
-import { getCogNetBillBdt } from '../../../utils/lcValueUtils';
+import { getCogNetBillBdt, isProductMatch } from '../../../utils/lcValueUtils';
 
 const gridColsClassMap = {
     1: 'md:grid-cols-1',
@@ -857,8 +857,6 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
         };
 
         const getProductReceivedQtyKg = (pName) => {
-            const cleanPName = (pName || '').trim().toLowerCase();
-
             const receiptsMap = {};
             allStockRecords
                 .filter(s => {
@@ -874,14 +872,14 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
                     if (s.entries && s.entries.length > 0) {
                         const matchingEntries = s.entries.filter(item => {
-                            const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
-                            return !cleanPName || itemPName === cleanPName;
+                            const itemPName = item.productName || s.productName || s.product || '';
+                            return !pName || isProductMatch(pName, itemPName);
                         });
                         const itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
                         receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
                     } else {
-                        const rootPName = (s.productName || s.product || '').trim().toLowerCase();
-                        if (!cleanPName || !rootPName || rootPName === cleanPName) {
+                        const rootPName = s.productName || s.product || '';
+                        if (!pName || isProductMatch(pName, rootPName)) {
                             const itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
                             if (!receiptsMap[key]) {
                                 receiptsMap[key] = itemQty;
@@ -908,18 +906,23 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                     return matchesLc && isValidStatus && isBorder;
                 })
                 .reduce((sum, s) => {
-                    let itemSubtotal = 0;
                     if (s.items && s.items.length > 0) {
                         const matchingItems = s.items.filter(item => {
-                            const itemPName = (item.productName || s.productName || '').trim().toLowerCase();
-                            return !cleanPName || itemPName === cleanPName;
+                            const itemPName = item.productName || s.productName || s.product || '';
+                            return !pName || isProductMatch(pName, itemPName);
                         });
-                        itemSubtotal = matchingItems.reduce((iSum, item) => {
+                        const itemSubtotal = matchingItems.reduce((iSum, item) => {
                             const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
                             return iSum + (brandSubtotal || parseNum(item.quantity));
                         }, 0);
+                        return sum + itemSubtotal;
+                    } else {
+                        const rootPName = s.productName || s.product || '';
+                        if (!pName || isProductMatch(pName, rootPName)) {
+                            return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
+                        }
+                        return sum;
                     }
-                    return sum + (itemSubtotal || parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
                 }, 0);
 
             return rQty + bQty;
@@ -938,8 +941,28 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
 
         let billValueUsd = parseFloat(data.billValueUsd) || 0;
         if (billValueUsd === 0 && origProducts.length > 0) {
+            const productRecMap = origProducts.map(p => ({
+                product: p,
+                recKg: getProductReceivedQtyKg(p.productName)
+            }));
+            const totalProdRecKg = productRecMap.reduce((sum, item) => sum + item.recKg, 0);
+
             origProducts.forEach(p => {
-                const pRecQtyKg = getProductReceivedQtyKg(p.productName);
+                let pRecQtyKg = 0;
+                const pQtyKg = (parseFloat(p.quantity) || 0) * 1000;
+                if (totalProdRecKg > 0) {
+                    const foundRec = productRecMap.find(item => item.product === p)?.recKg || 0;
+                    if (hasCustomReceive && totalReceivedQtyKg > 0 && totalProdRecKg > 0) {
+                        pRecQtyKg = foundRec * (totalReceivedQtyKg / totalProdRecKg);
+                    } else {
+                        pRecQtyKg = foundRec;
+                    }
+                } else if (totalReceivedQtyKg > 0 && openingQtyKg > 0) {
+                    pRecQtyKg = totalReceivedQtyKg * (pQtyKg / openingQtyKg);
+                } else if (totalReceivedQtyKg > 0) {
+                    pRecQtyKg = totalReceivedQtyKg / origProducts.length;
+                }
+
                 const pRecQtyTons = pRecQtyKg / 1000;
                 let pRate = getRatePerTon(p.rate);
                 let pFreight = getFreightPerTon(p.freight);
@@ -7029,8 +7052,6 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         };
 
         const getProductReceivedQtyKg = (pName) => {
-            const cleanPName = (pName || '').trim().toLowerCase();
-
             // Stock Receipts
             const receiptsMap = {};
             allStockRecords
@@ -7047,14 +7068,14 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
                     if (s.entries && s.entries.length > 0) {
                         const matchingEntries = s.entries.filter(item => {
-                            const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
-                            return !cleanPName || itemPName === cleanPName;
+                            const itemPName = item.productName || s.productName || s.product || '';
+                            return !pName || isProductMatch(pName, itemPName);
                         });
                         const itemQty = matchingEntries.reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
                         receiptsMap[key] = (receiptsMap[key] || 0) + itemQty;
                     } else {
-                        const rootPName = (s.productName || s.product || '').trim().toLowerCase();
-                        if (!cleanPName || !rootPName || rootPName === cleanPName) {
+                        const rootPName = s.productName || s.product || '';
+                        if (!pName || isProductMatch(pName, rootPName)) {
                             const itemQty = parseNum(s.totalLcQuantity) || parseNum(s.inHouseQuantity) || parseNum(s.quantity);
                             if (!receiptsMap[key]) {
                                 receiptsMap[key] = itemQty;
@@ -7082,15 +7103,23 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                     return matchesLc && isValidStatus && isBorder;
                 })
                 .reduce((sum, s) => {
-                    const matchingItems = (s.items || []).filter(item => {
-                        const itemPName = (item.productName || s.productName || s.product || '').trim().toLowerCase();
-                        return !cleanPName || !itemPName || itemPName === cleanPName;
-                    });
-                    const itemSubtotal = matchingItems.reduce((iSum, item) => {
-                        const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
-                        return iSum + (brandSubtotal || parseNum(item.quantity));
-                    }, 0);
-                    return sum + (itemSubtotal || parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
+                    if (s.items && s.items.length > 0) {
+                        const matchingItems = s.items.filter(item => {
+                            const itemPName = item.productName || s.productName || s.product || '';
+                            return !pName || isProductMatch(pName, itemPName);
+                        });
+                        const itemSubtotal = matchingItems.reduce((iSum, item) => {
+                            const brandSubtotal = (item.brandEntries || []).reduce((bSum, b) => bSum + parseNum(b.quantity), 0);
+                            return iSum + (brandSubtotal || parseNum(item.quantity));
+                        }, 0);
+                        return sum + itemSubtotal;
+                    } else {
+                        const rootPName = s.productName || s.product || '';
+                        if (!pName || isProductMatch(pName, rootPName)) {
+                            return sum + (parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total));
+                        }
+                        return sum;
+                    }
                 }, 0);
 
             return rQty + bQty;
@@ -7106,8 +7135,28 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
         let billValueUsd = parseFloat(record.billValueUsd) || 0;
         if (billValueUsd === 0 && origProducts.length > 0) {
+            const productRecMap = origProducts.map(p => ({
+                product: p,
+                recKg: getProductReceivedQtyKg(p.productName)
+            }));
+            const totalProdRecKg = productRecMap.reduce((sum, item) => sum + item.recKg, 0);
+
             origProducts.forEach(p => {
-                const pRecQtyKg = getProductReceivedQtyKg(p.productName);
+                let pRecQtyKg = 0;
+                const pQtyKg = (parseFloat(p.quantity) || 0) * 1000;
+                if (totalProdRecKg > 0) {
+                    const foundRec = productRecMap.find(item => item.product === p)?.recKg || 0;
+                    if (hasCustomReceive && totalReceivedQtyKg > 0 && totalProdRecKg > 0) {
+                        pRecQtyKg = foundRec * (totalReceivedQtyKg / totalProdRecKg);
+                    } else {
+                        pRecQtyKg = foundRec;
+                    }
+                } else if (totalReceivedQtyKg > 0 && openingQtyKg > 0) {
+                    pRecQtyKg = totalReceivedQtyKg * (pQtyKg / openingQtyKg);
+                } else if (totalReceivedQtyKg > 0) {
+                    pRecQtyKg = totalReceivedQtyKg / origProducts.length;
+                }
+
                 const pRecQtyTons = pRecQtyKg / 1000;
                 let pRate = getRatePerTon(p.rate);
                 let pFreight = getFreightPerTon(p.freight);
@@ -7138,7 +7187,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             billValueUsd = pRecQtyTons * (pRate + pFreight);
         }
 
-        const adjustedTotalAmount = dollarRate > 0
+        const adjustedTotalAmount = dollarRate > 0 && billValueUsd > 0
             ? billValueUsd * dollarRate
             : (isEnabled && openingQtyKg > 0
                 ? openingValue + (actualAdjustmentQtyKg * (openingValue / openingQtyKg))
