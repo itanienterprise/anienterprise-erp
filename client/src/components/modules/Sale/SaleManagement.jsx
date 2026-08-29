@@ -122,6 +122,9 @@ const SaleManagement = ({
             } else if (isEditReq) {
                 setIsEditRequestedOnly(true);
                 setIsRequestedOnly(false);
+            } else {
+                setIsRequestedOnly(false);
+                setIsEditRequestedOnly(false);
             }
         }
 

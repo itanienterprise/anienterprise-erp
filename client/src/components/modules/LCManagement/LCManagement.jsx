@@ -5056,6 +5056,8 @@ const ReportDropdown = React.memo(({ onGeneralReport, onBillReport }) => {
 });
 
 const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNotif }) => {
+    const [localHighlightId, setLocalHighlightId] = useState(null);
+    const activeHighlightId = highlightId || localHighlightId;
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     
     const [lcRecords, setLcRecords] = useState([]);
@@ -5080,30 +5082,33 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     }, [isRequestedNotif]);
 
     useEffect(() => {
-        if (!highlightId) return;
+        if (!activeHighlightId) return;
 
-        const cleanH = String(highlightId).toLowerCase().trim();
-        const targetItem = lcRecords.find(item => 
-            (item.lcNo && String(item.lcNo).toLowerCase().trim() === cleanH) ||
-            String(item._id) === cleanH
-        );
+        const cleanH = String(activeHighlightId).toLowerCase().trim();
+        const cleanHDigits = cleanH.replace(/\D/g, '');
+        const targetItem = lcRecords.find(item => {
+            const lcStr = String(item.lcNo || '').toLowerCase().trim();
+            const lcDigits = lcStr.replace(/\D/g, '');
+            const idStr = String(item._id || '').toLowerCase().trim();
+            return lcStr === cleanH || (cleanHDigits && lcDigits === cleanHDigits) || idStr === cleanH;
+        });
 
         if (targetItem) {
             const isReq = (targetItem.status || '').toLowerCase().includes('requested');
-            if (isReq) {
-                setIsRequestedOnly(true);
-            }
+            setIsRequestedOnly(isReq);
         }
 
         const scrollToRow = () => {
-            if (!highlightId) return false;
-            const target = String(highlightId).trim().toLowerCase();
+            if (!activeHighlightId) return false;
+            const target = String(activeHighlightId).trim().toLowerCase();
+            const targetDigits = target.replace(/\D/g, '');
             const keys = Object.keys(rowRefs.current);
             const matchedKey = keys.find(k => {
                 const cleanK = k.trim().toLowerCase();
-                return cleanK === target || cleanK.includes(target) || target.includes(cleanK);
+                const cleanKDigits = cleanK.replace(/\D/g, '');
+                return cleanK === target || (targetDigits && cleanKDigits === targetDigits) || cleanK.includes(target) || target.includes(cleanK);
             });
-            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            const el = matchedKey ? rowRefs.current[matchedKey] : (rowRefs.current[activeHighlightId] || (targetDigits && rowRefs.current[targetDigits]));
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return true;
@@ -5120,7 +5125,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             }
         }, 250);
         return () => clearTimeout(t1);
-    }, [highlightId, lcRecords]);
+    }, [activeHighlightId, lcRecords]);
     const [isLoading, setIsLoading] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -6107,7 +6112,10 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                     addNotification(
                         'LC Record Updated',
                         `LC No: ${formData.lcNo} has been updated by ${currentUser?.name || currentUser?.username}.`,
-                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry'],
+                        [],
+                        false,
+                        'lc-management-section'
                     );
                 }
 
@@ -6120,14 +6128,23 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                     addNotification(
                         'New LC Opened',
                         `A new LC (No: ${formData.lcNo}) has been opened for ${formData.importerName} by ${currentUser?.name || currentUser?.username}.`,
-                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry'],
+                        [],
+                        false,
+                        'lc-management-section'
                     );
                 }
 
                 addNotification?.('New LC record created successfully', 'success');
             }
+            const savedLcNo = formData.lcNo || editingRecord?.lcNo;
+            const savedId = editingId;
             resetForm();
-            fetchInitialData();
+            await fetchInitialData();
+            if (savedLcNo || savedId) {
+                setLocalHighlightId(savedLcNo || savedId);
+                setTimeout(() => setLocalHighlightId(null), 6000);
+            }
         } catch (error) {
             console.error('Error saving LC record:', error);
             addNotification?.('Failed to save LC record', 'error');
@@ -10554,19 +10571,29 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         return (
                                             <React.Fragment key={record._id ? `${record._id}_${index}` : index}>
                                                 <tr className={`hover:bg-gray-50/50 transition-colors border-b border-gray-50 group ${
-    highlightId && (
-        String(record._id) === String(highlightId) ||
-        (record.lcNo && String(record.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+    activeHighlightId && (
+        String(record._id) === String(activeHighlightId) ||
+        (record.lcNo && (
+            String(record.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() ||
+            String(record.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '')
+        ))
     ) ? "notif-row-highlight" : ""
 }`}
 ref={el => {
-    if (record.lcNo) rowRefs.current[record.lcNo] = el;
+    if (record.lcNo) {
+        rowRefs.current[record.lcNo] = el;
+        const digits = String(record.lcNo).replace(/\D/g, '');
+        if (digits) rowRefs.current[digits] = el;
+    }
     if (record._id) rowRefs.current[record._id] = el;
 }}
 style={
-    highlightId && (
-        String(record._id) === String(highlightId) ||
-        (record.lcNo && String(record.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+    activeHighlightId && (
+        String(record._id) === String(activeHighlightId) ||
+        (record.lcNo && (
+            String(record.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() ||
+            String(record.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '')
+        ))
     ) ? { borderLeft: '5px solid #f59e0b' } : undefined
 }>
                                                     <td className="px-2 py-3 text-sm font-medium text-gray-400 whitespace-nowrap">{index + 1}</td>

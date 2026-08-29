@@ -8,7 +8,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 
-const TransferManagement = ({ currentUser, addNotification }) => {
+const TransferManagement = ({ currentUser, addNotification, highlightId, isRequestedNotif }) => {
     const canDelete = hasPermission(currentUser, 'warehouse', 'delete') || hasPermission(currentUser, 'transfer', 'delete');
     const canTransfer = hasPermission(currentUser, 'stock', 'special') || hasPermission(currentUser, 'transfer', 'add') || hasPermission(currentUser, 'warehouse', 'edit');
     const canApprove = hasPermission(currentUser, 'transfer', 'approve') || hasPermission(currentUser, 'warehouse', 'approve') || currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
@@ -28,6 +28,52 @@ const TransferManagement = ({ currentUser, addNotification }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
     const [viewingTransfer, setViewingTransfer] = useState(null);
+
+    const rowRefs = useRef({});
+
+    useEffect(() => {
+        if (!highlightId) return;
+
+        const cleanH = String(highlightId).toLowerCase().trim();
+        const targetItem = (transferLogs || []).find(t => 
+            String(t._id) === cleanH ||
+            (t.truckNo && String(t.truckNo).toLowerCase().trim() === cleanH) ||
+            (t.gatePassNo && String(t.gatePassNo).toLowerCase().trim() === cleanH) ||
+            (t.lcNo && String(t.lcNo).toLowerCase().trim() === cleanH)
+        );
+
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase() === 'requested';
+            setIsRequestedOnly(isReq);
+        } else if (isRequestedNotif) {
+            setIsRequestedOnly(true);
+        } else {
+            setIsRequestedOnly(false);
+        }
+
+        const scrollToRow = () => {
+            if (!highlightId) return false;
+            const target = String(highlightId).trim().toLowerCase();
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => k.trim().toLowerCase() === target || k.trim().toLowerCase().includes(target) || target.includes(k.trim().toLowerCase()));
+            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+
+        const t1 = setTimeout(() => {
+            if (!scrollToRow()) {
+                const t2 = setTimeout(() => {
+                    if (!scrollToRow()) { setSearchQuery(""); setTimeout(scrollToRow, 300); }
+                }, 700);
+                return () => clearTimeout(t2);
+            }
+        }, 250);
+        return () => clearTimeout(t1);
+    }, [highlightId, transferLogs]);
 
     const requestedCount = useMemo(() => (transferLogs || []).filter(t => t.status === 'Requested').length, [transferLogs]);
 
@@ -1152,8 +1198,25 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                                         const bagVal = parseFloat(item.transferPkt ?? item.whPkt ?? item.inHousePacket ?? 0);
                                         const qtyVal = parseFloat(item.transferQty ?? item.whQty ?? item.inHouseQuantity ?? 0);
 
+                                        const isHighlighted = highlightId && (
+                                            String(item._id) === String(highlightId) ||
+                                            (item.truckNo && String(item.truckNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                            (item.gatePassNo && String(item.gatePassNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim()) ||
+                                            (item.lcNo && String(item.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())
+                                        );
+
                                         return (
-                                            <tr key={idx} className="hover:bg-blue-50/40 transition-colors group">
+                                            <tr 
+                                                key={idx} 
+                                                className={`hover:bg-blue-50/40 transition-colors group ${isHighlighted ? 'notif-row-highlight' : ''}`}
+                                                ref={el => {
+                                                    if (item._id) rowRefs.current[item._id] = el;
+                                                    if (item.truckNo) rowRefs.current[item.truckNo] = el;
+                                                    if (item.gatePassNo) rowRefs.current[item.gatePassNo] = el;
+                                                    if (item.lcNo) rowRefs.current[item.lcNo] = el;
+                                                }}
+                                                style={isHighlighted ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                            >
                                                 <td className="py-3 px-4 font-bold text-gray-900 whitespace-nowrap">
                                                     {formatDate(item.date || item.createdAt)}
                                                 </td>

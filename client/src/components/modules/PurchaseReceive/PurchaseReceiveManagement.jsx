@@ -22,9 +22,11 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         const targetItem = purchaseReceives.find(p => p.purchaseReceiveNo === highlightId || p.purchaseNo === highlightId || p._id === highlightId);
         if (targetItem) {
             const isReq = (targetItem.status || '').toLowerCase() === 'requested';
-            if (isReq) {
-                setIsRequestedOnly(true);
-            }
+            setIsRequestedOnly(isReq);
+        } else if (isRequestedNotif) {
+            setIsRequestedOnly(true);
+        } else {
+            setIsRequestedOnly(false);
         }
 
         const scrollToRow = () => {

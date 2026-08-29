@@ -172,6 +172,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             } else if (isEditReq) {
                 setIsEditRequestedOnly(true);
                 setIsRequestedOnly(false);
+            } else {
+                setIsRequestedOnly(false);
+                setIsEditRequestedOnly(false);
             }
         }
 

@@ -173,6 +173,9 @@ const PayToCustomer = ({ addNotification, currentUser: propCurrentUser, refreshP
             } else if (isEditReq) {
                 setIsEditRequestedOnly(true);
                 setIsRequestedOnly(false);
+            } else {
+                setIsRequestedOnly(false);
+                setIsEditRequestedOnly(false);
             }
         }
 

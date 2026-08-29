@@ -484,46 +484,53 @@ function LCReceive({
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
+    const [localHighlightId, setLocalHighlightId] = useState(null);
+    const activeHighlightId = highlightId || localHighlightId;
     const rowRefs = useRef({});
-        useEffect(() => {
-        if (!highlightId) return;
 
-        const target = String(highlightId).trim().toLowerCase();
+    useEffect(() => {
+        if (!activeHighlightId) return;
+
+        const target = String(activeHighlightId).trim().toLowerCase();
+        const targetDigits = target.replace(/\D/g, '');
 
         // Find the matching grouped record — check top-level lcNo AND entry-level lcNo
-        const targetItem = lcReceiveRecords.find(item =>
-            (item.lcNo && (
-                String(item.lcNo).toLowerCase().trim() === target ||
-                target.includes(String(item.lcNo).toLowerCase().trim()) ||
-                String(item.lcNo).toLowerCase().includes(target)
-            )) ||
-            String(item._id) === String(highlightId) ||
-            (item.entries && item.entries.some(e =>
-                e.lcNo && (
-                    String(e.lcNo).toLowerCase().trim() === target ||
-                    target.includes(String(e.lcNo).toLowerCase().trim()) ||
-                    String(e.lcNo).toLowerCase().includes(target)
-                )
-            ))
-        );
+        const targetItem = lcReceiveRecords.find(item => {
+            const lcStr = String(item.lcNo || '').toLowerCase().trim();
+            const lcDigits = lcStr.replace(/\D/g, '');
+            const idStr = String(item._id || '').toLowerCase().trim();
+            const hasEntryMatch = item.entries && item.entries.some(e => {
+                const eLc = String(e.lcNo || '').toLowerCase().trim();
+                const eDigits = eLc.replace(/\D/g, '');
+                return eLc === target || (targetDigits && eDigits === targetDigits) || target.includes(eLc) || eLc.includes(target);
+            });
+            const hasIdMatch = item.allIds && item.allIds.some(id => String(id) === String(activeHighlightId));
+            return lcStr === target || (targetDigits && lcDigits === targetDigits) || idStr === String(activeHighlightId) || target.includes(lcStr) || lcStr.includes(target) || hasEntryMatch || hasIdMatch;
+        });
 
         if (targetItem) {
             // Use the ACTUAL record status — not the notification flag
-            const isReq = (targetItem.status || '').toLowerCase().includes('requested');
+            const st = (targetItem.status || targetItem.entries?.[0]?.status || '').toLowerCase();
+            const isReq = st.includes('requested') && !st.includes('stock') && !st.includes('accept');
             setIsRequestedOnly(isReq);
         } else if (isRequestedNotif) {
             // Fallback to notification flag only if record not yet found (data still loading)
             setIsRequestedOnly(true);
+        } else {
+            setIsRequestedOnly(false);
         }
 
         const scrollToRow = () => {
-            if (!highlightId) return false;
+            if (!activeHighlightId) return false;
+            const target = String(activeHighlightId).trim().toLowerCase();
+            const targetDigits = target.replace(/\D/g, '');
             const keys = Object.keys(rowRefs.current);
             const matchedKey = keys.find(k => {
                 const cleanK = k.trim().toLowerCase();
-                return cleanK === target || cleanK.includes(target) || target.includes(cleanK);
+                const cleanKDigits = cleanK.replace(/\D/g, '');
+                return cleanK === target || (targetDigits && cleanKDigits === targetDigits) || cleanK.includes(target) || target.includes(cleanK);
             });
-            const el = matchedKey ? rowRefs.current[matchedKey] : rowRefs.current[highlightId];
+            const el = matchedKey ? rowRefs.current[matchedKey] : (rowRefs.current[activeHighlightId] || (targetDigits && rowRefs.current[targetDigits]));
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return true;
@@ -540,7 +547,7 @@ function LCReceive({
             }
         }, 250);
         return () => clearTimeout(t1);
-    }, [highlightId, lcReceiveRecords]);
+    }, [activeHighlightId, lcReceiveRecords]);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [lcRecords, setLcRecords] = useState([]);
@@ -1708,7 +1715,11 @@ function LCReceive({
 
                 await addNotification(
                     'New LC Received',
-                    `${dateStr} | ${timeStr} | ${employeeName} has requested new lc receive entry (${stockFormData.lcNo})`
+                    `${dateStr} | ${timeStr} | ${employeeName} has requested new lc receive entry (${stockFormData.lcNo})`,
+                    ['admin', 'incharge', 'sales manager'],
+                    [],
+                    false,
+                    'lc-entry-section'
                 );
             } else if (addNotification && editingId && (stockFormData.status || '').toLowerCase().includes('requested')) {
                 const now = new Date();
@@ -1778,9 +1789,14 @@ function LCReceive({
                     'LC Receive Entry Updated',
                     `${dateStr} | ${timeStr} | ${employeeName} has edited the requested LC receive entry (${stockFormData.lcNo})${changeText}`,
                     targetRoles,
-                    targetUsers
+                    targetUsers,
+                    false,
+                    'lc-entry-section'
                 );
             }
+
+            const savedLcNo = stockFormData.lcNo;
+            const savedId = editingId;
 
             setSubmitStatus('success');
             setTimeout(() => {
@@ -1789,6 +1805,10 @@ function LCReceive({
                 setSubmitStatus(null);
                 if (fetchStockRecords) fetchStockRecords();
                 fetchWarehouses(); // Refresh warehouse stock display immediately
+                if (savedLcNo || savedId) {
+                    setLocalHighlightId(savedLcNo || savedId);
+                    setTimeout(() => setLocalHighlightId(null), 6000);
+                }
             }, 1500);
 
         } catch (error) {
@@ -4351,28 +4371,36 @@ function LCReceive({
                                                     <tr
     key={entry.groupedKey}
     className={`transition-colors duration-200 cursor-pointer select-none ${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} ${
-        highlightId && (
-            (entry.lcNo && (String(entry.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(entry.lcNo).toLowerCase().trim()) || String(entry.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim()))) ||
-            (entry.entries && entry.entries.some(e => e.lcNo && (String(e.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(e.lcNo).toLowerCase().trim()) || String(e.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim())))) ||
-            (entry.allIds && entry.allIds.some(id => String(id) === String(highlightId))) ||
-            (String(entry.groupedKey || '').toLowerCase().includes(String(highlightId).toLowerCase().trim()))
+        activeHighlightId && (
+            (entry.lcNo && (String(entry.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() || String(entry.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '') || String(activeHighlightId).toLowerCase().includes(String(entry.lcNo).toLowerCase().trim()) || String(entry.lcNo).toLowerCase().includes(String(activeHighlightId).toLowerCase().trim()))) ||
+            (entry.entries && entry.entries.some(e => e.lcNo && (String(e.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() || String(e.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '') || String(activeHighlightId).toLowerCase().includes(String(e.lcNo).toLowerCase().trim()) || String(e.lcNo).toLowerCase().includes(String(activeHighlightId).toLowerCase().trim())))) ||
+            (entry.allIds && entry.allIds.some(id => String(id) === String(activeHighlightId))) ||
+            (String(entry.groupedKey || '').toLowerCase().includes(String(activeHighlightId).toLowerCase().trim()))
         ) ? 'notif-row-highlight' : ''
     }`}
     ref={el => {
-        if (entry.lcNo) rowRefs.current[entry.lcNo] = el;
+        if (entry.lcNo) {
+            rowRefs.current[entry.lcNo] = el;
+            const digits = String(entry.lcNo).replace(/\D/g, '');
+            if (digits) rowRefs.current[digits] = el;
+        }
         if (entry.groupedKey) rowRefs.current[entry.groupedKey] = el;
         if (entry.entries) {
             entry.entries.forEach(e => {
-                if (e.lcNo) rowRefs.current[e.lcNo] = el;
+                if (e.lcNo) {
+                    rowRefs.current[e.lcNo] = el;
+                    const digits = String(e.lcNo).replace(/\D/g, '');
+                    if (digits) rowRefs.current[digits] = el;
+                }
                 if (e._id) rowRefs.current[e._id] = el;
             });
         }
     }}
     style={
-        highlightId && (
-            (entry.lcNo && (String(entry.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(entry.lcNo).toLowerCase().trim()) || String(entry.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim()))) ||
-            (entry.entries && entry.entries.some(e => e.lcNo && (String(e.lcNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim() || String(highlightId).toLowerCase().includes(String(e.lcNo).toLowerCase().trim()) || String(e.lcNo).toLowerCase().includes(String(highlightId).toLowerCase().trim())))) ||
-            (entry.allIds && entry.allIds.some(id => String(id) === String(highlightId)))
+        activeHighlightId && (
+            (entry.lcNo && (String(entry.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() || String(entry.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '') || String(activeHighlightId).toLowerCase().includes(String(entry.lcNo).toLowerCase().trim()) || String(entry.lcNo).toLowerCase().includes(String(activeHighlightId).toLowerCase().trim()))) ||
+            (entry.entries && entry.entries.some(e => e.lcNo && (String(e.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() || String(e.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '') || String(activeHighlightId).toLowerCase().includes(String(e.lcNo).toLowerCase().trim()) || String(e.lcNo).toLowerCase().includes(String(activeHighlightId).toLowerCase().trim())))) ||
+            (entry.allIds && entry.allIds.some(id => String(id) === String(activeHighlightId)))
         ) ? { borderLeft: '5px solid #f59e0b' } : undefined
     }
     onMouseDown={() => startLongPress && startLongPress(entry.groupedKey)}

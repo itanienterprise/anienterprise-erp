@@ -40,6 +40,31 @@ const OrderManagement = ({
     const rowRefs = useRef({});
     useEffect(() => {
         if (!highlightId) return;
+
+        const cleanH = String(highlightId).toLowerCase().trim();
+        const targetItem = sales.find(s => 
+            (s.invoiceNo && String(s.invoiceNo).toLowerCase().trim() === cleanH) ||
+            (s.orderNo && String(s.orderNo).toLowerCase().trim() === cleanH) ||
+            String(s._id) === cleanH
+        );
+        if (targetItem) {
+            const isReq = (targetItem.status || '').toLowerCase() === 'requested';
+            const isEditReq = (targetItem.isEdited === true || targetItem.isEdited === 'true') && !isReq;
+            if (isReq) {
+                setIsRequestedOnly(true);
+                setIsEditRequestedOnly(false);
+            } else if (isEditReq) {
+                setIsEditRequestedOnly(true);
+                setIsRequestedOnly(false);
+            } else {
+                setIsRequestedOnly(false);
+                setIsEditRequestedOnly(false);
+            }
+        } else if (isRequestedNotif) {
+            setIsRequestedOnly(true);
+            setIsEditRequestedOnly(false);
+        }
+
         const scrollToRow = () => {
             if (!highlightId) return false;
             const target = String(highlightId).trim().toLowerCase();
@@ -61,7 +86,7 @@ const OrderManagement = ({
             }
         }, 250);
         return () => clearTimeout(t1);
-    }, [highlightId]);
+    }, [highlightId, sales]);
 
 
     // --- Permission Checks ---

@@ -34,8 +34,9 @@ const TITLE_TO_VIEW = [
     // IP Record
     { pattern: /\bip\b/i, view: 'ip-section' },
 
-    // LC Receive
-    { pattern: /\blc\s+receive\b/i, view: 'lc-entry-section' },
+    // LC Receive (matches "lc receive", "lc received", "lc receiving", "receive lc", etc.)
+    { pattern: /\blc\s*receiv/i, view: 'lc-entry-section' },
+    { pattern: /\breceiv.*?lc\b/i, view: 'lc-entry-section' },
 
     // LC Management / Open
     { pattern: /\blc\b/i, view: 'lc-management-section' },
@@ -201,22 +202,31 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
         const view = resolveLink(notif);
         if (view && onNavigate) {
             const highlightId = extractHighlightId(notif);
-            const titleStr = typeof notif.title === 'string' ? notif.title : (notif.title?.title || notif.title?.message || '');
-            const msgStr = typeof notif.message === 'string' ? notif.message : (notif.message?.message || '');
-            const titleMsg = (titleStr + ' ' + msgStr).toLowerCase();
+            const titleStr = (typeof notif.title === 'string' ? notif.title : (notif.title?.title || notif.title?.message || '')).trim().toLowerCase();
+            const msgStr = (typeof notif.message === 'string' ? notif.message : (notif.message?.message || '')).trim().toLowerCase();
+            const combined = titleStr + ' ' + msgStr;
 
-            // If action is already approved / completed / adjusted / rejected, do not open request view
-            const isCompletedOrApproved = /approved\s+successfully|has\s+been\s+approved|payment\s+approved|receipt\s+approved|collection\s+approved|adjusted|rejected|deleted/i.test(titleMsg) && !/pending|1st\s+approval|awaiting/i.test(titleMsg);
+            // 1. If it contains explicit acceptance, approval, completion, in stock, or rejection, it is NOT requested
+            const isAcceptedOrApproved = 
+                /\b(?:accepted|approved|completed|in stock|closed|delivered|paid|settled|rejected)\b/i.test(titleStr) ||
+                /\bhas\s+(?:accepted|approved|completed|rejected)\b/i.test(msgStr) ||
+                /\b(?:approved successfully|accepted successfully|in stock)\b/i.test(combined);
 
-            const isRequested = !isCompletedOrApproved && (
-                /request/i.test(titleMsg) ||
-                /created/i.test(titleMsg) ||
-                /new/i.test(titleMsg) ||
-                /pending/i.test(titleMsg) ||
-                /awaiting/i.test(titleMsg) ||
-                /ord/i.test(titleMsg) ||
-                view === 'order-sale-section'
-            );
+            let isRequested = false;
+            if (isAcceptedOrApproved) {
+                // Exception: only if it explicitly mentions pending further approval like '1st approval' or 'awaiting final approval'
+                if (/\b(?:pending|awaiting)\s+(?:2nd|final|approval)\b/i.test(combined) || /\b1st\s+approval\s+completed\b/i.test(combined)) {
+                    isRequested = true;
+                } else {
+                    isRequested = false;
+                }
+            } else {
+                // 2. Check if the notification represents an active request or pending approval
+                isRequested = 
+                    /\b(?:request|requested|awaiting|pending|needs approval)\b/i.test(titleStr) ||
+                    /\b(?:has requested|awaiting approval|pending approval|request submitted)\b/i.test(msgStr);
+            }
+
             onNavigate(view, highlightId, isRequested);
         }
     };
