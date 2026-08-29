@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { renderNonIslamiBankApplication, generateNonIslamiBankApplicationPDF } from './nonIslamiBankApplicationGenerator';
 
 // Helper function for date formatting (DD/MM/YYYY)
 const formatDate = (dateStr) => {
@@ -21,7 +22,29 @@ const formatDate = (dateStr) => {
  * Format Constants
  */
 export const APPLICATION_FORMATS = {
-    ISLAMI_BANK: 'Islami Bank Bangladesh PLC'
+    ISLAMI_BANK: 'Islami Bank Bangladesh PLC',
+    NON_ISLAMI_BANK: 'Non-Islami Bank Bangladesh PLC'
+};
+
+// Re-export non-Islami bank generator functions
+export { renderNonIslamiBankApplication, generateNonIslamiBankApplicationPDF };
+
+/**
+ * Check if the record is intended for Islami Bank Bangladesh PLC
+ * @param {Object} record - PI Record data
+ * @returns {boolean}
+ */
+export const isIslamiBank = (record) => {
+    if (!record) return false;
+    const formatName = (record.applicationFormat || '').toLowerCase().trim();
+    if (formatName.includes('non-islami') || formatName.includes('general')) {
+        return false;
+    }
+    if (formatName.includes('islami')) {
+        return true;
+    }
+    const bankName = (record.bankName || '').toLowerCase().trim();
+    return bankName.includes('islami') || bankName.includes('ibbl');
 };
 
 /**
@@ -136,20 +159,18 @@ export const renderIslamiBankApplication = (doc, record) => {
 
 /**
  * Dispatcher: Render the Bank Application Letter content based on Bank / Format
- * Defaults to Islami Bank Bangladesh PLC format
+ * If bank is Islami Bank Bangladesh PLC -> renderIslamiBankApplication
+ * If bank is any non-Islami bank -> renderNonIslamiBankApplication
  * @param {jsPDF} doc - jsPDF instance
  * @param {Object} record - PI Record data
  */
 export const renderBankApplicationContent = (doc, record) => {
     if (!doc || !record) return;
 
-    // Can branch into different templates by record.bankName or record.applicationFormat
-    const bankName = (record.bankName || '').toLowerCase();
-    const formatName = (record.applicationFormat || '').toLowerCase();
-
-    if (formatName.includes('islami') || bankName.includes('islami') || true) {
-        // Default to Islami Bank Bangladesh PLC format
+    if (isIslamiBank(record)) {
         renderIslamiBankApplication(doc, record);
+    } else {
+        renderNonIslamiBankApplication(doc, record);
     }
 };
 
@@ -166,6 +187,7 @@ export const appendBankApplicationPage = (doc, record) => {
 
 /**
  * Generate Bank Application Letter PDF standalone for a Proforma Invoice (PI)
+ * Automatically detects whether to use Islami Bank or Non-Islami Bank template
  * @param {Object} record - PI Record data
  */
 export const generateBankApplicationPDF = (record) => {
@@ -183,3 +205,24 @@ export const generateBankApplicationPDF = (record) => {
     const blobURL = URL.createObjectURL(pdfOutput);
     window.open(blobURL, '_blank');
 };
+
+/**
+ * Generate Islami Bank Bangladesh PLC Application standalone
+ * @param {Object} record - PI Record data
+ */
+export const generateIslamiBankApplicationPDF = (record) => {
+    if (!record) return;
+
+    const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+    });
+
+    renderIslamiBankApplication(doc, record);
+
+    const pdfOutput = doc.output('blob');
+    const blobURL = URL.createObjectURL(pdfOutput);
+    window.open(blobURL, '_blank');
+};
+
