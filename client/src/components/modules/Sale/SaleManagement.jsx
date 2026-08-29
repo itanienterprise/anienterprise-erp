@@ -2123,21 +2123,27 @@ const SaleManagement = ({
                     s.companyName?.toLowerCase().includes(query) ||
                     s.productName?.toLowerCase().includes(query) ||
                     resolveProductName(s.productName)?.toLowerCase().includes(query) ||
-                    s.brand?.toLowerCase().includes(query);
+                    s.brand?.toLowerCase().includes(query) ||
+                    (s.remarks || '').toLowerCase().includes(query);
 
                 if (matchesBasic) return true;
 
                 if (s.items && Array.isArray(s.items)) {
                     return s.items.some(item => {
+                        const pName = (item.productName || item.product || '').toLowerCase();
+                        const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
+                        const itemBrand = (item.brand || item.brandName || '').toLowerCase();
                         const itemLc = (item.lcNo || '').toLowerCase();
-                        const brandLcMatch = (item.brandEntries || []).some(be =>
-                            (be.lcNo || '').toLowerCase().includes(query)
+                        const brandEntriesMatch = (item.brandEntries || []).some(be =>
+                            (be.lcNo || '').toLowerCase().includes(query) ||
+                            (be.brand || be.brandName || '').toLowerCase().includes(query) ||
+                            (be.warehouseName || be.whName || '').toLowerCase().includes(query)
                         );
-                        return item.productName?.toLowerCase().includes(query) ||
-                            resolveProductName(item.productName)?.toLowerCase().includes(query) ||
-                            item.brand?.toLowerCase().includes(query) ||
+                        return pName.includes(query) ||
+                            resolvedPName.includes(query) ||
+                            itemBrand.includes(query) ||
                             itemLc.includes(query) ||
-                            brandLcMatch;
+                            brandEntriesMatch;
                     });
                 }
                 return false;
@@ -3224,10 +3230,11 @@ const SaleManagement = ({
                     const itemLcNo = (item.lcNo || item.lcNumber || item.lc_no || '').toLowerCase();
                     const brandLcMatch = (item.brandEntries || []).some(e =>
                         (e.lcNo || e.lcNumber || e.lc_no || '').toLowerCase().includes(q) ||
+                        (e.brand || e.brandName || '').toLowerCase().includes(q) ||
                         String(e.quantity || '').includes(q) || String(e.truck || '').includes(q) ||
                         String(e.unitPrice || '').includes(q) || String(e.totalAmount || '').includes(q)
                     );
-                    return pName.includes(q) || resolvedPName.includes(q) || itemLcNo.includes(q) || brandLcMatch;
+                    return pName.includes(q) || resolvedPName.includes(q) || itemLcNo.includes(q) || (item.brand || '').toLowerCase().includes(q) || brandLcMatch;
                 });
 
                 const matches = date.includes(q) || lcNo.includes(q) || invNo.includes(q) || importer.includes(q) ||
@@ -3241,18 +3248,21 @@ const SaleManagement = ({
                 const challan = (sale.challanNo || '').toLowerCase();
                 const truck = (sale.truckNo || '').toLowerCase();
                 const cname = (sale.companyName || sale.customerName || '').toLowerCase();
+                const remarks = (sale.remarks || '').toLowerCase();
                 const itemsMatch = (sale.items || []).some(item => {
                     const pName = (item.productName || item.product || '').toLowerCase();
+                    const resolvedPName = (resolveProductName(item.productName || item.product || '')).toLowerCase();
+                    const itemBrand = (item.brand || item.brandName || '').toLowerCase();
                     const itemLc = (item.lcNo || '').toLowerCase();
-                    const brandLcMatch = (item.brandEntries || []).some(e =>
-                        (e.lcNo || '').toLowerCase().includes(q)
-                    );
                     const brandEntriesMatch = (item.brandEntries || []).some(e =>
+                        (e.lcNo || '').toLowerCase().includes(q) ||
+                        (e.brand || e.brandName || '').toLowerCase().includes(q) ||
+                        (e.warehouseName || e.whName || '').toLowerCase().includes(q) ||
                         String(e.quantity || '').includes(q) || String(e.unitPrice || '').includes(q) || String(e.totalAmount || '').includes(q)
                     );
-                    return pName.includes(q) || itemLc.includes(q) || brandLcMatch || brandEntriesMatch;
+                    return pName.includes(q) || resolvedPName.includes(q) || itemBrand.includes(q) || itemLc.includes(q) || brandEntriesMatch;
                 });
-                if (!inv.includes(q) && !lcNo.includes(q) && !challan.includes(q) && !truck.includes(q) && !cname.includes(q) && !itemsMatch) return false;
+                if (!inv.includes(q) && !lcNo.includes(q) && !challan.includes(q) && !truck.includes(q) && !cname.includes(q) && !remarks.includes(q) && !itemsMatch) return false;
             }
         }
         // Date range
@@ -3268,7 +3278,7 @@ const SaleManagement = ({
             const recordDate = new Date(sale.date);
             if (saleFilters.quickRange === 'weekly') {
                 // Running week: Monday to Sunday of current week
-                const dayOfWeek = now.getDay(); // 0=Sun,1=Mon,...,6=Sat
+                const dayOfWeek = now.getDay();
                 const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
                 const weekStart = new Date(now);
                 weekStart.setDate(now.getDate() + diffToMonday);
@@ -3292,11 +3302,6 @@ const SaleManagement = ({
         if (saleFilters.companyName) {
             const c = (sale.companyName || sale.customerName || '').toLowerCase();
             if (!c.includes(saleFilters.companyName.toLowerCase())) return false;
-        }
-        // Invoice or LC No
-        if (saleFilters.invoiceNo && saleType !== 'Border') {
-            const inv = (sale.invoiceNo || '').toLowerCase();
-            if (!inv.includes(saleFilters.invoiceNo.toLowerCase())) return false;
         }
         // Port
         if (saleFilters.port) {
@@ -3366,7 +3371,7 @@ const SaleManagement = ({
                             </div>
                             <input autoComplete="off"
                                 type="text"
-                                placeholder={saleType === 'Border' ? "Search invoice, customer, LC no..." : "Search invoice, customer..."}
+                                placeholder={saleType === 'Border' ? "Search invoice, customer, LC no, product, brand..." : "Search invoice, customer, product, brand, warehouse..."}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="sale-mgmt-search-input"

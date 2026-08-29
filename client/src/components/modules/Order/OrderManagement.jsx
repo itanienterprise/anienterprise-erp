@@ -1207,12 +1207,43 @@ const OrderManagement = ({
             // Field Filters
             if (saleFilters.companyName && (sale.companyName || sale.customerName || '').toLowerCase() !== saleFilters.companyName.toLowerCase()) return false;
             if (saleFilters.invoiceNo && (sale.invoiceNo || sale.orderNo || '').toLowerCase() !== saleFilters.invoiceNo.toLowerCase()) return false;
+            if (saleFilters.productName) {
+                const targetProd = saleFilters.productName.toLowerCase().trim();
+                const hasProd = (sale.items || []).some(item => {
+                    const pName = (item.productName || item.product || item.name || '').toLowerCase().trim();
+                    return pName === targetProd || pName.includes(targetProd);
+                });
+                if (!hasProd) return false;
+            }
+            if (saleFilters.brand) {
+                const targetBrand = saleFilters.brand.toLowerCase().trim();
+                const hasBrand = (sale.items || []).some(item => {
+                    const itemBrand = (item.brand || item.brandName || '').toLowerCase().trim();
+                    const entryBrand = (item.brandEntries || []).some(e => (e.brand || e.brandName || '').toLowerCase().trim() === targetBrand || (e.brand || e.brandName || '').toLowerCase().trim().includes(targetBrand));
+                    return itemBrand === targetBrand || itemBrand.includes(targetBrand) || entryBrand;
+                });
+                if (!hasBrand) return false;
+            }
 
             if (searchQuery) {
-                const q = searchQuery.toLowerCase();
+                const q = searchQuery.toLowerCase().trim();
                 const inv = (sale.invoiceNo || sale.orderNo || '').toLowerCase();
                 const cust = (sale.companyName || sale.customerName || '').toLowerCase();
-                return inv.includes(q) || cust.includes(q);
+                const remarks = (sale.remarks || '').toLowerCase();
+
+                const matchesItems = (sale.items || []).some(item => {
+                    const pName = (item.productName || item.product || item.name || '').toLowerCase();
+                    const itemBrand = (item.brand || item.brandName || '').toLowerCase();
+                    const brandEntriesMatch = (item.brandEntries || []).some(e => {
+                        const bName = (e.brand || e.brandName || '').toLowerCase();
+                        const whName = (e.warehouseName || e.whName || e.warehouse || '').toLowerCase();
+                        const lcNo = (e.lcNo || '').toLowerCase();
+                        return bName.includes(q) || whName.includes(q) || lcNo.includes(q);
+                    });
+                    return pName.includes(q) || itemBrand.includes(q) || brandEntriesMatch;
+                });
+
+                return inv.includes(q) || cust.includes(q) || remarks.includes(q) || matchesItems;
             }
 
             return true;
@@ -1328,7 +1359,7 @@ const OrderManagement = ({
                             <input
                                 autoComplete="off"
                                 type="text"
-                                placeholder="Search order no, customer..."
+                                placeholder="Search order no, customer, product, brand, warehouse..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="sale-mgmt-search-input"
