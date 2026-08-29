@@ -16,7 +16,7 @@ export const isLcMatch = (targetLc, filterLc) => {
     const cleanTarget = rawTarget.replace(/^(lc|pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
     const cleanFilter = rawFilter.replace(/^(lc|pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
 
-    if (cleanTarget && cleanFilter && cleanTarget === cleanFilter) return true;
+    if (cleanTarget && cleanFilter && (cleanTarget === cleanFilter || cleanTarget.endsWith(cleanFilter) || cleanFilter.endsWith(cleanTarget))) return true;
     return false;
 };
 
@@ -526,7 +526,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const itemLc = (whItem.lcNo || '').trim().toLowerCase();
         const pKey = (whItem.productName || whItem.product || '').trim().toLowerCase();
         const bKey = (whItem.brand || '').trim().toLowerCase();
-        return lcRateMap[`${itemLc}_${pKey}_${bKey}`] || lcRateMap[`${pKey}_${bKey}`] || lcRateMap[itemLc] || 0;
+        if (itemLc && itemLc !== '-') {
+            return lcRateMap[`${itemLc}_${pKey}_${bKey}`] || lcRateMap[itemLc] || 0;
+        }
+        return 0;
     };
 
     // 2. Process Warehouse Records (Transfers)
@@ -612,7 +615,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const itemDateOnly = (item.date || '').split('T')[0];
         if (endDate && itemDateOnly > endDate) return false;
 
-        if (stockFilters.lcNo && (item.lcNo || '').trim() !== stockFilters.lcNo) return false;
+        if (stockFilters.lcNo && !isLcMatch(item.lcNo, stockFilters.lcNo)) return false;
         if (isWhFilter) {
             const filterWH = stockFilters.warehouse.trim().toLowerCase();
             const itemWH = (item.whName || item.warehouse || '').trim().toLowerCase();
@@ -650,8 +653,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         return true;
     });
 
-    // 4. Aggregation
-    const groupedStock = filteredRecords.reduce((acc, item) => {
+    // 4. Aggregation (FIFO: process oldest arrivals first so sales deplete older stock first)
+    const sortedFilteredRecords = [...filteredRecords].sort((a, b) => {
+        const dateA = a.date || a.createdAt || '';
+        const dateB = b.date || b.createdAt || '';
+        return dateA.localeCompare(dateB);
+    });
+
+    const groupedStock = sortedFilteredRecords.reduce((acc, item) => {
         const key = (item.productName || item.product || 'Unknown').trim();
         const keyLower = key.toLowerCase();
         const itemDateOnly = (item.date || '').split('T')[0];
@@ -683,6 +692,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             acc[key].brands[subKey] = {
                 brand: (item.brand || 'No Brand').trim(),
                 quality: item.quality || '-',
+                date: item.date || item.createdAt || '',
                 openingPacket: 0, openingQuantity: 0,
                 periodArrivalPacket: 0, periodArrivalQuantity: 0,
                 salePacket: 0, saleQuantity: 0,
@@ -985,7 +995,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const beLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim();
                 const bePrice = parseFloat(be.purchasedPrice) || 0;
  
-                if (stockFilters.lcNo && beLc.toLowerCase() !== stockFilters.lcNo.toLowerCase()) return;
+                if (stockFilters.lcNo && !isLcMatch(beLc, stockFilters.lcNo)) return;
                 if (stockSearchQuery) {
                     const q = stockSearchQuery.toLowerCase();
                     const matchesQuery = sProdName.toLowerCase().includes(q) ||
@@ -1041,7 +1051,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                             const damageLc = (damage.lcNo || '').trim().toLowerCase();
                             const stockLc = beLc.toLowerCase();
                             if (damageLc !== stockLc) return;
-                            if (stockFilters.lcNo && (damage.lcNo || '').trim().toLowerCase() !== stockFilters.lcNo.toLowerCase()) return;
+                            if (stockFilters.lcNo && !isLcMatch(damage.lcNo, stockFilters.lcNo)) return;
                             if (stockSearchQuery) {
                                 const q = stockSearchQuery.toLowerCase();
                                 const damageLc = (damage.lcNo || '').trim().toLowerCase();
@@ -1341,7 +1351,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const filterWH = stockFilters.warehouse.toLowerCase();
                 if (!dWh || (dWh !== filterWH && !dWh.includes(filterWH) && !filterWH.includes(dWh))) return;
             }
-            if (stockFilters.lcNo && (damage.lcNo || '').trim() !== stockFilters.lcNo) return;
+            if (stockFilters.lcNo && !isLcMatch(damage.lcNo, stockFilters.lcNo)) return;
             if (stockSearchQuery) {
                 const q = stockSearchQuery.toLowerCase();
                 const match = dProdName.includes(q) || dBrand.includes(q) || (damage.lcNo || '').toLowerCase().includes(q);

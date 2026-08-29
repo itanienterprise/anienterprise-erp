@@ -6,6 +6,7 @@ import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
+import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 
 const TransferManagement = ({ currentUser, addNotification }) => {
     const canDelete = hasPermission(currentUser, 'warehouse', 'delete') || hasPermission(currentUser, 'transfer', 'delete');
@@ -15,6 +16,8 @@ const TransferManagement = ({ currentUser, addNotification }) => {
     // States
     const [warehouseData, setWarehouseData] = useState([]);
     const [stockRecords, setStockRecords] = useState([]);
+    const [salesRecords, setSalesRecords] = useState([]);
+    const [damagesRecords, setDamagesRecords] = useState([]);
     const [products, setProducts] = useState([]);
     const [transferLogs, setTransferLogs] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -70,10 +73,12 @@ const TransferManagement = ({ currentUser, addNotification }) => {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const [whRes, stockRes, prodRes] = await Promise.all([
+            const [whRes, stockRes, prodRes, salesRes, damagesRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/warehouses`),
                 axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/products`)
+                axios.get(`${API_BASE_URL}/api/products`),
+                axios.get(`${API_BASE_URL}/api/sales`),
+                axios.get(`${API_BASE_URL}/api/damages`)
             ]);
 
             const rawWh = Array.isArray(whRes.data) ? whRes.data : [];
@@ -120,8 +125,33 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                 return { ...dec, _id: item._id };
             });
 
+            // Decrypt sales records
+            const rawSales = Array.isArray(salesRes.data) ? salesRes.data : [];
+            const decryptedSales = rawSales.map(item => {
+                let dec = item.data ? decryptData(item.data) : item;
+                if (typeof dec === 'string') {
+                    try { dec = decryptData(dec); } catch (e) { }
+                }
+                if (dec && typeof dec === 'object' && dec.data && typeof dec.data === 'string') {
+                    try { dec = decryptData(dec.data); } catch (e) { }
+                }
+                return { ...dec, _id: item._id, saleType: dec.saleType || item.saleType, invoiceNo: dec.invoiceNo || item.invoiceNo };
+            });
+
+            // Decrypt damages records
+            const rawDamages = Array.isArray(damagesRes?.data) ? damagesRes.data : [];
+            const decryptedDamages = rawDamages.map(item => {
+                let dec = item.data ? decryptData(item.data) : item;
+                if (typeof dec === 'string') {
+                    try { dec = decryptData(dec); } catch (e) { }
+                }
+                return { ...dec, _id: item._id };
+            });
+
             setWarehouseData(allDecryptedWh);
             setStockRecords(decryptedStock);
+            setSalesRecords(decryptedSales);
+            setDamagesRecords(decryptedDamages);
             setProducts(Array.isArray(prodRes.data) ? prodRes.data : []);
 
             // Sort logs: Requested items first, then date/createdAt desc
@@ -159,67 +189,68 @@ const TransferManagement = ({ currentUser, addNotification }) => {
         return Array.from(whSet).sort();
     }, [warehouseData, stockRecords]);
 
+    // Calculate source warehouse stock breakdown using centralized stock calculation
+    const sourceWarehouseStock = useMemo(() => {
+        const sourceWh = (formData.fromWh || '').trim();
+        if (!sourceWh) return [];
+
+        const res = calculateStockData(
+            stockRecords,
+            { warehouse: sourceWh, reportType: 'price' },
+            '',
+            warehouseData,
+            salesRecords,
+            products,
+            damagesRecords
+        );
+
+        return res?.displayRecords || [];
+    }, [formData.fromWh, stockRecords, warehouseData, salesRecords, products, damagesRecords]);
+
     // Available Products for Form
     const availableFormProducts = useMemo(() => {
-        const sourceWh = (formData.fromWh || '').trim().toLowerCase();
+        if (!formData.fromWh) {
+            return (products || []).map(p => p.name || p.productName).filter(Boolean).sort();
+        }
+
         const prodSet = new Set();
-
-        (warehouseData || []).forEach(w => {
-            const whName = (w.name || w.whName || w.warehouse || '').trim().toLowerCase();
-            const prodName = (w.productName || w.product || '').trim();
-            const qty = parseFloat(w.whQty ?? w.inHouseQuantity ?? w.quantity ?? 0);
-            const pkt = parseFloat(w.whPkt ?? w.inHousePacket ?? w.packet ?? 0);
-            if ((!sourceWh || whName === sourceWh || whName.includes(sourceWh)) && prodName && (qty > 0 || pkt > 0)) {
-                prodSet.add(prodName);
-            }
-        });
-
-        (stockRecords || []).forEach(s => {
-            const whName = (s.name || s.whName || s.warehouse || '').trim().toLowerCase();
-            const prodName = (s.productName || s.product || '').trim();
-            const qty = parseFloat(s.inHouseQuantity ?? s.inhouseQty ?? 0);
-            const pkt = parseFloat(s.inHousePacket ?? s.inhousePkt ?? 0);
-            if ((!sourceWh || whName === sourceWh || whName.includes(sourceWh)) && prodName && (qty > 0 || pkt > 0)) {
-                prodSet.add(prodName);
+        (sourceWarehouseStock || []).forEach(prod => {
+            const hasStock = (prod.brandList || []).some(b => (b.inHouseQuantity || 0) > 0.001 || (b.inHousePacket || 0) > 0.001);
+            if (hasStock && prod.productName) {
+                prodSet.add(prod.productName.trim());
             }
         });
 
         if (prodSet.size === 0) {
-            (products || []).forEach(p => { if (p.name || p.productName) prodSet.add(p.name || p.productName); });
+            (products || []).forEach(p => {
+                if (p.name || p.productName) prodSet.add(p.name || p.productName);
+            });
         }
 
         return Array.from(prodSet).sort();
-    }, [formData.fromWh, warehouseData, stockRecords, products]);
+    }, [formData.fromWh, sourceWarehouseStock, products]);
 
     // Available Brands for Form
     const availableFormBrands = useMemo(() => {
         const targetProd = (formData.productName || '').trim().toLowerCase();
         if (!targetProd) return [];
-        const sourceWh = (formData.fromWh || '').trim().toLowerCase();
 
         const brandMap = {};
+        const matchedProd = (sourceWarehouseStock || []).find(p => (p.productName || '').trim().toLowerCase() === targetProd);
 
-        const processItem = (item) => {
-            const whName = (item.name || item.whName || item.warehouse || '').trim().toLowerCase();
-            const prodName = (item.productName || item.product || '').trim().toLowerCase();
-            if (sourceWh && whName !== sourceWh && !whName.includes(sourceWh)) return;
-            if (prodName !== targetProd) return;
-
-            const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
-                ? item.brandEntries
-                : [{ brand: item.brand || '', packetSize: item.packetSize || 30, quantity: item.whQty ?? item.inHouseQuantity ?? item.quantity ?? 0 }];
-
-            brandEntries.forEach(be => {
-                const bName = (be.brand || item.brand || '').trim();
-                const pktSize = be.packetSize || item.packetSize || 30;
-                if (bName) {
-                    brandMap[bName.toLowerCase()] = { brand: bName, packetSize: pktSize };
+        if (matchedProd && matchedProd.brandList) {
+            matchedProd.brandList.forEach(b => {
+                const bName = (b.brand || '').trim();
+                const inHouseQty = b.inHouseQuantity || 0;
+                const inHousePkt = b.inHousePacket || 0;
+                if (bName && (inHouseQty > 0.001 || inHousePkt > 0.001)) {
+                    brandMap[bName.toLowerCase()] = {
+                        brand: bName,
+                        packetSize: b.packetSize || matchedProd.packetSize || 30
+                    };
                 }
             });
-        };
-
-        (warehouseData || []).forEach(processItem);
-        (stockRecords || []).forEach(processItem);
+        }
 
         // Fallback: If no brands found with stock, pull from products master list
         if (Object.keys(brandMap).length === 0) {
@@ -231,92 +262,72 @@ const TransferManagement = ({ currentUser, addNotification }) => {
             }
         }
 
-        return Object.values(brandMap);
-    }, [formData.fromWh, formData.productName, warehouseData, stockRecords, products]);
+        return Object.values(brandMap).sort((a, b) => a.brand.localeCompare(b.brand));
+    }, [formData.productName, sourceWarehouseStock, products]);
 
     // Available LCs for Form
     const availableFormLcs = useMemo(() => {
         const targetProd = (formData.productName || '').trim().toLowerCase();
         const targetBrand = (formData.brand || '').trim().toLowerCase();
         if (!targetProd) return [];
-        const sourceWh = (formData.fromWh || '').trim().toLowerCase();
 
         const lcSet = new Set();
         const prodLcSet = new Set();
 
-        const processItem = (item) => {
-            const whName = (item.name || item.whName || item.warehouse || '').trim().toLowerCase();
-            const prodName = (item.productName || item.product || '').trim().toLowerCase();
-            if (sourceWh && whName !== sourceWh && !whName.includes(sourceWh)) return;
-            if (prodName !== targetProd) return;
+        const matchedProd = (sourceWarehouseStock || []).find(p => (p.productName || '').trim().toLowerCase() === targetProd);
+        if (matchedProd && matchedProd.brandList) {
+            matchedProd.brandList.forEach(b => {
+                const bName = (b.brand || '').trim().toLowerCase();
+                const inHouseQty = b.inHouseQuantity || 0;
+                const inHousePkt = b.inHousePacket || 0;
+                const lc = (b.lcNo || '').trim();
 
-            const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
-                ? item.brandEntries
-                : [{ brand: item.brand || '', lcNo: item.lcNo || '' }];
-
-            brandEntries.forEach(be => {
-                const bName = (be.brand || item.brand || '').trim().toLowerCase();
-                const lcNo = (be.lcNo || item.lcNo || '').trim();
-                if (lcNo) {
-                    prodLcSet.add(lcNo);
+                if (lc && (inHouseQty > 0.001 || inHousePkt > 0.001)) {
+                    prodLcSet.add(lc);
                     if (!targetBrand || bName === targetBrand || bName.includes(targetBrand) || targetBrand.includes(bName)) {
-                        lcSet.add(lcNo);
+                        lcSet.add(lc);
                     }
                 }
             });
-        };
-
-        (warehouseData || []).forEach(processItem);
-        (stockRecords || []).forEach(processItem);
+        }
 
         const result = lcSet.size > 0 ? lcSet : prodLcSet;
         return Array.from(result).sort();
-    }, [formData.fromWh, formData.productName, formData.brand, warehouseData, stockRecords]);
+    }, [formData.productName, formData.brand, sourceWarehouseStock]);
 
     // Calculate Available Stock for Form
     const availableStock = useMemo(() => {
-        const sourceWh = (formData.fromWh || '').trim().toLowerCase();
+        const sourceWh = (formData.fromWh || '').trim();
         const targetProd = (formData.productName || '').trim().toLowerCase();
         const targetBrand = (formData.brand || '').trim().toLowerCase();
-        const targetLc = (formData.lcNo || '').trim().toLowerCase();
+        const targetLc = (formData.lcNo || '').trim();
 
-        if (!targetProd) return { bags: 0, qty: 0 };
+        if (!targetProd || !sourceWh) return { bags: 0, qty: 0 };
+
+        const matchedProd = (sourceWarehouseStock || []).find(p => (p.productName || '').trim().toLowerCase() === targetProd);
+        if (!matchedProd || !matchedProd.brandList) return { bags: 0, qty: 0 };
 
         let totalPkt = 0;
         let totalQty = 0;
 
-        const processItem = (item) => {
-            const whName = (item.name || item.whName || item.warehouse || '').trim().toLowerCase();
-            const prodName = (item.productName || item.product || '').trim().toLowerCase();
-            if (sourceWh && whName !== sourceWh && !whName.includes(sourceWh)) return;
-            if (prodName !== targetProd) return;
+        matchedProd.brandList.forEach(b => {
+            const bName = (b.brand || '').trim().toLowerCase();
+            const bLc = (b.lcNo || '').trim();
 
-            const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
-                ? item.brandEntries
-                : [{
-                    brand: item.brand || '',
-                    lcNo: item.lcNo || '',
-                    quantity: item.whQty ?? item.inHouseQuantity ?? item.quantity ?? 0,
-                    packet: item.whPkt ?? item.inHousePacket ?? item.packet ?? 0
-                }];
+            const brandMatch = !targetBrand || bName === targetBrand || bName.includes(targetBrand) || targetBrand.includes(bName);
+            const lcMatch = !targetLc || isLcMatch(bLc, targetLc);
 
-            brandEntries.forEach(be => {
-                const bName = (be.brand || item.brand || '').trim().toLowerCase();
-                const lcNo = (be.lcNo || item.lcNo || '').trim().toLowerCase();
+            if (brandMatch && lcMatch) {
+                totalPkt += (b.inHousePacket || 0);
+                totalQty += (b.inHouseQuantity || 0);
+            }
+        });
 
-                if ((!targetBrand || bName === targetBrand || bName.includes(targetBrand) || targetBrand.includes(bName)) &&
-                    (!targetLc || lcNo === targetLc || lcNo.includes(targetLc) || targetLc.includes(lcNo))) {
-                    totalPkt += parseFloat(be.packet ?? be.inHousePacket ?? be.whPkt ?? item.whPkt ?? item.inHousePacket ?? 0) || 0;
-                    totalQty += parseFloat(be.quantity ?? be.inHouseQuantity ?? be.whQty ?? item.whQty ?? item.inHouseQuantity ?? 0) || 0;
-                }
-            });
+        return {
+            bags: Math.round(totalPkt * 100) / 100,
+            qty: Math.round(totalQty * 100) / 100
         };
-
-        (warehouseData || []).forEach(processItem);
-        (stockRecords || []).forEach(processItem);
-
-        return { bags: Math.round(totalPkt * 100) / 100, qty: Math.round(totalQty * 100) / 100 };
-    }, [formData.fromWh, formData.productName, formData.brand, formData.lcNo, warehouseData, stockRecords]);
+    }, [formData.fromWh, formData.productName, formData.brand, formData.lcNo, sourceWarehouseStock]);
 
     // Form input handler
     const handleInputChange = (e) => {
@@ -386,7 +397,7 @@ const TransferManagement = ({ currentUser, addNotification }) => {
             const itemBrand = (item.brand || '').trim().toLowerCase();
             const itemLc = (item.lcNo || '').trim().toLowerCase();
 
-            return itemWh === fromWh && itemProd === prod && (!brand || itemBrand === brand || itemBrand.includes(brand)) && (!lc || itemLc === lc);
+            return itemWh === fromWh && itemProd === prod && (!brand || itemBrand === brand || itemBrand.includes(brand)) && (!lc || isLcMatch(itemLc, lc));
         });
 
         if (sourceMatch) {
@@ -442,7 +453,7 @@ const TransferManagement = ({ currentUser, addNotification }) => {
             const itemBrand = (item.brand || '').trim().toLowerCase();
             const itemLc = (item.lcNo || '').trim().toLowerCase();
 
-            return itemWh === toWh && itemProd === prod && (!brand || itemBrand === brand || itemBrand.includes(brand)) && (!lc || itemLc === lc);
+            return itemWh === toWh && itemProd === prod && (!brand || itemBrand === brand || itemBrand.includes(brand)) && (!lc || isLcMatch(itemLc, lc));
         });
 
         if (destMatch) {
@@ -601,7 +612,7 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                 const whMatch = !targetWh || itemWh === targetWh || itemWh.includes(targetWh);
                 const prodMatch = itemProd === targetProd;
                 const brandMatch = !targetBrand || itemBrand === targetBrand || itemBrand.includes(targetBrand);
-                const lcMatch = !targetLc || itemLc === targetLc;
+                const lcMatch = !targetLc || isLcMatch(itemLc, targetLc);
                 const availQty = parseFloat(s.whQty ?? s.inHouseQuantity ?? s.quantity ?? 0);
                 const availPkt = parseFloat(s.whPkt ?? s.inHousePacket ?? s.packet ?? 0);
 
@@ -839,18 +850,18 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                                     {uniqueWarehouses
                                         .filter(wh => wh.toLowerCase().includes((formData.fromWh || '').toLowerCase()))
                                         .map((wh, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                onClick={() => {
-                                                    setFormData(prev => ({ ...prev, fromWh: wh }));
-                                                    setActiveDropdown(null);
-                                                }}
-                                                className="w-full text-left px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-600"
-                                            >
-                                                {wh}
-                                            </button>
-                                        ))}
+                                             <button
+                                                 key={idx}
+                                                 type="button"
+                                                 onClick={() => {
+                                                     setFormData(prev => ({ ...prev, fromWh: wh, productName: '', brand: '', lcNo: '' }));
+                                                     setActiveDropdown(null);
+                                                 }}
+                                                 className="w-full text-left px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-600"
+                                             >
+                                                 {wh}
+                                             </button>
+                                         ))}
                                 </div>
                             )}
                         </div>
@@ -878,18 +889,18 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                                     {uniqueWarehouses
                                         .filter(wh => wh.toLowerCase().includes((formData.toWh || '').toLowerCase()) && wh !== formData.fromWh)
                                         .map((wh, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                onClick={() => {
-                                                    setFormData(prev => ({ ...prev, toWh: wh }));
-                                                    setActiveDropdown(null);
-                                                }}
-                                                className="w-full text-left px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-600"
-                                            >
-                                                {wh}
-                                            </button>
-                                        ))}
+                                             <button
+                                                 key={idx}
+                                                 type="button"
+                                                 onClick={() => {
+                                                     setFormData(prev => ({ ...prev, toWh: wh }));
+                                                     setActiveDropdown(null);
+                                                 }}
+                                                 className="w-full text-left px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-600"
+                                             >
+                                                 {wh}
+                                             </button>
+                                         ))}
                                 </div>
                             )}
                         </div>
@@ -917,18 +928,18 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                                     {availableFormProducts
                                         .filter(p => p.toLowerCase().includes((formData.productName || '').toLowerCase()))
                                         .map((p, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                onClick={() => {
-                                                    setFormData(prev => ({ ...prev, productName: p, brand: '', lcNo: '' }));
-                                                    setActiveDropdown(null);
-                                                }}
-                                                className="w-full text-left px-4 py-2 text-sm font-bold text-gray-800 hover:bg-blue-50 hover:text-blue-600"
-                                            >
-                                                {p}
-                                            </button>
-                                        ))}
+                                             <button
+                                                 key={idx}
+                                                 type="button"
+                                                 onClick={() => {
+                                                     setFormData(prev => ({ ...prev, productName: p, brand: '', lcNo: '' }));
+                                                     setActiveDropdown(null);
+                                                 }}
+                                                 className="w-full text-left px-4 py-2 text-sm font-bold text-gray-800 hover:bg-blue-50 hover:text-blue-600"
+                                             >
+                                                 {p}
+                                             </button>
+                                         ))}
                                 </div>
                             )}
                         </div>
@@ -956,18 +967,18 @@ const TransferManagement = ({ currentUser, addNotification }) => {
                                     {availableFormBrands
                                         .filter(b => b.brand.toLowerCase().includes((formData.brand || '').toLowerCase()))
                                         .map((b, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                onClick={() => {
-                                                    setFormData(prev => ({ ...prev, brand: b.brand, packetSize: b.packetSize }));
-                                                    setActiveDropdown(null);
-                                                }}
-                                                className="w-full text-left px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-600"
-                                            >
-                                                {b.brand}
-                                            </button>
-                                        ))}
+                                             <button
+                                                 key={idx}
+                                                 type="button"
+                                                 onClick={() => {
+                                                     setFormData(prev => ({ ...prev, brand: b.brand, packetSize: b.packetSize, lcNo: '' }));
+                                                     setActiveDropdown(null);
+                                                 }}
+                                                 className="w-full text-left px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-blue-50 hover:text-blue-600"
+                                             >
+                                                 {b.brand}
+                                             </button>
+                                         ))}
                                 </div>
                             )}
                         </div>

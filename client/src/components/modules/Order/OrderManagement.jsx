@@ -8,7 +8,7 @@ import {
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import { calculatePktRemainder, calculateStockData } from '../../../utils/stockHelpers';
+import { calculatePktRemainder, calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 
 const OrderManagement = ({
@@ -489,8 +489,8 @@ const OrderManagement = ({
                     const whStockFilters = {
                         productName: pName,
                         brand: bName || undefined,
-                        lcNo: lcNo || undefined,
-                        warehouse: whName
+                        warehouse: whName,
+                        reportType: 'price'
                     };
 
                     const whStockRes = calculateStockData(
@@ -511,6 +511,9 @@ const OrderManagement = ({
                         let targetBrands = matchedWhGroup.brandList;
                         if (targetBrandLower) {
                             targetBrands = targetBrands.filter(b => (b.brand || '').trim().toLowerCase() === targetBrandLower);
+                        }
+                        if (lcNo) {
+                            targetBrands = targetBrands.filter(b => isLcMatch(b.lcNo, lcNo));
                         }
                         whSaleable = targetBrands.reduce((sum, b) => {
                             return sum + (isBagUom ? (b.saleablePacket || 0) : (b.saleableQuantity || 0));

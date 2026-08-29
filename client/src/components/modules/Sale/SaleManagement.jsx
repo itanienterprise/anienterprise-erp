@@ -7,7 +7,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
-import { calculateStockData } from '../../../utils/stockHelpers';
+import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 import './SaleManagement.css';
 
 const getSafeString = (val) => {
@@ -1303,11 +1303,14 @@ const SaleManagement = ({
             ? allSalesRecords.filter(s => s._id !== editingId && s.invoiceNo !== formData.invoiceNo && s.orderNo !== formData.orderNo)
             : allSalesRecords;
 
+        const cleanBrand = (bName || '').trim();
+        const cleanLc = (lcNo || '').trim();
+
         // 1. Overall inhouse stock across all warehouses
         const stockFilters = {
             productName: cleanPName,
-            brand: (bName || '').trim() || undefined,
-            lcNo: (lcNo || '').trim() || undefined
+            brand: cleanBrand || undefined,
+            reportType: 'price'
         };
         const stockRes = calculateStockData(
             stockRecords,
@@ -1321,10 +1324,13 @@ const SaleManagement = ({
         const calculatedStock = stockRes?.displayRecords || [];
         const matchedGroup = calculatedStock.find(g => (g.productName || '').trim().toLowerCase() === cleanPName.toLowerCase());
         if (matchedGroup && matchedGroup.brandList) {
-            const targetBrandLower = (bName || '').toLowerCase().trim();
+            const targetBrandLower = cleanBrand.toLowerCase();
             let targetBrands = matchedGroup.brandList;
             if (targetBrandLower) {
                 targetBrands = targetBrands.filter(b => (b.brand || '').trim().toLowerCase() === targetBrandLower);
+            }
+            if (cleanLc) {
+                targetBrands = targetBrands.filter(b => isLcMatch(b.lcNo, cleanLc));
             }
             inhouseSaleable = targetBrands.reduce((sum, b) => {
                 return sum + (isBagUom ? (b.saleablePacket || 0) : (b.saleableQuantity || 0));
@@ -1336,9 +1342,9 @@ const SaleManagement = ({
         if (cleanWhName) {
             const whStockFilters = {
                 productName: cleanPName,
-                brand: (bName || '').trim() || undefined,
-                lcNo: (lcNo || '').trim() || undefined,
-                warehouse: cleanWhName
+                brand: cleanBrand || undefined,
+                warehouse: cleanWhName,
+                reportType: 'price'
             };
             const whStockRes = calculateStockData(
                 stockRecords,
@@ -1352,10 +1358,13 @@ const SaleManagement = ({
             const calculatedWhStock = whStockRes?.displayRecords || [];
             const matchedWhGroup = calculatedWhStock.find(g => (g.productName || '').trim().toLowerCase() === cleanPName.toLowerCase());
             if (matchedWhGroup && matchedWhGroup.brandList) {
-                const targetBrandLower = (bName || '').toLowerCase().trim();
+                const targetBrandLower = cleanBrand.toLowerCase();
                 let targetBrands = matchedWhGroup.brandList;
                 if (targetBrandLower) {
                     targetBrands = targetBrands.filter(b => (b.brand || '').trim().toLowerCase() === targetBrandLower);
+                }
+                if (cleanLc) {
+                    targetBrands = targetBrands.filter(b => isLcMatch(b.lcNo, cleanLc));
                 }
                 whSaleable = targetBrands.reduce((sum, b) => {
                     return sum + (isBagUom ? (b.saleablePacket || 0) : (b.saleableQuantity || 0));
