@@ -23,7 +23,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import StockReport from './StockReport';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { API_BASE_URL } from '../../../utils/helpers';
-import { calculateStockData, calculatePktRemainder, getGroupedBrandList } from '../../../utils/stockHelpers';
+import { calculateStockData, calculatePktRemainder, getGroupedBrandList, safeParse } from '../../../utils/stockHelpers';
 import { generateStockReportPDF, generateProductHistoryPDF } from '../../../utils/pdfGenerator';
 import axios from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -133,15 +133,30 @@ const StockManagement = ({
     showProductHistoryReport,
     setProductHistoryReportData,
     showRate,
-    setShowRate
+    setShowRate,
+    activeBaseline,
+    fetchStockBaseline
 }) => {
 
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const isAdmin = currentUser.username === 'admin' || (currentUser.role || '').toLowerCase() === 'admin';
     const isLcManager = (currentUser?.role || '').toLowerCase() === 'lc manager';
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
     const canTransfer = hasPermission(currentUser, 'stock', 'special');
     const canShowRate = hasPermission(currentUser, 'stock', 'showRate');
+    const canSetBaseline = isAdmin || hasPermission(currentUser, 'stock', 'special');
     const effectiveShowRate = canShowRate && showRate;
+
+    // Stock Baseline Modal States
+    const [showBaselineModal, setShowBaselineModal] = useState(false);
+    const [baselineTab, setBaselineTab] = useState('preview'); // 'preview' | 'history'
+    const [baselineNote, setBaselineNote] = useState('Initial Stock Baseline');
+    const [baselineCutoffDate, setBaselineCutoffDate] = useState(new Date().toISOString());
+    const [baselineConfirmText, setBaselineConfirmText] = useState('');
+    const [baselineLoading, setBaselineLoading] = useState(false);
+    const [baselineHistory, setBaselineHistory] = useState([]);
+    const [baselineSearchQuery, setBaselineSearchQuery] = useState('');
+    const [baselineWhFilter, setBaselineWhFilter] = useState('All');
 
     // Filtering & Search (Main View)
     const [displayUnit, setDisplayUnit] = useState(() => {
@@ -476,33 +491,15 @@ const StockManagement = ({
             const itemInHouseQty = parseFloat(item.inHouseQuantity) || 0;
             const itemInHousePkt = parseFloat(item.inHousePacket) || 0;
 
-            const matchingTransfers = (warehouseData || []).filter(w => {
-                if (!w.isTransferLog) return false;
-                const wLC = normalizeStr(w.lcNo);
-                const wProd = normalizeStr(w.productName || w.product);
-                const wBrand = normalizeStr(w.brand);
-                return wLC === targetLC && wProd === targetProd && (!targetBrand || wBrand === targetBrand);
-            });
+            const shortageQty = parseFloat(item.sweepedQuantity) || 0;
+            const origLcQty = parseFloat(item.quantity) || 0;
+            const origLcPkt = parseFloat(item.packet) || 0;
 
-            const transferredOutQty = matchingTransfers.reduce((sum, t) => sum + (parseFloat(t.transferQty ?? t.whQty) || 0), 0);
-            const transferredOutPkt = matchingTransfers.reduce((sum, t) => sum + (parseFloat(t.transferPacket ?? t.transferPkt ?? t.whPkt) || 0), 0);
+            const physicalWhQty = itemInHouseQty + whOnlyQty;
+            const physicalWhPkt = itemInHousePkt + whOnlyPkt;
 
-            const selectedWhFilter = normalizeStr(historyFilters.warehouse);
-
-            let physicalWhQty = itemInHouseQty + whOnlyQty;
-            let physicalWhPkt = itemInHousePkt + whOnlyPkt;
-
-            if (!selectedWhFilter) {
-                // When All Warehouses is selected (no warehouse filter), include transferred stock in total in-house calculation
-                physicalWhQty += transferredOutQty;
-                physicalWhPkt += transferredOutPkt;
-            }
             const saleQty = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.saleQuantity) || 0), 0);
             const salePkt = relatedWhRecords.reduce((sum, r) => sum + (parseFloat(r.salePacket) || 0), 0);
-            const shortageQty = parseFloat(item.sweepedQuantity) || 0;
-
-            const origLcQty = Math.max(parseFloat(item.quantity) || 0, physicalWhQty);
-            const origLcPkt = Math.max(parseFloat(item.packet) || 0, physicalWhPkt);
 
             if (!acc[key]) {
                 acc[key] = {
@@ -541,8 +538,6 @@ const StockManagement = ({
                     acc[key].totalInHouseQuantity += physicalWhQty;
                     acc[key].brandsProcessed.add(targetBrand);
                 } else {
-                    // If we've already seen this brand in this group, only add the specific 
-                    // in-house quantity of THIS stock record (since warehouse total was already added)
                     acc[key].totalInHousePacket += itemInHousePkt;
                     acc[key].totalInHouseQuantity += itemInHouseQty;
                 }
@@ -913,7 +908,8 @@ const StockManagement = ({
             purchaseHistory: purchaseFlattened,
             saleHistory: saleFlattened,
             damageHistory: damageFlattened,
-            transferHistory: transferFlattened
+            transferHistory: transferFlattened,
+            activeBaseline: activeBaseline
         });
         setShowProductHistoryReport(true);
     };
@@ -1592,8 +1588,16 @@ const StockManagement = ({
                         }
                     }
 
-                    // Execute Source Updates
+                    // Execute Source Updates (skip pre-baseline historical records to preserve old connections)
                     for (const { record: updatedSource, original } of updates) {
+                        if (activeBaseline && activeBaseline.status === 'active') {
+                            const origDate = original.date || original.createdAt || '';
+                            if (origDate && origDate < activeBaseline.baselineDate) {
+                                // Baseline isolates stock state; do not mutate pre-baseline historical DB records
+                                continue;
+                            }
+                        }
+
                         const { _id, recordType, createdAt, updatedAt, ...sourceDataToEncrypt } = updatedSource;
 
                         if (original.recordType === 'stock') {
@@ -2330,8 +2334,149 @@ const StockManagement = ({
     // --- Calculations (Memoized) ---
 
     const stockData = useMemo(() => {
-        return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate }, stockSearchQuery, warehouseData, salesRecords, products, damages);
-    }, [stockRecords, stockFilters, effectiveShowRate, stockSearchQuery, warehouseData, salesRecords, products, damages]);
+        return calculateStockData(stockRecords, { ...stockFilters, showRate: effectiveShowRate }, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline);
+    }, [stockRecords, stockFilters, effectiveShowRate, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline]);
+
+    // Function to calculate raw in-house snapshot across all warehouses for baseline
+    const generateCurrentStockSnapshot = () => {
+        const whSet = new Set();
+        (warehouseData || []).forEach(w => {
+            const name = (w.name || w.whName || w.warehouse || w.fromWh || w.toWh || '').trim();
+            if (name && name !== 'Inventory Adjustment') whSet.add(name);
+        });
+        (stockRecords || []).forEach(s => {
+            const name = (s.name || s.whName || s.warehouse || '').trim();
+            if (name && name !== 'Inventory Adjustment') whSet.add(name);
+        });
+        const whList = Array.from(whSet).sort();
+
+        const snapshot = [];
+        let totalInHouseBags = 0;
+        let totalInHouseKg = 0;
+        let totalStockValuation = 0;
+
+        whList.forEach(whName => {
+            const whRes = calculateStockData(
+                stockRecords,
+                { warehouse: whName, reportType: 'price', _isSubCall: true },
+                '',
+                warehouseData,
+                salesRecords,
+                products,
+                damages,
+                null // Raw physical in-house calculation without applying previous baselines
+            );
+
+            (whRes.displayRecords || []).forEach(prod => {
+                (prod.brandList || []).forEach(b => {
+                    const inHouseQty = Math.max(0, b.inHouseQuantity || 0);
+                    const inHousePkt = Math.max(0, b.inHousePacket || 0);
+                    if (inHouseQty > 0.0001 || inHousePkt > 0.0001) {
+                        const price = safeParse(b.purchasedPrice ?? b.rate);
+                        const valuation = inHouseQty * price;
+
+                        totalInHouseBags += inHousePkt;
+                        totalInHouseKg += inHouseQty;
+                        totalStockValuation += valuation;
+
+                        snapshot.push({
+                            warehouse: whName,
+                            productName: prod.productName,
+                            brand: b.brand || 'No Brand',
+                            quality: b.quality || '-',
+                            packetSize: b.packetSize || 30,
+                            inHouseQuantity: inHouseQty,
+                            inHousePacket: inHousePkt,
+                            quantity: inHouseQty,
+                            packet: inHousePkt,
+                            purchasedPrice: price,
+                            rate: price,
+                            lcNo: b.lcNo || (b.lcNos && b.lcNos[0]) || '',
+                            unit: prod.unit || 'kg'
+                        });
+                    }
+                });
+            });
+        });
+
+        return {
+            snapshotRecords: snapshot,
+            summary: {
+                totalWarehouses: whList.length,
+                totalProducts: new Set(snapshot.map(s => s.productName)).size,
+                totalBrands: new Set(snapshot.map(s => `${s.productName}|${s.brand}`)).size,
+                totalInHouseQuantity: totalInHouseKg,
+                totalInHousePacket: totalInHouseBags,
+                totalValuation: totalStockValuation
+            }
+        };
+    };
+
+    const fetchBaselineHistory = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/stock-baseline/history`);
+            setBaselineHistory(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.error('Error fetching baseline history:', err);
+        }
+    };
+
+    const handleSetBaseline = async (e) => {
+        if (e) e.preventDefault();
+        if (baselineConfirmText.trim().toUpperCase() !== 'CONFIRM') {
+            alert('Please type "CONFIRM" to establish the new initial stock baseline.');
+            return;
+        }
+
+        const { snapshotRecords, summary } = generateCurrentStockSnapshot();
+        if (!snapshotRecords || snapshotRecords.length === 0) {
+            alert('Cannot set initial baseline: No valid in-house stock records found.');
+            return;
+        }
+
+        setBaselineLoading(true);
+        try {
+            await axios.post(`${API_BASE_URL}/api/stock-baseline`, {
+                baselineDate: baselineCutoffDate || new Date().toISOString(),
+                note: baselineNote.trim() || 'Initial Stock Baseline',
+                setBy: currentUser.name || currentUser.username || 'Admin',
+                summary,
+                snapshotRecords
+            });
+
+            if (typeof fetchStockBaseline === 'function') await fetchStockBaseline();
+            if (typeof fetchStockRecords === 'function') await fetchStockRecords();
+
+            setShowBaselineModal(false);
+            setBaselineConfirmText('');
+            alert('Initial Stock Baseline established successfully! An automated safety backup was created on the server.');
+        } catch (err) {
+            console.error('Error setting initial baseline:', err);
+            alert(err.response?.data?.message || 'Failed to set initial stock baseline.');
+        } finally {
+            setBaselineLoading(false);
+        }
+    };
+
+    const handleRevertBaseline = async (baselineId) => {
+        if (!window.confirm('Are you sure you want to revert this stock baseline? Stock calculations will return to full historical mode.')) {
+            return;
+        }
+
+        setBaselineLoading(true);
+        try {
+            await axios.post(`${API_BASE_URL}/api/stock-baseline/${baselineId}/revert`);
+            if (typeof fetchStockBaseline === 'function') await fetchStockBaseline();
+            if (typeof fetchStockRecords === 'function') await fetchStockRecords();
+            await fetchBaselineHistory();
+            alert('Stock baseline reverted successfully!');
+        } catch (err) {
+            console.error('Error reverting baseline:', err);
+            alert(err.response?.data?.message || 'Failed to revert stock baseline.');
+        } finally {
+            setBaselineLoading(false);
+        }
+    };
 
     const isStockGroupSelected = (productName) => {
         const groupItems = stockRecords.filter(r => r.productName === productName);
@@ -2702,6 +2847,25 @@ const StockManagement = ({
                                 <BarChartIcon className="w-4 h-4 text-gray-400" />
                                 <span>Report</span>
                             </button>
+                            {isAdmin && (
+                                <button
+                                    onClick={() => {
+                                        setShowBaselineModal(true);
+                                        setBaselineTab('preview');
+                                        setBaselineConfirmText('');
+                                        fetchBaselineHistory();
+                                    }}
+                                    className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm active:scale-95 border ${
+                                        activeBaseline
+                                            ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 hover:border-amber-400'
+                                            : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400'
+                                    }`}
+                                    title={activeBaseline ? "Initial Stock Baseline is Active. Click to view or manage." : "Snapshot current in-house stock as Day 1 Initial Stage."}
+                                >
+                                    <span className={`w-2.5 h-2.5 rounded-full ${activeBaseline ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+                                    <span>{activeBaseline ? 'Baseline Active' : 'Set Initial Stage'}</span>
+                                </button>
+                            )}
                             {canTransfer && (
                                 <button
                                     onClick={() => setShowAddWarehouseStockForm(true)}
@@ -3337,11 +3501,11 @@ const StockManagement = ({
                         ) : (
                             stockData.displayRecords
                                 .filter(group => !expandedProducts || group.productName === expandedProducts)
-                                .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => (b.inHouseQuantity || 0) > 0.001)))
+                                .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001)))
                                 .map((group, gIdx) => {
                                     const isExpanded = expandedProducts === group.productName;
                                     const effectiveBrandList = effectiveShowRate
-                                        ? group.brandList.filter(b => (b.inHouseQuantity || 0) > 0.001)
+                                        ? group.brandList.filter(b => (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001)
                                         : group.brandList;
 
                                     // Calculate brand spans for this group's brandList
@@ -3514,10 +3678,10 @@ const StockManagement = ({
                                 ) : (
                                     stockData.displayRecords
                                         .filter(group => !expandedProducts || group.productName === expandedProducts)
-                                        .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => (b.inHouseQuantity || 0) > 0.001)))
+                                        .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001)))
                                         .map((group, gIdx) => {
                                             const effectiveBrandList = effectiveShowRate
-                                                ? group.brandList.filter(b => (b.inHouseQuantity || 0) > 0.001)
+                                                ? group.brandList.filter(b => (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001)
                                                 : group.brandList;
 
                                             // Calculate brand spans for this group's brandList
@@ -4622,7 +4786,399 @@ const StockManagement = ({
                 )
             }
 
-            {/* Stock Report Modal moved to App.jsx for printing stability */}
+            {/* Stock Baseline Modal (Set Initial Stage & Revert) */}
+            {showBaselineModal && createPortal(
+                <div className="fixed inset-0 z-[6000] flex items-center justify-center p-4 app-modal-overlay bg-black/60 backdrop-blur-xs animate-fade-in">
+                    <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-up">
+                        {/* Modal Header */}
+                        <div className="px-6 py-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white flex items-center justify-between shadow-md shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-white/15 rounded-2xl backdrop-blur-xs">
+                                    <BoxIcon className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold tracking-tight text-white">Stock Initial Stage & Rollover</h3>
+                                    <p className="text-xs text-blue-100 mt-0.5">Snapshot current in-house stock as the new Opening Baseline</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowBaselineModal(false)}
+                                className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-all"
+                            >
+                                <XIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex border-b border-gray-200 bg-gray-50/70 px-6 pt-3 shrink-0">
+                            <button
+                                onClick={() => setBaselineTab('preview')}
+                                className={`pb-3 px-4 text-sm font-bold transition-all relative ${
+                                    baselineTab === 'preview'
+                                        ? 'text-blue-600 border-b-2 border-blue-600'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                Snapshot Current Stock (Initial Stage)
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setBaselineTab('history');
+                                    fetchBaselineHistory();
+                                }}
+                                className={`pb-3 px-4 text-sm font-bold transition-all relative ${
+                                    baselineTab === 'history'
+                                        ? 'text-blue-600 border-b-2 border-blue-600'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                Baseline History & Revert
+                                {baselineHistory.length > 0 && (
+                                    <span className="ml-2 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full font-medium">
+                                        {baselineHistory.length}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            {baselineTab === 'preview' ? (
+                                (() => {
+                                    const { snapshotRecords, summary } = generateCurrentStockSnapshot();
+                                    const filteredSnapshot = snapshotRecords.filter(item => {
+                                        if (baselineWhFilter !== 'All' && item.warehouse !== baselineWhFilter) return false;
+                                        if (baselineSearchQuery) {
+                                            const q = baselineSearchQuery.toLowerCase();
+                                            return item.productName.toLowerCase().includes(q) ||
+                                                item.brand.toLowerCase().includes(q) ||
+                                                (item.lcNo || '').toLowerCase().includes(q) ||
+                                                item.warehouse.toLowerCase().includes(q);
+                                        }
+                                        return true;
+                                    });
+
+                                    const uniqueWhs = Array.from(new Set(snapshotRecords.map(s => s.warehouse))).sort();
+
+                                    return (
+                                        <div className="space-y-6">
+                                            {/* Active Baseline Status Card */}
+                                            {activeBaseline && (
+                                                <div className="p-4 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border border-amber-200 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-xs">
+                                                    <div className="flex items-start sm:items-center gap-3 min-w-0">
+                                                        <span className="flex h-3.5 w-3.5 relative shrink-0 mt-0.5 sm:mt-0">
+                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
+                                                        </span>
+                                                        <div className="text-xs md:text-sm text-amber-900 font-medium">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className="font-bold text-amber-950 text-sm">Initial Stage Active:</span>
+                                                                <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-200/80 text-amber-900 rounded-md">In Effect</span>
+                                                            </div>
+                                                            <div className="mt-1 text-amber-950">
+                                                                Current stock is calculated from baseline established on{' '}
+                                                                <span className="font-bold underline decoration-amber-300">
+                                                                    {new Date(activeBaseline.baselineDate).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                                                                </span>
+                                                                {activeBaseline.setBy && <span className="text-amber-800"> by <b>{activeBaseline.setBy}</b></span>}
+                                                                {activeBaseline.note && <span className="text-amber-800 italic"> — "{activeBaseline.note}"</span>}
+                                                            </div>
+                                                            {Array.isArray(activeBaseline.snapshotRecords) && (
+                                                                <div className="text-[11px] text-amber-700 mt-1">
+                                                                    Snapshot contains <b>{activeBaseline.snapshotRecords.length} items</b> across <b>{new Set(activeBaseline.snapshotRecords.map(s => s.warehouse)).size} warehouse(s)</b> ({Math.round(activeBaseline.snapshotRecords.reduce((sum, s) => sum + (parseFloat(s.quantity ?? s.inHouseQuantity) || 0), 0)).toLocaleString('en-US')} kg).
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            setBaselineTab('history');
+                                                            fetchBaselineHistory();
+                                                        }}
+                                                        className="text-xs font-bold text-amber-950 hover:text-amber-900 bg-amber-200/80 hover:bg-amber-300 px-3.5 py-2 rounded-xl transition-all shadow-xs cursor-pointer shrink-0 active:scale-95"
+                                                    >
+                                                        Manage / Revert Baseline →
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Informative Notice Banner */}
+                                            <div className="p-4 bg-blue-50/80 border border-blue-100 rounded-2xl text-xs md:text-sm text-blue-900 flex items-start gap-3 shadow-xs">
+                                                <div className="p-1 bg-blue-100 rounded-lg text-blue-600 shrink-0 mt-0.5">ℹ️</div>
+                                                <div>
+                                                    <div className="font-bold text-blue-950 mb-1">How this works:</div>
+                                                    Setting the initial stage will capture the <b>exact current In-House / Closing Stock</b> across all warehouses and establish it as Day 1 Opening Stock starting from the cutoff timestamp.
+                                                    <ul className="list-disc ml-5 mt-1.5 space-y-0.5 text-blue-800">
+                                                        <li><b>Non-destructive:</b> All past sales, customer invoices, and customer ledgers remain 100% intact.</li>
+                                                        <li><b>Automated Safety Backup:</b> A full database backup file will be created on the server prior to applying.</li>
+                                                        <li><b>Reversible:</b> You can revert back to full historical calculation at any time from the History tab.</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+
+                                            {/* Summary Cards */}
+                                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-center">
+                                                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Warehouses</div>
+                                                    <div className="text-lg font-extrabold text-slate-800 mt-1">{summary.totalWarehouses}</div>
+                                                </div>
+                                                <div className="bg-blue-50/50 border border-blue-200 rounded-2xl p-3.5 text-center">
+                                                    <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Products</div>
+                                                    <div className="text-lg font-extrabold text-blue-800 mt-1">{summary.totalProducts}</div>
+                                                </div>
+                                                <div className="bg-indigo-50/50 border border-indigo-200 rounded-2xl p-3.5 text-center">
+                                                    <div className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Brands</div>
+                                                    <div className="text-lg font-extrabold text-indigo-800 mt-1">{summary.totalBrands}</div>
+                                                </div>
+                                                <div className="bg-emerald-50/50 border border-emerald-200 rounded-2xl p-3.5 text-center">
+                                                    <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">In-House Bag</div>
+                                                    <div className="text-lg font-extrabold text-emerald-800 mt-1">{Math.round(summary.totalInHousePacket).toLocaleString('en-US')}</div>
+                                                </div>
+                                                <div className="bg-teal-50/50 border border-teal-200 rounded-2xl p-3.5 text-center">
+                                                    <div className="text-[11px] font-bold text-teal-600 uppercase tracking-wider">In-House QTY (kg)</div>
+                                                    <div className="text-lg font-extrabold text-teal-800 mt-1">{Math.round(summary.totalInHouseQuantity).toLocaleString('en-US')}</div>
+                                                </div>
+                                                <div className="bg-purple-50/50 border border-purple-200 rounded-2xl p-3.5 text-center">
+                                                    <div className="text-[11px] font-bold text-purple-600 uppercase tracking-wider">Total Valuation</div>
+                                                    <div className="text-lg font-extrabold text-purple-800 mt-1">৳{Math.round(summary.totalValuation).toLocaleString('en-IN')}</div>
+                                                </div>
+                                            </div>
+
+                                            {/* Preview Table Header & Search */}
+                                            <div className="space-y-3">
+                                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                                    <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                                        <span>Preview of Items Becoming Initial Stock ({filteredSnapshot.length} entries)</span>
+                                                    </h4>
+                                                    <div className="flex items-center gap-2">
+                                                        <select
+                                                            value={baselineWhFilter}
+                                                            onChange={(e) => setBaselineWhFilter(e.target.value)}
+                                                            className="text-xs border border-gray-300 rounded-xl px-3 py-1.5 bg-white font-medium text-gray-700 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                                                        >
+                                                            <option value="All">All Warehouses ({uniqueWhs.length})</option>
+                                                            {uniqueWhs.map(w => (
+                                                                <option key={w} value={w}>{w}</option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Search product / brand / LC..."
+                                                                value={baselineSearchQuery}
+                                                                onChange={(e) => setBaselineSearchQuery(e.target.value)}
+                                                                className="text-xs pl-8 pr-3 py-1.5 border border-gray-300 rounded-xl bg-white font-medium text-gray-700 w-48 md:w-60 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                                                            />
+                                                            <SearchIcon className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Scrollable Table */}
+                                                <div className="border border-gray-200 rounded-2xl overflow-hidden max-h-60 overflow-y-auto shadow-inner bg-gray-50/30">
+                                                    <table className="w-full text-left text-xs border-collapse">
+                                                        <thead className="bg-gray-100/80 sticky top-0 border-b border-gray-200 z-10">
+                                                            <tr>
+                                                                <th className="px-3 py-2.5 font-bold text-gray-600">Warehouse</th>
+                                                                <th className="px-3 py-2.5 font-bold text-gray-600">Product Name</th>
+                                                                <th className="px-3 py-2.5 font-bold text-gray-600">Brand</th>
+                                                                <th className="px-3 py-2.5 font-bold text-gray-600">LC No</th>
+                                                                <th className="px-3 py-2.5 font-bold text-gray-600 text-center">Pkt Size</th>
+                                                                <th className="px-3 py-2.5 font-bold text-emerald-700 text-right">In-House Bag</th>
+                                                                <th className="px-3 py-2.5 font-bold text-emerald-700 text-right">In-House Qty (kg)</th>
+                                                                <th className="px-3 py-2.5 font-bold text-purple-700 text-right">Rate</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100 bg-white">
+                                                            {filteredSnapshot.length === 0 ? (
+                                                                <tr>
+                                                                    <td colSpan="8" className="px-4 py-8 text-center text-gray-400 italic">
+                                                                        No in-house stock items found matching your filters.
+                                                                    </td>
+                                                                </tr>
+                                                            ) : (
+                                                                filteredSnapshot.map((item, idx) => (
+                                                                    <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                                                                        <td className="px-3 py-2 font-medium text-gray-800">{item.warehouse}</td>
+                                                                        <td className="px-3 py-2 font-semibold text-gray-900">{item.productName}</td>
+                                                                        <td className="px-3 py-2 text-gray-700">{item.brand}</td>
+                                                                        <td className="px-3 py-2 text-purple-700 font-medium">{item.lcNo || '—'}</td>
+                                                                        <td className="px-3 py-2 text-center text-gray-600">{item.packetSize} kg</td>
+                                                                        <td className="px-3 py-2 text-right font-bold text-emerald-700">{Math.round(item.inHousePacket).toLocaleString('en-US')}</td>
+                                                                        <td className="px-3 py-2 text-right font-bold text-emerald-800">{Math.round(item.inHouseQuantity).toLocaleString('en-US')}</td>
+                                                                        <td className="px-3 py-2 text-right text-purple-800 font-medium">{item.rate ? `৳${parseFloat(item.rate).toFixed(2)}` : '—'}</td>
+                                                                    </tr>
+                                                                ))
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+
+                                            {/* Baseline Configuration Form */}
+                                            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-4 shadow-xs">
+                                                <h4 className="text-sm font-bold text-gray-900">Baseline Setup Details</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-700 mb-1">Baseline Title / Note</label>
+                                                        <input
+                                                            type="text"
+                                                            value={baselineNote}
+                                                            onChange={(e) => setBaselineNote(e.target.value)}
+                                                            placeholder="e.g. Fiscal Year 2026 Opening Stock / Post-Audit Baseline"
+                                                            className="w-full text-xs md:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-gray-800"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-700 mb-1">Baseline Cutoff Timestamp</label>
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={baselineCutoffDate ? baselineCutoffDate.slice(0, 16) : ''}
+                                                            onChange={(e) => setBaselineCutoffDate(new Date(e.target.value).toISOString())}
+                                                            className="w-full text-xs md:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-gray-800"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Safety Confirmation Step */}
+                                                <div className="pt-3 border-t border-gray-200">
+                                                    <label className="block text-xs font-bold text-red-700 mb-1">
+                                                        To confirm, please type <span className="font-extrabold underline tracking-wider">CONFIRM</span> below:
+                                                    </label>
+                                                    <div className="flex flex-wrap items-center gap-3">
+                                                        <input
+                                                            type="text"
+                                                            value={baselineConfirmText}
+                                                            onChange={(e) => setBaselineConfirmText(e.target.value)}
+                                                            placeholder="Type CONFIRM to activate"
+                                                            className="flex-1 text-xs md:text-sm px-3.5 py-2.5 border-2 border-red-300 rounded-xl bg-white focus:outline-hidden focus:border-red-500 font-bold uppercase tracking-wider text-red-800"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            disabled={baselineLoading || baselineConfirmText.trim().toUpperCase() !== 'CONFIRM'}
+                                                            onClick={handleSetBaseline}
+                                                            className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                                                                baselineConfirmText.trim().toUpperCase() === 'CONFIRM' && !baselineLoading
+                                                                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-500/25 active:scale-95'
+                                                                    : 'bg-gray-400 cursor-not-allowed opacity-60'
+                                                            }`}
+                                                        >
+                                                            {baselineLoading ? (
+                                                                <>
+                                                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                                    <span>Applying Baseline...</span>
+                                                                </>
+                                                            ) : (
+                                                                <span>Establish Initial Stock Baseline</span>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()
+                            ) : (
+                                /* History & Revert Tab */
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-sm font-bold text-gray-900">Historical Stock Baselines</h4>
+                                        <button
+                                            onClick={fetchBaselineHistory}
+                                            className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 py-1 bg-blue-50 rounded-lg"
+                                        >
+                                            Refresh History
+                                        </button>
+                                    </div>
+
+                                    {baselineHistory.length === 0 ? (
+                                        <div className="p-8 text-center bg-gray-50 border border-gray-200 rounded-2xl text-gray-400 italic text-sm">
+                                            No stock baselines have been established yet.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {baselineHistory.map((bh) => {
+                                                const isActive = bh.status === 'active';
+                                                const isReverted = bh.status === 'reverted';
+                                                const isArchived = bh.status === 'archived';
+
+                                                return (
+                                                    <div
+                                                        key={bh._id}
+                                                        className={`p-4 rounded-2xl border transition-all ${
+                                                            isActive
+                                                                ? 'bg-amber-50/70 border-amber-300 shadow-sm ring-1 ring-amber-300'
+                                                                : (isReverted ? 'bg-gray-50 border-gray-200 opacity-80' : 'bg-white border-gray-200')
+                                                        }`}
+                                                    >
+                                                        <div className="flex flex-wrap items-start justify-between gap-3">
+                                                            <div>
+                                                                <div className="flex items-center gap-2.5">
+                                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase tracking-wide ${
+                                                                        isActive
+                                                                            ? 'bg-emerald-600 text-white'
+                                                                            : (isReverted ? 'bg-gray-200 text-gray-700' : 'bg-blue-100 text-blue-800')
+                                                                    }`}>
+                                                                        {isActive ? 'Active Baseline' : (isReverted ? 'Reverted' : 'Archived')}
+                                                                    </span>
+                                                                    <h5 className="font-bold text-gray-900 text-sm">{bh.note || 'Initial Stock Baseline'}</h5>
+                                                                </div>
+                                                                <div className="text-xs text-gray-500 mt-1.5 space-x-2">
+                                                                    <span><b>Cutoff:</b> {new Date(bh.baselineDate).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                                                    <span>•</span>
+                                                                    <span><b>Set by:</b> {bh.setBy || 'Admin'}</span>
+                                                                    <span>•</span>
+                                                                    <span><b>Created:</b> {new Date(bh.createdAt).toLocaleDateString()}</span>
+                                                                    {bh.backupFile && (
+                                                                        <>
+                                                                            <span>•</span>
+                                                                            <span className="text-blue-600 font-mono text-[11px]">📁 {bh.backupFile}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                                {bh.summary && (
+                                                                    <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-700">
+                                                                        <span className="bg-gray-100 px-2 py-0.5 rounded-md">Items: <b>{(bh.snapshotRecords || []).length}</b></span>
+                                                                        <span className="bg-gray-100 px-2 py-0.5 rounded-md">Warehouses: <b>{bh.summary.totalWarehouses || 0}</b></span>
+                                                                        <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md font-semibold">Total Bags: <b>{Math.round(bh.summary.totalInHousePacket || 0).toLocaleString('en-US')}</b></span>
+                                                                        <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md font-semibold">Total Qty: <b>{Math.round(bh.summary.totalInHouseQuantity || 0).toLocaleString('en-US')} kg</b></span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {isActive && (
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={baselineLoading}
+                                                                    onClick={() => handleRevertBaseline(bh._id)}
+                                                                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer shrink-0"
+                                                                >
+                                                                    {baselineLoading ? 'Reverting...' : 'Revert Baseline'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 shrink-0">
+                            <button
+                                onClick={() => setShowBaselineModal(false)}
+                                className="px-5 py-2.5 border border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-100 transition-all text-sm cursor-pointer"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div >
     );
 };

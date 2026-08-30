@@ -42,6 +42,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [warehouseData, setWarehouseData] = useState([]);
     const [stockRecords, setStockRecords] = useState([]);
+    const [activeBaseline, setActiveBaseline] = useState(null);
     const [viewingTransferHistory, setViewingTransferHistory] = useState(null);
     const [transferHistoryRecords, setTransferHistoryRecords] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -116,11 +117,14 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
 
     const fetchWarehouses = async () => {
         try {
-            const [whRes, stockRes, salesRes] = await Promise.all([
+            const [whRes, stockRes, salesRes, baselineRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/warehouses`),
                 axios.get(`${API_BASE_URL}/api/stock`),
-                axios.get(`${API_BASE_URL}/api/sales`)
+                axios.get(`${API_BASE_URL}/api/sales`),
+                axios.get(`${API_BASE_URL}/api/stock-baseline/active`).catch(() => ({ data: null }))
             ]);
+
+            setActiveBaseline(baselineRes.data || null);
 
             const whData = Array.isArray(whRes.data) ? whRes.data : [];
             const stockData = Array.isArray(stockRes.data) ? stockRes.data : [];
@@ -354,7 +358,8 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
             warehouseTransferRecords,
             salesRecords,
             products,
-            damages || []
+            damages || [],
+            activeBaseline
         );
 
         const brands = {};
@@ -601,7 +606,8 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                 warehouseTransferRecords,
                 salesRecords,
                 products,
-                damages || []
+                damages || [],
+                activeBaseline
             );
 
             displayRecords.forEach(group => {

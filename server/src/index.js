@@ -85,6 +85,7 @@ const TRSetup = require('./models/TRSetup');
 const MetaData = require('./models/MetaData');
 const CnFPayment = require('./models/CnFPayment');
 const InsurancePayment = require('./models/InsurancePayment');
+const StockBaseline = require('./models/StockBaseline');
 const { encryptData, decryptData } = require('./utils/encryption');
 const CryptoJS = require('crypto-js');
 
@@ -893,6 +894,170 @@ apiRouter.get('/api/stock', async (req, res) => {
     });
     res.json(decrypted);
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Helper for automated snapshot backup
+const createStockBackupSnapshot = async (prefix = 'stock_baseline') => {
+  try {
+    const BACKUP_DIR = path.resolve(__dirname, '../backups');
+    if (!fs.existsSync(BACKUP_DIR)) {
+      fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    }
+    const models = mongoose.connection.models;
+    const backupData = {};
+    for (const modelName in models) {
+      const Model = models[modelName];
+      const documents = await Model.find({}).lean();
+      backupData[modelName] = documents;
+    }
+    const now = new Date();
+    const dateStr = now.toISOString().replace(/[:.]/g, '-');
+    const filename = `backup-${prefix}-${dateStr}.json`;
+    const fullPath = path.join(BACKUP_DIR, filename);
+    fs.writeFileSync(fullPath, JSON.stringify({
+      version: '1.0',
+      timestamp: now.toISOString(),
+      reason: prefix,
+      data: backupData
+    }, null, 2));
+    console.log(`[Backup] Automatic safety backup created at ${fullPath}`);
+    return filename;
+  } catch (err) {
+    console.error('Failed to create automatic safety backup:', err);
+    return null;
+  }
+};
+
+// Stock Baseline APIs (Set Initial Stage & Rollover)
+apiRouter.post('/api/stock-baseline', async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    const hasPermission = userSession && (
+      userSession.username === 'admin' ||
+      (userSession.role || '').toLowerCase() === 'admin' ||
+      (userSession.permissions && userSession.permissions.stock && (
+        userSession.permissions.stock.special === true ||
+        userSession.permissions.stock.edit === true
+      ))
+    );
+
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Forbidden: Admin or authorized Stock Manager permission required.' });
+    }
+
+    const { baselineDate, note, snapshotRecords, summary, setBy } = req.body;
+
+    if (!Array.isArray(snapshotRecords) || snapshotRecords.length === 0) {
+      return res.status(400).json({ message: 'Cannot set initial stock: No stock records found in preview.' });
+    }
+
+    // 1. Create an automated safety backup
+    const backupFilename = await createStockBackupSnapshot('pre_stock_baseline');
+
+    // 2. Archive any currently active baselines
+    const existingBaselines = await StockBaseline.find();
+    for (const eb of existingBaselines) {
+      let ebData = decryptData(eb.data);
+      if (ebData && ebData.status === 'active') {
+        ebData.status = 'archived';
+        ebData.archivedAt = new Date().toISOString();
+        await StockBaseline.findByIdAndUpdate(eb._id, { data: encryptData(ebData) });
+      }
+    }
+
+    // 3. Save new active baseline
+    const payload = {
+      baselineDate: baselineDate || new Date().toISOString(),
+      note: note || 'Initial Stock Baseline',
+      setBy: setBy || userSession.name || userSession.username || 'Admin',
+      setByUsername: userSession.username || 'admin',
+      summary: summary || {},
+      snapshotRecords,
+      status: 'active',
+      backupFile: backupFilename,
+      createdAt: new Date().toISOString()
+    };
+
+    const newBaseline = new StockBaseline({ data: encryptData(payload) });
+    const saved = await newBaseline.save();
+
+    res.status(201).json({
+      ...payload,
+      _id: saved._id,
+      createdAt: saved.createdAt
+    });
+  } catch (err) {
+    console.error('Error creating stock baseline:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/stock-baseline/active', async (req, res) => {
+  try {
+    const baselines = await StockBaseline.find().sort({ createdAt: -1 });
+    let activeBaseline = null;
+
+    for (const b of baselines) {
+      let d = decryptData(b.data);
+      if (d && d.status === 'active') {
+        activeBaseline = { ...d, _id: b._id, createdAt: b.createdAt };
+        break;
+      }
+    }
+
+    res.json(activeBaseline);
+  } catch (err) {
+    console.error('Error fetching active stock baseline:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.get('/api/stock-baseline/history', async (req, res) => {
+  try {
+    const baselines = await StockBaseline.find().sort({ createdAt: -1 });
+    const history = baselines.map(b => {
+      let d = decryptData(b.data);
+      return { ...d, _id: b._id, createdAt: b.createdAt };
+    });
+    res.json(history);
+  } catch (err) {
+    console.error('Error fetching stock baseline history:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.post('/api/stock-baseline/:id/revert', async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    const hasPermission = userSession && (
+      userSession.username === 'admin' ||
+      (userSession.role || '').toLowerCase() === 'admin' ||
+      (userSession.permissions && userSession.permissions.stock && userSession.permissions.stock.special === true)
+    );
+
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Forbidden: Admin access required to revert baseline.' });
+    }
+
+    const baseline = await StockBaseline.findById(req.params.id);
+    if (!baseline) return res.status(404).json({ message: 'Stock baseline not found.' });
+
+    // Safety backup before reverting
+    await createStockBackupSnapshot('pre_stock_baseline_revert');
+
+    let d = decryptData(baseline.data);
+    if (d) {
+      d.status = 'reverted';
+      d.revertedAt = new Date().toISOString();
+      d.revertedBy = userSession.name || userSession.username || 'Admin';
+      await StockBaseline.findByIdAndUpdate(baseline._id, { data: encryptData(d) });
+    }
+
+    res.json({ message: 'Stock baseline reverted successfully. Stock calculations returned to standard historical mode.' });
+  } catch (err) {
+    console.error('Error reverting stock baseline:', err);
     res.status(500).json({ message: err.message });
   }
 });

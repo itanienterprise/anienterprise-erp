@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { XIcon, FileTextIcon, BarChartIcon, PrinterIcon, FunnelIcon, ChevronDownIcon } from '../../Icons';
 import { generateProductHistoryPDF } from '../../../utils/pdfGenerator';
@@ -63,6 +63,8 @@ const compareHistoryItems = (a, b) => {
     const timeA = parseDate(a.date).getTime();
     const timeB = parseDate(b.date).getTime();
     if (timeA !== timeB) return timeA - timeB;
+    if (a.type === 'baseline' && b.type !== 'baseline') return -1;
+    if (a.type !== 'baseline' && b.type === 'baseline') return 1;
     if (a.type === 'purchase' && b.type !== 'purchase') return -1;
     if (a.type !== 'purchase' && b.type === 'purchase') return 1;
     return 0;
@@ -165,28 +167,57 @@ const ProductHistoryReport = ({
 
     if (!isOpen || !reportData) return null;
 
-    const { productName, category, filters, purchaseHistory: rawPurchaseHistory, saleHistory: rawSaleHistory, damageHistory: rawDamageHistory, transferHistory: rawTransferHistory } = reportData;
+    const { productName, category, filters, purchaseHistory: rawPurchaseHistory, saleHistory: rawSaleHistory, damageHistory: rawDamageHistory, transferHistory: rawTransferHistory, activeBaseline } = reportData;
     const isFruitCategory = (category || '').toLowerCase() === 'fruit';
+
+    const baselineCutoffIso = (activeBaseline && activeBaseline.status === 'active' && activeBaseline.baselineDate)
+        ? activeBaseline.baselineDate
+        : null;
+    const isBaselineApplicable = Boolean(baselineCutoffIso);
+
+    const isPreBaselineRecord = (recordDate, recordCreatedAt) => {
+        if (!isBaselineApplicable) return false;
+        if (activeBaseline && activeBaseline.createdAt && recordCreatedAt) {
+            const baselineCreatedMs = new Date(activeBaseline.createdAt).getTime();
+            const recordCreatedMs = new Date(recordCreatedAt).getTime();
+            if (!isNaN(baselineCreatedMs) && !isNaN(recordCreatedMs) && recordCreatedMs >= baselineCreatedMs) {
+                return false; // POST-baseline
+            }
+        }
+        const rDate = (recordDate || recordCreatedAt || '').trim();
+        if (!rDate) return false;
+        const rTime = parseDate(rDate).getTime();
+        const bTime = new Date(baselineCutoffIso).getTime();
+        if (!isNaN(rTime) && !isNaN(bTime) && rTime !== 0) return rTime < bTime;
+        return rDate < baselineCutoffIso;
+    };
+
+    const matchingBaselineSnapshots = (isBaselineApplicable && Array.isArray(activeBaseline?.snapshotRecords))
+        ? activeBaseline.snapshotRecords.filter(s => (s.productName || s.product || '').trim().toLowerCase() === (productName || '').trim().toLowerCase())
+        : [];
 
     const partyOptions = [...new Set((rawSaleHistory || []).map(s => (s.companyName || '').trim()).filter(Boolean))].sort();
     const brandOptions = [...new Set([
         ...(rawPurchaseHistory || []).map(p => p.itemBrand || p.brand),
         ...(rawSaleHistory || []).map(s => s.itemBrand || s.brand),
         ...(rawDamageHistory || []).map(d => d.brand),
-        ...(rawTransferHistory || []).map(t => t.brand)
+        ...(rawTransferHistory || []).map(t => t.brand),
+        ...matchingBaselineSnapshots.map(s => s.brand)
     ].map(b => (b || '').trim()).filter(Boolean))].sort();
     const isLcPlaceholder = (v) => !v || v.toString().trim() === '-' || v.toString().trim() === '—' || v.toString().trim() === '--';
     const lcOptions = [...new Set([
         ...(rawPurchaseHistory || []).map(p => p.lcNo),
         ...(rawSaleHistory || []).map(s => s.lcNo),
         ...(rawDamageHistory || []).map(d => d.lcNo),
-        ...(rawTransferHistory || []).map(t => t.lcNo)
+        ...(rawTransferHistory || []).map(t => t.lcNo),
+        ...matchingBaselineSnapshots.map(s => s.lcNo)
     ].map(l => (l || '').trim()).filter(v => !isLcPlaceholder(v)))].sort();
     const warehouseOptions = [...new Set([
         ...(rawPurchaseHistory || []).map(p => p.warehouse || p.whName),
         ...(rawSaleHistory || []).map(s => s.itemWarehouse || s.warehouse || s.whName),
         ...(rawDamageHistory || []).map(d => d.warehouse || d.whName),
-        ...(rawTransferHistory || []).flatMap(t => [t.fromWh, t.toWh])
+        ...(rawTransferHistory || []).flatMap(t => [t.fromWh, t.toWh]),
+        ...matchingBaselineSnapshots.map(s => s.warehouse || s.whName)
     ].map(w => (w || '').trim()).filter(Boolean))].sort();
 
     const purchaseHistory = (rawPurchaseHistory || []).filter(p => {
@@ -236,9 +267,43 @@ const ProductHistoryReport = ({
 
     const isFilterApplied = Object.values(modalFilters).some(v => v !== '');
 
-    // Calculate Unified History with Running Balance
+    const baselineSnapshots = (() => {
+        if (!isBaselineApplicable || !Array.isArray(activeBaseline?.snapshotRecords)) return [];
+        return activeBaseline.snapshotRecords
+            .filter(snap => {
+                const pName = (snap.productName || snap.product || '').trim().toLowerCase();
+                if (pName !== (productName || '').trim().toLowerCase()) return false;
+                if (modalFilters.brand && (snap.brand || '').trim().toLowerCase() !== modalFilters.brand.trim().toLowerCase()) return false;
+                if (modalFilters.lcNo && !isLcMatch(snap.lcNo, modalFilters.lcNo)) return false;
+                if (modalFilters.warehouse) {
+                    const wh = (snap.warehouse || snap.whName || '').trim().toLowerCase();
+                    const filterWh = modalFilters.warehouse.trim().toLowerCase();
+                    if (wh !== filterWh && !wh.includes(filterWh) && !filterWh.includes(wh)) return false;
+                }
+                return (parseFloat(snap.quantity ?? snap.inHouseQuantity) || 0) > 0;
+            })
+            .map(snap => ({
+                type: 'baseline',
+                date: snap.date || baselineCutoffIso,
+                createdAt: snap.createdAt || baselineCutoffIso,
+                lcNo: snap.lcNo || '-',
+                itemExporter: '-',
+                invoiceNo: '-',
+                companyName: 'Initial Stage (Opening Stock Baseline)',
+                itemBrand: snap.brand,
+                itemQty: parseFloat(snap.quantity ?? snap.inHouseQuantity) || 0,
+                itemInHouseQty: parseFloat(snap.inHouseQuantity ?? snap.quantity) || 0,
+                itemShortageQty: 0,
+                warehouse: snap.warehouse || snap.whName || '',
+                whName: snap.warehouse || snap.whName || '',
+                fromWh: snap.warehouse || snap.whName || '',
+                toWh: snap.warehouse || snap.whName || '',
+                unit: snap.unit || 'kg'
+            }));
+    })();
+
+    // Calculate Unified History with Running Balance (All Receives, Sales, Transfers, Damages)
     const unifiedHistory = (() => {
-        // First, group purchases by Date/LC/Truck to match UI grouping
         const purchases = Object.values(purchaseHistory.reduce((acc, p) => {
             const key = `${p.date}_${p.lcNo}_${p.itemTruck || p.truckNo || ''}_${p.whName || p.warehouse || ''}`;
             if (!acc[key]) {
@@ -257,15 +322,12 @@ const ProductHistoryReport = ({
             
             const bKey = (p.itemBrand || '').trim().toLowerCase();
             if (!acc[key].brands[bKey]) {
-                // Store the itemInHouseQty but we need to be careful with the warehouse portion
-                // StockManagement now sends itemInHouseQty = (StockTableQty + WhTotal)
                 acc[key].brands[bKey] = {
                     qty: parseFloat(p.itemInHouseQty) || 0,
-                    stockTableQty: parseFloat(p.inHouseQuantity) || 0 // This should be the raw stock table remainder
+                    stockTableQty: parseFloat(p.inHouseQuantity) || 0
                 };
                 acc[key].itemInHouseQty += acc[key].brands[bKey].qty;
             } else {
-                // If same brand in same group, only add the stock table portion
                 const additionalStock = parseFloat(p.inHouseQuantity) || 0;
                 acc[key].brands[bKey].qty += additionalStock;
                 acc[key].brands[bKey].stockTableQty += additionalStock;
@@ -323,8 +385,6 @@ const ProductHistoryReport = ({
 
     const handlePrint = () => {
         const totalPurchaseQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemQty) || 0), 0);
-        
-        // Accurate total in-house calculation for header
         let totalInHouseQty = 0;
         if (activeTab === 'total') {
             totalInHouseQty = Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0);
@@ -672,20 +732,31 @@ const ProductHistoryReport = ({
                                                 const toMatch = !!currentWh && !!toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
                                                 const isTransferOut = item.type === 'transfer' && fromMatch && !toMatch;
                                                 const isTransferIn = item.type === 'transfer' && toMatch && !fromMatch;
+                                                const isInternalTransfer = item.type === 'transfer' && !currentWh;
+
+                                                const formattedTransferQty = Math.round(item.itemQty).toLocaleString('en-US');
 
                                                 let partyText = item.type === 'purchase' ? '-' : (item.companyName || '-');
-                                                if (item.type === 'transfer') {
-                                                    partyText = item.fromWh && item.toWh ? `Transfer (${item.fromWh} → ${item.toWh})` : 'Transfer';
+                                                if (item.type === 'baseline') {
+                                                    partyText = 'Initial Stage (Opening Stock Baseline)';
+                                                } else if (item.type === 'transfer') {
+                                                    if (isTransferOut) {
+                                                        partyText = `Transfer Out → ${item.toWh || '-'}`;
+                                                    } else if (isTransferIn) {
+                                                        partyText = `Transfer In ← ${item.fromWh || '-'}`;
+                                                    } else {
+                                                        partyText = item.fromWh && item.toWh ? `Transfer (${item.fromWh} → ${item.toWh}) [${formattedTransferQty} kg]` : `Transfer [${formattedTransferQty} kg]`;
+                                                    }
                                                 }
 
                                                 return (
-                                                    <tr key={idx} className="border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors">
+                                                    <tr key={idx} className={`border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors ${item.type === 'baseline' ? 'bg-amber-50/40 font-bold' : ''}`}>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{formatDate(item.date)}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900 text-center ">{item.lcNo || '-'}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{item.itemExporter || '-'}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center">{item.invoiceNo || '-'}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium whitespace-nowrap">{partyText}</td>
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{item.type === 'purchase' || isTransferIn ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{item.type === 'purchase' || item.type === 'baseline' || isTransferIn ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{item.type === 'sale' || isTransferOut ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-700 font-black">{Math.round(item.runningInHouse).toLocaleString('en-US')} kg</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'}</td>

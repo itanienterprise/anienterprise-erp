@@ -752,6 +752,7 @@ function App() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [allStockRecords, setAllStockRecords] = useState([]);
+  const [activeBaseline, setActiveBaseline] = useState(null);
   const stockRecords = useMemo(() => {
     return allStockRecords.filter(item => {
       const status = (item.status || '').toLowerCase();
@@ -991,6 +992,7 @@ function App() {
       fetchStockRecords(); // Fetch stock records for LC No dropdown
     } else if (currentView === 'stock-section' || currentView === 'lc-entry-section' || currentView === 'general-sale-section' || currentView === 'border-sale-section' || currentView === 'profit-loss-section') {
       fetchStockRecords();
+      fetchStockBaseline();
       fetchWarehouses(); // Fetch warehouse data
       fetchSales(); // Fetch sales data
       fetchPorts(); // Fetch ports to populate the dropdown
@@ -1415,10 +1417,22 @@ function App() {
   };
 
 
+  const fetchStockBaseline = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/stock-baseline/active`);
+      setActiveBaseline(res.data || null);
+    } catch (error) {
+      console.error('Error fetching stock baseline:', error);
+    }
+  };
+
   const fetchStockRecords = async () => {
     setIsLoading(true);
     try {
-      const stockRes = await axios.get(`${API_BASE_URL}/api/stock`);
+      const [stockRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/stock`),
+        fetchStockBaseline()
+      ]);
       const rawStock = Array.isArray(stockRes.data) ? stockRes.data : [];
       setAllStockRecords(rawStock);
     } catch (error) {
@@ -1887,6 +1901,8 @@ function App() {
             refreshPendingIndicators={fetchPendingEntries}
             showRate={showRate}
             setShowRate={setShowRate}
+            activeBaseline={activeBaseline}
+            fetchStockBaseline={fetchStockBaseline}
           />
         );
       case 'products-section':
@@ -2156,12 +2172,12 @@ function App() {
   };
 
   const getGlobalStockData = () => {
-    return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords, products, damages);
+    return calculateStockData(stockRecords, stockFilters, '', warehouseData, salesRecords, products, damages, activeBaseline);
   };
 
   const stockData = useMemo(() => {
     return getGlobalStockData();
-  }, [stockRecords, stockFilters, warehouseData, salesRecords, products, damages]);
+  }, [stockRecords, stockFilters, warehouseData, salesRecords, products, damages, activeBaseline]);
 
   if (isCheckingSession) {
     return (
@@ -3183,6 +3199,7 @@ function App() {
         products={products}
         damages={damages}
         showRate={showRate}
+        activeBaseline={activeBaseline}
       />
 
       {/* Product History Report Modal */}

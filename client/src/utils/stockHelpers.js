@@ -1,5 +1,5 @@
 // Helper to parse numbers safely and handle potential strings with commas
-const safeParse = (val) => {
+export const safeParse = (val) => {
     if (val === undefined || val === null || val === '') return 0;
     const parsed = typeof val === 'string' ? parseFloat(val.replace(/,/g, '')) : parseFloat(val);
     return isNaN(parsed) ? 0 : parsed;
@@ -186,7 +186,7 @@ export const reconcilePriceReportBrandList = (brandList) => {
         }
 
         // Keep entries that represent actual stock arrival / positive stock
-        const validEntries = group.entries.filter(e => 
+        const validEntries = group.entries.filter(e =>
             (e.openingQuantity || 0) > 0 || (e.inHouseQuantity || 0) > 0 || (e.closingQuantity || 0) > 0
         );
 
@@ -235,7 +235,7 @@ export const reconcilePriceReportBrandList = (brandList) => {
     });
 };
 
-export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = []) => {
+export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery = '', warehouseData = [], salesRecords = [], products = [], damages = [], activeBaseline = null) => {
     const isPriceReport = Boolean(stockFilters && (stockFilters.reportType === 'price' || stockFilters.showRate === true));
 
     const isWhFilter = stockFilters && stockFilters.warehouse &&
@@ -248,20 +248,30 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     if (!isWhFilter && (!stockFilters || !stockFilters._isSubCall)) {
         const whSet = new Set();
         (warehouseData || []).forEach(w => {
-            const name = (w.name || w.whName || w.warehouse || w.fromWh || w.toWh || '').trim();
+            const name = (w.name || w.whName || w.warehouse || '').trim();
             if (name && name !== 'Inventory Adjustment') whSet.add(name);
+            const fromName = (w.fromWh || '').trim();
+            if (fromName && fromName !== 'Inventory Adjustment') whSet.add(fromName);
+            const toName = (w.toWh || '').trim();
+            if (toName && toName !== 'Inventory Adjustment') whSet.add(toName);
         });
         (stockRecords || []).forEach(s => {
             const name = (s.name || s.whName || s.warehouse || '').trim();
             if (name && name !== 'Inventory Adjustment') whSet.add(name);
         });
+        if (activeBaseline && activeBaseline.status === 'active' && Array.isArray(activeBaseline.snapshotRecords)) {
+            activeBaseline.snapshotRecords.forEach(s => {
+                const name = (s.warehouse || s.whName || '').trim();
+                if (name && name !== 'Inventory Adjustment') whSet.add(name);
+            });
+        }
         const whList = Array.from(whSet);
 
         if (whList.length > 0) {
             const combinedProductsMap = {};
             whList.forEach(whName => {
                 const subFilters = { ...(stockFilters || {}), warehouse: whName, _isSubCall: true };
-                const whRes = calculateStockData(stockRecords, subFilters, stockSearchQuery, warehouseData, salesRecords, products, damages);
+                const whRes = calculateStockData(stockRecords, subFilters, stockSearchQuery, warehouseData, salesRecords, products, damages, activeBaseline);
                 (whRes.displayRecords || []).forEach(rec => {
                     const pName = rec.productName;
                     if (!combinedProductsMap[pName]) {
@@ -348,12 +358,36 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 });
             });
 
+            const baselineCutoffIso = (activeBaseline && activeBaseline.status === 'active' && activeBaseline.baselineDate)
+                ? activeBaseline.baselineDate
+                : null;
+            const isBaselineApplicable = Boolean(baselineCutoffIso);
+
+            const isPreBaselineRecord = (recordDate, recordCreatedAt) => {
+                if (!isBaselineApplicable) return false;
+                if (activeBaseline && activeBaseline.createdAt && recordCreatedAt) {
+                    const baselineCreatedMs = new Date(activeBaseline.createdAt).getTime();
+                    const recordCreatedMs = new Date(recordCreatedAt).getTime();
+                    if (!isNaN(baselineCreatedMs) && !isNaN(recordCreatedMs) && recordCreatedMs >= baselineCreatedMs) {
+                        return false;
+                    }
+                }
+                const rDate = (recordDate || recordCreatedAt || '').trim();
+                if (!rDate) return false;
+                const rTime = new Date(rDate).getTime();
+                const bTime = new Date(baselineCutoffIso).getTime();
+                if (!isNaN(rTime) && !isNaN(bTime)) return rTime < bTime;
+                return rDate < baselineCutoffIso;
+            };
+
             let cumulativeDamageQty = 0;
             if (Array.isArray(damages)) {
                 damages.forEach(damage => {
-                    const dDate = (damage.date || damage.createdAt || '').split('T')[0];
+                    if (isPreBaselineRecord(damage.date, damage.createdAt)) return;
+                    const dDate = damage.date || damage.createdAt || '';
+                    const dDateOnly = dDate.split('T')[0];
                     const endDate = stockFilters?.endDate || '';
-                    if (endDate && dDate > endDate) return;
+                    if (endDate && dDateOnly > endDate) return;
                     cumulativeDamageQty += safeParse(damage.quantity);
                 });
             }
@@ -410,6 +444,73 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     const consumedSales = new Set(); // Track consumed sale entries to prevent double-counting across quality grades
     const consumedDamages = new Set(); // Track consumed damages to prevent double-counting
 
+    const baselineCutoffIso = (activeBaseline && activeBaseline.status === 'active' && activeBaseline.baselineDate)
+        ? activeBaseline.baselineDate
+        : null;
+    const isBaselineApplicable = Boolean(baselineCutoffIso);
+
+    const isPreBaselineRecord = (recordDate, recordCreatedAt) => {
+        if (!isBaselineApplicable) return false;
+        if (activeBaseline && activeBaseline.createdAt && recordCreatedAt) {
+            const baselineCreatedMs = new Date(activeBaseline.createdAt).getTime();
+            const recordCreatedMs = new Date(recordCreatedAt).getTime();
+            if (!isNaN(baselineCreatedMs) && !isNaN(recordCreatedMs) && recordCreatedMs >= baselineCreatedMs) {
+                return false;
+            }
+        }
+        const rDate = (recordDate || recordCreatedAt || '').trim();
+        if (!rDate) return false;
+        const rTime = new Date(rDate).getTime();
+        const bTime = new Date(baselineCutoffIso).getTime();
+        if (!isNaN(rTime) && !isNaN(bTime)) return rTime < bTime;
+        return rDate < baselineCutoffIso;
+    };
+
+    // 0. Seed Initial Baseline Records (if active baseline exists)
+    if (isBaselineApplicable && Array.isArray(activeBaseline.snapshotRecords)) {
+        activeBaseline.snapshotRecords.forEach((snap, idx) => {
+            const snapWh = (snap.warehouse || snap.whName || '').trim();
+            if (isWhFilter) {
+                const filterWH = stockFilters.warehouse.trim().toLowerCase();
+                const snapWhLower = snapWh.toLowerCase();
+                if (snapWhLower !== filterWH && !snapWhLower.includes(filterWH) && !filterWH.includes(snapWhLower)) return;
+            }
+            const snapQty = safeParse(snap.quantity ?? snap.inHouseQuantity);
+            const snapPkt = safeParse(snap.packet ?? snap.inHousePacket);
+            if (snapQty <= 0 && snapPkt <= 0) return;
+
+            const pName = (snap.productName || snap.product || '').trim();
+            const bName = (snap.brand || 'No Brand').trim();
+            const uniqueId = `baseline_${snapWh}_${pName}_${bName}_${idx}`;
+            if (seenRecords.has(uniqueId)) return;
+            seenRecords.add(uniqueId);
+
+            const rq = resolveQuality(pName, bName);
+            const qualityVal = rq !== '-' ? rq : (snap.quality || '-');
+
+            rawExpanded.push({
+                ...snap,
+                _id: uniqueId,
+                date: snap.date || baselineCutoffIso,
+                createdAt: snap.createdAt || baselineCutoffIso,
+                productName: pName,
+                brand: bName,
+                quality: qualityVal,
+                warehouse: snapWh,
+                whName: snapWh,
+                quantity: snapQty,
+                packet: snapPkt,
+                inHouseQuantity: snapQty,
+                inHousePacket: snapPkt,
+                packetSize: safeParse(snap.packetSize) || resolvePacketSize(pName, bName, snap.packetSize) || 30,
+                purchasedPrice: safeParse(snap.purchasedPrice ?? snap.rate),
+                lcNo: snap.lcNo || '',
+                unit: snap.unit || 'kg',
+                recordType: 'baseline'
+            });
+        });
+    }
+
     // Build Map of order reference + product + brand -> sold quantity from General Sales
     // Key: `${ref}_${normProductName}_${normBrand}`
     const orderFulfilledQtyMap = {};
@@ -447,6 +548,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const itemStatus = (item.status || '').toLowerCase();
         if (itemStatus.includes('requested') || itemStatus.includes('rejected')) return;
 
+        if (isPreBaselineRecord(item.date, item.createdAt)) return;
+
         if (item.brandEntries && item.brandEntries.length > 0) {
             item.brandEntries.forEach((entry, idx) => {
                 const uniqueId = `${item._id}_brand_${idx}`;
@@ -478,24 +581,38 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         } else {
             if (seenRecords.has(item._id)) return;
             seenRecords.add(item._id);
-                const q = (() => {
-                    const rq = resolveQuality(item.productName || item.product, item.brand);
-                    return rq !== '-' ? rq : (item.quality || '-');
-                })();
-                rawExpanded.push({
-                    ...item,
-                    recordType: 'stock',
-                    quality: q,
-                    purchasedPrice: safeParse(item.purchasedPrice ?? item.rate),
-                    // InHouse quantity is already net (Quantity - Shortage)
-                    inHouseQuantity: safeParse(item.inHouseQuantity ?? item.inhouseQty ?? item.quantity),
-                    inHousePacket: safeParse(item.inHousePacket ?? item.inhousePkt ?? item.packet)
-                });
+            const q = (() => {
+                const rq = resolveQuality(item.productName || item.product, item.brand);
+                return rq !== '-' ? rq : (item.quality || '-');
+            })();
+            rawExpanded.push({
+                ...item,
+                recordType: 'stock',
+                quality: q,
+                purchasedPrice: safeParse(item.purchasedPrice ?? item.rate),
+                // InHouse quantity is already net (Quantity - Shortage)
+                inHouseQuantity: safeParse(item.inHouseQuantity ?? item.inhouseQty ?? item.quantity),
+                inHousePacket: safeParse(item.inHousePacket ?? item.inhousePkt ?? item.packet)
+            });
         }
     });
 
-    // Build Map of LC / Product / Brand -> Rate from primary stock records (LC Receive)
+    // Build Map of LC / Product / Brand -> Rate from primary stock records and baseline records
     const lcRateMap = {};
+    if (isBaselineApplicable && Array.isArray(activeBaseline.snapshotRecords)) {
+        activeBaseline.snapshotRecords.forEach(snap => {
+            const itemLc = (snap.lcNo || '').trim().toLowerCase();
+            const pKey = (snap.productName || snap.product || '').trim().toLowerCase();
+            const bKey = (snap.brand || '').trim().toLowerCase();
+            const price = safeParse(snap.purchasedPrice ?? snap.rate);
+            if (price > 0) {
+                if (itemLc && itemLc !== '-') lcRateMap[`${itemLc}_${pKey}_${bKey}`] = price;
+                if (pKey && bKey) lcRateMap[`${pKey}_${bKey}`] = price;
+                if (itemLc && itemLc !== '-') lcRateMap[itemLc] = price;
+            }
+        });
+    }
+
     (stockRecords || []).forEach(item => {
         const itemLc = (item.lcNo || '').trim().toLowerCase();
         const pKey = (item.productName || item.product || '').trim().toLowerCase();
@@ -541,6 +658,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (seenRecords.has(whItem._id)) return;
         seenRecords.add(whItem._id);
 
+        if (isPreBaselineRecord(whItem.date, whItem.createdAt)) return;
+
         let resolvedPktSize = safeParse(whItem.packetSize ?? whItem.size);
         if (resolvedPktSize <= 0 && Array.isArray(products)) {
             const pName = (whItem.productName || whItem.product || '').trim().toLowerCase();
@@ -585,6 +704,27 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     packetSize: resolvedPktSize || 30,
                     unit: whItem.unit || 'kg',
                     recordType: 'warehouse_dest'
+                });
+            }
+
+            // Source Entry (- stock at source warehouse)
+            if (srcWhName && isBaselineApplicable) {
+                rawExpanded.push({
+                    ...whItem,
+                    _id: `${whItem._id}_src`,
+                    date: whItem.date || whItem.createdAt || new Date().toISOString(),
+                    productName: pName,
+                    warehouse: srcWhName,
+                    whName: srcWhName,
+                    quality: qualityVal,
+                    purchasedPrice: whPrice,
+                    quantity: -itemQty,
+                    packet: -itemPkt,
+                    inHouseQuantity: -itemQty,
+                    inHousePacket: -itemPkt,
+                    packetSize: resolvedPktSize || 30,
+                    unit: whItem.unit || 'kg',
+                    recordType: 'warehouse_src_transfer'
                 });
             }
         } else {
@@ -737,6 +877,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 if (!isOrderSale && sStatus === 'requested') return;
 
                 const sDate = (sale.date || sale.createdAt || '').split('T')[0];
+                if (!isOrderSale && isPreBaselineRecord(sale.date, sale.createdAt)) return;
                 if (endDate && sDate > endDate) return;
 
                 const isBeforeSale = startDate && sDate < startDate;
@@ -845,10 +986,11 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (!brandObj._damagesResolved) {
             damages.forEach(damage => {
                 const dDate = (damage.date || damage.createdAt || '').split('T')[0];
+                if (isPreBaselineRecord(damage.date, damage.createdAt)) return;
                 if (endDate && dDate > endDate) return;
 
                 const isBeforeDamage = startDate && dDate < startDate;
-                
+
                 const dProdName = (damage.productName || damage.product || '').trim().toLowerCase();
                 const dBrand = (damage.brand || 'No Brand').trim().toLowerCase();
                 const dWh = (damage.warehouse || '').trim().toLowerCase();
@@ -938,6 +1080,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (sStatus === 'rejected' || sStatus === 'cancelled') return;
         if (isOrderSale && (sStatus === 'requested' || sStatus === 'pending')) return;
         if (!isOrderSale && sStatus === 'requested') return;
+        if (!isOrderSale && isPreBaselineRecord(sale.date, sale.createdAt)) return;
         if (endDate && (sale.date || '').split('T')[0] > endDate) return;
 
         (sale.items || []).forEach((si, siIdx) => {
@@ -976,7 +1119,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             itemBrandEntries.forEach((be, beIdx) => {
                 const saleWH = (be.warehouseName || si.whName || si.warehouse || sale.warehouse || sale.whName || '').trim().toLowerCase();
                 if (isWhFilter && saleWH && !saleWH.startsWith(stockFilters.warehouse.toLowerCase()) && saleWH !== stockFilters.warehouse.toLowerCase()) return;
-                
+
                 // ADDED: Brand filter for General products
                 if (stockFilters.brand) {
                     const itemBrand = (be.brand || '').trim().toLowerCase();
@@ -994,7 +1137,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 const normQuality = resolvedQ.trim().toLowerCase();
                 const beLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim();
                 const bePrice = parseFloat(be.purchasedPrice) || 0;
- 
+
                 if (stockFilters.lcNo && !isLcMatch(beLc, stockFilters.lcNo)) return;
                 if (stockSearchQuery) {
                     const q = stockSearchQuery.toLowerCase();
@@ -1005,7 +1148,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 }
 
                 const subKey = `${normQuality}_${normBrand}_${beLc.toLowerCase()}`;
-                
+
                 if (!group.brands[subKey]) {
                     let resolvedPktSize = safeParse(be.packetSize);
                     if (resolvedPktSize <= 0 && Array.isArray(products)) {
@@ -1082,7 +1225,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     });
                     brandObj._damagesResolved = true;
                 }
-                
+
                 const saleEntryId = `${sale._id}_${siIdx}_${beIdx}`;
                 if (!consumedSales.has(saleEntryId)) {
                     consumedSales.add(saleEntryId);
@@ -1151,7 +1294,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const isGrossArrival = false;
             const openingAfterShortage = isGrossArrival ? (totalIn - shortageQty) : totalIn;
             const openingPktAfterShortage = isGrossArrival ? (totalPkt - b.sweepedPacket) : totalPkt;
-            
+
             const closingQty = openingAfterShortage - saleQty - damageQty;
             const closingPkt = openingPktAfterShortage - b.salePacket - (b.damagePacket || 0);
 
@@ -1302,7 +1445,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             filteredBrands = filteredBrands.filter(b => (b.inHouseQuantity || 0) > 0.001);
         } else {
             // Standard view: keep items with positive in-house stock, opening, sale, or active pending orders
-            filteredBrands = filteredBrands.filter(b => 
+            filteredBrands = filteredBrands.filter(b =>
                 (b.inHouseQuantity || 0) > 0.001 ||
                 (b.orderQuantity || 0) > 0.001 ||
                 (b.openingQuantity || 0) > 0.001 ||

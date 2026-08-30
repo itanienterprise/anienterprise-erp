@@ -688,7 +688,7 @@ export const generateLCReceiveReportPDF = (reportData, filters, summary) => {
     }
 };
 
-export const generateStockReportPDF = async (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products, damages = [], searchQuery = '') => {
+export const generateStockReportPDF = async (stockData, filters, reportType = 'short', stockRecords, warehouseData, salesRecords, products, damages = [], searchQuery = '', activeBaseline = null) => {
     try {
         const doc = new jsPDF();
 
@@ -836,7 +836,8 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             ? (() => {
                 const fromStock = stockRecords.map(item => (item.warehouse || item.whName || '').trim()).filter(Boolean);
                 const fromWh = warehouseData ? warehouseData.map(item => (item.whName || item.warehouse || '').trim()).filter(Boolean) : [];
-                const options = [...new Set([...fromStock, ...fromWh])].sort();
+                const fromBaseline = (activeBaseline && Array.isArray(activeBaseline.snapshotRecords)) ? activeBaseline.snapshotRecords.map(s => (s.warehouse || s.whName || '').trim()).filter(Boolean) : [];
+                const options = [...new Set([...fromStock, ...fromWh, ...fromBaseline])].sort();
 
                 // Priority: HILI first, then BOGURA, then others
                 const hili = options.filter(o => o.toUpperCase().includes('HILI'));
@@ -846,7 +847,7 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
 
                 return sortedOptions.map(wh => ({
                     name: wh,
-                    data: calculateStockData(stockRecords, { ...filters, warehouse: wh, reportType }, searchQuery, warehouseData, salesRecords, products, damages)
+                    data: calculateStockData(stockRecords, { ...filters, warehouse: wh, reportType }, searchQuery, warehouseData, salesRecords, products, damages, activeBaseline)
                 })).filter(w => w.data.displayRecords.length > 0);
             })()
             : [{ name: filters.warehouse, data: stockData }];
@@ -3055,10 +3056,10 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 item.itemExporter || '-',
                 item.itemBrand || '-',
                 parseFloat(item.itemPurchasedPrice || 0).toLocaleString('en-IN'),
-                item.itemPacket.toLocaleString('en-US'),
-                `${Math.round(item.itemQty).toLocaleString('en-US')} kg`,
-                `${Math.round(item.itemInHouseQty).toLocaleString('en-US')} kg`,
-                `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg`
+                parseFloat(item.itemPacket || 0).toLocaleString('en-US'),
+                `${Math.round(parseFloat(item.itemQty || 0)).toLocaleString('en-US')} kg`,
+                `${Math.round(parseFloat(item.itemInHouseQty || 0)).toLocaleString('en-US')} kg`,
+                `${Math.round(parseFloat(item.itemShortageQty || 0)).toLocaleString('en-US')} kg`
             ]);
             const purchaseFoot = [[
                 { content: 'TOTAL PURCHASE', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -3138,14 +3139,14 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 saleHead = [['Date', 'LC No', 'Invoice', 'Company', 'Brand', 'Bag', 'Qty', 'Price', 'Total Price']];
                 saleBody = sortedSaleData.map(sale => [
                     formatDate(sale.date),
-                    sale.lcNo ? sale.lcNo.slice(-4) : '-',
+                    sale.lcNo ? (sale.lcNo.length > 4 ? sale.lcNo.slice(-4) : sale.lcNo) : '-',
                     sale.invoiceNo || '-',
                     sale.companyName || '-',
                     sale.itemBrand || '-',
-                    sale.itemPacket.toLocaleString('en-US'),
-                    `${sale.itemQty.toLocaleString('en-US')} kg`,
-                    sale.itemPrice.toLocaleString('en-IN'),
-                    sale.itemTotal.toLocaleString('en-IN')
+                    parseFloat(sale.itemPacket || 0).toLocaleString('en-US'),
+                    `${Math.round(parseFloat(sale.itemQty || 0)).toLocaleString('en-US')} kg`,
+                    parseFloat(sale.itemPrice || 0).toLocaleString('en-IN'),
+                    parseFloat(sale.itemTotal || 0).toLocaleString('en-IN')
                 ]);
                 saleFoot = [[
                     { content: 'TOTAL SALE', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },

@@ -20,6 +20,7 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     const [damagesRecords, setDamagesRecords] = useState([]);
     const [products, setProducts] = useState([]);
     const [transferLogs, setTransferLogs] = useState([]);
+    const [activeBaseline, setActiveBaseline] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
     const [showForm, setShowForm] = useState(false);
@@ -119,13 +120,16 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const [whRes, stockRes, prodRes, salesRes, damagesRes] = await Promise.all([
+            const [whRes, stockRes, prodRes, salesRes, damagesRes, baselineRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/warehouses`),
                 axios.get(`${API_BASE_URL}/api/stock`),
                 axios.get(`${API_BASE_URL}/api/products`),
                 axios.get(`${API_BASE_URL}/api/sales`),
-                axios.get(`${API_BASE_URL}/api/damages`)
+                axios.get(`${API_BASE_URL}/api/damages`),
+                axios.get(`${API_BASE_URL}/api/stock-baseline/active`).catch(() => ({ data: null }))
             ]);
+
+            setActiveBaseline(baselineRes.data || null);
 
             const rawWh = Array.isArray(whRes.data) ? whRes.data : [];
             const logs = [];
@@ -247,11 +251,12 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             warehouseData,
             salesRecords,
             products,
-            damagesRecords
+            damagesRecords,
+            activeBaseline
         );
 
         return res?.displayRecords || [];
-    }, [formData.fromWh, stockRecords, warehouseData, salesRecords, products, damagesRecords]);
+    }, [formData.fromWh, stockRecords, warehouseData, salesRecords, products, damagesRecords, activeBaseline]);
 
     // Available Products for Form
     const availableFormProducts = useMemo(() => {
@@ -690,10 +695,16 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                 };
                 delete updatedRecord._sourceType;
 
-                if (sourceRecord._sourceType === 'stock') {
-                    await axios.put(`${API_BASE_URL}/api/stock/${sourceRecord._id}`, updatedRecord);
-                } else {
-                    await axios.put(`${API_BASE_URL}/api/warehouses/${sourceRecord._id}`, updatedRecord);
+                // Protect pre-baseline historical records from mutation
+                const isPreBaseline = activeBaseline && activeBaseline.status === 'active' &&
+                    (sourceRecord.date || sourceRecord.createdAt || '') < activeBaseline.baselineDate;
+
+                if (!isPreBaseline) {
+                    if (sourceRecord._sourceType === 'stock') {
+                        await axios.put(`${API_BASE_URL}/api/stock/${sourceRecord._id}`, updatedRecord);
+                    } else {
+                        await axios.put(`${API_BASE_URL}/api/warehouses/${sourceRecord._id}`, updatedRecord);
+                    }
                 }
 
                 transferQty -= deductQty;
