@@ -4330,9 +4330,12 @@ function LCReceive({
                                                     {renderSortIcon('billOfEntry')}
                                                 </div>
                                             </th>
-                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
                                             <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Truck</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Brand</th>
                                             <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-red-500 uppercase tracking-wider">Short</th>
+                                            <th className="px-6 py-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Inhouse Qty</th>
                                             {isRequestedOnly && (
                                                 <th
                                                     className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
@@ -4350,7 +4353,7 @@ function LCReceive({
                                     <tbody className="divide-y divide-gray-100">
                                         {filteredRecords.length === 0 ? (
                                             <tr>
-                                                <td colSpan={(isSelectionMode || selectedItems.size > 0) ? (isRequestedOnly ? 15 : 14) : (isRequestedOnly ? 14 : 13)} className="px-6 py-12 text-center text-gray-400 bg-white/50">
+                                                <td colSpan={(isSelectionMode || selectedItems.size > 0) ? (isRequestedOnly ? 18 : 17) : (isRequestedOnly ? 17 : 16)} className="px-6 py-12 text-center text-gray-400 bg-white/50">
                                                     <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                                     <p>No LC receive records found</p>
                                                 </td>
@@ -4358,11 +4361,16 @@ function LCReceive({
                                         ) : (
                                             groupedRecordsList.map((entry) => {
                                                 const uniqueEntriesMap = entry.entries.reduce((acc, item) => {
-                                                    const key = `${item.productName}-${item.truckNo}-${item.unit}`;
+                                                    const key = `${item.productName}-${item.brand || ''}-${item.truckNo}-${item.unit}`;
                                                     if (!acc[key]) {
-                                                        acc[key] = { ...item, quantity: 0 };
+                                                        acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0 };
                                                     }
-                                                    acc[key].quantity += (parseFloat(item.quantity) || 0);
+                                                    const itemQty = parseFloat(item.quantity) || 0;
+                                                    const swpQty = parseFloat(item.sweepedQuantity) || 0;
+                                                    const inHouse = parseFloat(item.inHouseQuantity) || (itemQty - swpQty);
+                                                    acc[key].quantity += itemQty;
+                                                    acc[key].sweepedQuantity += swpQty;
+                                                    acc[key].inHouseQuantity += inHouse;
                                                     return acc;
                                                 }, {});
                                                 const uniqueEntries = Object.values(uniqueEntriesMap);
@@ -4439,11 +4447,36 @@ function LCReceive({
                                                             })()}
                                                         </td>
                                                         <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.port || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap align-middle">{entry.importer || '-'}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.exporter || '-'}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle min-w-[130px] max-w-[170px]">
+                                                            {(() => {
+                                                                const importers = [...new Set((entry.entries || []).map(e => e.importer).filter(Boolean))];
+                                                                const displayImporters = importers.length > 0 ? importers : (entry.importer ? [entry.importer] : []);
+                                                                return displayImporters.length > 0
+                                                                    ? displayImporters.map((imp, idx) => (
+                                                                        <div key={idx} className="leading-tight py-0.5 border-b border-gray-100 last:border-0 line-clamp-2" title={imp}>{imp}</div>
+                                                                    ))
+                                                                    : <span>-</span>;
+                                                            })()}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm text-gray-600 align-middle min-w-[130px] max-w-[170px]">
+                                                            {(() => {
+                                                                const exporters = [...new Set((entry.entries || []).map(e => e.exporter).filter(Boolean))];
+                                                                const displayExporters = exporters.length > 0 ? exporters : (entry.exporter ? [entry.exporter] : []);
+                                                                return displayExporters.length > 0
+                                                                    ? displayExporters.map((exp, idx) => (
+                                                                        <div key={idx} className="leading-tight py-0.5 border-b border-gray-100 last:border-0 line-clamp-2" title={exp}>{exp}</div>
+                                                                    ))
+                                                                    : <span>-</span>;
+                                                            })()}
+                                                        </td>
                                                         <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.indianCnF || '-'}</td>
                                                         <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.bdCnF || '-'}</td>
                                                         <td className="px-6 py-4 text-sm text-gray-600 align-middle">{entry.billOfEntry || '-'}</td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600 align-middle">
+                                                        {uniqueEntries.map((item, idx) => (
+                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{item.truckNo || '0'}</div>
+                                                        ))}
+                                                    </td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 align-middle">
                                                         {uniqueEntries.map((item, idx) => (
                                                             <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0 truncate max-w-xs">{item.productName || '-'}</div>
@@ -4451,13 +4484,30 @@ function LCReceive({
                                                     </td>
                                                     <td className="px-6 py-4 text-sm text-gray-600 align-middle">
                                                         {uniqueEntries.map((item, idx) => (
-                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{item.truckNo || '0'}</div>
+                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0 truncate max-w-xs">{item.brand || '-'}</div>
                                                         ))}
                                                     </td>
                                                     <td className="px-6 py-4 text-sm font-medium text-gray-900 align-middle">
                                                         {uniqueEntries.map((item, idx) => (
-                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{Math.round(item.quantity)}</div>
+                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">{Math.round(item.quantity).toLocaleString('en-US')}</div>
                                                         ))}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm font-semibold text-red-500 align-middle">
+                                                        {uniqueEntries.map((item, idx) => (
+                                                            <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
+                                                                {parseFloat(item.sweepedQuantity) > 0 ? Math.round(item.sweepedQuantity).toLocaleString('en-US') : '-'}
+                                                            </div>
+                                                        ))}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm font-bold text-blue-700 align-middle">
+                                                        {uniqueEntries.map((item, idx) => {
+                                                            const inHouse = parseFloat(item.inHouseQuantity) || ((parseFloat(item.quantity) || 0) - (parseFloat(item.sweepedQuantity) || 0));
+                                                            return (
+                                                                <div key={idx} className="leading-6 py-1 border-b border-gray-100 last:border-0">
+                                                                    {Math.round(inHouse).toLocaleString('en-US')}
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </td>
                                                     {isRequestedOnly && (
                                                         <td className="px-6 py-4 text-sm text-gray-600 align-middle whitespace-nowrap">
