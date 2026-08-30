@@ -2281,6 +2281,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                 />
                                             </th>
                                         )}
+                                        <th className="sale-mgmt-th w-12 text-center">SL</th>
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
@@ -2311,7 +2312,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                     {isLoading ? (
                                         Array(5).fill(0).map((_, i) => (
                                             <tr key={i} className="animate-pulse">
-                                                <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
+                                                <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 12 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
                                                     <div className="flex flex-col items-center gap-2">
                                                         <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
                                                             <DollarSignIcon className="w-6 h-6 text-blue-500" />
@@ -2322,7 +2323,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                             </tr>
                                         ))
                                     ) : displayedGroups.length > 0 ? (
-                                        displayedGroups.map((group) => {
+                                        displayedGroups.map((group, index) => {
                                             const isMultiple = group.items.length > 1;
                                             const isExpanded = !collapsedRows.has(group.key);
                                             const paidAmount = group.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -2378,6 +2379,9 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                             />
                                                         </td>
                                                     )}
+                                                    <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} text-center whitespace-nowrap`}>
+                                                        <div className="text-xs font-bold text-gray-500">{index + 1}</div>
+                                                    </td>
                                                     <td className={`px-3 ${!isExpanded ? 'py-4' : 'py-3'} whitespace-nowrap`}>
                                                         <div className="text-sm font-medium text-gray-600 leading-tight">{formatDate(group.date)}</div>
                                                     </td>
@@ -2578,7 +2582,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 11 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
+                                            <td colSpan={(selectedItems.size > 0 ? 1 : 0) + 12 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center">
                                                         <SearchIcon className="w-6 h-6 text-gray-400" />
