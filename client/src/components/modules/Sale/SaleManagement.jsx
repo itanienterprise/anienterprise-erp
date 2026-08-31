@@ -2443,32 +2443,173 @@ const SaleManagement = ({
         return found ? found.name : name;
     };
 
+    const allAvailableLCs = useMemo(() => {
+        const list = [...(lcRecords || [])];
+        const seenLcNos = new Set(list.map(l => (l.lcNo || l.lcNumber || '').toString().trim().toLowerCase()).filter(Boolean));
+
+        (stockRecords || []).forEach(st => {
+            const stLc = (st.lcNo || '').toString().trim();
+            if (stLc && !seenLcNos.has(stLc.toLowerCase())) {
+                seenLcNos.add(stLc.toLowerCase());
+                list.push({
+                    _id: `stock-lc-${stLc}`,
+                    lcNo: stLc,
+                    importerName: st.importer || st.supplier || st.importerName || 'Stock Entry',
+                    productName: st.productName || st.product || '',
+                    brand: st.brand || '',
+                    port: st.port || '',
+                    isStockOnly: true
+                });
+            }
+        });
+        return list;
+    }, [lcRecords, stockRecords]);
+
+    const getLcProductNames = (lc) => {
+        if (!lc) return [];
+        const productNamesSet = new Set();
+        if (lc.productName) productNamesSet.add(lc.productName.toString().trim());
+        if (lc.product) productNamesSet.add(lc.product.toString().trim());
+        if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
+            lc.productsList.forEach(p => {
+                if (typeof p === 'string' && p.trim()) productNamesSet.add(p.trim());
+                else if (p) {
+                    if (p.productName) productNamesSet.add(p.productName.toString().trim());
+                    if (p.product) productNamesSet.add(p.product.toString().trim());
+                    if (p.name) productNamesSet.add(p.name.toString().trim());
+                }
+            });
+        }
+        if (Array.isArray(lc.products) && lc.products.length > 0) {
+            lc.products.forEach(p => {
+                if (typeof p === 'string' && p.trim()) productNamesSet.add(p.trim());
+                else if (p) {
+                    if (p.productName) productNamesSet.add(p.productName.toString().trim());
+                    if (p.product) productNamesSet.add(p.product.toString().trim());
+                    if (p.name) productNamesSet.add(p.name.toString().trim());
+                }
+            });
+        }
+        if (Array.isArray(lc.items) && lc.items.length > 0) {
+            lc.items.forEach(p => {
+                if (typeof p === 'string' && p.trim()) productNamesSet.add(p.trim());
+                else if (p) {
+                    if (p.productName) productNamesSet.add(p.productName.toString().trim());
+                    if (p.product) productNamesSet.add(p.product.toString().trim());
+                    if (p.name) productNamesSet.add(p.name.toString().trim());
+                }
+            });
+        }
+        if (Array.isArray(lc.productEntries) && lc.productEntries.length > 0) {
+            lc.productEntries.forEach(p => {
+                if (typeof p === 'string' && p.trim()) productNamesSet.add(p.trim());
+                else if (p) {
+                    if (p.productName) productNamesSet.add(p.productName.toString().trim());
+                    if (p.product) productNamesSet.add(p.product.toString().trim());
+                    if (p.name) productNamesSet.add(p.name.toString().trim());
+                }
+            });
+        }
+
+        const cleanLc = (lc.lcNo || lc.lcNumber || '').toString().trim().toLowerCase();
+        if (cleanLc && Array.isArray(stockRecords)) {
+            stockRecords.forEach(st => {
+                if (isLcMatch(st.lcNo, cleanLc)) {
+                    if (st.productName) productNamesSet.add(st.productName.toString().trim());
+                    if (st.product) productNamesSet.add(st.product.toString().trim());
+                    if (Array.isArray(st.entries)) {
+                        st.entries.forEach(e => {
+                            if (e.productName) productNamesSet.add(e.productName.toString().trim());
+                            if (e.product) productNamesSet.add(e.product.toString().trim());
+                        });
+                    }
+                    if (Array.isArray(st.brandEntries)) {
+                        st.brandEntries.forEach(be => {
+                            if (be.productName) productNamesSet.add(be.productName.toString().trim());
+                            if (be.product) productNamesSet.add(be.product.toString().trim());
+                        });
+                    }
+                }
+            });
+        }
+
+        return Array.from(productNamesSet).filter(Boolean);
+    };
+
+    const isLcMatchingTargetProduct = (lc, targetProd, targetIpName) => {
+        if (!targetProd) return true;
+        const lcProds = getLcProductNames(lc);
+        if (lcProds.length === 0) return true;
+
+        const cleanTarget = targetProd.toLowerCase().trim();
+        const cleanTargetIp = (targetIpName || '').toLowerCase().trim();
+
+        return lcProds.some(pName => {
+            const cleanPName = pName.toLowerCase().trim();
+            if (cleanPName === cleanTarget) return true;
+            if (cleanTargetIp && cleanPName === cleanTargetIp) return true;
+
+            const resolved = resolveProductName(pName).toLowerCase().trim();
+            if (resolved === cleanTarget) return true;
+            if (cleanTargetIp && resolved === cleanTargetIp) return true;
+
+            const pDef = products.find(p =>
+                (p.name || '').toLowerCase().trim() === cleanPName ||
+                (p.ipName || '').toLowerCase().trim() === cleanPName
+            );
+            if (pDef) {
+                const defName = (pDef.name || '').toLowerCase().trim();
+                const defIp = (pDef.ipName || '').toLowerCase().trim();
+                if (defName === cleanTarget || (cleanTargetIp && defName === cleanTargetIp)) return true;
+                if (defIp === cleanTarget || (cleanTargetIp && defIp === cleanTargetIp)) return true;
+            }
+
+            return false;
+        });
+    };
+
     const getFilteredLCs = () => {
-        const query = (lcSearch || '').toLowerCase();
-        let filtered = lcRecords;
+        const query = (lcSearch || '').toLowerCase().trim();
+        let filtered = allAvailableLCs;
+
+        let targetProd = '';
+        let targetIpName = '';
         if (saleType !== 'Border' && activeItemIndex !== null) {
             const item = formData.items[activeItemIndex];
             if (item && item.productName) {
-                const targetProd = item.productName.toLowerCase().trim();
+                targetProd = item.productName.toLowerCase().trim();
                 const matchedProdDef = products.find(p => p.name.toLowerCase().trim() === targetProd);
-                const targetIpName = matchedProdDef?.ipName?.toLowerCase().trim();
-
-                filtered = filtered.filter(lc => {
-                    const lcProd = (lc.productName || '').toLowerCase().trim();
-                    return lcProd === targetProd || (targetIpName && lcProd === targetIpName);
-                });
+                targetIpName = matchedProdDef?.ipName?.toLowerCase().trim();
             }
+        } else if (saleType === 'Border' && formData.items?.[0]?.productName) {
+            targetProd = formData.items[0].productName.toLowerCase().trim();
+            const matchedProdDef = products.find(p => p.name.toLowerCase().trim() === targetProd);
+            targetIpName = matchedProdDef?.ipName?.toLowerCase().trim();
         }
+
+        if (targetProd) {
+            filtered = filtered.filter(lc => isLcMatchingTargetProduct(lc, targetProd, targetIpName));
+        }
+
+        if (!query) {
+            return filtered.slice(0, 50);
+        }
+
         return filtered.filter(lc => {
-            const matchedProduct = products.find(p =>
-                (p.name || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim() ||
-                (p.ipName || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim()
-            );
-            const dispProductName = matchedProduct ? matchedProduct.name : (lc.productName || '');
+            const lcProds = getLcProductNames(lc);
+            const dispProductNames = lcProds.map(pName => {
+                const matched = products.find(p =>
+                    (p.name || '').toLowerCase().trim() === (pName || '').toLowerCase().trim() ||
+                    (p.ipName || '').toLowerCase().trim() === (pName || '').toLowerCase().trim()
+                );
+                return matched ? matched.name : pName;
+            });
+
             return (lc.lcNo || '').toLowerCase().includes(query) ||
                 (lc.importerName || '').toLowerCase().includes(query) ||
                 (lc.productName || '').toLowerCase().includes(query) ||
-                dispProductName.toLowerCase().includes(query);
+                lcProds.some(p => p.toLowerCase().includes(query)) ||
+                dispProductNames.some(p => p.toLowerCase().includes(query));
         }).slice(0, 50);
     };
 
@@ -2498,25 +2639,20 @@ const SaleManagement = ({
 
         const productNamesSet = new Set();
 
-        // 1. From lcRecords (LC Management records)
-        (lcRecords || []).forEach(lc => {
+        // 1. From allAvailableLCs / lcRecords
+        (allAvailableLCs || []).forEach(lc => {
             const curLcNo = (lc.lcNo || lc.lcNumber || '').toString().trim().toLowerCase();
-            if (curLcNo === cleanLc) {
-                if (Array.isArray(lc.productsList) && lc.productsList.length > 0) {
-                    lc.productsList.forEach(p => {
-                        if (p.productName) productNamesSet.add(p.productName.toString().trim());
-                        else if (p.product) productNamesSet.add(p.product.toString().trim());
-                    });
-                }
-                if (lc.productName) productNamesSet.add(lc.productName.toString().trim());
-                if (lc.product) productNamesSet.add(lc.product.toString().trim());
+            if (curLcNo === cleanLc || isLcMatch(curLcNo, cleanLc)) {
+                getLcProductNames(lc).forEach(pName => {
+                    productNamesSet.add(pName);
+                });
             }
         });
 
         // 2. From stockRecords (LC Receive / Stock)
         (stockRecords || []).forEach(st => {
             const curLcNo = (st.lcNo || '').toString().trim().toLowerCase();
-            if (curLcNo === cleanLc) {
+            if (curLcNo === cleanLc || isLcMatch(curLcNo, cleanLc)) {
                 if (st.productName) productNamesSet.add(st.productName.toString().trim());
                 if (st.product) productNamesSet.add(st.product.toString().trim());
                 if (Array.isArray(st.entries)) {
@@ -2529,6 +2665,12 @@ const SaleManagement = ({
                     st.brandEntries.forEach(be => {
                         if (be.productName) productNamesSet.add(be.productName.toString().trim());
                         if (be.product) productNamesSet.add(be.product.toString().trim());
+                    });
+                }
+                if (Array.isArray(st.productEntries)) {
+                    st.productEntries.forEach(pe => {
+                        if (pe.productName) productNamesSet.add(pe.productName.toString().trim());
+                        if (pe.product) productNamesSet.add(pe.product.toString().trim());
                     });
                 }
             }
@@ -2631,10 +2773,23 @@ const SaleManagement = ({
             const pNameLower = (selectedProductName || selectedProduct?.name || '').toLowerCase().trim();
             const cleanLc = (selectedLcNo || '').toLowerCase().trim();
             lcRecords.forEach(lc => {
-                const lcProdName = (lc.productName || '').trim().toLowerCase();
                 const curLcNo = (lc.lcNo || lc.lcNumber || '').toString().trim().toLowerCase();
-                if ((!pNameLower || lcProdName === pNameLower) || (cleanLc && curLcNo === cleanLc)) {
+                const lcMatches = cleanLc && (curLcNo === cleanLc || isLcMatch(curLcNo, cleanLc));
+                const lcProds = getLcProductNames(lc).map(p => p.toLowerCase().trim());
+                const prodMatches = pNameLower && lcProds.some(p => p === pNameLower || resolveProductName(p).toLowerCase().trim() === pNameLower);
+
+                if ((!pNameLower && lcMatches) || (cleanLc && lcMatches) || prodMatches) {
                     if (lc.brand) brandsSet.add(lc.brand);
+                    if (Array.isArray(lc.productsList)) {
+                        lc.productsList.forEach(p => {
+                            if (p && p.brand) brandsSet.add(p.brand);
+                        });
+                    }
+                    if (Array.isArray(lc.products)) {
+                        lc.products.forEach(p => {
+                            if (p && p.brand) brandsSet.add(p.brand);
+                        });
+                    }
                 }
             });
         }
@@ -4131,11 +4286,18 @@ const SaleManagement = ({
                                                         <span className="text-[10px] text-gray-500">
                                                             {lc.importerName} | {
                                                                 (() => {
-                                                                    const matched = products.find(p =>
-                                                                        (p.name || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim() ||
-                                                                        (p.ipName || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim()
-                                                                    );
-                                                                    return matched ? matched.name : (lc.productName || '');
+                                                                    if (formData.items?.[0]?.productName) {
+                                                                        return formData.items[0].productName;
+                                                                    }
+                                                                    const lcProds = getLcProductNames(lc);
+                                                                    const dispNames = lcProds.map(pName => {
+                                                                        const matched = products.find(p =>
+                                                                            (p.name || '').toLowerCase().trim() === (pName || '').toLowerCase().trim() ||
+                                                                            (p.ipName || '').toLowerCase().trim() === (pName || '').toLowerCase().trim()
+                                                                        );
+                                                                        return matched ? matched.name : pName;
+                                                                    }).filter(Boolean);
+                                                                    return dispNames.length > 0 ? Array.from(new Set(dispNames)).join(', ') : (lc.productName || '');
                                                                 })()
                                                             }
                                                         </span>
@@ -5025,11 +5187,18 @@ const SaleManagement = ({
                                                                                 <span className="text-[9px] text-gray-500">
                                                                                     {lc.importerName} | {
                                                                                         (() => {
-                                                                                            const matched = products.find(p =>
-                                                                                                (p.name || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim() ||
-                                                                                                (p.ipName || '').toLowerCase().trim() === (lc.productName || '').toLowerCase().trim()
-                                                                                            );
-                                                                                            return matched ? matched.name : (lc.productName || '');
+                                                                                            if (activeItemIndex !== null && formData.items[activeItemIndex]?.productName) {
+                                                                                                return formData.items[activeItemIndex].productName;
+                                                                                            }
+                                                                                            const lcProds = getLcProductNames(lc);
+                                                                                            const dispNames = lcProds.map(pName => {
+                                                                                                const matched = products.find(p =>
+                                                                                                    (p.name || '').toLowerCase().trim() === (pName || '').toLowerCase().trim() ||
+                                                                                                    (p.ipName || '').toLowerCase().trim() === (pName || '').toLowerCase().trim()
+                                                                                                );
+                                                                                                return matched ? matched.name : pName;
+                                                                                            }).filter(Boolean);
+                                                                                            return dispNames.length > 0 ? Array.from(new Set(dispNames)).join(', ') : (lc.productName || '');
                                                                                         })()
                                                                                     }
                                                                                 </span>
