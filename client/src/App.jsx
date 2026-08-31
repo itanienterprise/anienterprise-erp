@@ -3080,20 +3080,8 @@ function App() {
             </h1>
           )}
 
-          {/* Right side — profile and bell icon */}
+          {/* Right side — bell icon */}
           <div className="flex items-center gap-3 relative z-10">
-            {windowWidth < 768 && !sidebarOpen && (
-              <button
-                onClick={() => setShowProfile(true)}
-                className="relative group focus:outline-none flex-shrink-0 mr-1 animate-in fade-in duration-200"
-              >
-                <img
-                  src={`https://ui-avatars.com/api/?name=${currentUser?.name || currentUser?.username || 'User'}&background=3b82f6&color=fff`}
-                  alt="Profile"
-                  className="w-8 h-8 rounded-full border border-gray-200 shadow-sm transition-all group-hover:scale-105 group-hover:border-blue-400"
-                />
-              </button>
-            )}
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
