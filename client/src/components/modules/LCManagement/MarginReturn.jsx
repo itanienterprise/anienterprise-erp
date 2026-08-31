@@ -28,7 +28,9 @@ import { isProductMatch } from '../../../utils/lcValueUtils';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
+const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, highlightId, isRequestedNotif }) => {
+    const [localHighlightId, setLocalHighlightId] = useState(null);
+    const activeHighlightId = highlightId || localHighlightId;
     const [marginReturns, setMarginReturns] = useState([]);
     const [lcRecords, setLcRecords] = useState([]);
     const [banks, setBanks] = useState([]);
@@ -53,6 +55,60 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
     const filterButtonRef = useRef(null);
     const lcFilterRef = useRef(null);
     const bankFilterRef = useRef(null);
+    const rowRefs = useRef({});
+
+    const isHighlighted = (record) => {
+        if (!activeHighlightId || !record) return false;
+        const target = String(activeHighlightId).trim().toLowerCase();
+        const targetDigits = target.replace(/\D/g, '');
+
+        if (record._id && String(record._id).trim().toLowerCase() === target) return true;
+        if (record.lcNo) {
+            const lcStr = String(record.lcNo).trim().toLowerCase();
+            const lcDigits = lcStr.replace(/\D/g, '');
+            if (lcStr === target) return true;
+            if (targetDigits && lcDigits && lcDigits === targetDigits) return true;
+            if (target.length >= 4 && lcStr.length >= 4 && (lcStr.includes(target) || target.includes(lcStr))) return true;
+        }
+        return false;
+    };
+
+    useEffect(() => {
+        if (!activeHighlightId) return;
+
+        setIsModalOpen(false);
+        setSearchQuery('');
+        setMarginReturnFilters(initialMarginReturnFilterState);
+
+        const scrollToRow = () => {
+            if (!activeHighlightId) return false;
+            const targetStr = String(activeHighlightId).trim().toLowerCase();
+            const targetDigitsStr = targetStr.replace(/\D/g, '');
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => {
+                const cleanK = k.trim().toLowerCase();
+                const cleanKDigits = cleanK.replace(/\D/g, '');
+                if (cleanK === targetStr) return true;
+                if (targetDigitsStr && cleanKDigits && cleanKDigits === targetDigitsStr) return true;
+                if (cleanK.length >= 4 && targetStr.length >= 4 && (cleanK.includes(targetStr) || targetStr.includes(cleanK))) return true;
+                return false;
+            });
+            const el = matchedKey ? rowRefs.current[matchedKey] : (rowRefs.current[activeHighlightId] || (targetDigitsStr && rowRefs.current[targetDigitsStr]));
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+
+        const timeouts = [50, 150, 350, 700, 1200].map(delay =>
+            setTimeout(() => {
+                scrollToRow();
+            }, delay)
+        );
+
+        return () => timeouts.forEach(clearTimeout);
+    }, [activeHighlightId, marginReturns]);
     const importerFilterRef = useRef(null);
 
     const initialFilterDropdownState = {
@@ -676,6 +732,16 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             if (isEditMode) {
                 const res = await axios.put(`${API_BASE_URL}/api/margin-returns/${editingId}`, formData);
                 setMarginReturns(prev => prev.map(r => r._id === editingId ? res.data : r));
+                if (addNotification) {
+                    addNotification(
+                        'Margin Return Record Updated',
+                        `Margin return for LC No: ${formData.lcNo} has been updated by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry'],
+                        [],
+                        false,
+                        'margin-return-section'
+                    );
+                }
                 addNotification?.('Margin Return record updated successfully', 'success');
             } else {
                 const res = await axios.post(`${API_BASE_URL}/api/margin-returns`, formData);
@@ -685,7 +751,10 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                     addNotification(
                         'Margin Return Received',
                         `Margin return of ৳${amt.toLocaleString('en-IN')} for LC No: ${formData.lcNo} received.`,
-                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry'],
+                        [],
+                        false,
+                        'margin-return-section'
                     );
                 }
                 addNotification?.('Margin Return record added successfully', 'success');
@@ -1035,7 +1104,21 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                             filteredRecords.map((record) => {
                                 const lcDetails = lcMarginMap[record.lcId] || {};
                                 return (
-                                    <tr key={record._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                    <tr
+                                        key={record._id}
+                                        ref={el => {
+                                            if (el) {
+                                                if (record.lcNo) {
+                                                    rowRefs.current[record.lcNo] = el;
+                                                    const digits = String(record.lcNo).replace(/\D/g, '');
+                                                    if (digits) rowRefs.current[digits] = el;
+                                                }
+                                                if (record._id) rowRefs.current[record._id] = el;
+                                            }
+                                        }}
+                                        className={`hover:bg-gray-50/50 transition-colors border-b border-gray-50 group ${isHighlighted(record) ? 'notif-row-highlight' : ''}`}
+                                        style={isHighlighted(record) ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                    >
                                         <td className="px-4 py-3.5 whitespace-nowrap text-sm text-gray-600 font-medium">
                                             {formatDate(record.returnDate)}
                                         </td>
@@ -1108,7 +1191,21 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                         const isExpanded = expandedRecordIdx === idx;
                         const lcDetails = lcMarginMap[record.lcId] || {};
                         return (
-                            <div key={record._id} className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+                            <div
+                                key={record._id}
+                                ref={el => {
+                                    if (el) {
+                                        if (record.lcNo) {
+                                            rowRefs.current[record.lcNo] = el;
+                                            const digits = String(record.lcNo).replace(/\D/g, '');
+                                            if (digits) rowRefs.current[digits] = el;
+                                        }
+                                        if (record._id) rowRefs.current[record._id] = el;
+                                    }
+                                }}
+                                className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isHighlighted(record) ? 'notif-row-highlight ring-2 ring-amber-500' : ''} ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}
+                                style={isHighlighted(record) ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                            >
                                 <div
                                     className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"
                                     onClick={() => setExpandedRecordIdx(isExpanded ? null : idx)}

@@ -2117,6 +2117,8 @@ function App() {
           <LCGatePass
             currentUser={currentUser}
             addNotification={addNotification}
+            highlightId={notifHighlightId}
+            isRequestedNotif={notifIsRequested}
           />
         );
       case 'lc-expense-section':
@@ -2127,6 +2129,8 @@ function App() {
             addNotification={addNotification}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
             refreshKey={refreshKey}
+            highlightId={notifHighlightId}
+            isRequestedNotif={notifIsRequested}
           />
         );
       case 'margin-return-section':
@@ -2137,6 +2141,8 @@ function App() {
             addNotification={addNotification}
             onDeleteConfirm={(data) => handleDelete(data.type, data.id, data.isBulk, data.extraData)}
             refreshKey={refreshKey}
+            highlightId={notifHighlightId}
+            isRequestedNotif={notifIsRequested}
           />
         );
       case 'lc-management-section':
@@ -3108,12 +3114,16 @@ function App() {
                     handleViewChange(view);
                     setShowNotifications(false);
                     if (highlightId || isRequested) {
-                      setNotifHighlightId(highlightId);
+                      setNotifHighlightId(null);
                       setNotifIsRequested(!!isRequested);
+                      setTimeout(() => {
+                        setNotifHighlightId(highlightId);
+                        setNotifIsRequested(!!isRequested);
+                      }, 20);
                       setTimeout(() => {
                         setNotifHighlightId(null);
                         setNotifIsRequested(false);
-                      }, 6000);
+                      }, 8000);
                     }
                   }
                 }}

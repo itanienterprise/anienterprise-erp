@@ -34,11 +34,17 @@ const TITLE_TO_VIEW = [
     // IP Record
     { pattern: /\bip\b/i, view: 'ip-section' },
 
-    // LC Receive (matches "lc receive", "lc received", "lc receiving", "receive lc", etc.)
+    // Specific LC submodules (place BEFORE generic LC pattern)
+    { pattern: /\b(?:gate\s*pass|lc\s*gp|lc\s*gate\s*pass)\b/i, view: 'lc-gp-section' },
+    { pattern: /\b(?:lc\s*expense|lc\s*expenses)\b/i, view: 'lc-expense-section' },
+    { pattern: /\b(?:margin\s*return)\b/i, view: 'margin-return-section' },
+
+    // LC Receive / Stock Entry (matches "lc receive", "lc received", "lc receiving", "receive lc", etc.)
+    { pattern: /\b(?:new\s+lc\s+received|lc\s*receive\s*entry|requested\s*lc\s*receive|lc\s*receive\s*(?:accepted|rejected|status|request))\b/i, view: 'lc-entry-section' },
     { pattern: /\blc\s*receiv/i, view: 'lc-entry-section' },
     { pattern: /\breceiv.*?lc\b/i, view: 'lc-entry-section' },
 
-    // LC Management / Open
+    // LC Management / Open / Amendment / Dollar Rate / Status / Expiry
     { pattern: /\blc\b/i, view: 'lc-management-section' },
 
     // Border Sale
@@ -100,9 +106,9 @@ function extractHighlightId(notif) {
 
     if (!text.trim()) return null;
 
-    // 1. Prefix match: e.g. "LC No: 087326010476", "PI No: PI-0012", "Invoice No: PL-001"
-    const prefixMatch = text.match(/(?:PI|LC|IP|Invoice|Order|Receipt|Payout|Payment|Purchase|Sale|PL)\s*(?:No|Number|#)?\s*[:#]\s*([A-Za-z0-9\-_\/.]+)/i);
-    if (prefixMatch) {
+    // 1. Prefix match: e.g. "LC No: 087326010476", "PI No: PI-0012", "Invoice No: PL-001", "LC (No: 087326010476)", "LC #087326010476"
+    const prefixMatch = text.match(/(?:PI|LC|IP|Invoice|Order|Receipt|Payout|Payment|Purchase|Sale|PL|Gate\s*Pass|GP)?\s*(?:\(?\s*(?:No|Number|#)\s*[:#]?|[:#])\s*([A-Za-z0-9\-_\/.]+)/i);
+    if (prefixMatch && prefixMatch[1] && prefixMatch[1].length >= 2) {
         return prefixMatch[1].trim();
     }
 
@@ -112,35 +118,38 @@ function extractHighlightId(notif) {
         return codeMatch[1].trim();
     }
 
-    // 3. Long numeric LC number e.g. 087326010476 or 073926010078
-    const numMatch = text.match(/\b([0-9]{6,})\b/);
-    if (numMatch) {
-        return numMatch[1].trim();
-    }
-
-    // 4. Party / Agent / Customer Name: e.g. "for PANNA (৳500) approved", "from ALIF TRADERS was created", "for PANNA. Pending"
-    const forMatch = text.match(/(?:for|from)\s+([A-Za-z0-9\s\-_\/.]+?)(?:\s*\(|\s+(?:was|has|is|been|submitted|created|updated|added|rejected|approved|\.))/i);
-    if (forMatch) {
-        const val = forMatch[1].trim();
-        if (val.length >= 2 && !val.toLowerCase().startsWith('a ')) {
-            return val;
-        }
-    }
-
-    // 5. Parentheses format: only if inside parentheses there is an explicit code or number
+    // 3. Parentheses format: e.g. "(087326010476)", "(No: 087326010476)", "(PI-0012)"
     const parenMatch = text.match(/\(([^)]+)\)/);
     if (parenMatch) {
         const inner = parenMatch[1].trim();
         if (inner.includes(':')) {
             const afterColon = inner.split(':').slice(1).join(':').trim();
             const firstWord = afterColon.split(/\s+/)[0];
-            if (firstWord) return firstWord.trim();
+            if (firstWord && firstWord.length >= 2) return firstWord.trim();
         }
         const tokens = inner.split(/\s+/);
         for (const t of tokens) {
-            if (/[0-9]/.test(t) && t.length >= 3) {
+            if (/[0-9]/.test(t) && t.length >= 3 && !t.includes('/') && !t.includes(':')) {
                 return t.trim();
             }
+        }
+        if (inner.length >= 3 && !inner.includes(' ') && /[0-9]/.test(inner)) {
+            return inner;
+        }
+    }
+
+    // 4. Long numeric LC number e.g. 087326010476 or 073926010078
+    const numMatch = text.match(/\b([0-9]{6,})\b/);
+    if (numMatch) {
+        return numMatch[1].trim();
+    }
+
+    // 5. Party / Agent / Customer Name: e.g. "for PANNA (৳500) approved", "from ALIF TRADERS was created", "for PANNA. Pending"
+    const forMatch = text.match(/(?:for|from)\s+([A-Za-z0-9\s\-_\/.]+?)(?:\s*\(|\s+(?:was|has|is|been|submitted|created|updated|added|rejected|approved|\.))/i);
+    if (forMatch) {
+        const val = forMatch[1].trim();
+        if (val.length >= 2 && !val.toLowerCase().startsWith('a ')) {
+            return val;
         }
     }
 
@@ -224,7 +233,7 @@ const NotificationMenu = ({ isOpen, onClose, notifications, onMarkAllAsRead, onC
                 // 2. Check if the notification represents an active request or pending approval
                 isRequested = 
                     /\b(?:request|requested|awaiting|pending|needs approval)\b/i.test(titleStr) ||
-                    /\b(?:has requested|awaiting approval|pending approval|request submitted)\b/i.test(msgStr);
+                    /\b(?:has requested|awaiting approval|pending approval|request submitted|requested\s+.*?\s+entry|edited the requested)\b/i.test(msgStr);
             }
 
             onNavigate(view, highlightId, isRequested);

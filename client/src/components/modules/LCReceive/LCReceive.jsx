@@ -488,8 +488,48 @@ function LCReceive({
     const activeHighlightId = highlightId || localHighlightId;
     const rowRefs = useRef({});
 
+    const isHighlighted = (entry) => {
+        if (!activeHighlightId || !entry) return false;
+        const target = String(activeHighlightId).trim().toLowerCase();
+        const targetDigits = target.replace(/\D/g, '');
+
+        if (entry._id && String(entry._id).trim().toLowerCase() === target) return true;
+        if (entry.allIds && entry.allIds.some(id => String(id).trim().toLowerCase() === target)) return true;
+
+        if (entry.lcNo) {
+            const lcStr = String(entry.lcNo).trim().toLowerCase();
+            const lcDigits = lcStr.replace(/\D/g, '');
+            if (lcStr === target) return true;
+            if (targetDigits && lcDigits && lcDigits === targetDigits) return true;
+            if (target.length >= 4 && lcStr.length >= 4 && (lcStr.includes(target) || target.includes(lcStr))) return true;
+        }
+
+        if (entry.entries && entry.entries.some(e => {
+            const eId = String(e._id || '').trim().toLowerCase();
+            const eLc = String(e.lcNo || '').trim().toLowerCase();
+            const eDigits = eLc.replace(/\D/g, '');
+            return (
+                eId === target ||
+                eLc === target ||
+                (targetDigits && eDigits && eDigits === targetDigits) ||
+                (target.length >= 4 && eLc.length >= 4 && (eLc.includes(target) || target.includes(eLc)))
+            );
+        })) {
+            return true;
+        }
+
+        if (entry.groupedKey && String(entry.groupedKey).toLowerCase().includes(target)) return true;
+
+        return false;
+    };
+
     useEffect(() => {
         if (!activeHighlightId) return;
+
+        // Auto-close open form or report so highlighted record is visible
+        setShowStockForm(false);
+        if (setShowLcReport) setShowLcReport(false);
+        if (setLcSearchQuery) setLcSearchQuery('');
 
         const target = String(activeHighlightId).trim().toLowerCase();
         const targetDigits = target.replace(/\D/g, '');
@@ -502,10 +542,23 @@ function LCReceive({
             const hasEntryMatch = item.entries && item.entries.some(e => {
                 const eLc = String(e.lcNo || '').toLowerCase().trim();
                 const eDigits = eLc.replace(/\D/g, '');
-                return eLc === target || (targetDigits && eDigits === targetDigits) || target.includes(eLc) || eLc.includes(target);
+                const eId = String(e._id || '').toLowerCase().trim();
+                return (
+                    eId === target ||
+                    eLc === target ||
+                    (targetDigits && eDigits && eDigits === targetDigits) ||
+                    (target.length >= 4 && eLc.length >= 4 && (eLc.includes(target) || target.includes(eLc)))
+                );
             });
             const hasIdMatch = item.allIds && item.allIds.some(id => String(id) === String(activeHighlightId));
-            return lcStr === target || (targetDigits && lcDigits === targetDigits) || idStr === String(activeHighlightId) || target.includes(lcStr) || lcStr.includes(target) || hasEntryMatch || hasIdMatch;
+            return (
+                idStr === target ||
+                lcStr === target ||
+                (targetDigits && lcDigits && lcDigits === targetDigits) ||
+                (target.length >= 4 && lcStr.length >= 4 && (lcStr.includes(target) || target.includes(lcStr))) ||
+                hasEntryMatch ||
+                hasIdMatch
+            );
         });
 
         if (targetItem) {
@@ -514,7 +567,6 @@ function LCReceive({
             const isReq = st.includes('requested') && !st.includes('stock') && !st.includes('accept');
             setIsRequestedOnly(isReq);
         } else if (isRequestedNotif) {
-            // Fallback to notification flag only if record not yet found (data still loading)
             setIsRequestedOnly(true);
         } else {
             setIsRequestedOnly(false);
@@ -522,15 +574,18 @@ function LCReceive({
 
         const scrollToRow = () => {
             if (!activeHighlightId) return false;
-            const target = String(activeHighlightId).trim().toLowerCase();
-            const targetDigits = target.replace(/\D/g, '');
+            const targetStr = String(activeHighlightId).trim().toLowerCase();
+            const targetDigitsStr = targetStr.replace(/\D/g, '');
             const keys = Object.keys(rowRefs.current);
             const matchedKey = keys.find(k => {
                 const cleanK = k.trim().toLowerCase();
                 const cleanKDigits = cleanK.replace(/\D/g, '');
-                return cleanK === target || (targetDigits && cleanKDigits === targetDigits) || cleanK.includes(target) || target.includes(cleanK);
+                if (cleanK === targetStr) return true;
+                if (targetDigitsStr && cleanKDigits && cleanKDigits === targetDigitsStr) return true;
+                if (cleanK.length >= 4 && targetStr.length >= 4 && (cleanK.includes(targetStr) || targetStr.includes(cleanK))) return true;
+                return false;
             });
-            const el = matchedKey ? rowRefs.current[matchedKey] : (rowRefs.current[activeHighlightId] || (targetDigits && rowRefs.current[targetDigits]));
+            const el = matchedKey ? rowRefs.current[matchedKey] : (rowRefs.current[activeHighlightId] || (targetDigitsStr && rowRefs.current[targetDigitsStr]));
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return true;
@@ -538,16 +593,14 @@ function LCReceive({
             return false;
         };
 
-        const t1 = setTimeout(() => {
-            if (!scrollToRow()) {
-                const t2 = setTimeout(() => {
-                    if (!scrollToRow()) { setLcSearchQuery(""); setTimeout(scrollToRow, 300); }
-                }, 700);
-                return () => clearTimeout(t2);
-            }
-        }, 250);
-        return () => clearTimeout(t1);
-    }, [activeHighlightId, lcReceiveRecords]);
+        const timeouts = [50, 150, 350, 700, 1200].map(delay =>
+            setTimeout(() => {
+                scrollToRow();
+            }, delay)
+        );
+
+        return () => timeouts.forEach(clearTimeout);
+    }, [activeHighlightId, lcReceiveRecords, isRequestedNotif]);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [lcRecords, setLcRecords] = useState([]);
@@ -2016,7 +2069,9 @@ function LCReceive({
                         `LC Receive ${statusLabel}`,
                         `${dateStr} | ${timeStr} | ${adminName} has ${actionLabel} the LC receive entry (${firstEntry.lcNo}) requested by ${requesterName}`,
                         targetRoles,
-                        targetUsers
+                        targetUsers,
+                        false,
+                        'lc-entry-section'
                     );
                 }
             }
@@ -2097,7 +2152,9 @@ function LCReceive({
                             `LC Receive Accepted`,
                             `${dateStr} | ${timeStr} | ${adminName} has accepted the LC receive entry (${firstEntry.lcNo || ''}) requested by ${requesterName}`,
                             targetRoles,
-                            targetUsers
+                            targetUsers,
+                            false,
+                            'lc-entry-section'
                         );
                     }
                 }
@@ -2227,7 +2284,9 @@ function LCReceive({
                             `LC Receive Rejected`,
                             `${dateStr} | ${timeStr} | ${adminName} has rejected the LC receive entry (${firstEntry.lcNo || ''}) requested by ${requesterName}`,
                             targetRoles,
-                            targetUsers
+                            targetUsers,
+                            false,
+                            'lc-entry-section'
                         );
                     }
                 }
@@ -4379,37 +4438,30 @@ function LCReceive({
                                                     <tr
     key={entry.groupedKey}
     className={`transition-colors duration-200 cursor-pointer select-none ${selectedItems.has(entry.groupedKey) ? 'bg-blue-50/30' : 'hover:bg-gray-50'} ${
-        activeHighlightId && (
-            (entry.lcNo && (String(entry.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() || String(entry.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '') || String(activeHighlightId).toLowerCase().includes(String(entry.lcNo).toLowerCase().trim()) || String(entry.lcNo).toLowerCase().includes(String(activeHighlightId).toLowerCase().trim()))) ||
-            (entry.entries && entry.entries.some(e => e.lcNo && (String(e.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() || String(e.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '') || String(activeHighlightId).toLowerCase().includes(String(e.lcNo).toLowerCase().trim()) || String(e.lcNo).toLowerCase().includes(String(activeHighlightId).toLowerCase().trim())))) ||
-            (entry.allIds && entry.allIds.some(id => String(id) === String(activeHighlightId))) ||
-            (String(entry.groupedKey || '').toLowerCase().includes(String(activeHighlightId).toLowerCase().trim()))
-        ) ? 'notif-row-highlight' : ''
+        isHighlighted(entry) ? 'notif-row-highlight' : ''
     }`}
     ref={el => {
-        if (entry.lcNo) {
-            rowRefs.current[entry.lcNo] = el;
-            const digits = String(entry.lcNo).replace(/\D/g, '');
-            if (digits) rowRefs.current[digits] = el;
-        }
-        if (entry.groupedKey) rowRefs.current[entry.groupedKey] = el;
-        if (entry.entries) {
-            entry.entries.forEach(e => {
-                if (e.lcNo) {
-                    rowRefs.current[e.lcNo] = el;
-                    const digits = String(e.lcNo).replace(/\D/g, '');
-                    if (digits) rowRefs.current[digits] = el;
-                }
-                if (e._id) rowRefs.current[e._id] = el;
-            });
+        if (el) {
+            if (entry.lcNo) {
+                rowRefs.current[entry.lcNo] = el;
+                const digits = String(entry.lcNo).replace(/\D/g, '');
+                if (digits) rowRefs.current[digits] = el;
+            }
+            if (entry.groupedKey) rowRefs.current[entry.groupedKey] = el;
+            if (entry.entries) {
+                entry.entries.forEach(e => {
+                    if (e.lcNo) {
+                        rowRefs.current[e.lcNo] = el;
+                        const digits = String(e.lcNo).replace(/\D/g, '');
+                        if (digits) rowRefs.current[digits] = el;
+                    }
+                    if (e._id) rowRefs.current[e._id] = el;
+                });
+            }
         }
     }}
     style={
-        activeHighlightId && (
-            (entry.lcNo && (String(entry.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() || String(entry.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '') || String(activeHighlightId).toLowerCase().includes(String(entry.lcNo).toLowerCase().trim()) || String(entry.lcNo).toLowerCase().includes(String(activeHighlightId).toLowerCase().trim()))) ||
-            (entry.entries && entry.entries.some(e => e.lcNo && (String(e.lcNo).toLowerCase().trim() === String(activeHighlightId).toLowerCase().trim() || String(e.lcNo).replace(/\D/g, '') === String(activeHighlightId).replace(/\D/g, '') || String(activeHighlightId).toLowerCase().includes(String(e.lcNo).toLowerCase().trim()) || String(e.lcNo).toLowerCase().includes(String(activeHighlightId).toLowerCase().trim())))) ||
-            (entry.allIds && entry.allIds.some(id => String(id) === String(activeHighlightId)))
-        ) ? { borderLeft: '5px solid #f59e0b' } : undefined
+        isHighlighted(entry) ? { borderLeft: '5px solid #f59e0b' } : undefined
     }
     onMouseDown={() => startLongPress && startLongPress(entry.groupedKey)}
     onMouseUp={endLongPress}
@@ -4642,7 +4694,28 @@ function LCReceive({
                                     return (
                                         <div
                                             key={entry.groupedKey}
-                                            className="p-4 bg-white hover:bg-gray-50 transition-all cursor-pointer"
+                                            ref={el => {
+                                                if (el) {
+                                                    if (entry.lcNo) {
+                                                        rowRefs.current[entry.lcNo] = el;
+                                                        const digits = String(entry.lcNo).replace(/\D/g, '');
+                                                        if (digits) rowRefs.current[digits] = el;
+                                                    }
+                                                    if (entry.groupedKey) rowRefs.current[entry.groupedKey] = el;
+                                                    if (entry.entries) {
+                                                        entry.entries.forEach(e => {
+                                                            if (e.lcNo) {
+                                                                rowRefs.current[e.lcNo] = el;
+                                                                const digits = String(e.lcNo).replace(/\D/g, '');
+                                                                if (digits) rowRefs.current[digits] = el;
+                                                            }
+                                                            if (e._id) rowRefs.current[e._id] = el;
+                                                        });
+                                                    }
+                                                }
+                                            }}
+                                            className={`p-4 bg-white hover:bg-gray-50 transition-all cursor-pointer ${isHighlighted(entry) ? 'notif-row-highlight ring-2 ring-amber-500' : ''}`}
+                                            style={isHighlighted(entry) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                             onClick={() => toggleCard(entry.groupedKey)}
                                         >
                                             <div className={`flex justify-between items-center ${isExpanded ? 'mb-2' : ''}`}>

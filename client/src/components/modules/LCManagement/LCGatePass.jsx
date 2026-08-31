@@ -10,7 +10,9 @@ import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 
-const LCGatePass = ({ currentUser, addNotification }) => {
+const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNotif }) => {
+    const [localHighlightId, setLocalHighlightId] = useState(null);
+    const activeHighlightId = highlightId || localHighlightId;
     const [records, setRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -48,6 +50,60 @@ const LCGatePass = ({ currentUser, addNotification }) => {
     const [expandedGpIdx, setExpandedGpIdx] = useState(null);
     const lcRef = useRef(null);
     const partyRef = useRef(null);
+    const rowRefs = useRef({});
+
+    const isHighlighted = (record) => {
+        if (!activeHighlightId || !record) return false;
+        const target = String(activeHighlightId).trim().toLowerCase();
+        const targetDigits = target.replace(/\D/g, '');
+
+        if (record._id && String(record._id).trim().toLowerCase() === target) return true;
+        if (record.lcNumber) {
+            const lcStr = String(record.lcNumber).trim().toLowerCase();
+            const lcDigits = lcStr.replace(/\D/g, '');
+            if (lcStr === target) return true;
+            if (targetDigits && lcDigits && lcDigits === targetDigits) return true;
+            if (target.length >= 4 && lcStr.length >= 4 && (lcStr.includes(target) || target.includes(lcStr))) return true;
+        }
+        return false;
+    };
+
+    useEffect(() => {
+        if (!activeHighlightId) return;
+
+        setShowForm(false);
+        setSearchQuery('');
+        setFilters({ startDate: '', endDate: '', product: '', status: '' });
+
+        const scrollToRow = () => {
+            if (!activeHighlightId) return false;
+            const targetStr = String(activeHighlightId).trim().toLowerCase();
+            const targetDigitsStr = targetStr.replace(/\D/g, '');
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => {
+                const cleanK = k.trim().toLowerCase();
+                const cleanKDigits = cleanK.replace(/\D/g, '');
+                if (cleanK === targetStr) return true;
+                if (targetDigitsStr && cleanKDigits && cleanKDigits === targetDigitsStr) return true;
+                if (cleanK.length >= 4 && targetStr.length >= 4 && (cleanK.includes(targetStr) || targetStr.includes(cleanK))) return true;
+                return false;
+            });
+            const el = matchedKey ? rowRefs.current[matchedKey] : (rowRefs.current[activeHighlightId] || (targetDigitsStr && rowRefs.current[targetDigitsStr]));
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+
+        const timeouts = [50, 150, 350, 700, 1200].map(delay =>
+            setTimeout(() => {
+                scrollToRow();
+            }, delay)
+        );
+
+        return () => timeouts.forEach(clearTimeout);
+    }, [activeHighlightId, records]);
 
     const canAdd = hasPermission(currentUser, 'lcGp', 'add');
     const canEdit = hasPermission(currentUser, 'lcGp', 'edit');
@@ -141,9 +197,29 @@ const LCGatePass = ({ currentUser, addNotification }) => {
         try {
             if (editingId) {
                 await axios.put(`${API_BASE_URL}/api/lc-gp/${editingId}`, formData);
+                if (addNotification) {
+                    addNotification(
+                        'LC Gate Pass Updated',
+                        `Gate Pass for LC No: ${formData.lcNumber} has been updated by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry'],
+                        [],
+                        false,
+                        'lc-gp-section'
+                    );
+                }
                 addNotification?.('Gate Pass updated successfully', 'success');
             } else {
                 await axios.post(`${API_BASE_URL}/api/lc-gp`, formData);
+                if (addNotification) {
+                    addNotification(
+                        'New LC Gate Pass Created',
+                        `New Gate Pass for LC No: ${formData.lcNumber} created by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry'],
+                        [],
+                        false,
+                        'lc-gp-section'
+                    );
+                }
                 addNotification?.('New Gate Pass created successfully', 'success');
             }
             setShowForm(false);
@@ -321,7 +397,21 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                                     </tr>
                                 ) : (
                                     filteredRecords.map((record) => (
-                                        <tr key={record._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                        <tr
+                                            key={record._id}
+                                            ref={el => {
+                                                if (el) {
+                                                    if (record.lcNumber) {
+                                                        rowRefs.current[record.lcNumber] = el;
+                                                        const digits = String(record.lcNumber).replace(/\D/g, '');
+                                                        if (digits) rowRefs.current[digits] = el;
+                                                    }
+                                                    if (record._id) rowRefs.current[record._id] = el;
+                                                }
+                                            }}
+                                            className={`hover:bg-gray-50/50 transition-colors border-b border-gray-50 group ${isHighlighted(record) ? 'notif-row-highlight' : ''}`}
+                                            style={isHighlighted(record) ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                        >
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <p className="text-sm font-medium text-gray-600">{formatDate(record.gpDate)}</p>
                                             </td>
@@ -444,7 +534,21 @@ const LCGatePass = ({ currentUser, addNotification }) => {
                             filteredRecords.map((record, idx) => {
                                 const isExpanded = expandedGpIdx === idx;
                                 return (
-                                    <div key={record._id} className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+                                    <div
+                                        key={record._id}
+                                        ref={el => {
+                                            if (el) {
+                                                if (record.lcNumber) {
+                                                    rowRefs.current[record.lcNumber] = el;
+                                                    const digits = String(record.lcNumber).replace(/\D/g, '');
+                                                    if (digits) rowRefs.current[digits] = el;
+                                                }
+                                                if (record._id) rowRefs.current[record._id] = el;
+                                            }
+                                        }}
+                                        className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isHighlighted(record) ? 'notif-row-highlight ring-2 ring-amber-500' : ''} ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}
+                                        style={isHighlighted(record) ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                    >
                                         {/* Card Toggle Header */}
                                         <div
                                             className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"

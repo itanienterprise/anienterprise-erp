@@ -6,7 +6,9 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateLCExpenseReportPDF } from '../../../utils/pdfGenerator';
 
-const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }) => {
+const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, highlightId, isRequestedNotif }) => {
+    const [localHighlightId, setLocalHighlightId] = useState(null);
+    const activeHighlightId = highlightId || localHighlightId;
     const canAdd = hasPermission(currentUser, 'lcExpense', 'add');
     const canEdit = hasPermission(currentUser, 'lcExpense', 'edit');
     const canDelete = hasPermission(currentUser, 'lcExpense', 'delete');
@@ -28,6 +30,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const lcRef = React.useRef(null);
     const expenseHeadRef = React.useRef(null);
+    const rowRefs = React.useRef({});
 
     const initialFilterDropdownState = {
         lcNo: false,
@@ -53,6 +56,59 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
     const expenseFilterButtonRef = React.useRef(null);
     const lcFilterRef = React.useRef(null);
     const expenseHeadFilterRef = React.useRef(null);
+
+    const isHighlighted = (exp) => {
+        if (!activeHighlightId || !exp) return false;
+        const target = String(activeHighlightId).trim().toLowerCase();
+        const targetDigits = target.replace(/\D/g, '');
+
+        if (exp._id && String(exp._id).trim().toLowerCase() === target) return true;
+        if (exp.lcNo) {
+            const lcStr = String(exp.lcNo).trim().toLowerCase();
+            const lcDigits = lcStr.replace(/\D/g, '');
+            if (lcStr === target) return true;
+            if (targetDigits && lcDigits && lcDigits === targetDigits) return true;
+            if (target.length >= 4 && lcStr.length >= 4 && (lcStr.includes(target) || target.includes(lcStr))) return true;
+        }
+        return false;
+    };
+
+    useEffect(() => {
+        if (!activeHighlightId) return;
+
+        setShowAddModal(false);
+        setSearchQuery('');
+        setExpenseFilters(initialExpenseFilterState);
+
+        const scrollToRow = () => {
+            if (!activeHighlightId) return false;
+            const targetStr = String(activeHighlightId).trim().toLowerCase();
+            const targetDigitsStr = targetStr.replace(/\D/g, '');
+            const keys = Object.keys(rowRefs.current);
+            const matchedKey = keys.find(k => {
+                const cleanK = k.trim().toLowerCase();
+                const cleanKDigits = cleanK.replace(/\D/g, '');
+                if (cleanK === targetStr) return true;
+                if (targetDigitsStr && cleanKDigits && cleanKDigits === targetDigitsStr) return true;
+                if (cleanK.length >= 4 && targetStr.length >= 4 && (cleanK.includes(targetStr) || targetStr.includes(cleanK))) return true;
+                return false;
+            });
+            const el = matchedKey ? rowRefs.current[matchedKey] : (rowRefs.current[activeHighlightId] || (targetDigitsStr && rowRefs.current[targetDigitsStr]));
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        };
+
+        const timeouts = [50, 150, 350, 700, 1200].map(delay =>
+            setTimeout(() => {
+                scrollToRow();
+            }, delay)
+        );
+
+        return () => timeouts.forEach(clearTimeout);
+    }, [activeHighlightId, expenses]);
 
     const initialFormData = {
         date: '',
@@ -424,9 +480,29 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
 
             if (isEditMode && editingId) {
                 await axios.put(`${API_BASE_URL}/api/lc-expenses/${editingId}`, dataToSubmit);
+                if (addNotification) {
+                    addNotification(
+                        'LC Expense Updated',
+                        `LC Expense for LC No: ${formData.lcNo} has been updated by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry'],
+                        [],
+                        false,
+                        'lc-expense-section'
+                    );
+                }
                 addNotification?.('Expense updated successfully', 'success');
             } else {
                 await axios.post(`${API_BASE_URL}/api/lc-expenses`, dataToSubmit);
+                if (addNotification) {
+                    addNotification(
+                        'New LC Expense Added',
+                        `New LC Expense for LC No: ${formData.lcNo} added by ${currentUser?.name || currentUser?.username}.`,
+                        ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry'],
+                        [],
+                        false,
+                        'lc-expense-section'
+                    );
+                }
                 addNotification?.('Expense added successfully', 'success');
             }
             fetchExpenses();
@@ -754,7 +830,21 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                                     <tr><td colSpan={6 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-gray-400">No expenses found.</td></tr>
                                 ) : (
                                     filteredExpenses.map((exp) => (
-                                        <tr key={exp._id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 group">
+                                        <tr
+                                            key={exp._id}
+                                            ref={el => {
+                                                if (el) {
+                                                    if (exp.lcNo) {
+                                                        rowRefs.current[exp.lcNo] = el;
+                                                        const digits = String(exp.lcNo).replace(/\D/g, '');
+                                                        if (digits) rowRefs.current[digits] = el;
+                                                    }
+                                                    if (exp._id) rowRefs.current[exp._id] = el;
+                                                }
+                                            }}
+                                            className={`hover:bg-gray-50/50 transition-colors border-b border-gray-50 group ${isHighlighted(exp) ? 'notif-row-highlight' : ''}`}
+                                            style={isHighlighted(exp) ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                        >
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">{formatDate(exp.date)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{exp.lcNo || '-'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">{exp.expenseHead}</td>
@@ -810,7 +900,21 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey }
                             filteredExpenses.map((exp, idx) => {
                                 const isExpanded = expandedExpenseIdx === idx;
                                 return (
-                                    <div key={exp._id} className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+                                    <div
+                                        key={exp._id}
+                                        ref={el => {
+                                            if (el) {
+                                                if (exp.lcNo) {
+                                                    rowRefs.current[exp.lcNo] = el;
+                                                    const digits = String(exp.lcNo).replace(/\D/g, '');
+                                                    if (digits) rowRefs.current[digits] = el;
+                                                }
+                                                if (exp._id) rowRefs.current[exp._id] = el;
+                                            }
+                                        }}
+                                        className={`bg-white rounded-xl border transition-all duration-300 overflow-hidden ${isHighlighted(exp) ? 'notif-row-highlight ring-2 ring-amber-500' : ''} ${isExpanded ? 'border-blue-200 shadow-md ring-1 ring-blue-50' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}
+                                        style={isHighlighted(exp) ? { borderLeft: '5px solid #f59e0b' } : undefined}
+                                    >
                                         {/* Card Toggle Header */}
                                         <div
                                             className="flex justify-between items-center p-4 cursor-pointer select-none active:bg-gray-50 transition-colors"

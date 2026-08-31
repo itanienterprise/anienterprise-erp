@@ -3661,6 +3661,8 @@ const checkLcExpiryNotifications = async () => {
                 targetRoles,
                 targetUsers: [],
                 isSystemic: true,
+                link: 'lc-management-section',
+                highlightId: lcNoStr,
                 readByUsers: [],
                 createdBy: 'system',
                 createdByName: 'System Scheduler'
@@ -3682,6 +3684,8 @@ const checkLcExpiryNotifications = async () => {
                 targetRoles,
                 targetUsers: [],
                 isSystemic: true,
+                link: 'lc-management-section',
+                highlightId: lcNoStr,
                 readByUsers: [],
                 createdBy: 'system',
                 createdByName: 'System Scheduler'
@@ -3723,6 +3727,8 @@ const checkLcExpiryNotifications = async () => {
                 targetRoles,
                 targetUsers: [],
                 isSystemic: true,
+                link: 'lc-management-section',
+                highlightId: lcNoStr,
                 readByUsers: [],
                 createdBy: 'system',
                 createdByName: 'System Scheduler'
@@ -3744,6 +3750,8 @@ const checkLcExpiryNotifications = async () => {
                 targetRoles,
                 targetUsers: [],
                 isSystemic: true,
+                link: 'lc-management-section',
+                highlightId: lcNoStr,
                 readByUsers: [],
                 createdBy: 'system',
                 createdByName: 'System Scheduler'
