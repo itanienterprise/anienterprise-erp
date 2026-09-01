@@ -771,9 +771,13 @@ apiRouter.post('/api/stock', async (req, res) => {
     }
 
     const encryptedData = encryptData(req.body);
-    const newStock = new Stock({ data: encryptedData });
+    const stockDoc = { data: encryptedData };
+    if (req.body.createdAt) {
+      stockDoc.createdAt = new Date(req.body.createdAt);
+    }
+    const newStock = new Stock(stockDoc);
     const savedStock = await newStock.save();
-    res.status(201).json({ ...req.body, _id: savedStock._id, createdAt: savedStock.createdAt });
+    res.status(201).json({ ...req.body, _id: savedStock._id, createdAt: req.body.createdAt || savedStock.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -882,8 +886,12 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
     }
 
     const encryptedData = encryptData(req.body);
-    const updatedStock = await Stock.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
-    res.json(req.body);
+    const updateDoc = { data: encryptedData };
+    if (req.body.createdAt) {
+      updateDoc.createdAt = new Date(req.body.createdAt);
+    }
+    const updatedStock = await Stock.findByIdAndUpdate(req.params.id, updateDoc, { returnDocument: 'after' });
+    res.json({ ...req.body, createdAt: req.body.createdAt || updatedStock?.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -898,7 +906,7 @@ apiRouter.get('/api/stock', async (req, res) => {
       if (d && d.data && typeof d.data === 'string' && !d.productName) {
         try { d = decryptData(d.data); } catch (e) { /* ignore */ }
       }
-      return { ...d, _id: r._id, createdAt: r.createdAt };
+      return { ...d, _id: r._id, createdAt: d?.createdAt || r.createdAt };
     });
     res.json(decrypted);
   } catch (err) {
