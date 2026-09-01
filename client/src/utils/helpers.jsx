@@ -11,17 +11,17 @@ export const API_BASE_URL = '';
 // Date Formatting Utilities
 export const formatDate = (dateString) => {
     if (!dateString) return '-';
-    
+
     // If it's a simple YYYY-MM-DD string, handle it directly
     if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
         const [year, month, day] = dateString.split('-');
         return `${day}/${month}/${year}`;
     }
-    
+
     // Otherwise, try to create a Date object and format it
     const date = dateString instanceof Date ? dateString : new Date(dateString);
     if (isNaN(date.getTime())) return '-';
-    
+
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
@@ -37,6 +37,15 @@ export const parseDate = (dateString) => {
     return new Date(dateString);
 };
 
+export const getLocalDateString = (d = new Date()) => {
+    const dateObj = d instanceof Date ? d : new Date(d);
+    if (isNaN(dateObj.getTime())) return '';
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
+
 // Sort Icon Component
 export const SortIcon = ({ config, columnKey }) => {
     if (!config || config.key !== columnKey) {
@@ -47,11 +56,103 @@ export const SortIcon = ({ config, columnKey }) => {
         : <ChevronDownIcon className="w-4 h-4 ml-1 text-blue-600" />;
 };
 
-// Calculate exact customer final balance across sales, payments, payToCustomer, and purchases/purchaseReceives
-export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [], purchaseReceivesList = [] } = {}) => {
-    if (!c) return 0;
+// Robust ISO date converter for universal date comparisons (handles YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, ISO strings, Date objects)
+export const getIsoDateString = (val) => {
+    if (!val) return '';
+    if (val instanceof Date) {
+        if (isNaN(val.getTime())) return '';
+        const y = val.getFullYear();
+        const m = String(val.getMonth() + 1).padStart(2, '0');
+        const d = String(val.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+    const str = String(val).trim();
+    if (!str) return '';
 
-    const sales = (c.salesHistory || []).filter(s => (s.status || '').toLowerCase() !== 'requested').map(s => {
+    // Match YYYY-MM-DD or YYYY/MM/DD (with optional time)
+    const ymd = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    if (ymd) {
+        return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
+    }
+
+    // Match DD-MM-YYYY or DD/MM/YYYY
+    const dmy = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+    if (dmy) {
+        return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+    }
+
+    // Fallback Date parser
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+        const y = parsed.getFullYear();
+        const m = String(parsed.getMonth() + 1).padStart(2, '0');
+        const d = String(parsed.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    return '';
+};
+
+// Calculate exact customer final balance across sales, payments, payToCustomer, and purchases/purchaseReceives
+export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [], purchaseReceivesList = [], stockList = [], asOfDate = null } = {}) => {
+    if (!c) return 0;
+    const targetCutoff = asOfDate ? getIsoDateString(asOfDate) : null;
+
+    const resolvePurchaseItem = (p, item, b) => {
+        const pNo = (p?.purchaseNo || p?.invoiceNo || 'PUR-0000').trim().toUpperCase();
+        const pName = (item?.productName || item?.product || p?.productName || p?.product || '').trim().toLowerCase();
+        const bName = (b?.brand || p?.brand || '').trim().toLowerCase();
+
+        const matchingStocks = (stockList || []).filter(s =>
+            (s.status || '').toLowerCase() === 'accepted' &&
+            ((s.lcNo || '').trim().toUpperCase() === pNo || (s.purchaseNo || '').trim().toUpperCase() === pNo) &&
+            (!pName || (s.productName || s.product || '').trim().toLowerCase() === pName) &&
+            (!bName || (s.brand || '').trim().toLowerCase() === bName)
+        );
+        const totalStockQty = matchingStocks.reduce((sum, s) => sum + parseFloat((s.inHouseQuantity ?? s.quantity) || 0), 0);
+
+        let prQty = 0;
+        const matchingPRs = (purchaseReceivesList || []).filter(pr =>
+            (pr.status || '').toLowerCase() === 'accepted' &&
+            ((pr.purchaseNo || pr.purchaseReceiveNo || '').trim().toUpperCase() === pNo)
+        );
+        matchingPRs.forEach(matchedPR => {
+            if (matchedPR && matchedPR.items) {
+                matchedPR.items.forEach(prItem => {
+                    if (!pName || (prItem.productName || prItem.product || '').trim().toLowerCase() === pName) {
+                        (prItem.brandEntries || []).forEach(be => {
+                            if (!bName || (be.brand || '').trim().toLowerCase() === bName) {
+                                prQty += parseFloat((be.inHouseQuantity ?? be.inHouseQty ?? be.inhouseQty ?? be.qty) || 0);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        const finalInHouseQty = matchingStocks.length > 0
+            ? totalStockQty
+            : (prQty > 0
+                ? prQty
+                : parseFloat((b?.inHouseQuantity ?? b?.inHouseQty ?? b?.inhouseQty ?? b?.qty ?? item?.qty ?? item?.quantity ?? p?.quantity ?? p?.qty) || 0));
+
+        const rate = parseFloat((b?.rate ?? item?.rate ?? p?.rate) || 0);
+        const origTotal = parseFloat((b?.total ?? item?.total ?? item?.amount ?? p?.totalAmount ?? p?.amount) || 0);
+        const origQty = parseFloat((b?.qty ?? b?.quantity ?? item?.qty ?? item?.quantity ?? p?.quantity ?? p?.qty) || 0);
+        const amount = (rate > 0 && finalInHouseQty > 0) ? (finalInHouseQty * rate) : (origQty > 0 ? (origTotal * (finalInHouseQty / origQty)) : origTotal);
+
+        return { quantity: finalInHouseQty, rate, amount };
+    };
+
+    const sales = (c.salesHistory || []).filter(s => {
+        if ((s.status || '').toLowerCase() === 'requested') return false;
+        if (s.saleType === 'Order' || (s.invoiceNo || '').startsWith('ORD') || s.isOrderEntry === true) return false;
+        if (targetCutoff) {
+            const sDate = getIsoDateString(s.date);
+            if (sDate && sDate >= targetCutoff) return false;
+        }
+        return true;
+    }).map(s => {
         let updatedS = { ...s };
         if (salesRecords && salesRecords.length > 0) {
             const itemInv = (s.invoiceNo || '').trim().toUpperCase();
@@ -60,7 +161,7 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
                 const sInv = (sale.invoiceNo || '').trim().toUpperCase();
                 const sOrd = (sale.orderNo || '').trim().toUpperCase();
                 return (itemInv && (sInv === itemInv || sOrd === itemInv)) ||
-                       (itemOrd && (sInv === itemOrd || sOrd === itemOrd));
+                    (itemOrd && (sInv === itemOrd || sOrd === itemOrd));
             });
 
             if (matchingSale) {
@@ -102,20 +203,34 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
         return {
             ...updatedS,
             type: 'sale',
-            sortDate: new Date(s.date || 0)
+            sortDate: s.date
         };
     });
 
-    const payments = (c.paymentHistory || []).filter(p => (p.status || '').toLowerCase() !== 'requested').map(p => ({
+    const payments = (c.paymentHistory || []).filter(p => {
+        if ((p.status || '').toLowerCase() === 'requested') return false;
+        if (targetCutoff) {
+            const pDate = getIsoDateString(p.date);
+            if (pDate && pDate >= targetCutoff) return false;
+        }
+        return true;
+    }).map(p => ({
         ...p,
         type: 'payment',
-        sortDate: new Date(p.date || 0)
+        sortDate: p.date
     }));
 
-    const payouts = (c.payToCustomerHistory || []).filter(pc => (pc.status || '').toLowerCase() !== 'requested').map(pc => ({
+    const payouts = (c.payToCustomerHistory || []).filter(pc => {
+        if ((pc.status || '').toLowerCase() === 'requested') return false;
+        if (targetCutoff) {
+            const pcDate = getIsoDateString(pc.date);
+            if (pcDate && pcDate >= targetCutoff) return false;
+        }
+        return true;
+    }).map(pc => ({
         ...pc,
         type: 'payToCustomer',
-        sortDate: new Date(pc.date || 0)
+        sortDate: pc.date
     }));
 
     let prEntries = [];
@@ -123,6 +238,10 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
     if (purchaseReceivesList && purchaseReceivesList.length > 0) {
         const matchedPRs = purchaseReceivesList.filter(pr => {
             if ((pr.status || '').toLowerCase() === 'requested') return false;
+            if (targetCutoff) {
+                const prDate = getIsoDateString(pr.date);
+                if (prDate && prDate >= targetCutoff) return false;
+            }
             const sName = (pr.supplierName || pr.companyName || '').trim().toLowerCase();
             const cComp = (c?.companyName || '').trim().toLowerCase();
             const cCust = (c?.customerName || '').trim().toLowerCase();
@@ -158,7 +277,7 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
                                 warehouse: pr.warehouse || item.warehouse || '-',
                                 status: pr.status || 'Accepted',
                                 type: 'purchase',
-                                sortDate: new Date(pr.date || 0)
+                                sortDate: pr.date
                             };
                         });
                     }
@@ -180,7 +299,7 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
                         warehouse: pr.warehouse || item.warehouse || '-',
                         status: pr.status || 'Accepted',
                         type: 'purchase',
-                        sortDate: new Date(pr.date || 0)
+                        sortDate: pr.date
                     }];
                 });
             }
@@ -192,6 +311,10 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
 
     const matchedPurchases = (purchasesList || []).filter(p => {
         if ((p.status || '').toLowerCase() === 'requested') return false;
+        if (targetCutoff) {
+            const pDate = getIsoDateString(p.date);
+            if (pDate && pDate >= targetCutoff) return false;
+        }
         const pNo = (p.purchaseNo || p.invoiceNo || '').trim().toUpperCase();
         if (pNo && coveredPurchaseNos.has(pNo)) return false;
 
@@ -209,29 +332,34 @@ export const computeCustomerBalance = (c, { salesRecords = [], purchasesList = [
         if (p.items && Array.isArray(p.items)) {
             return p.items.flatMap(item => {
                 if (item.brandEntries && Array.isArray(item.brandEntries)) {
-                    return item.brandEntries.map(b => ({
-                        amount: b.total || (parseFloat(b.qty || 0) * parseFloat(b.rate || 0)),
-                        discount: p.discount || 0,
-                        paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
-                        type: 'purchase',
-                        sortDate: new Date(p.date || 0)
-                    }));
+                    return item.brandEntries.map(b => {
+                        const res = resolvePurchaseItem(p, item, b);
+                        return {
+                            amount: res.amount,
+                            discount: p.discount || 0,
+                            paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
+                            type: 'purchase',
+                            sortDate: p.date
+                        };
+                    });
                 }
+                const res = resolvePurchaseItem(p, item, null);
                 return [{
-                    amount: item.total || item.amount || 0,
+                    amount: res.amount,
                     discount: p.discount || 0,
                     paid: p.paid || p.paidAmount || item.paid || item.paidAmount || 0,
                     type: 'purchase',
-                    sortDate: new Date(p.date || 0)
+                    sortDate: p.date
                 }];
             });
         }
+        const res = resolvePurchaseItem(p, null, null);
         return [{
-            amount: p.totalAmount || p.amount || 0,
+            amount: res.amount,
             discount: p.discount || 0,
             paid: p.paid || p.paidAmount || 0,
             type: 'purchase',
-            sortDate: new Date(p.date || 0)
+            sortDate: p.date
         }];
     });
 
@@ -291,10 +419,12 @@ export const getItemTimestamp = (item) => {
 
 // Comparator to sort transactions chronologically (by calendar date, then precise creation timestamp)
 export const compareTransactions = (a, b) => {
-    const aDate = new Date(a.date || a.sortDate || 0).setHours(0, 0, 0, 0);
-    const bDate = new Date(b.date || b.sortDate || 0).setHours(0, 0, 0, 0);
-    if (aDate !== bDate) {
-        return aDate - bDate;
+    const aDateStr = getIsoDateString(a.date || a.sortDate);
+    const bDateStr = getIsoDateString(b.date || b.sortDate);
+    if (aDateStr !== bDateStr) {
+        if (!aDateStr) return -1;
+        if (!bDateStr) return 1;
+        return aDateStr.localeCompare(bDateStr);
     }
     const aTime = getItemTimestamp(a);
     const bTime = getItemTimestamp(b);

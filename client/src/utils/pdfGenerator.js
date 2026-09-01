@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
-import { computeCustomerBalance, compareTransactions } from './helpers';
+import { computeCustomerBalance, compareTransactions, getIsoDateString } from './helpers';
 import { api } from './api';
 
 const formatDate = (dateString) => {
@@ -2546,7 +2546,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
             doc.text("TOTAL QUANTITY", rightBoxX + (rightBoxW / 2), finalY + 5.5, { align: 'center' });
             doc.setFontSize(12);
             doc.text(totalDeliveredQty.toLocaleString('en-US') + (sale.uom === 'BAG' ? ' BAG' : ' KG'), rightBoxX + (rightBoxW / 2), finalY + 12, { align: 'center' });
-            
+
             doc.setTextColor(0, 0, 0); // reset to black
             sumY = finalY + boxH + 5;
         } else {
@@ -2665,8 +2665,8 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
         }
 
         const preparedByName = getFormattedName(sale.requestedByUsername || sale.createdByUsername, sale.requestedBy || sale.createdByName || sale.createdBy || sale.requestedByUsername || sale.entryBy || "-");
-        const verifiedByName = orderCreator 
-            ? getFormattedName(orderCreator, orderCreator) 
+        const verifiedByName = orderCreator
+            ? getFormattedName(orderCreator, orderCreator)
             : "-";
         const isApproved = (sale.status || '').toLowerCase() !== 'requested';
         const rawApproved = sale.acceptedBy || sale.approvedByName || sale.approvedBy || sale.acceptedByUsername || sale.approvedByUsername || "";
@@ -3575,13 +3575,15 @@ export const generateCustomerReportPDF = (
     dateStr,
     purchasesList = [],
     salesRecords = [],
-    purchaseReceivesList = []
+    purchaseReceivesList = [],
+    asOfDate = null,
+    stockList = []
 ) => {
     try {
         const doc = new jsPDF();
 
         const computeDue = (customer) => {
-            return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList });
+            return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate });
         };
 
         const pageWidth = doc.internal.pageSize.width;
@@ -3635,6 +3637,14 @@ export const generateCustomerReportPDF = (
             yPos += 5;
         }
 
+        if (asOfDate) {
+            doc.setFont('helvetica', 'bold');
+            doc.text("Balance As Of:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(formatDate(asOfDate), margin + 30, yPos);
+            yPos += 5;
+        }
+
         doc.setFont('helvetica', 'bold');
         doc.text("Total Records:", margin, yPos);
         doc.setFont('helvetica', 'normal');
@@ -3643,7 +3653,15 @@ export const generateCustomerReportPDF = (
         doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
 
         const getLastTransDay = (customer) => {
-            const payments = customer.paymentHistory || [];
+            const targetCutoff = asOfDate ? getIsoDateString(asOfDate) : null;
+            const payments = (customer.paymentHistory || []).filter(p => {
+                if ((p.status || '').toLowerCase() === 'requested') return false;
+                if (targetCutoff) {
+                    const pDate = getIsoDateString(p.date);
+                    if (pDate && pDate >= targetCutoff) return false;
+                }
+                return true;
+            });
             if (payments.length === 0) return '-';
 
             const latestPayment = payments.reduce((latest, current) => {

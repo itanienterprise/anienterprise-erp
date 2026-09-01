@@ -649,33 +649,35 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
         const pName = (item?.productName || item?.product || p?.productName || p?.product || '').trim().toLowerCase();
         const bName = (b?.brand || p?.brand || '').trim().toLowerCase();
 
-        const matchedStock = (stockList || []).find(s =>
+        const matchingStocks = (stockList || []).filter(s =>
             (s.status || '').toLowerCase() === 'accepted' &&
             ((s.lcNo || '').trim().toUpperCase() === pNo || (s.purchaseNo || '').trim().toUpperCase() === pNo) &&
             (!pName || (s.productName || s.product || '').trim().toLowerCase() === pName) &&
             (!bName || (s.brand || '').trim().toLowerCase() === bName)
         );
+        const totalStockQty = matchingStocks.reduce((sum, s) => sum + parseFloat((s.inHouseQuantity ?? s.quantity) || 0), 0);
 
-        const matchedPR = (purchaseReceivesList || []).find(pr =>
+        let prQty = 0;
+        const matchingPRs = (purchaseReceivesList || []).filter(pr =>
             (pr.status || '').toLowerCase() === 'accepted' &&
             ((pr.purchaseNo || pr.purchaseReceiveNo || '').trim().toUpperCase() === pNo)
         );
+        matchingPRs.forEach(matchedPR => {
+            if (matchedPR && matchedPR.items) {
+                matchedPR.items.forEach(prItem => {
+                    if (!pName || (prItem.productName || prItem.product || '').trim().toLowerCase() === pName) {
+                        (prItem.brandEntries || []).forEach(be => {
+                            if (!bName || (be.brand || '').trim().toLowerCase() === bName) {
+                                prQty += parseFloat((be.inHouseQuantity ?? be.inHouseQty ?? be.inhouseQty ?? be.qty) || 0);
+                            }
+                        });
+                    }
+                });
+            }
+        });
 
-        let prQty = 0;
-        if (matchedPR && matchedPR.items) {
-            matchedPR.items.forEach(prItem => {
-                if (!pName || (prItem.productName || prItem.product || '').trim().toLowerCase() === pName) {
-                    (prItem.brandEntries || []).forEach(be => {
-                        if (!bName || (be.brand || '').trim().toLowerCase() === be.brand) {
-                            prQty += parseFloat((be.inHouseQuantity ?? be.inHouseQty ?? be.inhouseQty ?? be.qty) || 0);
-                        }
-                    });
-                }
-            });
-        }
-
-        const finalInHouseQty = matchedStock
-            ? parseFloat((matchedStock.inHouseQuantity ?? matchedStock.quantity) || 0)
+        const finalInHouseQty = matchingStocks.length > 0
+            ? totalStockQty
             : (prQty > 0
                 ? prQty
                 : parseFloat((b?.inHouseQuantity ?? b?.inHouseQty ?? b?.inhouseQty ?? b?.qty ?? item?.qty ?? item?.quantity ?? p?.quantity ?? p?.qty) || 0));

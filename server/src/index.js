@@ -760,7 +760,9 @@ apiRouter.post('/api/stock', async (req, res) => {
       (userSession.role || '').toLowerCase() === 'admin' ||
       (userSession.permissions && (
         (userSession.permissions.lcReceive && userSession.permissions.lcReceive.add === true) ||
-        (userSession.permissions.stock && userSession.permissions.stock.add === true)
+        (userSession.permissions.stock && userSession.permissions.stock.add === true) ||
+        (userSession.permissions.purchaseReceive && userSession.permissions.purchaseReceive.add === true) ||
+        (userSession.permissions.purchase && userSession.permissions.purchase.add === true)
       ))
     );
 
@@ -785,7 +787,9 @@ apiRouter.delete('/api/stock/:id', async (req, res) => {
       (userSession.role || '').toLowerCase() === 'admin' ||
       (userSession.permissions && (
         (userSession.permissions.lcReceive && userSession.permissions.lcReceive.delete === true) ||
-        (userSession.permissions.stock && userSession.permissions.stock.delete === true)
+        (userSession.permissions.stock && userSession.permissions.stock.delete === true) ||
+        (userSession.permissions.purchaseReceive && userSession.permissions.purchaseReceive.delete === true) ||
+        (userSession.permissions.purchase && userSession.permissions.purchase.delete === true)
       ))
     );
 
@@ -829,7 +833,9 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
       (userSession.role || '').toLowerCase() === 'admin' ||
       (userSession.permissions && (
         (userSession.permissions.lcReceive && userSession.permissions.lcReceive.edit === true) ||
-        (userSession.permissions.stock && userSession.permissions.stock.edit === true)
+        (userSession.permissions.stock && userSession.permissions.stock.edit === true) ||
+        (userSession.permissions.purchaseReceive && userSession.permissions.purchaseReceive.edit === true) ||
+        (userSession.permissions.purchase && userSession.permissions.purchase.edit === true)
       ))
     );
 
@@ -845,11 +851,13 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
       const isStatusChange = req.body.status !== existingData.status;
       if (isStatusChange) {
         const canApprove = userSession && (
-          ['admin', 'incharge', 'sales manager'].includes((userSession.role || '').toLowerCase()) ||
+          ['admin', 'incharge', 'sales manager', 'purchase manager'].includes((userSession.role || '').toLowerCase()) ||
           userSession.username === 'admin' ||
           (userSession.permissions && (
             (userSession.permissions.lcReceive && userSession.permissions.lcReceive.special === true) ||
-            (userSession.permissions.stock && userSession.permissions.stock.special === true)
+            (userSession.permissions.stock && userSession.permissions.stock.special === true) ||
+            (userSession.permissions.purchaseReceive && userSession.permissions.purchaseReceive.special === true) ||
+            (userSession.permissions.purchase && userSession.permissions.purchase.special === true)
           ))
         );
         if (!canApprove) {

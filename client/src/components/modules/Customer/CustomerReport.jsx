@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { XIcon, BarChartIcon, PrinterIcon, SearchIcon } from '../../Icons';
-import { formatDate, computeCustomerBalance } from '../../../utils/helpers';
+import { XIcon, BarChartIcon, PrinterIcon, SearchIcon, FunnelIcon } from '../../Icons';
+import { formatDate, computeCustomerBalance, getLocalDateString, getIsoDateString } from '../../../utils/helpers';
 import { generateCustomerReportPDF } from '../../../utils/pdfGenerator';
+import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const CustomerReport = ({
     isOpen,
@@ -10,20 +11,56 @@ const CustomerReport = ({
     customers = [],
     purchasesList = [],
     salesRecords = [],
-    purchaseReceivesList = []
+    purchaseReceivesList = [],
+    stockList = [],
+    asOfDate = ''
 }) => {
     if (!isOpen) return null;
 
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState('General Customer');
+    const [reportDate, setReportDate] = useState(asOfDate || '');
+    const [showFilterCard, setShowFilterCard] = useState(false);
+    const mobileFilterContainerRef = useRef(null);
+    const desktopFilterContainerRef = useRef(null);
+
+    useEffect(() => {
+        setReportDate(asOfDate || '');
+    }, [asOfDate]);
+
+    // Click outside listener for filter card
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            const inMobile = mobileFilterContainerRef.current && mobileFilterContainerRef.current.contains(e.target);
+            const inDesktop = desktopFilterContainerRef.current && desktopFilterContainerRef.current.contains(e.target);
+            if (!inMobile && !inDesktop) {
+                setShowFilterCard(false);
+            }
+        };
+        if (showFilterCard) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showFilterCard]);
 
     // --- Calculate running balance per customer from all history (sales, payments, payouts, purchases) ---
     const computeDue = (customer) => {
-        return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList });
+        return computeCustomerBalance(customer, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate: reportDate });
     };
 
     const getLastTransDay = (customer) => {
-        const payments = customer.paymentHistory || [];
+        const targetCutoff = reportDate ? getIsoDateString(reportDate) : null;
+        const payments = (customer.paymentHistory || []).filter(p => {
+            if ((p.status || '').toLowerCase() === 'requested') return false;
+            if (targetCutoff) {
+                const pDate = getIsoDateString(p.date);
+                if (pDate && pDate >= targetCutoff) return false;
+            }
+            return true;
+        });
+
         if (payments.length === 0) return '-';
         
         const latestPayment = payments.reduce((latest, current) => {
@@ -43,6 +80,22 @@ const CustomerReport = ({
         if (diffDays === 0) return 'Today';
         if (diffDays === 1) return '1 day ago';
         return `${diffDays} days ago`;
+    };
+
+    const setQuickReportDate = (type) => {
+        if (type === 'today') {
+            setReportDate(getLocalDateString(new Date()));
+        } else if (type === 'yesterday') {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            setReportDate(getLocalDateString(d));
+        } else if (type === 'lastMonthEnd') {
+            const d = new Date();
+            d.setDate(0);
+            setReportDate(getLocalDateString(d));
+        } else if (type === 'clear') {
+            setReportDate('');
+        }
     };
 
     const filtered = customers.filter(c => {
@@ -69,32 +122,50 @@ const CustomerReport = ({
             filtered,
             typeFilter,
             grandTotalDue,
-            formatDate(new Date().toISOString().split('T')[0]),
+            reportDate ? formatDate(reportDate) : formatDate(getLocalDateString(new Date())),
             purchasesList,
             salesRecords,
-            purchaseReceivesList
+            purchaseReceivesList,
+            reportDate,
+            stockList
         );
     };
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
-            <div className="bg-white w-full max-w-5xl max-h-[82vh] sm:max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
+            <div className="bg-white w-full max-w-5xl max-h-[85vh] sm:max-h-[92vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
                 {/* Modal Header — hidden on print */}
                 
                 {/* MOBILE HEADER LAYOUT (visible on mobile only, hidden on tablet/desktop) */}
-                <div className="flex flex-col gap-3.5 px-4 py-4 border-b border-gray-100 print:hidden sm:hidden w-full">
+                <div className="flex flex-col gap-3 px-4 py-3.5 border-b border-gray-100 print:hidden sm:hidden w-full">
                     {/* Top row: Title and Action Buttons */}
                     <div className="flex items-center justify-between w-full">
                         <div className="flex items-center gap-2">
                             <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg">
                                 <BarChartIcon className="w-4 h-4 text-blue-600" />
                             </div>
-                            <h3 className="text-base font-black text-gray-800">Customer Report</h3>
+                            <div>
+                                <h3 className="text-base font-black text-gray-800">Customer Report</h3>
+                                <div className="text-[10px] font-bold text-gray-400">
+                                    {reportDate ? `As of ${formatDate(reportDate)}` : 'Live balances'}
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Actions (Print & X close at top right on mobile) */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Actions (Filter, Print & X close at top right on mobile) */}
+                        <div className="flex items-center gap-1.5 flex-shrink-0 relative" ref={mobileFilterContainerRef}>
+                            <button
+                                onClick={() => setShowFilterCard(!showFilterCard)}
+                                className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all ${
+                                    showFilterCard || reportDate
+                                        ? 'bg-blue-50 border-blue-300 text-blue-600'
+                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                }`}
+                                title="Filter"
+                            >
+                                <FunnelIcon className="w-4 h-4" />
+                            </button>
                             <button
                                 onClick={handlePrint}
                                 className="w-8 h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
@@ -107,6 +178,75 @@ const CustomerReport = ({
                             >
                                 <XIcon className="w-4 h-4 text-gray-500" />
                             </button>
+
+                            {/* Mobile Filter Card Popup */}
+                            {showFilterCard && (
+                                <div className="absolute right-0 top-10 w-[280px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                    <div className="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
+                                        <h4 className="text-xs font-bold text-gray-800">Filter Report</h4>
+                                        <div className="flex items-center gap-1.5">
+                                            {reportDate && (
+                                                <button
+                                                    onClick={() => setQuickReportDate('clear')}
+                                                    className="text-[11px] font-bold text-gray-500 hover:text-blue-600 px-2 py-0.5 bg-gray-50 rounded"
+                                                >
+                                                    Reset
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => setShowFilterCard(false)}
+                                                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                                            >
+                                                <XIcon className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2.5">
+                                        <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider block">
+                                            Balance As Of Date
+                                        </label>
+                                        <div className="flex flex-wrap gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuickReportDate('today')}
+                                                className="px-2 py-1 rounded-md text-[11px] font-semibold border bg-gray-50 border-gray-200 text-gray-600"
+                                            >
+                                                Today
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuickReportDate('yesterday')}
+                                                className="px-2 py-1 rounded-md text-[11px] font-semibold border bg-gray-50 border-gray-200 text-gray-600"
+                                            >
+                                                Yesterday
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuickReportDate('lastMonthEnd')}
+                                                className="px-2 py-1 rounded-md text-[11px] font-semibold border bg-gray-50 border-gray-200 text-gray-600"
+                                            >
+                                                Last Month End
+                                            </button>
+                                        </div>
+                                        <CustomDatePicker
+                                            value={reportDate || ''}
+                                            onChange={(e) => setReportDate(e.target.value)}
+                                            placeholder="Select Date"
+                                            compact
+                                        />
+                                    </div>
+
+                                    <div className="mt-3 pt-2 border-t border-gray-100">
+                                        <button
+                                            onClick={() => setShowFilterCard(false)}
+                                            className="w-full py-1.5 bg-gray-900 text-white text-xs font-bold rounded-lg shadow-sm"
+                                        >
+                                            Apply
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -144,16 +284,21 @@ const CustomerReport = ({
                 </div>
 
                 {/* DESKTOP HEADER LAYOUT (visible on desktop only, hidden on mobile) */}
-                <div className="hidden sm:flex flex-row items-center justify-between px-8 py-4 border-b border-gray-100 print:hidden gap-3 w-full">
+                <div className="hidden sm:flex flex-row items-center justify-between px-8 py-3.5 border-b border-gray-100 print:hidden gap-3 w-full">
                     <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
                         <div className="w-10 sm:w-10 h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-xl">
                             <BarChartIcon className="w-5 h-5 text-blue-600" />
                         </div>
-                        <h3 className="text-xl font-black text-gray-800 truncate leading-none">Customer Report</h3>
+                        <div>
+                            <h3 className="text-xl font-black text-gray-800 truncate leading-none">Customer Report</h3>
+                            <div className="text-[11px] font-bold text-gray-400 mt-1">
+                                {reportDate ? `As of ${formatDate(reportDate)}` : 'Live balances'}
+                            </div>
+                        </div>
                     </div>
 
                     {/* Search Input — centered in desktop mode */}
-                    <div className="flex-1 max-w-xs mx-4">
+                    <div className="flex-1 max-w-sm mx-4">
                         <div className="relative w-full">
                             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                             <input
@@ -185,6 +330,103 @@ const CustomerReport = ({
 
                         {/* Actions */}
                         <div className="flex items-center gap-2">
+                            {/* Filter Button & Filter Card Dropdown */}
+                            <div className="relative" ref={desktopFilterContainerRef}>
+                                <button
+                                    onClick={() => setShowFilterCard(!showFilterCard)}
+                                    className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-all shadow-sm ${
+                                        showFilterCard || reportDate
+                                            ? 'bg-blue-50 border-blue-300 text-blue-600 font-semibold'
+                                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                    }`}
+                                    title="Filter"
+                                >
+                                    <FunnelIcon className="w-5 h-5" />
+                                </button>
+
+                                {showFilterCard && (
+                                    <div className="absolute right-0 top-12 w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
+                                            <h4 className="text-sm font-bold text-gray-800">Filter Report</h4>
+                                            <div className="flex items-center gap-2">
+                                                {reportDate && (
+                                                    <button
+                                                        onClick={() => setQuickReportDate('clear')}
+                                                        className="text-[12px] font-bold text-gray-500 hover:text-blue-600 transition-colors px-2 py-1 bg-gray-50 hover:bg-blue-50 rounded-md"
+                                                    >
+                                                        Reset
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => setShowFilterCard(false)}
+                                                    className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                                >
+                                                    <XIcon className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block">
+                                                    Balance As Of Date
+                                                </label>
+                                                <p className="text-xs text-gray-500">
+                                                    View balances calculated up to this date.
+                                                </p>
+
+                                                {/* Quick Presets */}
+                                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuickReportDate('today')}
+                                                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                                                            reportDate === getLocalDateString(new Date())
+                                                                ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold'
+                                                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        Today
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuickReportDate('yesterday')}
+                                                        className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                                                    >
+                                                        Yesterday
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuickReportDate('lastMonthEnd')}
+                                                        className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                                                    >
+                                                        Last Month End
+                                                    </button>
+                                                </div>
+
+                                                <div className="pt-1">
+                                                    <CustomDatePicker
+                                                        value={reportDate || ''}
+                                                        onChange={(e) => setReportDate(e.target.value)}
+                                                        placeholder="Select Date (YYYY-MM-DD)"
+                                                        compact
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end gap-2">
+                                            <button
+                                                onClick={() => setShowFilterCard(false)}
+                                                className="w-full py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95"
+                                            >
+                                                Apply Filters
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             <button
                                 onClick={handlePrint}
                                 className="w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
@@ -230,6 +472,17 @@ const CustomerReport = ({
                                         <span className="text-blue-700 font-extrabold">{typeFilter}</span>
                                     </div>
                                 )}
+                                {reportDate ? (
+                                    <div className="flex">
+                                        <span className="font-bold text-gray-900 w-32">Balance As Of:</span>
+                                        <span className="text-blue-700 font-extrabold">{formatDate(reportDate)}</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex">
+                                        <span className="font-bold text-gray-900 w-32">Balance Type:</span>
+                                        <span className="text-emerald-700 font-extrabold">Live Current Balance</span>
+                                    </div>
+                                )}
                                 <div className="flex">
                                     <span className="font-bold text-gray-900 w-32">Total Records:</span>
                                     <span className="text-gray-900">{filtered.length}</span>
@@ -237,7 +490,7 @@ const CustomerReport = ({
                             </div>
                             <div className="font-bold">
                                 <span className="text-gray-900">Printed on: </span>
-                                <span className="text-gray-900">{formatDate(new Date().toISOString().split('T')[0])}</span>
+                                <span className="text-gray-900">{formatDate(getLocalDateString(new Date()))}</span>
                             </div>
                         </div>
 

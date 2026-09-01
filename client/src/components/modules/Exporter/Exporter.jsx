@@ -478,7 +478,7 @@ const Exporter = ({
         }));
     };
 
-    const handleFormSubmit = async (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
         setSubmitStatus(null);

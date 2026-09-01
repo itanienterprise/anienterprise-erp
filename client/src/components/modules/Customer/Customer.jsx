@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
-import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTransactions, getItemTimestamp } from '../../../utils/helpers';
+import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTransactions, getItemTimestamp, getLocalDateString } from '../../../utils/helpers';
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceiptPDF, generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
 import { api } from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -28,7 +28,11 @@ const Customer = ({
 }) => {
     const [showForm, setShowForm] = useState(false);
     const [showFilterPanel, setShowFilterPanel] = useState(false);
-    const [filters, setFilters] = useState({ type: 'General Customer' });
+    const [filters, setFilters] = useState({
+        type: 'General Customer',
+        asOfDate: '',
+        status: 'All'
+    });
     const [showReport, setShowReport] = useState(false);
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
@@ -485,8 +489,35 @@ const Customer = ({
         setHistorySortConfig({ key, direction });
     };
 
-    const getCustomerFinalBalance = (c) => {
-        return computeCustomerBalance(c, { salesRecords, purchasesList, purchaseReceivesList });
+    const isFilterActive = Boolean(filters.asOfDate);
+
+    const resetFilters = () => {
+        setFilters(prev => ({
+            ...prev,
+            asOfDate: ''
+        }));
+    };
+
+    const setQuickDate = (type) => {
+        if (type === 'today') {
+            const today = getLocalDateString(new Date());
+            setFilters(prev => ({ ...prev, asOfDate: today }));
+        } else if (type === 'yesterday') {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            setFilters(prev => ({ ...prev, asOfDate: getLocalDateString(d) }));
+        } else if (type === 'lastMonthEnd') {
+            const d = new Date();
+            d.setDate(0);
+            setFilters(prev => ({ ...prev, asOfDate: getLocalDateString(d) }));
+        } else if (type === 'clear') {
+            setFilters(prev => ({ ...prev, asOfDate: '' }));
+        }
+    };
+
+    const getCustomerFinalBalance = (c, customDate = null) => {
+        const targetDate = customDate !== null ? customDate : filters.asOfDate;
+        return computeCustomerBalance(c, { salesRecords, purchasesList, purchaseReceivesList, stockList, asOfDate: targetDate });
     };
 
     const handleDownloadMoneyReceipt = (payment) => {
@@ -619,6 +650,10 @@ const Customer = ({
             filtered = filtered.filter(c => (c.customerType || 'General Customer') === filters.type);
         }
 
+        if (filters.status && filters.status !== 'All') {
+            filtered = filtered.filter(c => (c.status || 'Active') === filters.status);
+        }
+
         return sortData(filtered);
     };
 
@@ -729,33 +764,35 @@ const Customer = ({
         const pName = (item?.productName || item?.product || p?.productName || p?.product || '').trim().toLowerCase();
         const bName = (b?.brand || p?.brand || '').trim().toLowerCase();
 
-        const matchedStock = (stockList || []).find(s =>
+        const matchingStocks = (stockList || []).filter(s =>
             (s.status || '').toLowerCase() === 'accepted' &&
             ((s.lcNo || '').trim().toUpperCase() === pNo || (s.purchaseNo || '').trim().toUpperCase() === pNo) &&
             (!pName || (s.productName || s.product || '').trim().toLowerCase() === pName) &&
             (!bName || (s.brand || '').trim().toLowerCase() === bName)
         );
+        const totalStockQty = matchingStocks.reduce((sum, s) => sum + parseFloat((s.inHouseQuantity ?? s.quantity) || 0), 0);
 
-        const matchedPR = (purchaseReceivesList || []).find(pr =>
+        let prQty = 0;
+        const matchingPRs = (purchaseReceivesList || []).filter(pr =>
             (pr.status || '').toLowerCase() === 'accepted' &&
             ((pr.purchaseNo || pr.purchaseReceiveNo || '').trim().toUpperCase() === pNo)
         );
+        matchingPRs.forEach(matchedPR => {
+            if (matchedPR && matchedPR.items) {
+                matchedPR.items.forEach(prItem => {
+                    if (!pName || (prItem.productName || prItem.product || '').trim().toLowerCase() === pName) {
+                        (prItem.brandEntries || []).forEach(be => {
+                            if (!bName || (be.brand || '').trim().toLowerCase() === bName) {
+                                prQty += parseFloat((be.inHouseQuantity ?? be.inHouseQty ?? be.inhouseQty ?? be.qty) || 0);
+                            }
+                        });
+                    }
+                });
+            }
+        });
 
-        let prQty = 0;
-        if (matchedPR && matchedPR.items) {
-            matchedPR.items.forEach(prItem => {
-                if (!pName || (prItem.productName || prItem.product || '').trim().toLowerCase() === pName) {
-                    (prItem.brandEntries || []).forEach(be => {
-                        if (!bName || (be.brand || '').trim().toLowerCase() === bName) {
-                            prQty += parseFloat((be.inHouseQuantity ?? be.inHouseQty ?? be.inhouseQty ?? be.qty) || 0);
-                        }
-                    });
-                }
-            });
-        }
-
-        const finalInHouseQty = matchedStock
-            ? parseFloat((matchedStock.inHouseQuantity ?? matchedStock.quantity) || 0)
+        const finalInHouseQty = matchingStocks.length > 0
+            ? totalStockQty
             : (prQty > 0
                 ? prQty
                 : parseFloat((b?.inHouseQuantity ?? b?.inHouseQty ?? b?.inhouseQty ?? b?.qty ?? item?.qty ?? item?.quantity ?? p?.quantity ?? p?.qty) || 0));
@@ -1402,6 +1439,125 @@ const Customer = ({
                         </div>
 
                         <div className="w-full md:w-auto flex flex-row items-center justify-between md:justify-end gap-2">
+                            {/* Advanced Filter Button & Panel Container */}
+                            <div className="relative flex-1 md:flex-none">
+                                <button
+                                    ref={filterButtonRef}
+                                    onClick={() => setShowFilterPanel(!showFilterPanel)}
+                                    className={`h-10 w-full md:w-auto flex justify-center items-center gap-2 px-4 rounded-xl border transition-all shadow-sm active:scale-95 text-sm font-medium ${
+                                        showFilterPanel || isFilterActive
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <FunnelIcon className={`w-4 h-4 ${isFilterActive || showFilterPanel ? 'text-white' : 'text-gray-400'}`} />
+                                    <span className="text-sm font-medium">Filter</span>
+                                    {isFilterActive && (
+                                        <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                                    )}
+                                </button>
+
+                                {/* Filter Panel Popup */}
+                                {showFilterPanel && (
+                                    <div
+                                        ref={filterPanelRef}
+                                        className="fixed inset-x-4 top-[140px] md:absolute md:inset-auto md:right-0 md:mt-3 md:top-auto w-auto md:w-[380px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-[2010] p-5 opacity-100 scale-100 transform transform-gpu transition-all duration-200 ease-out origin-top-right text-left"
+                                    >
+                                        <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                                                    <FunnelIcon className="w-4 h-4" />
+                                                </div>
+                                                <h3 className="font-bold text-gray-800 text-[15px]">Customer Filter</h3>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={resetFilters}
+                                                    className="text-[12px] font-bold text-gray-500 hover:text-blue-600 transition-colors px-2 py-1 bg-gray-50 hover:bg-blue-50 rounded-md"
+                                                >
+                                                    Reset All
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowFilterPanel(false)}
+                                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                                >
+                                                    <XIcon className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {/* Balance As Of Date Section */}
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block">
+                                                        Balance As Of Date
+                                                    </label>
+                                                    {filters.asOfDate && (
+                                                        <button
+                                                            onClick={() => setFilters(prev => ({ ...prev, asOfDate: '' }))}
+                                                            className="text-[10px] text-red-500 hover:text-red-700 font-semibold"
+                                                        >
+                                                            Clear Date
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-500">
+                                                    View customer balances calculated up to this specific date.
+                                                </p>
+
+                                                {/* Quick Presets */}
+                                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuickDate('today')}
+                                                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                                                            filters.asOfDate === getLocalDateString(new Date())
+                                                                ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold'
+                                                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        Today
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuickDate('yesterday')}
+                                                        className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                                                    >
+                                                        Yesterday
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuickDate('lastMonthEnd')}
+                                                        className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                                                    >
+                                                        Last Month End
+                                                    </button>
+                                                </div>
+
+                                                <div className="pt-1">
+                                                    <CustomDatePicker
+                                                        value={filters.asOfDate || ''}
+                                                        onChange={(e) => setFilters(prev => ({ ...prev, asOfDate: e.target.value }))}
+                                                        placeholder="Select Date (YYYY-MM-DD)"
+                                                        compact
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-5 pt-3 border-t border-gray-100 flex justify-end gap-2">
+                                            <button
+                                                onClick={() => setShowFilterPanel(false)}
+                                                className="w-full py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95"
+                                            >
+                                                Apply Filters
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             <button
                                 onClick={() => setShowReport(true)}
                                 className="h-10 flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 text-sm font-medium"
@@ -1425,13 +1581,13 @@ const Customer = ({
                 )}
 
                 {!showForm && (
-                    <div className="flex items-center justify-between w-full md:w-auto">
-                        <div className="flex items-center gap-1 bg-gray-100/50 p-1 rounded-xl w-full md:w-fit justify-between md:justify-start">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                        <div className="flex items-center gap-1 bg-gray-100/50 p-1 rounded-xl w-full sm:w-fit justify-between sm:justify-start">
                             {['All Customer', 'General Customer', 'Party Customer'].map((type) => (
                                 <button
                                     key={type}
-                                    onClick={() => setFilters({ type })}
-                                    className={`flex-1 md:flex-none px-4 md:px-6 py-2 rounded-lg text-sm font-bold transition-all text-center ${filters.type === type
+                                    onClick={() => setFilters(prev => ({ ...prev, type }))}
+                                    className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 rounded-lg text-sm font-bold transition-all text-center ${filters.type === type
                                         ? 'bg-white text-blue-600 shadow-sm'
                                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
                                         }`}
@@ -1440,6 +1596,24 @@ const Customer = ({
                                 </button>
                             ))}
                         </div>
+
+                        {/* Active Filter Indicators */}
+                        {isFilterActive && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                {filters.asOfDate && (
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200/60 rounded-xl text-xs font-medium text-blue-700 shadow-sm animate-in fade-in duration-200">
+                                        <span>Showing balances as of: <strong className="font-bold">{formatDate(filters.asOfDate)}</strong></span>
+                                        <button
+                                            onClick={() => setFilters(prev => ({ ...prev, asOfDate: '' }))}
+                                            className="p-0.5 hover:bg-blue-200/50 rounded-full text-blue-500 hover:text-blue-800 transition-colors"
+                                            title="Clear date filter"
+                                        >
+                                            <XIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -1646,7 +1820,12 @@ const Customer = ({
                                                 </th>
                                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
                                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
-                                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Balance</th>
+                                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => requestSort('balance')}>
+                                                    <div className="flex items-center justify-end space-x-1">
+                                                        <span>Balance</span>
+                                                        <SortIcon config={sortConfig.customer} columnKey="balance" />
+                                                    </div>
+                                                </th>
                                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Actions</th>
                                             </tr>
@@ -3785,6 +3964,8 @@ const Customer = ({
                 purchasesList={purchasesList}
                 salesRecords={salesRecords}
                 purchaseReceivesList={purchaseReceivesList}
+                stockList={stockList}
+                asOfDate={filters.asOfDate}
             />
         </>
     );

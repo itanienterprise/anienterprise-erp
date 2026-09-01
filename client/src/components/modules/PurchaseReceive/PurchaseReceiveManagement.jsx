@@ -103,15 +103,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
     const canApprove = hasPermission(currentUser, 'purchaseReceive', 'special') || hasPermission(currentUser, 'purchase', 'special') || currentUser?.role === 'admin';
 
     const syncPurchaseReceiveStock = async (purchasesList) => {
-        try {
-            for (const p of purchasesList) {
-                if ((p.status || 'Accepted') === 'Accepted') {
-                    await updateWarehouseStockForPurchaseReceive(p);
-                }
-            }
-        } catch (e) {
-            console.error('Error syncing purchase receive stock:', e);
-        }
+        await syncAllPurchaseReceiveStock(purchasesList);
     };
 
     const fetchPurchaseReceives = async () => {
@@ -703,145 +695,274 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         recalculateTotals(updatedItems);
     };
 
-    const recalculateStockForPurchaseNo = async (pNoInput, altPNoInput) => {
-        const purchaseNo = (pNoInput || altPNoInput || '').trim();
-        if (!purchaseNo) return;
+    const updateWarehouseStockForPurchaseReceive = async (purchaseData) => {
+        if (!purchaseData) return;
         try {
-            const targetNos = new Set([
-                (pNoInput || '').trim().toLowerCase(),
-                (altPNoInput || '').trim().toLowerCase()
-            ].filter(Boolean));
+            const prId = (purchaseData._id || '').toString();
+            const pNo = (purchaseData.purchaseNo || purchaseData.purchaseReceiveNo || '').trim();
+            const prDate = purchaseData.date || new Date().toISOString().split('T')[0];
+            const prWarehouse = (purchaseData.warehouse || 'HILI').trim();
+            const prCompany = (purchaseData.companyName || purchaseData.supplierName || '').trim();
+            const prCreatedAt = purchaseData.createdAt || new Date().toISOString();
 
-            const [prRes, stockRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/purchase-receives`),
-                axios.get(`${API_BASE_URL}/api/stock`)
-            ]);
-
-            const allPRs = Array.isArray(prRes.data) ? prRes.data : [];
+            const stockRes = await axios.get(`${API_BASE_URL}/api/stock`);
             const existingStock = Array.isArray(stockRes.data) ? stockRes.data : [];
 
-            const acceptedPRs = allPRs.filter(pr => {
-                const pNo = (pr.purchaseNo || '').trim().toLowerCase();
-                const prNo = (pr.purchaseReceiveNo || '').trim().toLowerCase();
-                const status = (pr.status || '').toLowerCase();
-                const isAccepted = (status === 'accepted' || status === 'approved');
-                return isAccepted && (targetNos.has(pNo) || targetNos.has(prNo));
+            const myStockRecords = existingStock.filter(s =>
+                (prId && s.purchaseReceiveId === prId) ||
+                (!s.purchaseReceiveId && (s.lcNo || '').trim().toUpperCase() === pNo.toUpperCase() && s.date === prDate && (s.warehouse || s.whName || '').trim().toUpperCase() === prWarehouse.toUpperCase())
+            );
+
+            const claimedStockIds = new Set();
+
+            for (const item of (purchaseData.items || [])) {
+                const pName = (item.productName || item.product || '').trim();
+                if (!pName) continue;
+                const unit = item.unit || 'kg';
+
+                const entries = (item.brandEntries && item.brandEntries.length > 0)
+                    ? item.brandEntries
+                    : [{ brand: item.brand || '', qty: item.qty || 0, rate: item.rate || 0, bag: item.bag || 0 }];
+
+                for (const be of entries) {
+                    const bName = (be.brand || '').trim();
+                    if (!bName) continue;
+
+                    const inHouseQ = parseFloat(be.inHouseQuantity);
+                    const normalQ = parseFloat(be.qty);
+                    const swpQ = parseFloat(be.sweepedQuantity || be.swpQty || 0);
+                    const effQty = (!isNaN(inHouseQ) && inHouseQ > 0) ? inHouseQ : Math.max(0, (isNaN(normalQ) ? 0 : normalQ) - swpQ);
+
+                    const inHouseB = parseFloat(be.inHousePacket);
+                    const normalB = parseFloat(be.bag || be.packet);
+                    const swpB = parseFloat(be.sweepedPacket || be.swpBag || 0);
+                    const effBag = (!isNaN(inHouseB) && inHouseB > 0) ? inHouseB : Math.max(0, (isNaN(normalB) ? 0 : normalB) - swpB);
+
+                    if (effQty <= 0) continue;
+
+                    const pktSize = getProductPacketSize(pName, bName) || (effBag > 0 ? effQty / effBag : 25);
+                    const rate = parseFloat(be.rate) || 0;
+
+                    const matchedStock = myStockRecords.find(s =>
+                        !claimedStockIds.has(s._id) &&
+                        (s.productName || s.product || '').trim().toLowerCase() === pName.toLowerCase() &&
+                        (s.brand || '').trim().toLowerCase() === bName.toLowerCase()
+                    );
+
+                    const recordPayload = {
+                        purchaseReceiveId: prId,
+                        date: prDate,
+                        createdAt: prCreatedAt,
+                        lcNo: pNo,
+                        warehouse: prWarehouse,
+                        whName: prWarehouse,
+                        port: prWarehouse,
+                        productName: pName,
+                        brand: bName,
+                        quantity: effQty,
+                        inHouseQuantity: effQty,
+                        totalInHouseQuantity: effQty,
+                        packet: effBag,
+                        inHousePacket: effBag,
+                        totalInHousePacket: effBag,
+                        packetSize: pktSize,
+                        exporter: prCompany,
+                        purchasedPrice: rate,
+                        status: 'Accepted',
+                        requestedBy: 'PurchaseReceive',
+                        requestedByUsername: 'PurchaseReceive',
+                        unit: unit
+                    };
+
+                    if (matchedStock) {
+                        claimedStockIds.add(matchedStock._id);
+                        const { _id, ...rest } = matchedStock;
+                        await axios.put(`${API_BASE_URL}/api/stock/${_id}`, {
+                            ...rest,
+                            ...recordPayload
+                        });
+                    } else {
+                        const postRes = await axios.post(`${API_BASE_URL}/api/stock`, recordPayload);
+                        if (postRes?.data?._id) {
+                            claimedStockIds.add(postRes.data._id);
+                        }
+                    }
+                }
+            }
+
+            for (const s of myStockRecords) {
+                if (!claimedStockIds.has(s._id) && s.purchaseReceiveId === prId) {
+                    await axios.delete(`${API_BASE_URL}/api/stock/${s._id}`);
+                }
+            }
+
+            if (typeof fetchStockRecords === 'function') {
+                fetchStockRecords();
+            }
+        } catch (err) {
+            console.error('Error updating warehouse stock for purchase receive:', err);
+        }
+    };
+
+    const reverseWarehouseStockForPurchaseReceive = async (purchaseData) => {
+        if (!purchaseData) return;
+        try {
+            const prId = (purchaseData._id || '').toString();
+            const pNo = (purchaseData.purchaseNo || purchaseData.purchaseReceiveNo || '').trim();
+            const prDate = purchaseData.date;
+
+            const stockRes = await axios.get(`${API_BASE_URL}/api/stock`);
+            const existingStock = Array.isArray(stockRes.data) ? stockRes.data : [];
+
+            const stockToDelete = existingStock.filter(s =>
+                (prId && s.purchaseReceiveId === prId) ||
+                (!s.purchaseReceiveId && (s.lcNo || '').trim().toUpperCase() === pNo.toUpperCase() && s.date === prDate)
+            );
+
+            for (const s of stockToDelete) {
+                await axios.delete(`${API_BASE_URL}/api/stock/${s._id}`);
+            }
+
+            if (typeof fetchStockRecords === 'function') {
+                fetchStockRecords();
+            }
+        } catch (err) {
+            console.error('Error reversing warehouse stock for purchase receive:', err);
+        }
+    };
+
+    const syncAllPurchaseReceiveStock = async (purchasesList) => {
+        try {
+            const stockRes = await axios.get(`${API_BASE_URL}/api/stock`);
+            const existingStock = Array.isArray(stockRes.data) ? stockRes.data : [];
+
+            const acceptedPRs = (purchasesList || []).filter(p => {
+                const s = (p.status || 'Accepted').toLowerCase();
+                return s === 'accepted' || s === 'approved';
             });
 
-            const totalsMap = {};
+            const claimedStockIds = new Set();
+            let hasChanges = false;
 
-            acceptedPRs.forEach(pr => {
-                const wh = pr.warehouse || 'HILI';
-                const comp = pr.companyName || pr.supplierName || '';
-                (pr.items || []).forEach(item => {
+            for (const pr of acceptedPRs) {
+                const prId = (pr._id || '').toString();
+                const pNo = (pr.purchaseNo || pr.purchaseReceiveNo || '').trim();
+                const prDate = pr.date || new Date().toISOString().split('T')[0];
+                const prWarehouse = (pr.warehouse || 'HILI').trim();
+                const prCompany = (pr.companyName || pr.supplierName || '').trim();
+                const prCreatedAt = pr.createdAt || new Date().toISOString();
+
+                for (const item of (pr.items || [])) {
                     const pName = (item.productName || item.product || '').trim();
-                    if (!pName) return;
+                    if (!pName) continue;
                     const unit = item.unit || 'kg';
+
                     const entries = (item.brandEntries && item.brandEntries.length > 0)
                         ? item.brandEntries
                         : [{ brand: item.brand || '', qty: item.qty || 0, rate: item.rate || 0, bag: item.bag || 0 }];
 
-                    entries.forEach(be => {
+                    for (const be of entries) {
                         const bName = (be.brand || '').trim();
-                        if (!bName) return;
-                        const key = `${pName.toLowerCase()}|${bName.toLowerCase()}`;
-                        if (!totalsMap[key]) {
-                            totalsMap[key] = {
-                                productName: pName,
-                                brand: bName,
-                                qty: 0,
-                                bag: 0,
-                                warehouse: wh,
-                                companyName: comp,
-                                rate: parseFloat(be.rate) || 0,
-                                unit: unit
-                            };
-                        }
+                        if (!bName) continue;
+
                         const inHouseQ = parseFloat(be.inHouseQuantity);
                         const normalQ = parseFloat(be.qty);
-                        const q = (!isNaN(inHouseQ) && inHouseQ > 0) ? inHouseQ : (isNaN(normalQ) ? 0 : normalQ);
+                        const swpQ = parseFloat(be.sweepedQuantity || be.swpQty || 0);
+                        const effQty = (!isNaN(inHouseQ) && inHouseQ > 0) ? inHouseQ : Math.max(0, (isNaN(normalQ) ? 0 : normalQ) - swpQ);
 
                         const inHouseB = parseFloat(be.inHousePacket);
                         const normalB = parseFloat(be.bag || be.packet);
-                        const b = (!isNaN(inHouseB) && inHouseB > 0) ? inHouseB : (isNaN(normalB) ? 0 : normalB);
+                        const swpB = parseFloat(be.sweepedPacket || be.swpBag || 0);
+                        const effBag = (!isNaN(inHouseB) && inHouseB > 0) ? inHouseB : Math.max(0, (isNaN(normalB) ? 0 : normalB) - swpB);
 
-                        totalsMap[key].qty += q;
-                        totalsMap[key].bag += b;
-                    });
-                });
-            });
+                        if (effQty <= 0) continue;
 
-            const matchingStock = existingStock.filter(s => targetNos.has((s.lcNo || '').trim().toLowerCase()));
+                        const pktSize = getProductPacketSize(pName, bName) || (effBag > 0 ? effQty / effBag : 25);
+                        const rate = parseFloat(be.rate) || 0;
 
-            for (const stockRec of matchingStock) {
-                const key = `${(stockRec.productName || stockRec.product || '').trim().toLowerCase()}|${(stockRec.brand || '').trim().toLowerCase()}`;
-                const targetData = totalsMap[key];
-                if (targetData && targetData.qty > 0) {
-                    const { _id, createdAt, updatedAt, ...rest } = stockRec;
-                    const pktSize = getProductPacketSize(targetData.productName, targetData.brand);
-                    await axios.put(`${API_BASE_URL}/api/stock/${_id}`, {
-                        ...rest,
-                        quantity: targetData.qty,
-                        inHouseQuantity: targetData.qty,
-                        totalInHouseQuantity: targetData.qty,
-                        packet: targetData.bag,
-                        inHousePacket: targetData.bag,
-                        totalInHousePacket: targetData.bag,
-                        packetSize: pktSize,
-                        port: targetData.warehouse,
-                        exporter: targetData.companyName || rest.exporter || '',
-                        purchasedPrice: targetData.rate || rest.purchasedPrice || 0,
-                    });
-                    delete totalsMap[key];
-                } else {
-                    await axios.delete(`${API_BASE_URL}/api/stock/${stockRec._id}`);
+                        let match = existingStock.find(s =>
+                            !claimedStockIds.has(s._id) &&
+                            s.purchaseReceiveId === prId &&
+                            (s.productName || s.product || '').trim().toLowerCase() === pName.toLowerCase() &&
+                            (s.brand || '').trim().toLowerCase() === bName.toLowerCase()
+                        );
+
+                        if (!match) {
+                            match = existingStock.find(s =>
+                                !claimedStockIds.has(s._id) &&
+                                !s.purchaseReceiveId &&
+                                (s.lcNo || '').trim().toUpperCase() === pNo.toUpperCase() &&
+                                (s.productName || s.product || '').trim().toLowerCase() === pName.toLowerCase() &&
+                                (s.brand || '').trim().toLowerCase() === bName.toLowerCase() &&
+                                s.date === prDate
+                            );
+                        }
+
+                        if (!match) {
+                            match = existingStock.find(s =>
+                                !claimedStockIds.has(s._id) &&
+                                !s.purchaseReceiveId &&
+                                (s.lcNo || '').trim().toUpperCase() === pNo.toUpperCase() &&
+                                (s.productName || s.product || '').trim().toLowerCase() === pName.toLowerCase() &&
+                                (s.brand || '').trim().toLowerCase() === bName.toLowerCase()
+                            );
+                        }
+
+                        const recordPayload = {
+                            purchaseReceiveId: prId,
+                            date: prDate,
+                            createdAt: prCreatedAt,
+                            lcNo: pNo,
+                            warehouse: prWarehouse,
+                            whName: prWarehouse,
+                            port: prWarehouse,
+                            productName: pName,
+                            brand: bName,
+                            quantity: effQty,
+                            inHouseQuantity: effQty,
+                            totalInHouseQuantity: effQty,
+                            packet: effBag,
+                            inHousePacket: effBag,
+                            totalInHousePacket: effBag,
+                            packetSize: pktSize,
+                            exporter: prCompany,
+                            purchasedPrice: rate,
+                            status: 'Accepted',
+                            requestedBy: 'PurchaseReceive',
+                            requestedByUsername: 'PurchaseReceive',
+                            unit: unit
+                        };
+
+                        if (match) {
+                            claimedStockIds.add(match._id);
+                            if (match.purchaseReceiveId !== prId || match.date !== prDate || parseFloat(match.quantity) !== effQty || (match.warehouse || match.whName) !== prWarehouse) {
+                                const { _id, ...rest } = match;
+                                await axios.put(`${API_BASE_URL}/api/stock/${_id}`, { ...rest, ...recordPayload });
+                                hasChanges = true;
+                            }
+                        } else {
+                            const postRes = await axios.post(`${API_BASE_URL}/api/stock`, recordPayload);
+                            if (postRes?.data?._id) claimedStockIds.add(postRes.data._id);
+                            hasChanges = true;
+                        }
+                    }
                 }
             }
 
-            for (const key of Object.keys(totalsMap)) {
-                const targetData = totalsMap[key];
-                if (targetData.qty > 0) {
-                    const pktSize = getProductPacketSize(targetData.productName, targetData.brand);
-                    await axios.post(`${API_BASE_URL}/api/stock`, {
-                        date: new Date().toISOString().split('T')[0],
-                        lcNo: purchaseNo,
-                        warehouse: targetData.warehouse,
-                        whName: targetData.warehouse,
-                        productName: targetData.productName,
-                        brand: targetData.brand,
-                        quantity: targetData.qty,
-                        inHouseQuantity: targetData.qty,
-                        totalInHouseQuantity: targetData.qty,
-                        inHousePacket: targetData.bag,
-                        totalInHousePacket: targetData.bag,
-                        packet: targetData.bag,
-                        packetSize: pktSize,
-                        port: targetData.warehouse,
-                        exporter: targetData.companyName || '',
-                        purchasedPrice: targetData.rate || 0,
-                        status: 'Accepted',
-                        requestedBy: 'PurchaseReceive',
-                        requestedByUsername: 'PurchaseReceive',
-                        unit: targetData.unit || 'kg',
-                    });
-                }
+            if (hasChanges && typeof fetchStockRecords === 'function') {
+                fetchStockRecords();
             }
-        } catch (err) {
-            console.error('Error recalculating stock for purchaseNo:', pNoInput, err);
+        } catch (e) {
+            console.error('Error syncing all purchase receive stock:', e);
         }
-    };
-
-    const updateWarehouseStockForPurchaseReceive = async (purchaseData) => {
-        const pNo = (purchaseData.purchaseNo || '').trim();
-        const prNo = (purchaseData.purchaseReceiveNo || '').trim();
-        await recalculateStockForPurchaseNo(pNo, prNo);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            const initialStatus = 'Requested';
+            const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+            const initialStatus = (canApprove || isAdmin) ? 'Accepted' : 'Requested';
             const generatedNo = formData.purchaseReceiveNo || formData.purchaseNo || `PR-REC-${String(purchaseReceives.length + 1).padStart(4, '0')}`;
             const payload = {
                 ...formData,
@@ -860,9 +981,12 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             if (!targetUsers.includes('admin')) targetUsers.push('admin');
 
             if (editingId) {
-                await axios.put(`${API_BASE_URL}/api/purchase-receives/${editingId}`, payload);
-                if (payload.status === 'Accepted' || payload.status === 'Approved') {
-                    await updateWarehouseStockForPurchaseReceive(payload);
+                const res = await axios.put(`${API_BASE_URL}/api/purchase-receives/${editingId}`, payload);
+                const savedPR = res.data || { ...payload, _id: editingId };
+                if (savedPR.status === 'Accepted' || savedPR.status === 'Approved') {
+                    await updateWarehouseStockForPurchaseReceive(savedPR);
+                } else {
+                    await reverseWarehouseStockForPurchaseReceive(savedPR);
                 }
                 if (addNotification) {
                     await addNotification(
@@ -873,9 +997,10 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                     );
                 }
             } else {
-                await axios.post(`${API_BASE_URL}/api/purchase-receives`, payload);
-                if (payload.status === 'Accepted' || payload.status === 'Approved') {
-                    await updateWarehouseStockForPurchaseReceive(payload);
+                const res = await axios.post(`${API_BASE_URL}/api/purchase-receives`, payload);
+                const savedPR = res.data || payload;
+                if (savedPR.status === 'Accepted' || savedPR.status === 'Approved') {
+                    await updateWarehouseStockForPurchaseReceive(savedPR);
                 }
                 if (addNotification) {
                     await addNotification(
@@ -890,7 +1015,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
             }
 
             setShowModal(false);
-            if (!editingId) setIsRequestedOnly(true);
+            if (!editingId && payload.status === 'Requested') setIsRequestedOnly(true);
             fetchPurchaseReceives();
             if (typeof fetchStockRecords === 'function') fetchStockRecords();
             if (typeof refreshPendingIndicators === 'function') refreshPendingIndicators();
@@ -902,21 +1027,16 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         }
     };
 
-    const reverseWarehouseStockForPurchaseReceive = async (purchaseData) => {
-        const pNo = (purchaseData.purchaseNo || '').trim();
-        const prNo = (purchaseData.purchaseReceiveNo || '').trim();
-        await recalculateStockForPurchaseNo(pNo, prNo);
-    };
-
     const handleStatusUpdate = async (purchase, newStatus) => {
         try {
             const updated = { ...purchase, status: newStatus };
-            await axios.put(`${API_BASE_URL}/api/purchase-receives/${purchase._id}`, updated);
+            const res = await axios.put(`${API_BASE_URL}/api/purchase-receives/${purchase._id}`, updated);
+            const savedPR = res.data || updated;
             const statusLower = (newStatus || '').toLowerCase();
             if (statusLower === 'approved' || statusLower === 'accepted') {
-                await updateWarehouseStockForPurchaseReceive(updated);
-            } else if (statusLower === 'rejected' || statusLower === 'deleted') {
-                await reverseWarehouseStockForPurchaseReceive(purchase);
+                await updateWarehouseStockForPurchaseReceive(savedPR);
+            } else if (statusLower === 'rejected' || statusLower === 'deleted' || statusLower === 'requested') {
+                await reverseWarehouseStockForPurchaseReceive(savedPR);
             }
             if (addNotification) {
                 const now = new Date();
@@ -942,10 +1062,9 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         if (!window.confirm('Are you sure you want to delete this purchase receive entry?')) return;
         try {
             const purchaseToDelete = purchaseReceives.find(p => p._id === id);
-            const pNo = purchaseToDelete ? (purchaseToDelete.purchaseReceiveNo || purchaseToDelete.purchaseNo) : '';
             await axios.delete(`${API_BASE_URL}/api/purchase-receives/${id}`);
-            if (pNo) {
-                await recalculateStockForPurchaseNo(pNo);
+            if (purchaseToDelete) {
+                await reverseWarehouseStockForPurchaseReceive(purchaseToDelete);
             }
             if (addNotification) addNotification('Purchase receive deleted and stock reversed successfully!', 'success');
             fetchPurchaseReceives();
