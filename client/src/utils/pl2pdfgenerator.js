@@ -1362,11 +1362,13 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     const enrichedProductsList = productsList.map((prod, idx) => {
         const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
+        const isIndHsEnabled = prod.showIndHsCode !== false && piProd?.showIndHsCode !== false && pi?.showIndHsCode !== false && record.showIndHsCode !== false;
         return {
             ...prod,
             bagCount: prod.bagCount,
             packingType: prod.packingType,
             hsCodeInd: prod.hsCodeInd || piProd?.hsCodeInd || pi?.hsCodeInd || '',
+            showIndHsCode: isIndHsEnabled,
             freight: prod.freight || piProd?.freight || '',
             totalFreight: prod.totalFreight || piProd?.totalFreight || ''
         };
@@ -1446,6 +1448,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         coverNote: trCoverNote,
         amendmentLine: trAmendmentLine,
         piGrandTotal: trPiGrandTotal,
+        showIndHsCode: pi?.showIndHsCode !== false && record.showIndHsCode !== false,
         packingType: record.packingType || pi?.packingType || '',
         certification: record.certification || pi?.certification || ''
     }, trSetups);

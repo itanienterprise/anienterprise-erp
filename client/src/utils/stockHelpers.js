@@ -448,13 +448,40 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         ? activeBaseline.baselineDate
         : null;
     const isBaselineApplicable = Boolean(baselineCutoffIso);
+    const baselineDateStr = (baselineCutoffIso || '').split('T')[0];
+    const baselineCreatedMs = activeBaseline && activeBaseline.createdAt ? new Date(activeBaseline.createdAt).getTime() : NaN;
+
+    // Track pre-baseline sales by LC to determine if any pre-baseline arrival was already fully consumed before the baseline
+    const preBaselineSalesByLc = {};
+    if (isBaselineApplicable) {
+        salesRecords.forEach(sale => {
+            const sStatus = (sale.status || '').toLowerCase();
+            const sType = (sale.saleType || '').toLowerCase();
+            const isBorder = sType === 'border' || (sale.invoiceNo || '').toUpperCase().startsWith('BS') || sale.isBorderSale === true;
+            if (isBorder || sStatus === 'rejected' || sStatus === 'cancelled') return;
+            const isOrder = sType === 'order' || (sale.invoiceNo || '').toUpperCase().startsWith('ORD') || sale.isOrderEntry === true;
+            if (isOrder) return;
+
+            const sCreatedMs = new Date(sale.createdAt).getTime();
+            if (!isNaN(baselineCreatedMs) && sCreatedMs >= baselineCreatedMs) return;
+
+            (sale.items || []).forEach(si => {
+                (si.brandEntries || [{ lcNo: si.lcNo || sale.lcNo, quantity: si.quantity }]).forEach(be => {
+                    const lc = (be.lcNo || si.lcNo || sale.lcNo || '').trim().toUpperCase();
+                    if (lc) {
+                        preBaselineSalesByLc[lc] = (preBaselineSalesByLc[lc] || 0) + safeParse(be.quantity);
+                    }
+                });
+            });
+        });
+    }
 
     const isPreBaselineRecord = (recordDate, recordCreatedAt) => {
         if (!isBaselineApplicable) return false;
         if (activeBaseline && activeBaseline.createdAt && recordCreatedAt) {
-            const baselineCreatedMs = new Date(activeBaseline.createdAt).getTime();
+            const bCreatedMs = new Date(activeBaseline.createdAt).getTime();
             const recordCreatedMs = new Date(recordCreatedAt).getTime();
-            if (!isNaN(baselineCreatedMs) && !isNaN(recordCreatedMs) && recordCreatedMs >= baselineCreatedMs) {
+            if (!isNaN(bCreatedMs) && !isNaN(recordCreatedMs) && recordCreatedMs >= bCreatedMs) {
                 return false;
             }
         }
@@ -465,6 +492,31 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         const bTime = new Date(baselineCutoffIso).getTime();
         if (!isNaN(rTime) && !isNaN(bTime)) return rTime < bTime;
         return rDate < baselineCutoffIso;
+    };
+
+    const cumArrivalsByLc = {};
+    const isStockPreBaseline = (item) => {
+        if (!isBaselineApplicable) return false;
+        const rRaw = item.date || item.createdAt || '';
+        const rDate = (rRaw instanceof Date ? rRaw.toISOString() : String(rRaw)).trim().split('T')[0];
+        const itemCreatedMs = new Date(item.createdAt).getTime();
+
+        if (rDate >= baselineDateStr) return false;
+        if (!isNaN(baselineCreatedMs) && !isNaN(itemCreatedMs) && itemCreatedMs < baselineCreatedMs) return true;
+
+        const lc = (item.lcNo || '').trim().toUpperCase();
+        let qty = safeParse(item.quantity);
+        if (qty <= 0 && Array.isArray(item.brandEntries)) {
+            qty = item.brandEntries.reduce((sum, be) => sum + safeParse(be.quantity), 0);
+        }
+        const prevCum = cumArrivalsByLc[lc] || 0;
+        cumArrivalsByLc[lc] = prevCum + qty;
+        const preSales = preBaselineSalesByLc[lc] || 0;
+
+        if (cumArrivalsByLc[lc] <= preSales) {
+            return true;
+        }
+        return false;
     };
 
     // 0. Seed Initial Baseline Records (if active baseline exists)
@@ -545,11 +597,17 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     });
 
     // 1. Process Primary Stock Records (LC Receive)
-    stockRecords.forEach(item => {
+    const sortedStockRecords = [...stockRecords].sort((a, b) => {
+        const da = a.date || a.createdAt || '';
+        const db = b.date || b.createdAt || '';
+        return da > db ? 1 : (da < db ? -1 : 0);
+    });
+
+    sortedStockRecords.forEach(item => {
         const itemStatus = (item.status || '').toLowerCase();
         if (itemStatus.includes('requested') || itemStatus.includes('rejected')) return;
 
-        if (isPreBaselineRecord(item.date, item.createdAt)) return;
+        if (isStockPreBaseline(item)) return;
 
         if (item.brandEntries && item.brandEntries.length > 0) {
             item.brandEntries.forEach((entry, idx) => {

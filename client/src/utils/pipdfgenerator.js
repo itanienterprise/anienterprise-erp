@@ -627,7 +627,8 @@ export const generatePIPDF = (record) => {
                 // 3. HS Code — dynamic bold, centered
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(hsCodeSize);
-                if (prod.hsCodeInd && prod.showIndHsCode !== false) {
+                const isIndHsEnabled = prod.showIndHsCode !== false && record.showIndHsCode !== false;
+                if (prod.hsCodeInd && isIndHsEnabled) {
                     // Show both BD and IND HS codes
                     const bdHsLine = `H.S. CODE NO.${prod.hsCode || ''} (BD)`;
                     const indHsLine = `H.S. CODE NO.${prod.hsCodeInd} (IND)`;

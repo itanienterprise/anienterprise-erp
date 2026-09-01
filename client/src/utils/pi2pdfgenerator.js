@@ -477,19 +477,20 @@ export const generatePI2PDF = (record) => {
     productsList.forEach((prod, pIdx) => {
         const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
         const isLastProduct = pIdx === numProducts - 1;
+        const isIndHsEnabled = prod.showIndHsCode !== false && record.showIndHsCode !== false;
         let rowHeight = productRowHeight(numProducts, hasFreight);
-        if (rowHeight && prod.hsCodeInd && prod.showIndHsCode !== false) {
+        if (rowHeight && prod.hsCodeInd && isIndHsEnabled) {
             rowHeight += 3; // Add extra height for the IND HS code line to prevent it touching the bottom border
         }
 
         firstRowIndexForProduct.push(tableBody.length);
 
         let requiredNewlines = 1;
-        if (prod.hsCodeInd && prod.showIndHsCode !== false) requiredNewlines += 1;
+        if (prod.hsCodeInd && isIndHsEnabled) requiredNewlines += 1;
         if (numProducts === 1) {
             requiredNewlines += 1;
         } else {
-            requiredNewlines = (prod.hsCodeInd && prod.showIndHsCode !== false) ? 2 : 1;
+            requiredNewlines = (prod.hsCodeInd && isIndHsEnabled) ? 2 : 1;
         }
 
         let cellText = "\n".repeat(requiredNewlines);
@@ -680,8 +681,8 @@ export const generatePI2PDF = (record) => {
                 drawY += nameGap;
 
                 // HS Code
-                doc.setFontSize(hsCodeFS);
-                if (prod.hsCodeInd && prod.showIndHsCode !== false) {
+                const isIndHsEnabled = prod.showIndHsCode !== false && record.showIndHsCode !== false;
+                if (prod.hsCodeInd && isIndHsEnabled) {
                     const bdHsLine = `H.S. CODE NO.${prod.hsCode || ''} (BD)`;
                     const indHsLine = `H.S. CODE NO.${prod.hsCodeInd} (IND)`;
                     doc.text(bdHsLine, centerX, drawY, { align: 'center' });
