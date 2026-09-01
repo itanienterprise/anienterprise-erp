@@ -940,7 +940,20 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             const qualityEndRowIndices = new Set();
             const customLinesToDraw = [];
 
-            const sortedDisplayRecords = [...currentStockData.displayRecords].sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
+            const sortedDisplayRecords = [...currentStockData.displayRecords].map(item => {
+                const validBrands = (item.brandList || []).filter(b => {
+                    if (reportType === 'short') {
+                        return (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
+                    }
+                    if (reportType === 'price') {
+                        return (b.inHouseQuantity || 0) > 0.001;
+                    }
+                    return (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
+                });
+                if (validBrands.length === 0) return null;
+                return { ...item, brandList: validBrands };
+            }).filter(Boolean).sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
+
             sortedDisplayRecords.forEach((item, index) => {
                 const brands = item.brandList || [];
 

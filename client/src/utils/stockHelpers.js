@@ -308,9 +308,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             });
 
             const displayRecords = Object.values(combinedProductsMap).map(prod => {
-                const groupedBrands = isPriceReport
+                let groupedBrands = isPriceReport
                     ? reconcilePriceReportBrandList(prod.brandList)
                     : getGroupedBrandList(prod.brandList);
+
+                if (isPriceReport) {
+                    groupedBrands = groupedBrands.filter(b => (b.inHouseQuantity || 0) > 0.001);
+                } else if (stockFilters?.reportType === 'short') {
+                    groupedBrands = groupedBrands.filter(b =>
+                        (b.inHouseQuantity || 0) > 0.001 ||
+                        (b.orderQuantity || 0) > 0.001
+                    );
+                }
                 const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity), 0);
                 const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket), 0);
                 const openingQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.openingQuantity), 0);
@@ -1547,8 +1556,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (isPriceReport && !stockFilters?._isSubCall) {
             // In Price Report mode, keep all LC entries with positive remaining stock
             filteredBrands = filteredBrands.filter(b => (b.inHouseQuantity || 0) > 0.001);
+        } else if (stockFilters?.reportType === 'short') {
+            // In Short Report mode, only keep items with positive closing stock or active pending orders
+            filteredBrands = filteredBrands.filter(b =>
+                (b.inHouseQuantity || 0) > 0.001 ||
+                (b.orderQuantity || 0) > 0.001
+            );
         } else {
-            // Standard view: keep items with positive in-house stock, opening, sale, or active pending orders
+            // Standard / Detailed view: keep items with positive in-house stock, opening, sale, or active pending orders
             filteredBrands = filteredBrands.filter(b =>
                 (b.inHouseQuantity || 0) > 0.001 ||
                 (b.orderQuantity || 0) > 0.001 ||

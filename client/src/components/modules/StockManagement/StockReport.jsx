@@ -317,7 +317,28 @@ const StockReport = ({
         return [...new Set(stockRecords.map(item => (item[key] || '').trim()).filter(Boolean))].sort();
     };
 
-    const renderStockTable = (records, data) => {
+    const renderStockTable = (rawRecords, data) => {
+        const records = (rawRecords || []).map(item => {
+            const validBrands = (item.brandList || []).filter(b => {
+                if (reportType === 'short') {
+                    return (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
+                }
+                if (reportType === 'price') {
+                    return (b.inHouseQuantity || 0) > 0.001;
+                }
+                return (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
+            });
+            if (validBrands.length === 0) return null;
+            return {
+                ...item,
+                brandList: validBrands,
+                inHouseQuantity: validBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0),
+                totalInHouseQuantity: validBrands.reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0),
+                saleQuantity: validBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0),
+                salePacket: validBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0)
+            };
+        }).filter(Boolean);
+
         const totals = {
             totalTotalInHouseQty: records.reduce((sum, item) => sum + (item.totalInHouseQuantity || 0), 0),
             totalSaleQty: records.reduce((sum, item) => sum + (item.saleQuantity || 0), 0),
