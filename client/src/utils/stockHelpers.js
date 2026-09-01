@@ -13,6 +13,10 @@ export const isLcMatch = (targetLc, filterLc) => {
     if (!rawTarget || !rawFilter) return false;
     if (rawTarget === rawFilter) return true;
 
+    // Allow generic "purchase" or "pur" to match any purchase "pur-..."
+    if ((rawTarget === 'purchase' || rawTarget === 'pur') && (rawFilter.startsWith('pur-') || rawFilter.startsWith('purchase'))) return true;
+    if ((rawFilter === 'purchase' || rawFilter === 'pur') && (rawTarget.startsWith('pur-') || rawTarget.startsWith('purchase'))) return true;
+
     const cleanTarget = rawTarget.replace(/^(lc|pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
     const cleanFilter = rawFilter.replace(/^(lc|pur|purchase)[-_\s]*/i, '').replace(/^0+/, '');
 
@@ -451,31 +455,6 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
     const baselineDateStr = (baselineCutoffIso || '').split('T')[0];
     const baselineCreatedMs = activeBaseline && activeBaseline.createdAt ? new Date(activeBaseline.createdAt).getTime() : NaN;
 
-    // Track pre-baseline sales by LC to determine if any pre-baseline arrival was already fully consumed before the baseline
-    const preBaselineSalesByLc = {};
-    if (isBaselineApplicable) {
-        salesRecords.forEach(sale => {
-            const sStatus = (sale.status || '').toLowerCase();
-            const sType = (sale.saleType || '').toLowerCase();
-            const isBorder = sType === 'border' || (sale.invoiceNo || '').toUpperCase().startsWith('BS') || sale.isBorderSale === true;
-            if (isBorder || sStatus === 'rejected' || sStatus === 'cancelled') return;
-            const isOrder = sType === 'order' || (sale.invoiceNo || '').toUpperCase().startsWith('ORD') || sale.isOrderEntry === true;
-            if (isOrder) return;
-
-            const sCreatedMs = new Date(sale.createdAt).getTime();
-            if (!isNaN(baselineCreatedMs) && sCreatedMs >= baselineCreatedMs) return;
-
-            (sale.items || []).forEach(si => {
-                (si.brandEntries || [{ lcNo: si.lcNo || sale.lcNo, quantity: si.quantity }]).forEach(be => {
-                    const lc = (be.lcNo || si.lcNo || sale.lcNo || '').trim().toUpperCase();
-                    if (lc) {
-                        preBaselineSalesByLc[lc] = (preBaselineSalesByLc[lc] || 0) + safeParse(be.quantity);
-                    }
-                });
-            });
-        });
-    }
-
     const isPreBaselineRecord = (recordDate, recordCreatedAt) => {
         if (!isBaselineApplicable) return false;
         if (activeBaseline && activeBaseline.createdAt && recordCreatedAt) {
@@ -494,7 +473,49 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         return rDate < baselineCutoffIso;
     };
 
+    // Track pre-baseline sales by LC and by Purchase Key (warehouse + product + brand)
+    // ONLY include sales that are discarded/skipped by isPreBaselineRecord!
+    const preBaselineSalesByLc = {};
+    const preBaselineSalesByPurchaseKey = {};
+    if (isBaselineApplicable) {
+        salesRecords.forEach(sale => {
+            const sStatus = (sale.status || '').toLowerCase();
+            const sType = (sale.saleType || '').toLowerCase();
+            const isBorder = sType === 'border' || (sale.invoiceNo || '').toUpperCase().startsWith('BS') || sale.isBorderSale === true;
+            if (isBorder || sStatus === 'rejected' || sStatus === 'cancelled') return;
+            const isOrder = sType === 'order' || (sale.invoiceNo || '').toUpperCase().startsWith('ORD') || sale.isOrderEntry === true;
+            if (isOrder) return;
+
+            // Only count sales that are skipped from online deduction by isPreBaselineRecord
+            if (!isPreBaselineRecord(sale.date, sale.createdAt)) return;
+
+            (sale.items || []).forEach(si => {
+                const pName = (si.productName || si.product || '').trim().toUpperCase();
+                const brandEntries = (Array.isArray(si.brandEntries) && si.brandEntries.length > 0)
+                    ? si.brandEntries
+                    : [{ lcNo: si.lcNo || sale.lcNo, quantity: si.quantity, brand: si.brand, warehouseName: sale.warehouse || sale.whName }];
+
+                brandEntries.forEach(be => {
+                    const lc = (be.lcNo || si.lcNo || sale.lcNo || '').trim().toUpperCase();
+                    const bName = (be.brand || si.brand || '').trim().toUpperCase();
+                    const whName = (be.warehouseName || be.warehouse || sale.warehouse || sale.whName || '').trim().toUpperCase();
+                    const qty = safeParse(be.quantity);
+
+                    if (lc) {
+                        preBaselineSalesByLc[lc] = (preBaselineSalesByLc[lc] || 0) + qty;
+                    }
+                    const isSalePurchase = lc.startsWith('PUR-') || (be.requestedBy === 'PurchaseReceive') || (lc === 'PURCHASE');
+                    if (isSalePurchase) {
+                        const purKey = `${whName}__${pName}__${bName}`;
+                        preBaselineSalesByPurchaseKey[purKey] = (preBaselineSalesByPurchaseKey[purKey] || 0) + qty;
+                    }
+                });
+            });
+        });
+    }
+
     const cumArrivalsByLc = {};
+    const cumArrivalsByPurchaseKey = {};
     const isStockPreBaseline = (item) => {
         if (!isBaselineApplicable) return false;
         const rRaw = item.date || item.createdAt || '';
@@ -505,17 +526,30 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         if (!isNaN(baselineCreatedMs) && !isNaN(itemCreatedMs) && itemCreatedMs < baselineCreatedMs) return true;
 
         const lc = (item.lcNo || '').trim().toUpperCase();
+        const wh = (item.warehouse || item.whName || '').trim().toUpperCase();
+        const prod = (item.productName || item.product || '').trim().toUpperCase();
+        const brand = (item.brand || '').trim().toUpperCase();
+
         let qty = safeParse(item.quantity);
         if (qty <= 0 && Array.isArray(item.brandEntries)) {
             qty = item.brandEntries.reduce((sum, be) => sum + safeParse(be.quantity), 0);
         }
-        const prevCum = cumArrivalsByLc[lc] || 0;
-        cumArrivalsByLc[lc] = prevCum + qty;
-        const preSales = preBaselineSalesByLc[lc] || 0;
 
-        if (cumArrivalsByLc[lc] <= preSales) {
-            return true;
+        const isPurchase = (item.requestedBy === 'PurchaseReceive' || lc.startsWith('PUR-'));
+
+        if (lc) {
+            cumArrivalsByLc[lc] = (cumArrivalsByLc[lc] || 0) + qty;
+            const preSalesLc = preBaselineSalesByLc[lc] || 0;
+            if (cumArrivalsByLc[lc] <= preSalesLc) return true;
         }
+
+        if (isPurchase && wh && prod && brand) {
+            const purKey = `${wh}__${prod}__${brand}`;
+            cumArrivalsByPurchaseKey[purKey] = (cumArrivalsByPurchaseKey[purKey] || 0) + qty;
+            const preSalesPur = preBaselineSalesByPurchaseKey[purKey] || 0;
+            if (cumArrivalsByPurchaseKey[purKey] <= preSalesPur) return true;
+        }
+
         return false;
     };
 
@@ -968,8 +1002,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 const saleLc = ((be.lcNo !== undefined && be.lcNo !== null) ? be.lcNo : (si.lcNo || sale.lcNo || '')).trim();
                                 const stockLc = (item.lcNo || '').trim();
 
-                                const isStockPurchase = (item.requestedBy === 'PurchaseReceive' || (stockLc || '').toUpperCase().startsWith('PUR-'));
-                                const isSalePurchase = (saleLc.toUpperCase().startsWith('PUR-'));
+                                const isStockPurchase = (item.requestedBy === 'PurchaseReceive' || (stockLc || '').toUpperCase().startsWith('PUR-') || (stockLc || '').toUpperCase() === 'PURCHASE');
+                                const isSalePurchase = (saleLc.toUpperCase().startsWith('PUR-') || saleLc.toUpperCase().startsWith('PURCHASE') || saleLc.toUpperCase() === 'PUR');
 
                                 // Strictly keep LC Receive and Purchase Receive stock separate
                                 if (isStockPurchase && !isSalePurchase) return;
