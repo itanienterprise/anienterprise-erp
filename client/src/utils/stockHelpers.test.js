@@ -364,21 +364,22 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const isBaselineApplicable = Boolean(baselineCutoffIso);
 
             const isPreBaselineRecord = (recordDate, recordCreatedAt) => {
-                if (!isBaselineApplicable) return false;
-                if (activeBaseline && activeBaseline.createdAt && recordCreatedAt) {
-                    const baselineCreatedMs = new Date(activeBaseline.createdAt).getTime();
-                    const recordCreatedMs = new Date(recordCreatedAt).getTime();
-                    if (!isNaN(baselineCreatedMs) && !isNaN(recordCreatedMs) && recordCreatedMs >= baselineCreatedMs) {
-                        return false;
-                    }
-                }
-                const rDate = (recordDate || recordCreatedAt || '').trim();
-                if (!rDate) return false;
-                const rTime = new Date(rDate).getTime();
-                const bTime = new Date(baselineCutoffIso).getTime();
-                if (!isNaN(rTime) && !isNaN(bTime)) return rTime < bTime;
-                return rDate < baselineCutoffIso;
-            };
+        if (!isBaselineApplicable) return false;
+        if (activeBaseline && activeBaseline.createdAt && recordCreatedAt) {
+            const baselineCreatedMs = new Date(activeBaseline.createdAt).getTime();
+            const recordCreatedMs = new Date(recordCreatedAt).getTime();
+            if (!isNaN(baselineCreatedMs) && !isNaN(recordCreatedMs) && recordCreatedMs >= baselineCreatedMs) {
+                return false;
+            }
+        }
+        const rRaw = recordDate || recordCreatedAt || ;
+        const rDate = (rRaw instanceof Date ? rRaw.toISOString() : String(rRaw)).trim();
+        if (!rDate) return false;
+        const rTime = new Date(rDate).getTime();
+        const bTime = new Date(baselineCutoffIso).getTime();
+        if (!isNaN(rTime) && !isNaN(bTime)) return rTime < bTime;
+        return rDate < baselineCutoffIso;
+    };
 
             let cumulativeDamageQty = 0;
             if (Array.isArray(damages)) {
@@ -451,16 +452,27 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
     const isPreBaselineRecord = (recordDate, recordCreatedAt) => {
         if (!isBaselineApplicable) return false;
-        if (activeBaseline && activeBaseline.createdAt && recordCreatedAt) {
-            const baselineCreatedMs = new Date(activeBaseline.createdAt).getTime();
-            const recordCreatedMs = new Date(recordCreatedAt).getTime();
-            if (!isNaN(baselineCreatedMs) && !isNaN(recordCreatedMs) && recordCreatedMs >= baselineCreatedMs) {
-                return false;
-            }
-        }
         const rRaw = recordDate || recordCreatedAt || '';
         const rDate = (rRaw instanceof Date ? rRaw.toISOString() : String(rRaw)).trim();
         if (!rDate) return false;
+
+        const baselineDateStr = String(baselineCutoffIso).split('T')[0];
+        const recordDateStr = rDate.split('T')[0];
+
+        // If transaction date is strictly after the baseline cutoff date, it is NOT pre-baseline
+        if (recordDateStr > baselineDateStr) return false;
+
+        // If transaction date is strictly before the baseline cutoff date, it IS pre-baseline
+        if (recordDateStr < baselineDateStr) return true;
+
+        // On the same day as the baseline: check timestamps if available
+        if (activeBaseline && activeBaseline.createdAt && recordCreatedAt) {
+            const baselineCreatedMs = new Date(activeBaseline.createdAt).getTime();
+            const recordCreatedMs = new Date(recordCreatedAt).getTime();
+            if (!isNaN(baselineCreatedMs) && !isNaN(recordCreatedMs)) {
+                return recordCreatedMs < baselineCreatedMs;
+            }
+        }
         const rTime = new Date(rDate).getTime();
         const bTime = new Date(baselineCutoffIso).getTime();
         if (!isNaN(rTime) && !isNaN(bTime)) return rTime < bTime;
