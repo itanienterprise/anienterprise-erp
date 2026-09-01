@@ -811,6 +811,16 @@ function App() {
   const [lcFilters, setLcFilters] = useState(initialLcFilterState);
   const [lcSearchQuery, setLcSearchQuery] = useState('');
 
+  const lcStockRecords = useMemo(() => {
+    return allStockRecords.filter(item => {
+      if (item.purchaseReceiveId) return false;
+      if (item.requestedBy === 'PurchaseReceive' || item.requestedByUsername === 'PurchaseReceive') return false;
+      if (item.isPurchase) return false;
+      const lcUpper = (item.lcNo || '').trim().toUpperCase();
+      if (lcUpper.startsWith('PUR-') || lcUpper === 'PURCHASE') return false;
+      return true;
+    });
+  }, [allStockRecords]);
 
   const lcReceiveRecords = useMemo(() => {
     const searchLower = lcSearchQuery.toLowerCase().trim();
@@ -849,7 +859,7 @@ function App() {
       return found ? found.name : name;
     };
 
-    const filtered = allStockRecords.filter(item => {
+    const filtered = lcStockRecords.filter(item => {
       // Apply Advanced Filters
       if (lcFilters.startDate && item.date < lcFilters.startDate) return false;
       if (lcFilters.endDate && item.date > lcFilters.endDate) return false;
@@ -1631,7 +1641,7 @@ function App() {
           <LCReceive
             highlightId={notifHighlightId} isRequestedNotif={notifIsRequested}
             currentUser={currentUser}
-            stockRecords={allStockRecords}
+            stockRecords={lcStockRecords}
             addNotification={addNotification}
             fetchStockRecords={fetchStockRecords}
             importers={importers}
@@ -3176,7 +3186,7 @@ function App() {
       <LCReport
         isOpen={showLcReport}
         onClose={() => setShowLcReport(false)}
-        stockRecords={stockRecords}
+        stockRecords={lcStockRecords}
         lcFilters={lcFilters}
         setLcFilters={setLcFilters}
         lcReceiveRecords={lcReceiveRecords}

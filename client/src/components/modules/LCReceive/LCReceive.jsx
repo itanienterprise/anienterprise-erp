@@ -2569,6 +2569,21 @@ function LCReceive({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
 
+    // Helper to identify purchase receive records
+    const isPurchaseReceiveItem = (item) => {
+        if (!item) return false;
+        if (item.purchaseReceiveId) return true;
+        if (item.requestedBy === 'PurchaseReceive' || item.requestedByUsername === 'PurchaseReceive') return true;
+        if (item.isPurchase) return true;
+        const lc = (item.lcNo || '').trim().toUpperCase();
+        if (lc.startsWith('PUR-') || lc === 'PURCHASE') return true;
+        return false;
+    };
+
+    const cleanStockRecords = useMemo(() => {
+        return (stockRecords || []).filter(r => !isPurchaseReceiveItem(r));
+    }, [stockRecords]);
+
     // Handlers for dropdown filtering
     const getFilteredOptions = (type) => {
         let options = [];
@@ -2576,23 +2591,23 @@ function LCReceive({
 
         switch (type) {
             case 'lcFilterLcNo':
-                options = [...new Set(stockRecords.map(r => (r.lcNo || '').trim()).filter(Boolean))].sort();
+                options = [...new Set(cleanStockRecords.map(r => (r.lcNo || '').trim()).filter(Boolean))].sort();
                 search = filterSearchInputs.lcNoSearch;
                 break;
             case 'lcFilterPort':
-                options = [...new Set(stockRecords.map(r => (r.port || '').trim()).filter(Boolean))].sort();
+                options = [...new Set(cleanStockRecords.map(r => (r.port || '').trim()).filter(Boolean))].sort();
                 search = filterSearchInputs.portSearch;
                 break;
             case 'lcFilterIndCnf':
-                options = [...new Set(stockRecords.map(r => (r.indianCnF || '').trim()).filter(Boolean))].sort();
+                options = [...new Set(cleanStockRecords.map(r => (r.indianCnF || '').trim()).filter(Boolean))].sort();
                 search = filterSearchInputs.indCnfSearch;
                 break;
             case 'lcFilterBdCnf':
-                options = [...new Set(stockRecords.map(r => (r.bdCnF || '').trim()).filter(Boolean))].sort();
+                options = [...new Set(cleanStockRecords.map(r => (r.bdCnF || '').trim()).filter(Boolean))].sort();
                 search = filterSearchInputs.bdCnfSearch;
                 break;
             case 'lcFilterBillOfEntry':
-                options = [...new Set(stockRecords.map(r => (r.billOfEntry || '').trim()).filter(Boolean))].sort();
+                options = [...new Set(cleanStockRecords.map(r => (r.billOfEntry || '').trim()).filter(Boolean))].sort();
                 search = filterSearchInputs.billOfEntrySearch;
                 break;
             default:
@@ -2605,10 +2620,11 @@ function LCReceive({
 
     const filteredRecords = useMemo(() => {
         let records = [];
+        const baseList = (lcReceiveRecords || []).filter(item => !isPurchaseReceiveItem(item));
         if (isRequestedOnly) {
-            records = lcReceiveRecords.filter(item => (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected');
+            records = baseList.filter(item => (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected');
         } else {
-            records = lcReceiveRecords.filter(item => !(item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected');
+            records = baseList.filter(item => !(item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected');
         }
 
         // The search query and advanced filters are already applied to lcReceiveRecords by App.jsx
@@ -2638,7 +2654,7 @@ function LCReceive({
     }, [lcReceiveRecords, isRequestedOnly, sortConfig]);
 
     const requestedCount = useMemo(() => {
-        const requested = lcReceiveRecords.filter(item => (item.status || '').toLowerCase().includes('requested'));
+        const requested = (lcReceiveRecords || []).filter(item => !isPurchaseReceiveItem(item) && (item.status || '').toLowerCase().includes('requested'));
         return new Set(requested.map(item => `${item.date || ''}-${item.warehouse || ''}-${item.indianCnF || ''}-${item.bdCnF || ''}`)).size;
     }, [lcReceiveRecords]);
 
@@ -2864,7 +2880,7 @@ function LCReceive({
                                                     </div>
                                                 </div>
                                                 {filterDropdownOpen.product && (() => {
-                                                    const options = stockRecords ? [...new Set(stockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort() : [];
+                                                    const options = cleanStockRecords ? [...new Set(cleanStockRecords.map(item => (item.productName || '').trim()).filter(Boolean))].sort() : [];
                                                     const filtered = options.filter(o => o.toLowerCase().includes((filterSearchInputs.productSearch || '').toLowerCase()));
                                                     return filtered.length > 0 ? (
                                                         <div className="absolute z-[120] mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
@@ -2901,10 +2917,10 @@ function LCReceive({
                                                     </div>
                                                 </div>
                                                 {filterDropdownOpen.brand && (() => {
-                                                    if (!stockRecords) return null;
+                                                    if (!cleanStockRecords) return null;
                                                     const productFilteredRecords = lcFilters.productName
-                                                        ? stockRecords.filter(item => (item.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase())
-                                                        : stockRecords;
+                                                        ? cleanStockRecords.filter(item => (item.productName || '').trim().toLowerCase() === lcFilters.productName.toLowerCase())
+                                                        : cleanStockRecords;
                                                     const options = [...new Set(productFilteredRecords.flatMap(item => {
                                                         if (item.brand) return [(item.brand || '').trim()];
                                                         return (item.brandEntries || []).map(e => (e.brand || '').trim());
