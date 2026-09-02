@@ -1211,26 +1211,49 @@ const OrderManagement = ({
             // Quick Date Range Filter
             if (saleFilters.quickRange && saleFilters.quickRange !== 'all' && saleFilters.quickRange !== 'custom') {
                 const now = new Date();
-                const recordDate = new Date(sale.date);
-                if (!isNaN(recordDate.getTime())) {
-                    if (saleFilters.quickRange === 'weekly') {
-                        const dayOfWeek = now.getDay();
-                        const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
-                        const weekStart = new Date(now);
-                        weekStart.setDate(now.getDate() + diffToMonday);
-                        weekStart.setHours(0, 0, 0, 0);
-                        const weekEnd = new Date(weekStart);
-                        weekEnd.setDate(weekStart.getDate() + 6);
-                        weekEnd.setHours(23, 59, 59, 999);
-                        if (recordDate < weekStart || recordDate > weekEnd) return false;
-                    } else if (saleFilters.quickRange === 'monthly') {
-                        const month = saleFilters.selectedMonth || (now.getMonth() + 1);
-                        const year = saleFilters.selectedYear || now.getFullYear();
-                        if (recordDate.getMonth() + 1 !== parseInt(month) || recordDate.getFullYear() !== parseInt(year)) return false;
-                    } else if (saleFilters.quickRange === 'yearly') {
-                        const year = saleFilters.selectedYear || now.getFullYear();
-                        if (recordDate.getFullYear() !== parseInt(year)) return false;
-                    }
+                const parseDate = (dVal) => {
+                    if (!dVal) return null;
+                    const d = new Date(dVal);
+                    return isNaN(d.getTime()) ? null : d;
+                };
+                const datesToCheck = [
+                    parseDate(sale.date),
+                    parseDate(sale.createdAt)
+                ].filter(Boolean);
+
+                if (datesToCheck.length === 0) return false;
+
+                if (saleFilters.quickRange === 'weekly') {
+                    const dayOfWeek = now.getDay();
+                    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                    const weekStart = new Date(now);
+                    weekStart.setDate(now.getDate() + diffToMonday);
+                    weekStart.setHours(0, 0, 0, 0);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekStart.getDate() + 6);
+                    weekEnd.setHours(23, 59, 59, 999);
+
+                    const rollingWeekStart = new Date(now);
+                    rollingWeekStart.setDate(now.getDate() - 7);
+                    rollingWeekStart.setHours(0, 0, 0, 0);
+
+                    const matchesWeekly = datesToCheck.some(d => 
+                        (d >= weekStart && d <= weekEnd) || (d >= rollingWeekStart && d <= now)
+                    );
+                    if (!matchesWeekly) return false;
+                } else if (saleFilters.quickRange === 'monthly') {
+                    const month = saleFilters.selectedMonth || (now.getMonth() + 1);
+                    const year = saleFilters.selectedYear || now.getFullYear();
+                    const matchesMonthly = datesToCheck.some(d => 
+                        d.getMonth() + 1 === parseInt(month) && d.getFullYear() === parseInt(year)
+                    );
+                    if (!matchesMonthly) return false;
+                } else if (saleFilters.quickRange === 'yearly') {
+                    const year = saleFilters.selectedYear || now.getFullYear();
+                    const matchesYearly = datesToCheck.some(d => 
+                        d.getFullYear() === parseInt(year)
+                    );
+                    if (!matchesYearly) return false;
                 }
             } else if (saleFilters.quickRange === 'custom') {
                 const saleDate = (sale.date || '').split('T')[0];

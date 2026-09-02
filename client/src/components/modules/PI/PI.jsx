@@ -2371,7 +2371,26 @@ function PI({
         // Quick range filtering
         if (piFilters.quickRange && piFilters.quickRange !== 'all' && piFilters.quickRange !== 'custom') {
             const now = new Date();
-            const recordDate = new Date(record.date || record.piDate || record.createdAt);
+
+            const parseDate = (dVal) => {
+                if (!dVal) return null;
+                const d = new Date(dVal);
+                return isNaN(d.getTime()) ? null : d;
+            };
+
+            const latestRevDate = record.revisions && record.revisions.length > 0
+                ? record.revisions[record.revisions.length - 1].reviseDate
+                : null;
+
+            const datesToCheck = [
+                parseDate(latestRevDate),
+                parseDate(record.date),
+                parseDate(record.piDate),
+                parseDate(record.createdAt)
+            ].filter(Boolean);
+
+            if (datesToCheck.length === 0) return false;
+
             if (piFilters.quickRange === 'weekly') {
                 const dayOfWeek = now.getDay();
                 const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
@@ -2381,16 +2400,28 @@ function PI({
                 const weekEnd = new Date(weekStart);
                 weekEnd.setDate(weekStart.getDate() + 6);
                 weekEnd.setHours(23, 59, 59, 999);
-                if (recordDate < weekStart || recordDate > weekEnd) return false;
-            }
-            if (piFilters.quickRange === 'monthly') {
+
+                const rollingWeekStart = new Date(now);
+                rollingWeekStart.setDate(now.getDate() - 7);
+                rollingWeekStart.setHours(0, 0, 0, 0);
+
+                const matchesWeekly = datesToCheck.some(d => 
+                    (d >= weekStart && d <= weekEnd) || (d >= rollingWeekStart && d <= now)
+                );
+                if (!matchesWeekly) return false;
+            } else if (piFilters.quickRange === 'monthly') {
                 const month = piFilters.selectedMonth || (now.getMonth() + 1);
                 const year = piFilters.selectedYear || now.getFullYear();
-                if (recordDate.getMonth() + 1 !== month || recordDate.getFullYear() !== year) return false;
-            }
-            if (piFilters.quickRange === 'yearly') {
+                const matchesMonthly = datesToCheck.some(d => 
+                    d.getMonth() + 1 === parseInt(month) && d.getFullYear() === parseInt(year)
+                );
+                if (!matchesMonthly) return false;
+            } else if (piFilters.quickRange === 'yearly') {
                 const year = piFilters.selectedYear || now.getFullYear();
-                if (recordDate.getFullYear() !== year) return false;
+                const matchesYearly = datesToCheck.some(d => 
+                    d.getFullYear() === parseInt(year)
+                );
+                if (!matchesYearly) return false;
             }
         }
         
