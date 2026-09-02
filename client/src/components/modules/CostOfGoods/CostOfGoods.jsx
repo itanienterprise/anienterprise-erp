@@ -1007,23 +1007,8 @@ const CostOfGoods = ({
                                                                 <span className="text-[10px] font-bold text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-lg ml-2">
                                                                     {group.records.length} {group.records.length === 1 ? 'record' : 'records'}
                                                                 </span>
-                                                                {group.lcNo && onNavigate && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            onNavigate('lc-management-section', group.lcNo);
-                                                                        }}
-                                                                        title={`Go to LC ${group.lcNo} in LC Management`}
-                                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-600 hover:text-white border border-blue-200 hover:border-blue-600 rounded-lg shadow-xs hover:shadow transition-all duration-150 transform active:scale-95 ml-2 cursor-pointer group"
-                                                                    >
-                                                                        <LCManagerIcon className="w-3.5 h-3.5 text-blue-600 group-hover:text-white transition-colors" />
-                                                                        <span>Go to LC</span>
-                                                                        <ArrowUpRightIcon className="w-3 h-3 text-blue-500 group-hover:text-white transition-colors opacity-70" />
-                                                                    </button>
-                                                                )}
                                                             </div>
-                                                            <div className="flex gap-6 text-xs text-gray-500 pr-4">
+                                                            <div className="flex items-center gap-6 text-xs text-gray-500 pr-2">
                                                                 <div>Total Qty: <span className="font-extrabold text-gray-800">{group.records.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString()} kg</span></div>
                                                                 <div>Total Net Bill: <span className="font-extrabold text-gray-800">{group.records.reduce((sum, r) => {
                                                                     const isChina = r.country === 'CHINA';
@@ -1034,6 +1019,21 @@ const CostOfGoods = ({
                                                                     const netBillVal = isChina ? amountVal : (r.netBill !== undefined ? r.netBill : (billSum - rebateVal));
                                                                     return sum + netBillVal;
                                                                 }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {group.records.some(r => r.country === 'CHINA') ? 'USD' : 'RS'}</span></div>
+                                                                {group.lcNo && onNavigate && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            onNavigate('lc-management-section', group.lcNo);
+                                                                        }}
+                                                                        title={`Go to LC ${group.lcNo} in LC Management`}
+                                                                        className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-600 hover:text-white border border-blue-200 hover:border-blue-600 rounded-lg shadow-xs hover:shadow transition-all duration-150 transform active:scale-95 cursor-pointer group select-none ml-1"
+                                                                    >
+                                                                        <LCManagerIcon className="w-3.5 h-3.5 text-blue-600 group-hover:text-white transition-colors" />
+                                                                        <span>Go to LC</span>
+                                                                        <ArrowUpRightIcon className="w-3 h-3 text-blue-500 group-hover:text-white transition-colors opacity-70" />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>
