@@ -2287,6 +2287,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Net Bill (Rs)</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Costing/kg (BDT)</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Total BDT</th>
+                                                    <th className="px-4 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-center whitespace-nowrap">LC Receive Date</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Lc Receive Qty</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Receive Total Price</th>
                                                     <th className="px-1 py-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right whitespace-nowrap">Inhouse QTY</th>
@@ -2318,6 +2319,11 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                                         });
 
+                                                        const lcReceiveDates = [...new Set(matchingStocks.map(s => s.date).filter(Boolean))];
+                                                        const lcReceiveDateStr = lcReceiveDates.length > 0
+                                                            ? lcReceiveDates.map(d => formatDate(d)).join(', ')
+                                                            : '—';
+
                                                         const lcReceiveQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
                                                         const inhouseQty = matchingStocks.reduce((sum, s) => {
                                                             const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
@@ -2336,6 +2342,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                 <td className="px-1 py-1.5 text-sm font-semibold text-right text-gray-700 whitespace-nowrap">{netBillVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} RS</td>
                                                                 <td className="px-1 py-1.5 text-sm font-bold text-right text-blue-600 whitespace-nowrap">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                 <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600 whitespace-nowrap">৳{(costingKgVal * qtyVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="px-4 py-1.5 text-sm text-gray-600 text-center whitespace-nowrap">{lcReceiveDateStr}</td>
                                                                 <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900 whitespace-nowrap">{lcReceiveQty.toLocaleString('en-IN')}</td>
                                                                 <td className="px-1 py-1.5 text-sm font-black text-right text-emerald-600 whitespace-nowrap">৳{(costingKgVal * lcReceiveQty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                 <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900 whitespace-nowrap">{inhouseQty.toLocaleString('en-IN')}</td>
@@ -2345,7 +2352,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                     })
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan="14" className="px-1 py-1.5 text-center text-gray-400 font-bold">
+                                                        <td colSpan="15" className="px-1 py-1.5 text-center text-gray-400 font-bold">
                                                             {consumptionSearchQuery ? 'No CoG records match your search.' : 'No Cost of Goods records found for this LC.'}
                                                         </td>
                                                     </tr>
@@ -2386,6 +2393,7 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                             return sum + (costingKgVal * qtyVal);
                                                         }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </td>
+                                                    <td className="px-4 py-1.5 text-center"></td>
                                                     <td className="px-1 py-1.5 text-sm font-black text-right text-gray-900">
                                                         {filteredCogRecords.reduce((sum, record) => {
                                                             const matchingStocks = allStockRecords.filter(s => {
@@ -2507,6 +2515,11 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                             String(s.brand || '').trim().toLowerCase() === String(record.brand || '').trim().toLowerCase();
                                                     });
 
+                                                    const lcReceiveDates = [...new Set(matchingStocks.map(s => s.date).filter(Boolean))];
+                                                    const lcReceiveDateStr = lcReceiveDates.length > 0
+                                                        ? lcReceiveDates.map(d => formatDate(d)).join(', ')
+                                                        : '—';
+
                                                     const lcReceiveQty = matchingStocks.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
                                                     const inhouseQty = matchingStocks.reduce((sum, s) => {
                                                         const val = s.inHouseQuantity !== undefined && s.inHouseQuantity !== null && s.inHouseQuantity !== '' ? parseFloat(s.inHouseQuantity) : NaN;
@@ -2555,6 +2568,10 @@ const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Truck No</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                                         <span className="font-semibold text-gray-700 text-[11px]">{record.truckNo || '—'}</span>
+
+                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive Date</span>
+                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                        <span className="font-semibold text-gray-700 text-[11px]">{lcReceiveDateStr}</span>
 
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC Receive Qty</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>

@@ -1071,9 +1071,76 @@ apiRouter.post('/api/stock-baseline/:id/revert', async (req, res) => {
       await StockBaseline.findByIdAndUpdate(baseline._id, { data: encryptData(d) });
     }
 
-    res.json({ message: 'Stock baseline reverted successfully. Stock calculations returned to standard historical mode.' });
+    // Automatically reactivate the most recent non-reverted baseline if one exists
+    const remainingBaselines = await StockBaseline.find().sort({ createdAt: -1 });
+    let reactivated = null;
+    for (const rb of remainingBaselines) {
+      if (rb._id.toString() === baseline._id.toString()) continue;
+      let rbData = decryptData(rb.data);
+      if (rbData && rbData.status !== 'reverted') {
+        rbData.status = 'active';
+        delete rbData.archivedAt;
+        await StockBaseline.findByIdAndUpdate(rb._id, { data: encryptData(rbData) });
+        reactivated = rbData;
+        break;
+      }
+    }
+
+    res.json({
+      message: reactivated
+        ? 'Stock baseline reverted. Previous baseline has been reactivated.'
+        : 'Stock baseline reverted successfully. Stock calculations returned to standard historical mode.'
+    });
   } catch (err) {
     console.error('Error reverting stock baseline:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+apiRouter.post('/api/stock-baseline/:id/activate', async (req, res) => {
+  try {
+    const userSession = req.session.user;
+    const hasPermission = userSession && (
+      userSession.username === 'admin' ||
+      (userSession.role || '').toLowerCase() === 'admin' ||
+      (userSession.permissions && userSession.permissions.stock && (
+        userSession.permissions.stock.special === true ||
+        userSession.permissions.stock.edit === true
+      ))
+    );
+
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Forbidden: Admin or authorized Stock Manager permission required.' });
+    }
+
+    const targetBaseline = await StockBaseline.findById(req.params.id);
+    if (!targetBaseline) return res.status(404).json({ message: 'Stock baseline not found.' });
+
+    // 1. Archive any other active baselines
+    const allBaselines = await StockBaseline.find();
+    for (const b of allBaselines) {
+      if (b._id.toString() !== req.params.id) {
+        let bData = decryptData(b.data);
+        if (bData && bData.status === 'active') {
+          bData.status = 'archived';
+          bData.archivedAt = new Date().toISOString();
+          await StockBaseline.findByIdAndUpdate(b._id, { data: encryptData(bData) });
+        }
+      }
+    }
+
+    // 2. Activate target baseline
+    let targetData = decryptData(targetBaseline.data);
+    if (targetData) {
+      targetData.status = 'active';
+      delete targetData.archivedAt;
+      delete targetData.revertedAt;
+      await StockBaseline.findByIdAndUpdate(targetBaseline._id, { data: encryptData(targetData) });
+    }
+
+    res.json({ message: 'Baseline activated successfully.', baseline: { ...targetData, _id: targetBaseline._id } });
+  } catch (err) {
+    console.error('Error activating stock baseline:', err);
     res.status(500).json({ message: err.message });
   }
 });

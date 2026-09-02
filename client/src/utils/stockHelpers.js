@@ -821,7 +821,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             }
 
             // Source Entry (- stock at source warehouse)
-            if (srcWhName && isBaselineApplicable) {
+            if (srcWhName) {
                 rawExpanded.push({
                     ...whItem,
                     _id: `${whItem._id}_src`,

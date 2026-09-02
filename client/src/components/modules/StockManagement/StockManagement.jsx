@@ -2364,7 +2364,7 @@ const StockManagement = ({
                 salesRecords,
                 products,
                 damages,
-                null // Raw physical in-house calculation without applying previous baselines
+                activeBaseline // Carry forward active baseline calculations so current verified physical stock is captured!
             );
 
             (whRes.displayRecords || []).forEach(prod => {
@@ -2473,6 +2473,26 @@ const StockManagement = ({
         } catch (err) {
             console.error('Error reverting baseline:', err);
             alert(err.response?.data?.message || 'Failed to revert stock baseline.');
+        } finally {
+            setBaselineLoading(false);
+        }
+    };
+
+    const handleActivateBaseline = async (baselineId) => {
+        if (!window.confirm('Are you sure you want to activate this stock baseline?')) {
+            return;
+        }
+
+        setBaselineLoading(true);
+        try {
+            await axios.post(`${API_BASE_URL}/api/stock-baseline/${baselineId}/activate`);
+            if (typeof fetchStockBaseline === 'function') await fetchStockBaseline();
+            if (typeof fetchStockRecords === 'function') await fetchStockRecords();
+            await fetchBaselineHistory();
+            alert('Stock baseline activated successfully!');
+        } catch (err) {
+            console.error('Error activating baseline:', err);
+            alert(err.response?.data?.message || 'Failed to activate stock baseline.');
         } finally {
             setBaselineLoading(false);
         }
@@ -5146,7 +5166,7 @@ const StockManagement = ({
                                                                 )}
                                                             </div>
 
-                                                            {isActive && (
+                                                            {isActive ? (
                                                                 <button
                                                                     type="button"
                                                                     disabled={baselineLoading}
@@ -5154,6 +5174,15 @@ const StockManagement = ({
                                                                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer shrink-0"
                                                                 >
                                                                     {baselineLoading ? 'Reverting...' : 'Revert Baseline'}
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={baselineLoading}
+                                                                    onClick={() => handleActivateBaseline(bh._id)}
+                                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer shrink-0"
+                                                                >
+                                                                    {baselineLoading ? 'Activating...' : 'Activate Baseline'}
                                                                 </button>
                                                             )}
                                                         </div>
