@@ -164,12 +164,64 @@ const SalesReport = ({
 
     // Calculate aggregated data for the report
     const filteredSales = salesRecords.filter(sale => {
-        const saleDate = new Date(sale.date);
+        const statusLower = (sale.status || '').toLowerCase();
+        if (statusLower === 'rejected') return false;
+
+        const saleDate = sale.date ? new Date(sale.date) : (sale.createdAt ? new Date(sale.createdAt) : null);
         const start = saleFilters.startDate ? new Date(saleFilters.startDate) : null;
         const end = saleFilters.endDate ? new Date(saleFilters.endDate) : null;
 
-        if (start && saleDate < start) return false;
-        if (end && saleDate > end) return false;
+        if (start && saleDate && saleDate < start) return false;
+        if (end && saleDate && saleDate > end) return false;
+
+        // Quick range filtering
+        if (saleFilters.quickRange && saleFilters.quickRange !== 'all' && saleFilters.quickRange !== 'custom') {
+            const parseLocalDate = (dVal) => {
+                if (!dVal) return null;
+                if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
+                const str = String(dVal).trim();
+                if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                    const [y, m, d] = str.split('T')[0].split('-').map(Number);
+                    return new Date(y, m - 1, d);
+                }
+                const d = new Date(str);
+                return isNaN(d.getTime()) ? null : d;
+            };
+
+            const targetDate = parseLocalDate(sale.date) || parseLocalDate(sale.createdAt);
+            if (!targetDate) return false;
+
+            const now = new Date();
+            if (saleFilters.quickRange === 'weekly') {
+                const dayOfWeek = now.getDay();
+                const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() + diffToMonday);
+                weekStart.setHours(0, 0, 0, 0);
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                weekEnd.setHours(23, 59, 59, 999);
+
+                const rollingWeekStart = new Date(now);
+                rollingWeekStart.setDate(now.getDate() - 7);
+                rollingWeekStart.setHours(0, 0, 0, 0);
+
+                const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
+                if (!matchesWeekly) return false;
+            } else if (saleFilters.quickRange === 'monthly') {
+                const month = parseInt(saleFilters.selectedMonth || (now.getMonth() + 1));
+                const year = parseInt(saleFilters.selectedYear || now.getFullYear());
+                if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
+                    return false;
+                }
+            } else if (saleFilters.quickRange === 'yearly') {
+                const year = parseInt(saleFilters.selectedYear || now.getFullYear());
+                if (targetDate.getFullYear() !== year) {
+                    return false;
+                }
+            }
+        }
+
         if (saleFilters.companyName && (sale.companyName || sale.customerName) !== saleFilters.companyName) return false;
         if (saleFilters.invoiceNo && sale.invoiceNo !== saleFilters.invoiceNo) return false;
 
@@ -199,6 +251,36 @@ const SalesReport = ({
         }
         return (a.createdAt || a._id || 0) > (b.createdAt || b._id || 0) ? 1 : -1;
     });
+
+    const activeFilterCount = Object.entries(saleFilters || {}).filter(([key, val]) => {
+        if (key === 'quickRange') return val !== 'all' && val !== '' && val !== undefined;
+        if (key === 'selectedMonth' || key === 'selectedYear') return false;
+        return val !== '' && val !== undefined && val !== null;
+    }).length;
+    const hasActiveFilters = activeFilterCount > 0;
+
+    const getDateRangeDisplay = () => {
+        if (saleFilters.quickRange && saleFilters.quickRange !== 'all') {
+            if (saleFilters.quickRange === 'weekly') {
+                return 'Weekly (Current Week)';
+            } else if (saleFilters.quickRange === 'monthly') {
+                const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const monthName = months[(saleFilters.selectedMonth || new Date().getMonth() + 1) - 1];
+                const year = saleFilters.selectedYear || new Date().getFullYear();
+                return `${monthName} ${year}`;
+            } else if (saleFilters.quickRange === 'yearly') {
+                const year = saleFilters.selectedYear || new Date().getFullYear();
+                return `Year: ${year}`;
+            } else if (saleFilters.quickRange === 'custom') {
+                const start = saleFilters.startDate ? formatDate(saleFilters.startDate) : 'Start';
+                const end = saleFilters.endDate ? formatDate(saleFilters.endDate) : 'Present';
+                return `${start} to ${end}`;
+            }
+        }
+        const start = saleFilters.startDate ? formatDate(saleFilters.startDate) : 'Start';
+        const end = saleFilters.endDate ? formatDate(saleFilters.endDate) : 'Present';
+        return `${start} to ${end}`;
+    };
 
     // Construct flat items per sale, applying search query filters to display only matching products/brands/LCs
     const salesWithItems = filteredSales.map(sale => {
@@ -332,24 +414,38 @@ const SalesReport = ({
                             <button
                                 ref={filterButtonRef}
                                 onClick={() => setShowFilterPanel(!showFilterPanel)}
-                                className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || Object.values(saleFilters).some(v => v !== '')
+                                className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterPanel || hasActiveFilters
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
                                     : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
                                     }`}
                             >
-                                <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showFilterPanel || Object.values(saleFilters).some(v => v !== '') ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${showFilterPanel || hasActiveFilters ? 'text-white' : 'text-gray-400'}`} />
                             </button>
 
                             {/* Floating Filter Panel */}
                             {showFilterPanel && (
                                 <>
                                     <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] md:hidden" onClick={() => setShowFilterPanel(false)} />
-                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:left-auto md:right-0 md:mt-2 w-auto md:w-80 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-visible">
+                                    <div ref={filterPanelRef} className={`fixed inset-x-4 top-24 md:absolute md:top-full md:left-auto md:right-0 md:mt-2 w-auto md:w-84 bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col animate-in fade-in zoom-in-95 duration-200 ${Object.values(filterDropdownOpen).some(Boolean) ? 'overflow-visible' : 'max-h-[calc(90vh-100px)] overflow-y-auto custom-scrollbar'}`}>
                                         <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 flex-shrink-0">
                                             <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <button
                                                 onClick={() => {
-                                                    setSaleFilters({ startDate: '', endDate: '', companyName: '', invoiceNo: '', productName: '', brandName: '', port: '', indCnf: '', bdCnf: '' });
+                                                    localStorage.setItem('sale_quick_range_default', 'all');
+                                                    setSaleFilters({
+                                                        quickRange: 'all',
+                                                        selectedMonth: new Date().getMonth() + 1,
+                                                        selectedYear: new Date().getFullYear(),
+                                                        startDate: '',
+                                                        endDate: '',
+                                                        companyName: '',
+                                                        invoiceNo: '',
+                                                        productName: '',
+                                                        brandName: '',
+                                                        port: '',
+                                                        indCnf: '',
+                                                        bdCnf: ''
+                                                    });
                                                     setFilterSearchInputs({ companySearch: '', invoiceSearch: '', productSearch: '', brandSearch: '', portSearch: '', indCnfSearch: '', bdCnfSearch: '' });
                                                     setFilterDropdownOpen(initialFilterDropdownState);
                                                 }}
@@ -360,12 +456,69 @@ const SalesReport = ({
                                         </div>
 
                                         <div className="space-y-3 flex-1 pr-0.5">
+                                            {/* Quick Range */}
+                                            <div className="space-y-2 text-center">
+                                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block font-mono">QUICK RANGE</label>
+                                                <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
+                                                    {['all', 'weekly', 'monthly', 'yearly'].map(range => (
+                                                        <button
+                                                            key={range}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                localStorage.setItem('sale_quick_range_default', range);
+                                                                setSaleFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }));
+                                                            }}
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${saleFilters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                        >
+                                                            {range.charAt(0).toUpperCase() + range.slice(1)}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                {/* Month dropdown for monthly */}
+                                                {saleFilters.quickRange === 'monthly' && (
+                                                    <div className="flex items-center justify-center gap-2 mt-1">
+                                                        <select
+                                                            value={saleFilters.selectedMonth || new Date().getMonth() + 1}
+                                                            onChange={(e) => setSaleFilters(prev => ({ ...prev, selectedMonth: parseInt(e.target.value) }))}
+                                                            className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                        >
+                                                            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => (
+                                                                <option key={i + 1} value={i + 1}>{m}</option>
+                                                            ))}
+                                                        </select>
+                                                        <select
+                                                            value={saleFilters.selectedYear || new Date().getFullYear()}
+                                                            onChange={(e) => setSaleFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                            className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                        >
+                                                            {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                                <option key={y} value={y}>{y}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                                {/* Year dropdown for yearly */}
+                                                {saleFilters.quickRange === 'yearly' && (
+                                                    <div className="flex items-center justify-center gap-2 mt-1">
+                                                        <select
+                                                            value={saleFilters.selectedYear || new Date().getFullYear()}
+                                                            onChange={(e) => setSaleFilters(prev => ({ ...prev, selectedYear: parseInt(e.target.value) }))}
+                                                            className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                                                        >
+                                                            {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                                                <option key={y} value={y}>{y}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             <div className="space-y-2">
                                                 <div ref={fromDateFilterRef}>
                                                     <CustomDatePicker
                                                         label="From Date"
                                                         value={saleFilters.startDate}
-                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, startDate: e.target.value, quickRange: 'custom' }))}
                                                         compact={true}
                                                         isOpen={filterDropdownOpen.from}
                                                         onToggle={(val) => setFilterDropdownOpen(prev => ({ ...prev, from: val }))}
@@ -375,7 +528,7 @@ const SalesReport = ({
                                                     <CustomDatePicker
                                                         label="To Date"
                                                         value={saleFilters.endDate}
-                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                        onChange={(e) => setSaleFilters(prev => ({ ...prev, endDate: e.target.value, quickRange: 'custom' }))}
                                                         compact={true}
                                                         isOpen={filterDropdownOpen.to}
                                                         onToggle={(val) => setFilterDropdownOpen(prev => ({ ...prev, to: val }))}
@@ -945,7 +1098,7 @@ const SalesReport = ({
 
                         <div className="flex justify-between items-end text-[14px] text-gray-800 pt-2 px-2">
                             <div className="flex flex-col gap-1.5">
-                                <div className="flex"><span className="font-bold text-gray-900 w-28">Date Range:</span> <span className="text-gray-900">{formatDate(saleFilters.startDate) === '-' ? 'Start' : formatDate(saleFilters.startDate)} to {formatDate(saleFilters.endDate) === '-' ? 'Present' : formatDate(saleFilters.endDate)}</span></div>
+                                <div className="flex"><span className="font-bold text-gray-900 w-28">Date Range:</span> <span className="text-gray-900">{getDateRangeDisplay()}</span></div>
                                 {saleFilters.companyName && <div className="flex"><span className="font-bold text-gray-900 w-28">Customer:</span> <span className="text-gray-900">{saleFilters.companyName}</span></div>}
                             </div>
                             <div className="font-bold"><span className="text-gray-900">Printed on:</span> <span className="text-gray-900">{formatDate(new Date().toISOString().split('T')[0])}</span></div>

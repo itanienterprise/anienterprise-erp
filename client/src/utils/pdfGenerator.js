@@ -3270,7 +3270,25 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         doc.setFont('helvetica', 'bold');
         doc.text("Date Range:", margin, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
+        let dateRangeStr = `${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`;
+        if (filters.quickRange && filters.quickRange !== 'all') {
+            if (filters.quickRange === 'weekly') {
+                dateRangeStr = 'Weekly (Current Week)';
+            } else if (filters.quickRange === 'monthly') {
+                const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const monthName = months[(filters.selectedMonth || new Date().getMonth() + 1) - 1];
+                const year = filters.selectedYear || new Date().getFullYear();
+                dateRangeStr = `${monthName} ${year}`;
+            } else if (filters.quickRange === 'yearly') {
+                const year = filters.selectedYear || new Date().getFullYear();
+                dateRangeStr = `Year: ${year}`;
+            } else if (filters.quickRange === 'custom') {
+                const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
+                const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
+                dateRangeStr = `${start} to ${end}`;
+            }
+        }
+        doc.text(dateRangeStr, margin + 25, yPos);
 
         if (filters.companyName) {
             yPos += 5;

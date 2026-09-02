@@ -1210,19 +1210,22 @@ const OrderManagement = ({
 
             // Quick Date Range Filter
             if (saleFilters.quickRange && saleFilters.quickRange !== 'all' && saleFilters.quickRange !== 'custom') {
-                const now = new Date();
-                const parseDate = (dVal) => {
+                const parseLocalDate = (dVal) => {
                     if (!dVal) return null;
-                    const d = new Date(dVal);
+                    if (dVal instanceof Date) return isNaN(dVal.getTime()) ? null : dVal;
+                    const str = String(dVal).trim();
+                    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                        const [y, m, d] = str.split('T')[0].split('-').map(Number);
+                        return new Date(y, m - 1, d);
+                    }
+                    const d = new Date(str);
                     return isNaN(d.getTime()) ? null : d;
                 };
-                const datesToCheck = [
-                    parseDate(sale.date),
-                    parseDate(sale.createdAt)
-                ].filter(Boolean);
 
-                if (datesToCheck.length === 0) return false;
+                const targetDate = parseLocalDate(sale.date) || parseLocalDate(sale.createdAt);
+                if (!targetDate) return false;
 
+                const now = new Date();
                 if (saleFilters.quickRange === 'weekly') {
                     const dayOfWeek = now.getDay();
                     const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
@@ -1237,23 +1240,19 @@ const OrderManagement = ({
                     rollingWeekStart.setDate(now.getDate() - 7);
                     rollingWeekStart.setHours(0, 0, 0, 0);
 
-                    const matchesWeekly = datesToCheck.some(d => 
-                        (d >= weekStart && d <= weekEnd) || (d >= rollingWeekStart && d <= now)
-                    );
+                    const matchesWeekly = (targetDate >= weekStart && targetDate <= weekEnd) || (targetDate >= rollingWeekStart && targetDate <= now);
                     if (!matchesWeekly) return false;
                 } else if (saleFilters.quickRange === 'monthly') {
-                    const month = saleFilters.selectedMonth || (now.getMonth() + 1);
-                    const year = saleFilters.selectedYear || now.getFullYear();
-                    const matchesMonthly = datesToCheck.some(d => 
-                        d.getMonth() + 1 === parseInt(month) && d.getFullYear() === parseInt(year)
-                    );
-                    if (!matchesMonthly) return false;
+                    const month = parseInt(saleFilters.selectedMonth || (now.getMonth() + 1));
+                    const year = parseInt(saleFilters.selectedYear || now.getFullYear());
+                    if (targetDate.getMonth() + 1 !== month || targetDate.getFullYear() !== year) {
+                        return false;
+                    }
                 } else if (saleFilters.quickRange === 'yearly') {
-                    const year = saleFilters.selectedYear || now.getFullYear();
-                    const matchesYearly = datesToCheck.some(d => 
-                        d.getFullYear() === parseInt(year)
-                    );
-                    if (!matchesYearly) return false;
+                    const year = parseInt(saleFilters.selectedYear || now.getFullYear());
+                    if (targetDate.getFullYear() !== year) {
+                        return false;
+                    }
                 }
             } else if (saleFilters.quickRange === 'custom') {
                 const saleDate = (sale.date || '').split('T')[0];
@@ -1744,7 +1743,14 @@ const OrderManagement = ({
                         {/* Report Button */}
                         <button
                             onClick={() => {
-                                if (setSalesReportData) setSalesReportData(getFilteredData);
+                                const orderRecords = sales.filter(sale => {
+                                    const sType = (sale.saleType || '').toLowerCase();
+                                    const inv = (sale.invoiceNo || sale.orderNo || '').toUpperCase();
+                                    const isOrder = sType === 'order' || inv.startsWith('ORD');
+                                    const statusLower = (sale.status || '').toLowerCase();
+                                    return isOrder && statusLower !== 'rejected';
+                                });
+                                if (setSalesReportData) setSalesReportData(orderRecords.length > 0 ? orderRecords : sales);
                                 if (setSalesReportSearchQuery) setSalesReportSearchQuery(searchQuery);
                                 if (setShowSalesReport) setShowSalesReport(true);
                             }}
