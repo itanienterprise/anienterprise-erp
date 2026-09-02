@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { EditIcon, TrashIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, FunnelIcon, ChevronDownIcon, PrinterIcon, CheckIcon } from '../../Icons';
+import { EditIcon, TrashIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, PlusIcon, FunnelIcon, ChevronDownIcon, PrinterIcon, CheckIcon, ArrowUpRightIcon, LCManagerIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './CostOfGoods.css';
@@ -18,6 +18,7 @@ const CostOfGoods = ({
     setEditingId,
     onDeleteConfirm,
     addNotification,
+    onNavigate,
 }) => {
     const canEdit = hasPermission(currentUser, 'costOfGoods', 'edit');
     const canDelete = hasPermission(currentUser, 'costOfGoods', 'delete');
@@ -1003,9 +1004,24 @@ const CostOfGoods = ({
                                                             <div className="flex items-center gap-2">
                                                                 <ChevronDownIcon className={`w-4.5 h-4.5 text-blue-600 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
                                                                 <span>LC No: {group.lcNo}</span>
-                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-lg ml-2">
+                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-lg ml-2">
                                                                     {group.records.length} {group.records.length === 1 ? 'record' : 'records'}
                                                                 </span>
+                                                                {group.lcNo && onNavigate && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            onNavigate('lc-management-section', group.lcNo);
+                                                                        }}
+                                                                        title={`Go to LC ${group.lcNo} in LC Management`}
+                                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-600 hover:text-white border border-blue-200 hover:border-blue-600 rounded-lg shadow-xs hover:shadow transition-all duration-150 transform active:scale-95 ml-2 cursor-pointer group"
+                                                                    >
+                                                                        <LCManagerIcon className="w-3.5 h-3.5 text-blue-600 group-hover:text-white transition-colors" />
+                                                                        <span>Go to LC</span>
+                                                                        <ArrowUpRightIcon className="w-3 h-3 text-blue-500 group-hover:text-white transition-colors opacity-70" />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                             <div className="flex gap-6 text-xs text-gray-500 pr-4">
                                                                 <div>Total Qty: <span className="font-extrabold text-gray-800">{group.records.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString()} kg</span></div>
@@ -1060,7 +1076,22 @@ const CostOfGoods = ({
                                                                 </td>
                                                             )}
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{record.date ? formatDate(record.date) : '—'}</td>
-                                                            <td className="px-4 py-3 text-[13px] font-semibold text-gray-800">{record.lcNo ? record.lcNo.slice(-5) : '—'}</td>
+                                                            <td className="px-4 py-3 text-[13px] font-semibold text-gray-800">
+                                                                {record.lcNo ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            if (onNavigate) onNavigate('lc-management-section', record.lcNo);
+                                                                        }}
+                                                                        className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold cursor-pointer"
+                                                                        title={`Open LC ${record.lcNo} in LC Management`}
+                                                                    >
+                                                                        <span>{record.lcNo.slice(-5)}</span>
+                                                                        <ArrowUpRightIcon className="w-3 h-3 opacity-60 hover:opacity-100" />
+                                                                    </button>
+                                                                ) : '—'}
+                                                            </td>
                                                             <td className="px-4 py-3 text-[13px] text-gray-800 max-w-[140px] truncate" title={record.supplier || ''}>{record.supplier || '—'}</td>
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{record.invoiceNo || '—'}</td>
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{record.truckNo || '—'}</td>
@@ -1074,6 +1105,19 @@ const CostOfGoods = ({
                                                             <td className="px-4 py-3 text-[13px] text-gray-800">{costingKgVal !== undefined && costingKgVal !== null && costingKgVal !== '' ? `${Number(costingKgVal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BDT` : '—'}</td>
                                                             <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                                                                 <div className="flex items-center justify-end gap-1">
+                                                                    {record.lcNo && onNavigate && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                onNavigate('lc-management-section', record.lcNo);
+                                                                            }}
+                                                                            className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-500 hover:text-blue-600 transition-colors"
+                                                                            title={`Open LC ${record.lcNo} in LC Management`}
+                                                                        >
+                                                                            <ArrowUpRightIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
                                                                     <button onClick={() => setViewData(record)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="View">
                                                                         <EyeIcon className="w-4 h-4 text-gray-500 hover:text-blue-600 transition-colors" />
                                                                     </button>
@@ -1719,7 +1763,27 @@ const CostOfGoods = ({
                                 const isChinaView = viewData.country === 'CHINA';
                                 return [
                                     ['Date', viewData.date ? formatDate(viewData.date) : '—'],
-                                    ['LC No', viewData.lcNo],
+                                    ['LC No', (
+                                        <div className="flex items-center justify-between gap-1">
+                                            <span>{viewData.lcNo || '—'}</span>
+                                            {viewData.lcNo && onNavigate && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const targetLc = viewData.lcNo;
+                                                        setViewData(null);
+                                                        onNavigate('lc-management-section', targetLc);
+                                                    }}
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-lg transition-colors cursor-pointer"
+                                                    title={`Open LC ${viewData.lcNo} in LC Management`}
+                                                >
+                                                    <LCManagerIcon className="w-3 h-3" />
+                                                    <span>Go to LC</span>
+                                                    <ArrowUpRightIcon className="w-3 h-3" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    )],
                                     ['Importer', viewData.importer],
                                     ['Exporter', viewData.exporter],
                                     ['Supplier', viewData.supplier],

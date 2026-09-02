@@ -563,6 +563,25 @@ function App() {
   const [notifHighlightId, setNotifHighlightId] = useState(null);
   const [notifIsRequested, setNotifIsRequested] = useState(false);
 
+  const handleNavigate = (view, highlightId, isRequested) => {
+    if (view) {
+      handleViewChange(view);
+      setShowNotifications(false);
+      if (highlightId || isRequested) {
+        setNotifHighlightId(null);
+        setNotifIsRequested(!!isRequested);
+        setTimeout(() => {
+          setNotifHighlightId(highlightId);
+          setNotifIsRequested(!!isRequested);
+        }, 50);
+        setTimeout(() => {
+          setNotifHighlightId(null);
+          setNotifIsRequested(false);
+        }, 8000);
+      }
+    }
+  };
+
 
   // Fetch employee name if missing
   useEffect(() => {
@@ -2174,6 +2193,7 @@ function App() {
             setEditingId={setEditingId}
             onDeleteConfirm={setDeleteConfirm}
             addNotification={addNotification}
+            onNavigate={handleNavigate}
           />
         );
       case 'backup-restore-section': {
@@ -3119,24 +3139,7 @@ function App() {
                 onClearAll={handleClearAll}
                 onMarkAsRead={handleMarkAsRead}
                 currentUser={currentUser}
-                onNavigate={(view, highlightId, isRequested) => {
-                  if (view) {
-                    handleViewChange(view);
-                    setShowNotifications(false);
-                    if (highlightId || isRequested) {
-                      setNotifHighlightId(null);
-                      setNotifIsRequested(!!isRequested);
-                      setTimeout(() => {
-                        setNotifHighlightId(highlightId);
-                        setNotifIsRequested(!!isRequested);
-                      }, 20);
-                      setTimeout(() => {
-                        setNotifHighlightId(null);
-                        setNotifIsRequested(false);
-                      }, 8000);
-                    }
-                  }
-                }}
+                onNavigate={handleNavigate}
               />
             </div>
           </div>
