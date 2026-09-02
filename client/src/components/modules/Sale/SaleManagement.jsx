@@ -938,7 +938,7 @@ const SaleManagement = ({
     };
 
     const activeFilterCount = Object.entries(saleFilters).filter(([key, val]) => {
-        if (key === 'quickRange') return val !== 'all' && val !== 'monthly' && val !== 'custom' && val !== '';
+        if (key === 'quickRange') return val !== 'all' && val !== '';
         if (key === 'selectedMonth' || key === 'selectedYear') return false;
         return val !== '';
     }).length;
@@ -1097,7 +1097,7 @@ const SaleManagement = ({
     useEffect(() => {
         if (setSaleFilters) {
             setSaleFilters({
-                quickRange: 'monthly',
+                quickRange: localStorage.getItem('sale_quick_range_default') || 'all',
                 selectedMonth: new Date().getMonth() + 1,
                 selectedYear: new Date().getFullYear(),
                 startDate: '',
@@ -3608,7 +3608,8 @@ const SaleManagement = ({
                                             <button
                                                 onMouseDown={(e) => {
                                                     e.preventDefault();
-                                                    setSaleFilters({ quickRange: 'monthly', selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
+                                                    localStorage.setItem('sale_quick_range_default', 'all');
+                                                    setSaleFilters({ quickRange: 'all', selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
                                                     setSaleFilterSearch({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
                                                     setActiveFilterDropdown(null);
                                                 }}
@@ -3655,8 +3656,11 @@ const SaleManagement = ({
                                                         <button
                                                             key={range}
                                                             type="button"
-                                                            onClick={() => setSaleFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
-                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${saleFilters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                                            onClick={() => {
+                                                                localStorage.setItem('sale_quick_range_default', range);
+                                                                setSaleFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }));
+                                                            }}
+                                                            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${saleFilters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                                                         >
                                                             {range.charAt(0).toUpperCase() + range.slice(1)}
                                                         </button>

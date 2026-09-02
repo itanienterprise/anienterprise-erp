@@ -216,7 +216,7 @@ function PI({
     };
 
     const initialPiFilterState = {
-        quickRange: 'monthly',
+        quickRange: localStorage.getItem('pi_quick_range_default') || 'all',
         selectedMonth: new Date().getMonth() + 1,
         selectedYear: new Date().getFullYear(),
         startDate: '',
@@ -228,6 +228,12 @@ function PI({
     };
 
     const [piFilters, setPiFilters] = useState(initialPiFilterState);
+
+    useEffect(() => {
+        if (piFilters.quickRange) {
+            localStorage.setItem('pi_quick_range_default', piFilters.quickRange);
+        }
+    }, [piFilters.quickRange]);
     const [showPiFilterPanel, setShowPiFilterPanel] = useState(false);
     const [filterSearchInputs, setFilterSearchInputs] = useState({
         portSearch: '',
@@ -2499,9 +2505,9 @@ function PI({
                             <button
                                 ref={piFilterButtonRef}
                                 onClick={() => setShowPiFilterPanel(!showPiFilterPanel)}
-                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPiFilterPanel || Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'monthly' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')) ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                className={`w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border h-[40px] ${showPiFilterPanel || Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'all' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')) ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                             >
-                                <FunnelIcon className={`w-4 h-4 ${(showPiFilterPanel || (piFilters && Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'monthly' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')))) ? 'text-white' : 'text-gray-400'}`} />
+                                <FunnelIcon className={`w-4 h-4 ${(showPiFilterPanel || (piFilters && Object.entries(piFilters).some(([k, v]) => k === 'quickRange' ? (v !== 'all' && v !== '') : (k === 'selectedMonth' || k === 'selectedYear' ? false : v !== '')))) ? 'text-white' : 'text-gray-400'}`} />
                                 <span className="text-sm font-medium">Filter</span>
                             </button>
 
@@ -2513,7 +2519,8 @@ function PI({
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                setPiFilters(initialPiFilterState);
+                                                localStorage.setItem('pi_quick_range_default', 'all');
+                                                setPiFilters({ ...initialPiFilterState, quickRange: 'all' });
                                                 setFilterSearchInputs({
                                                     portSearch: '',
                                                     exporterSearch: '',
@@ -2538,7 +2545,10 @@ function PI({
                                                     <button
                                                         key={range}
                                                         type="button"
-                                                        onClick={() => setPiFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }))}
+                                                        onClick={() => {
+                                                            localStorage.setItem('pi_quick_range_default', range);
+                                                            setPiFilters(prev => ({ ...prev, quickRange: range, startDate: '', endDate: '' }));
+                                                        }}
                                                         className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${piFilters.quickRange === range ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                                                     >
                                                         {range.charAt(0).toUpperCase() + range.slice(1)}

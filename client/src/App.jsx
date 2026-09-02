@@ -810,7 +810,16 @@ function App() {
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [filteredSalesForReport, setFilteredSalesForReport] = useState([]);
   const [salesReportSearchQuery, setSalesReportSearchQuery] = useState('');
-  const [saleFilters, setSaleFilters] = useState({ quickRange: 'monthly', selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
+  const [saleFilters, setSaleFilters] = useState(() => {
+    const saved = localStorage.getItem('sale_quick_range_default') || 'all';
+    return { quickRange: saved, selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' };
+  });
+
+  useEffect(() => {
+    if (saleFilters.quickRange) {
+      localStorage.setItem('sale_quick_range_default', saleFilters.quickRange);
+    }
+  }, [saleFilters.quickRange]);
   const [products, setProducts] = useState([]);
   const [damages, setDamages] = useState([]);
 

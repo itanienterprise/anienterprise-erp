@@ -165,20 +165,29 @@ const OrderManagement = ({
     const saleCompanyFilterRef = useRef(null);
     const saleProductFilterRef = useRef(null);
     const saleBrandFilterRef = useRef(null);
-    const [saleFilters, setSaleFilters] = useState({
-        quickRange: 'monthly',
-        selectedMonth: new Date().getMonth() + 1,
-        selectedYear: new Date().getFullYear(),
-        startDate: '',
-        endDate: '',
-        companyName: '',
-        invoiceNo: '',
-        port: '',
-        productName: '',
-        brand: '',
-        indCnf: '',
-        bdCnf: ''
+    const [saleFilters, setSaleFilters] = useState(() => {
+        const savedRange = localStorage.getItem('order_quick_range_default') || 'all';
+        return {
+            quickRange: savedRange,
+            selectedMonth: new Date().getMonth() + 1,
+            selectedYear: new Date().getFullYear(),
+            startDate: '',
+            endDate: '',
+            companyName: '',
+            invoiceNo: '',
+            port: '',
+            productName: '',
+            brand: '',
+            indCnf: '',
+            bdCnf: ''
+        };
     });
+
+    useEffect(() => {
+        if (saleFilters.quickRange) {
+            localStorage.setItem('order_quick_range_default', saleFilters.quickRange);
+        }
+    }, [saleFilters.quickRange]);
 
     const [saleFilterSearch, setSaleFilterSearch] = useState({
         companySearch: '',
@@ -1359,7 +1368,7 @@ const OrderManagement = ({
 
     const activeFilterCount = useMemo(() => {
         return Object.entries(saleFilters).filter(([key, val]) => {
-            if (key === 'quickRange') return val !== 'all' && val !== 'monthly' && val !== 'custom' && val !== '';
+            if (key === 'quickRange') return val !== 'all' && val !== '';
             if (key === 'selectedMonth' || key === 'selectedYear') return false;
             return val !== '';
         }).length;
@@ -1462,7 +1471,8 @@ const OrderManagement = ({
                                             <button
                                                 onMouseDown={(e) => {
                                                     e.preventDefault();
-                                                    setSaleFilters({ quickRange: 'monthly', selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
+                                                    localStorage.setItem('order_quick_range_default', 'all');
+                                                    setSaleFilters({ quickRange: 'all', selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' });
                                                     setSaleFilterSearch({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
                                                     setActiveFilterDropdown(null);
                                                 }}
