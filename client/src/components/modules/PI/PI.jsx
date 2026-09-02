@@ -121,6 +121,15 @@ function PI({
         toastTimerRef.current = setTimeout(() => setToast(null), duration);
     };
 
+    const getIndHsCodeDefault = () => {
+        try {
+            const saved = localStorage.getItem('pi_showIndHsCode_default');
+            return saved !== null ? saved !== 'false' : true;
+        } catch {
+            return true;
+        }
+    };
+
     const [formData, setFormData] = useState({
         date: '',
         validityDate: '',
@@ -140,7 +149,8 @@ function PI({
         totalFreight: '',
         grandTotal: '',
         grandTotalQuantity: '',
-        productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: true }],
+        showIndHsCode: getIndHsCodeDefault(),
+        productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: getIndHsCodeDefault() }],
         invoiceStyle: 'Style 1 SAA',
         port: '',
         placeOfReceipt: '',
@@ -958,6 +968,7 @@ function PI({
                 updated.amount = list[0].amount || '';
                 updated.freight = list[0].freight || '';
                 updated.totalFreight = list[0].totalFreight || '';
+                updated.showIndHsCode = list[0].showIndHsCode !== false;
             }
 
             return updated;
@@ -977,7 +988,7 @@ function PI({
                     amount: '',
                     freight: currentList.length > 0 ? currentList[0].freight : '',
                     totalFreight: '',
-                    showIndHsCode: true
+                    showIndHsCode: getIndHsCodeDefault()
                 }
             ];
             return {
@@ -1211,7 +1222,7 @@ function PI({
                             currentProducts.splice(prodIdx, 1);
                         }
                         if (currentProducts.length === 0) {
-                            currentProducts.push({ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '' });
+                            currentProducts.push({ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: getIndHsCodeDefault() });
                         }
                         updated.productsList = currentProducts;
                     } else {
@@ -1232,6 +1243,7 @@ function PI({
                             amount: '',
                             freight: '',
                             totalFreight: '',
+                            showIndHsCode: getIndHsCodeDefault(),
                             _fromIp: value
                         };
 
@@ -1462,6 +1474,7 @@ function PI({
 
         const submissionData = {
             ...formData,
+            showIndHsCode: formData.showIndHsCode !== undefined ? formData.showIndHsCode : (formData.productsList?.[0]?.showIndHsCode !== false),
             grandTotal: calculatedGrandTotal > 0 ? calculatedGrandTotal.toFixed(2) : '',
             grandTotalQuantity: calculatedGrandTotalQuantity > 0 ? calculatedGrandTotalQuantity.toFixed(2) : '',
             entryBy: editingId ? (formData.entryBy || currentUser?.username || currentUser?.id || currentUser?.employeeId || '') : (currentUser?.username || currentUser?.id || currentUser?.employeeId || ''),
@@ -1600,7 +1613,8 @@ function PI({
             totalFreight: '',
             grandTotal: '',
             grandTotalQuantity: '',
-            productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: true }],
+            showIndHsCode: getIndHsCodeDefault(),
+            productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: getIndHsCodeDefault() }],
             port: '',
             placeOfReceipt: '',
             portOfLoading: 'ANY PLACE OF INDIA',
@@ -1791,7 +1805,7 @@ function PI({
 
     function getPiProductsList(pi) {
         if (pi.productsList && pi.productsList.length > 0) {
-            return pi.productsList.map(p => ({ ...p, showIndHsCode: p.showIndHsCode !== undefined ? p.showIndHsCode : true }));
+            return pi.productsList.map(p => ({ ...p, showIndHsCode: p.showIndHsCode !== undefined ? p.showIndHsCode : getIndHsCodeDefault() }));
         }
         return [{
             productName: pi.productName || '',
@@ -1801,7 +1815,7 @@ function PI({
             amount: pi.amount || '',
             freight: pi.freight || '',
             totalFreight: pi.totalFreight || '',
-            showIndHsCode: pi.showIndHsCode !== undefined ? pi.showIndHsCode : true
+            showIndHsCode: pi.showIndHsCode !== undefined ? pi.showIndHsCode : getIndHsCodeDefault()
         }];
     }
 
@@ -3759,7 +3773,10 @@ function PI({
                                                             type="radio"
                                                             name={`showIndHsCode_${idx}`}
                                                             checked={item.showIndHsCode !== false}
-                                                            onChange={() => handleProductFieldChange(idx, 'showIndHsCode', true)}
+                                                            onChange={() => {
+                                                                try { localStorage.setItem('pi_showIndHsCode_default', 'true'); } catch {}
+                                                                handleProductFieldChange(idx, 'showIndHsCode', true);
+                                                            }}
                                                             className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                                                         />
                                                         <span>Enable</span>
@@ -3769,7 +3786,10 @@ function PI({
                                                             type="radio"
                                                             name={`showIndHsCode_${idx}`}
                                                             checked={item.showIndHsCode === false}
-                                                            onChange={() => handleProductFieldChange(idx, 'showIndHsCode', false)}
+                                                            onChange={() => {
+                                                                try { localStorage.setItem('pi_showIndHsCode_default', 'false'); } catch {}
+                                                                handleProductFieldChange(idx, 'showIndHsCode', false);
+                                                            }}
                                                             className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                                                         />
                                                         <span>Disable</span>
