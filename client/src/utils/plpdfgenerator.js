@@ -582,7 +582,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
 
     const enrichedProductsList = (record.productsList || []).map((prod, idx) => {
         const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
-        const isIndHsEnabled = prod.showIndHsCode !== false && piProd?.showIndHsCode !== false && pi?.showIndHsCode !== false && record.showIndHsCode !== false;
+        const isIndHsEnabled = (prod.showIndHsCode === true || piProd?.showIndHsCode === true) && pi?.showIndHsCode !== false && record.showIndHsCode !== false;
         return {
             ...prod,
             bagCount: prod.bagCount,

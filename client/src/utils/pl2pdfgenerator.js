@@ -821,7 +821,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     productsList.forEach((prod, pIdx) => {
         const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
         const isLastProduct = pIdx === numProducts - 1;
-        const indHsEnabled = prod.showIndHsCode !== false && pi?.productsList?.[pIdx]?.showIndHsCode !== false;
+        const indHsEnabled = (prod.showIndHsCode === true || pi?.productsList?.[pIdx]?.showIndHsCode === true);
         const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled);
         let rowHeight = productRowHeight(numProducts, hasFreight);
         if (rowHeight && hasDoubleHsCode) {
@@ -848,7 +848,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
         let singleRowMinHeight = undefined;
         if (numProducts === 1) {
             const descTextHeight = getDescriptionBlockHeight(certFontSize, 108);
-            const firstIndHsEnabled = prod.showIndHsCode !== false && pi?.productsList?.[0]?.showIndHsCode !== false;
+            const firstIndHsEnabled = (prod.showIndHsCode === true || pi?.productsList?.[0]?.showIndHsCode === true);
             const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[0]?.hsCodeInd) && firstIndHsEnabled);
             const offsetToDesc = -1 + 7.5 + (hasDoubleHsCode ? 4 : 0) + (showSafta ? 16.5 : 0) + 6;
             if (record.productsImage) {
@@ -951,7 +951,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 let productsRowsHeight = 0;
                 productsList.forEach((prod, pIdx) => {
                     const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
-                    const indHsEnabled = prod.showIndHsCode !== false && pi?.productsList?.[pIdx]?.showIndHsCode !== false;
+                    const indHsEnabled = (prod.showIndHsCode === true || pi?.productsList?.[pIdx]?.showIndHsCode === true);
                     const hasDoubleHsCode = !!((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && indHsEnabled);
                     let rH = productRowHeight(numProducts, hasFreight);
                     if (rH && hasDoubleHsCode) rH += 3;
@@ -1121,7 +1121,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
                 drawY += nameGap;
 
                 doc.setFontSize(hsCodeFS);
-                const isIndHsEnabled = prod.showIndHsCode !== false && pi?.productsList?.[pIdx]?.showIndHsCode !== false;
+                const isIndHsEnabled = (prod.showIndHsCode === true || pi?.productsList?.[pIdx]?.showIndHsCode === true);
                 if ((prod.hsCodeInd || pi?.productsList?.[pIdx]?.hsCodeInd) && isIndHsEnabled) {
                     const bdHsLine = `H.S. CODE NO.${prod.hsCode || ''} (BD)`;
                     const indHsLine = `H.S. CODE NO.${prod.hsCodeInd || pi.productsList[pIdx].hsCodeInd} (IND)`;
@@ -1362,7 +1362,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     const enrichedProductsList = productsList.map((prod, idx) => {
         const piProd = pi?.productsList?.find(p => (p.productName || '').trim().toLowerCase() === (prod.productName || '').trim().toLowerCase()) || pi?.productsList?.[idx];
-        const isIndHsEnabled = prod.showIndHsCode !== false && piProd?.showIndHsCode !== false && pi?.showIndHsCode !== false && record.showIndHsCode !== false;
+        const isIndHsEnabled = (prod.showIndHsCode === true || piProd?.showIndHsCode === true) && pi?.showIndHsCode !== false && record.showIndHsCode !== false;
         return {
             ...prod,
             bagCount: prod.bagCount,

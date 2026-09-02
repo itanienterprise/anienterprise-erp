@@ -277,7 +277,7 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
             applyAlgerianFont(doc, hsFontSize);
 
             let currentY = startY + lineSpacing;
-            const isIndHsEnabled = prod.showIndHsCode !== false && record.showIndHsCode !== false;
+            const isIndHsEnabled = prod.showIndHsCode === true && record.showIndHsCode !== false;
             if (hsIndia && isIndHsEnabled) {
                 doc.text(`H.S. CODE NO. ${hsIndia} (INDIA)`, x, currentY, { charSpace: -0.15 });
                 currentY += lineSpacing;

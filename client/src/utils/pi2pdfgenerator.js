@@ -477,7 +477,7 @@ export const generatePI2PDF = (record) => {
     productsList.forEach((prod, pIdx) => {
         const hasFreight = prod.freight && parseFloat(prod.freight) > 0;
         const isLastProduct = pIdx === numProducts - 1;
-        const isIndHsEnabled = prod.showIndHsCode !== false && record.showIndHsCode !== false;
+        const isIndHsEnabled = prod.showIndHsCode === true && record.showIndHsCode !== false;
         let rowHeight = productRowHeight(numProducts, hasFreight);
         if (rowHeight && prod.hsCodeInd && isIndHsEnabled) {
             rowHeight += 3; // Add extra height for the IND HS code line to prevent it touching the bottom border
@@ -683,7 +683,7 @@ export const generatePI2PDF = (record) => {
                 // HS Code
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(hsCodeFS);
-                const isIndHsEnabled = prod.showIndHsCode !== false && record.showIndHsCode !== false;
+                const isIndHsEnabled = prod.showIndHsCode === true && record.showIndHsCode !== false;
                 if (prod.hsCodeInd && isIndHsEnabled) {
                     const bdHsLine = `H.S. CODE NO.${prod.hsCode || ''} (BD)`;
                     const indHsLine = `H.S. CODE NO.${prod.hsCodeInd} (IND)`;

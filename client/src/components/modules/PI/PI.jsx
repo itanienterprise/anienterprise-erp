@@ -121,15 +121,6 @@ function PI({
         toastTimerRef.current = setTimeout(() => setToast(null), duration);
     };
 
-    const getIndHsCodeDefault = () => {
-        try {
-            const saved = localStorage.getItem('pi_showIndHsCode_default');
-            return saved !== null ? saved !== 'false' : true;
-        } catch {
-            return true;
-        }
-    };
-
     const [formData, setFormData] = useState({
         date: '',
         validityDate: '',
@@ -149,8 +140,8 @@ function PI({
         totalFreight: '',
         grandTotal: '',
         grandTotalQuantity: '',
-        showIndHsCode: getIndHsCodeDefault(),
-        productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: getIndHsCodeDefault() }],
+        showIndHsCode: false,
+        productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: false }],
         invoiceStyle: 'Style 1 SAA',
         port: '',
         placeOfReceipt: '',
@@ -238,6 +229,12 @@ function PI({
     };
 
     const [piFilters, setPiFilters] = useState(initialPiFilterState);
+
+    useEffect(() => {
+        try {
+            localStorage.removeItem('pi_showIndHsCode_default');
+        } catch {}
+    }, []);
 
     useEffect(() => {
         if (piFilters.quickRange && piFilters.quickRange !== 'custom') {
@@ -968,7 +965,7 @@ function PI({
                 updated.amount = list[0].amount || '';
                 updated.freight = list[0].freight || '';
                 updated.totalFreight = list[0].totalFreight || '';
-                updated.showIndHsCode = list[0].showIndHsCode !== false;
+                updated.showIndHsCode = list[0].showIndHsCode === true;
             }
 
             return updated;
@@ -988,7 +985,7 @@ function PI({
                     amount: '',
                     freight: currentList.length > 0 ? currentList[0].freight : '',
                     totalFreight: '',
-                    showIndHsCode: getIndHsCodeDefault()
+                    showIndHsCode: false
                 }
             ];
             return {
@@ -1222,7 +1219,7 @@ function PI({
                             currentProducts.splice(prodIdx, 1);
                         }
                         if (currentProducts.length === 0) {
-                            currentProducts.push({ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: getIndHsCodeDefault() });
+                            currentProducts.push({ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: false });
                         }
                         updated.productsList = currentProducts;
                     } else {
@@ -1243,7 +1240,7 @@ function PI({
                             amount: '',
                             freight: '',
                             totalFreight: '',
-                            showIndHsCode: getIndHsCodeDefault(),
+                            showIndHsCode: false,
                             _fromIp: value
                         };
 
@@ -1474,7 +1471,7 @@ function PI({
 
         const submissionData = {
             ...formData,
-            showIndHsCode: formData.showIndHsCode !== undefined ? formData.showIndHsCode : (formData.productsList?.[0]?.showIndHsCode !== false),
+            showIndHsCode: formData.showIndHsCode !== undefined ? formData.showIndHsCode === true : (formData.productsList?.[0]?.showIndHsCode === true),
             grandTotal: calculatedGrandTotal > 0 ? calculatedGrandTotal.toFixed(2) : '',
             grandTotalQuantity: calculatedGrandTotalQuantity > 0 ? calculatedGrandTotalQuantity.toFixed(2) : '',
             entryBy: editingId ? (formData.entryBy || currentUser?.username || currentUser?.id || currentUser?.employeeId || '') : (currentUser?.username || currentUser?.id || currentUser?.employeeId || ''),
@@ -1613,8 +1610,8 @@ function PI({
             totalFreight: '',
             grandTotal: '',
             grandTotalQuantity: '',
-            showIndHsCode: getIndHsCodeDefault(),
-            productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: getIndHsCodeDefault() }],
+            showIndHsCode: false,
+            productsList: [{ productName: '', hsCode: '', quantity: '', rate: '', amount: '', freight: '', totalFreight: '', showIndHsCode: false }],
             port: '',
             placeOfReceipt: '',
             portOfLoading: 'ANY PLACE OF INDIA',
@@ -1673,7 +1670,7 @@ function PI({
 
     const handleEdit = (record) => {
         const loadedList = record.productsList && record.productsList.length > 0
-            ? record.productsList.map(p => ({ ...p, showIndHsCode: p.showIndHsCode !== undefined ? p.showIndHsCode : true }))
+            ? record.productsList.map(p => ({ ...p, showIndHsCode: p.showIndHsCode !== undefined ? p.showIndHsCode === true : false }))
             : [{
                 productName: record.productName || '',
                 hsCode: record.hsCode || '',
@@ -1682,7 +1679,7 @@ function PI({
                 amount: record.amount || '',
                 freight: record.freight || '',
                 totalFreight: record.totalFreight || '',
-                showIndHsCode: record.showIndHsCode !== undefined ? record.showIndHsCode : true
+                showIndHsCode: record.showIndHsCode !== undefined ? record.showIndHsCode === true : false
             }];
 
         const parsedIpNumbers = record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
@@ -1805,7 +1802,7 @@ function PI({
 
     function getPiProductsList(pi) {
         if (pi.productsList && pi.productsList.length > 0) {
-            return pi.productsList.map(p => ({ ...p, showIndHsCode: p.showIndHsCode !== undefined ? p.showIndHsCode : getIndHsCodeDefault() }));
+            return pi.productsList.map(p => ({ ...p, showIndHsCode: p.showIndHsCode !== undefined ? p.showIndHsCode === true : false }));
         }
         return [{
             productName: pi.productName || '',
@@ -1815,7 +1812,7 @@ function PI({
             amount: pi.amount || '',
             freight: pi.freight || '',
             totalFreight: pi.totalFreight || '',
-            showIndHsCode: pi.showIndHsCode !== undefined ? pi.showIndHsCode : getIndHsCodeDefault()
+            showIndHsCode: pi.showIndHsCode !== undefined ? pi.showIndHsCode === true : false
         }];
     }
 
@@ -3772,11 +3769,8 @@ function PI({
                                                         <input
                                                             type="radio"
                                                             name={`showIndHsCode_${idx}`}
-                                                            checked={item.showIndHsCode !== false}
-                                                            onChange={() => {
-                                                                try { localStorage.setItem('pi_showIndHsCode_default', 'true'); } catch {}
-                                                                handleProductFieldChange(idx, 'showIndHsCode', true);
-                                                            }}
+                                                            checked={item.showIndHsCode === true}
+                                                            onChange={() => handleProductFieldChange(idx, 'showIndHsCode', true)}
                                                             className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                                                         />
                                                         <span>Enable</span>
@@ -3785,11 +3779,8 @@ function PI({
                                                         <input
                                                             type="radio"
                                                             name={`showIndHsCode_${idx}`}
-                                                            checked={item.showIndHsCode === false}
-                                                            onChange={() => {
-                                                                try { localStorage.setItem('pi_showIndHsCode_default', 'false'); } catch {}
-                                                                handleProductFieldChange(idx, 'showIndHsCode', false);
-                                                            }}
+                                                            checked={item.showIndHsCode !== true}
+                                                            onChange={() => handleProductFieldChange(idx, 'showIndHsCode', false)}
                                                             className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                                                         />
                                                         <span>Disable</span>
