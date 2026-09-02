@@ -184,7 +184,7 @@ const OrderManagement = ({
     });
 
     useEffect(() => {
-        if (saleFilters.quickRange) {
+        if (saleFilters.quickRange && saleFilters.quickRange !== 'custom') {
             localStorage.setItem('order_quick_range_default', saleFilters.quickRange);
         }
     }, [saleFilters.quickRange]);

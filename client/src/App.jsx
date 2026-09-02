@@ -816,7 +816,7 @@ function App() {
   });
 
   useEffect(() => {
-    if (saleFilters.quickRange) {
+    if (saleFilters.quickRange && saleFilters.quickRange !== 'custom') {
       localStorage.setItem('sale_quick_range_default', saleFilters.quickRange);
     }
   }, [saleFilters.quickRange]);

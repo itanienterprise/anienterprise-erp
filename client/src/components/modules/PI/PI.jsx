@@ -230,7 +230,7 @@ function PI({
     const [piFilters, setPiFilters] = useState(initialPiFilterState);
 
     useEffect(() => {
-        if (piFilters.quickRange) {
+        if (piFilters.quickRange && piFilters.quickRange !== 'custom') {
             localStorage.setItem('pi_quick_range_default', piFilters.quickRange);
         }
     }, [piFilters.quickRange]);
@@ -2539,7 +2539,7 @@ function PI({
                                     <div className="space-y-5">
                                         {/* Quick Range */}
                                         <div className="space-y-2 text-center">
-                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Quick Range</label>
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">FILTER BY RANGE</label>
                                             <div className="flex flex-wrap justify-center gap-2">
                                                 {['all', 'weekly', 'monthly', 'yearly'].map(range => (
                                                     <button
