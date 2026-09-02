@@ -648,7 +648,7 @@ export const generatePI2PDF = (record) => {
                     // Erase top border so it merges with the empty header box
                     doc.setDrawColor(255, 255, 255);
                     doc.setLineWidth(1.5);
-                    doc.line(data.cell.x + 0.5, data.cell.y, data.cell.x + data.cell.width - 0.5, data.cell.y);
+                    doc.line(data.cell.x + 0.1, data.cell.y, data.cell.x + data.cell.width - 0.1, data.cell.y);
                     doc.setDrawColor(0, 0, 0);
                     doc.setLineWidth(0.1);
                 }
@@ -657,14 +657,14 @@ export const generatePI2PDF = (record) => {
                 const cellY = data.cell.y;
                 const cellWidth = data.cell.width;
                 const centerX = cellX + cellWidth / 2;
-                let drawY = pIdx === 0 ? cellY - 1 : cellY + 5;
+                let drawY = pIdx === 0 ? cellY - 3 : cellY + 5;
 
                 const numProds = productsList.length;
-                let pNameSize = 20, hsCodeFS = 12, nameGap = 7.5;
+                let pNameSize = 16, hsCodeFS = 10, nameGap = 7;
                 if (numProds === 2) {
-                    pNameSize = 14; hsCodeFS = 11; nameGap = 6.5;
+                    pNameSize = 13; hsCodeFS = 9; nameGap = 6;
                 } else if (numProds >= 3) {
-                    pNameSize = 12; hsCodeFS = 10; nameGap = 5.5;
+                    pNameSize = 11; hsCodeFS = 8; nameGap = 5;
                 }
 
                 // Product Name — large, bold, centered
@@ -675,18 +675,20 @@ export const generatePI2PDF = (record) => {
                 // Add underline under product name
                 const pWidth = doc.getTextWidth(pName);
                 doc.setLineWidth(0.3);
-                doc.line(centerX - pWidth / 2, drawY + 3, centerX + pWidth / 2, drawY + 3);
+                doc.line(centerX - pWidth / 2, drawY + 1.8, centerX + pWidth / 2, drawY + 1.8);
                 doc.setLineWidth(0.1);
 
                 drawY += nameGap;
 
                 // HS Code
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(hsCodeFS);
                 const isIndHsEnabled = prod.showIndHsCode !== false && record.showIndHsCode !== false;
                 if (prod.hsCodeInd && isIndHsEnabled) {
                     const bdHsLine = `H.S. CODE NO.${prod.hsCode || ''} (BD)`;
                     const indHsLine = `H.S. CODE NO.${prod.hsCodeInd} (IND)`;
                     doc.text(bdHsLine, centerX, drawY, { align: 'center' });
-                    drawY += 5;
+                    drawY += 4.5;
                     doc.text(indHsLine, centerX, drawY, { align: 'center' });
                 } else {
                     const hsCodeLine = `H.S. CODE NO.${prod.hsCode || ''}`;

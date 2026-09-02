@@ -1023,6 +1023,22 @@ apiRouter.get('/api/stock-baseline/active', async (req, res) => {
       }
     }
 
+    // Auto-heal on deployment / server start: if no baseline is marked 'active',
+    // find the most recent valid un-reverted baseline and automatically activate it.
+    if (!activeBaseline) {
+      for (const b of baselines) {
+        let d = decryptData(b.data);
+        if (d && d.status !== 'reverted') {
+          d.status = 'active';
+          delete d.archivedAt;
+          await StockBaseline.findByIdAndUpdate(b._id, { data: encryptData(d) });
+          activeBaseline = { ...d, _id: b._id, createdAt: b.createdAt };
+          console.log(`[Baseline] Automatically activated most recent valid baseline on deployment: ${b._id}`);
+          break;
+        }
+      }
+    }
+
     res.json(activeBaseline);
   } catch (err) {
     console.error('Error fetching active stock baseline:', err);
