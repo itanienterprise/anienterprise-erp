@@ -5,6 +5,8 @@ import { PlusIcon, SearchIcon, EditIcon, TrashIcon, XIcon, CalendarIcon, DollarS
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateLCExpenseReportPDF } from '../../../utils/pdfGenerator';
+import { generateLCExpenseReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, highlightId, isRequestedNotif }) => {
     const [localHighlightId, setLocalHighlightId] = useState(null);
@@ -21,6 +23,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
     const [showAddModal, setShowAddModal] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [expandedExpenseIdx, setExpandedExpenseIdx] = useState(null);
 
@@ -575,11 +578,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
     };
 
     const handleGenerateReport = () => {
-        const enrichedExpenses = filteredExpenses.map(exp => ({
-            ...exp,
-            displayName: getExpenseDisplayName(exp)
-        }));
-        generateLCExpenseReportPDF(enrichedExpenses, expenseFilters, searchQuery);
+        setShowReportFormatModal(true);
     };
 
     const filteredExpenses = expenses.filter(exp => {
@@ -1274,6 +1273,28 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
                     </form>
                 </div>
             )}
+
+            {/* LC Expense Report Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title="LC Expense Report"
+                subtitle="Select your preferred format to export or preview LC expenses"
+                onExportPdf={() => {
+                    const enrichedExpenses = filteredExpenses.map(exp => ({
+                        ...exp,
+                        displayName: getExpenseDisplayName(exp)
+                    }));
+                    generateLCExpenseReportPDF(enrichedExpenses, expenseFilters, searchQuery);
+                }}
+                onExportExcel={() => {
+                    const enrichedExpenses = filteredExpenses.map(exp => ({
+                        ...exp,
+                        displayName: getExpenseDisplayName(exp)
+                    }));
+                    generateLCExpenseReportExcel(enrichedExpenses, expenseFilters, searchQuery);
+                }}
+            />
         </div>
     );
 };

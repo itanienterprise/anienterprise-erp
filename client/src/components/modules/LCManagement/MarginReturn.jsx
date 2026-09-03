@@ -23,6 +23,8 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { formatDate } from '../../../utils/helpers';
 import { getLCHistoryTimeline, getMilestoneTotalDollar } from './LCManagement';
 import { generateMarginReturnReportPDF } from '../../../utils/pdfGenerator';
+import { generateMarginReturnReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import { isProductMatch } from '../../../utils/lcValueUtils';
 
 
@@ -51,6 +53,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
     };
     const [marginReturnFilters, setMarginReturnFilters] = useState(initialMarginReturnFilterState);
     const [showFilterPanel, setShowFilterPanel] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
     const lcFilterRef = useRef(null);
@@ -233,7 +236,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
     };
 
     const handleGenerateReport = () => {
-        generateMarginReturnReportPDF(filteredRecords, marginReturnFilters, totals, lcMarginMap, searchQuery);
+        setShowReportFormatModal(true);
     };
 
     const fetchData = async () => {
@@ -1500,6 +1503,20 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                 </div>,
                 document.body
             )}
+
+            {/* Margin Return Report Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title="Margin Return Report"
+                subtitle="Select your preferred format to export or preview margin returns"
+                onExportPdf={() => {
+                    generateMarginReturnReportPDF(filteredRecords, marginReturnFilters, totals, lcMarginMap, searchQuery);
+                }}
+                onExportExcel={() => {
+                    generateMarginReturnReportExcel(filteredRecords, marginReturnFilters, totals, lcMarginMap, searchQuery);
+                }}
+            />
         </div>
     );
 };

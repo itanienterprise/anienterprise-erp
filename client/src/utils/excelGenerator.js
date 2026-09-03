@@ -1246,6 +1246,570 @@ export const generateInsurancePaymentReportExcel = (payments = [], filters = {},
     }
 };
 
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for LC Management (General Report).
+ * Matches all data, calculations, and layout of the PDF and UI reports.
+ * 
+ * @param {Array} reportData - Formatted LC records
+ * @param {Object} totals - Calculated grand totals
+ * @param {string} searchQuery - Current search filter text
+ * @param {Object} filters - Active filter criteria
+ */
+export const generateLCManagementReportExcel = (reportData = [], totals = {}, searchQuery = '', filters = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['LC MANAGEMENT REPORT (GENERAL)']);
+        rows.push([]);
+
+        // 2. Metadata
+        const currentDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const start = filters?.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters?.endDate ? formatDate(filters.endDate) : 'Present';
+
+        rows.push([
+            'Date Range:',
+            `${start} to ${end}`,
+            '',
+            '',
+            'Printed On:',
+            currentDateStr
+        ]);
+
+        const filterBadges = [];
+        if (searchQuery) filterBadges.push(`Search: "${searchQuery}"`);
+        if (filters?.importerName) filterBadges.push(`Importer: ${filters.importerName}`);
+        if (filters?.exporterName) filterBadges.push(`Exporter: ${filters.exporterName}`);
+        if (filters?.port) filterBadges.push(`Port: ${filters.port}`);
+        if (filters?.productName) filterBadges.push(`Product: ${filters.productName}`);
+        if (filters?.bankName) filterBadges.push(`Bank: ${filters.bankName}`);
+
+        if (filterBadges.length > 0) {
+            rows.push(['Filters Applied:', filterBadges.join('  |  ')]);
+        }
+        rows.push([]);
+
+        // 3. Table Headers
+        const tableHeaders = [
+            'SL',
+            'Date',
+            'L.S. Date',
+            'LC No',
+            'Importer',
+            'Exporter',
+            'Bank',
+            'Port',
+            'Product',
+            'Quantity (KG)',
+            'LC Receive (KG)',
+            'LC Balance (KG)',
+            'Total Value (TK)',
+            'Expense (TK)',
+            'Status'
+        ];
+        rows.push(tableHeaders);
+
+        // 4. Data Rows
+        reportData.forEach((record, index) => {
+            rows.push([
+                index + 1,
+                formatDate(record.openingDate),
+                formatDate(record.latestShipmentDate),
+                String(record.lcNo || '-').trim(),
+                String(record.importerName || '-').trim(),
+                String(record.exporterName || '-').trim(),
+                String(record.bankName || '-').trim(),
+                String(record.port || '-').trim(),
+                String(record.product || '-').trim(),
+                parseFloat(record.qty) || 0,
+                parseFloat(record.received) || 0,
+                parseFloat(record.bal) || 0,
+                parseFloat(record.val) || 0,
+                record.exp > 0 ? parseFloat(record.exp) : 0,
+                String(record.status || 'Opened')
+            ]);
+        });
+
+        // 5. Grand Total Row
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            totals.totalQty || 0,
+            totals.totalReceived || 0,
+            totals.totalBal || 0,
+            totals.totalVal || 0,
+            totals.totalExp || 0,
+            ''
+        ]);
+
+        // 6. Build Worksheet & Workbook
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 14 }, // Date
+            { wch: 14 }, // L.S. Date
+            { wch: 18 }, // LC No
+            { wch: 26 }, // Importer
+            { wch: 26 }, // Exporter
+            { wch: 16 }, // Bank
+            { wch: 16 }, // Port
+            { wch: 24 }, // Product
+            { wch: 16 }, // Qty
+            { wch: 16 }, // Received
+            { wch: 16 }, // Balance
+            { wch: 18 }, // Total Value
+            { wch: 16 }, // Expense
+            { wch: 14 }  // Status
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'General Report');
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const fileName = `LC_General_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        console.error('Error exporting LC Management General Excel report:', err);
+        alert(`Failed to generate LC General Excel report: ${err.message}`);
+    }
+};
+
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for LC Bill Report.
+ * Matches all data, calculations, and layout of the PDF and UI reports.
+ * 
+ * @param {Array} reportData - Formatted LC bill records
+ * @param {Object} totals - Calculated grand totals
+ * @param {string} searchQuery - Current search filter text
+ * @param {Object} filters - Active filter criteria
+ */
+export const generateLCBillReportExcel = (reportData = [], totals = {}, searchQuery = '', filters = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['LC BILL REPORT']);
+        rows.push([]);
+
+        // 2. Metadata
+        const currentDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const start = filters?.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters?.endDate ? formatDate(filters.endDate) : 'Present';
+
+        rows.push([
+            'Date Range:',
+            `${start} to ${end}`,
+            '',
+            '',
+            'Printed On:',
+            currentDateStr
+        ]);
+
+        const filterBadges = [];
+        if (searchQuery) filterBadges.push(`Search: "${searchQuery}"`);
+        if (filters?.importerName) filterBadges.push(`Importer: ${filters.importerName}`);
+        if (filters?.exporterName) filterBadges.push(`Exporter: ${filters.exporterName}`);
+        if (filters?.port) filterBadges.push(`Port: ${filters.port}`);
+        if (filters?.productName) filterBadges.push(`Product: ${filters.productName}`);
+        if (filters?.bankName) filterBadges.push(`Bank: ${filters.bankName}`);
+
+        if (filterBadges.length > 0) {
+            rows.push(['Filters Applied:', filterBadges.join('  |  ')]);
+        }
+        rows.push([]);
+
+        // 3. Table Headers
+        const tableHeaders = [
+            'SL',
+            'Date',
+            'LC No',
+            'Importer',
+            'Exporter',
+            'Bank',
+            'Product',
+            'Bank Bill (TK)',
+            'Margin Bill (TK)',
+            'C&F Bill (TK)',
+            'Insu. Bill (TK)',
+            'Other (TK)',
+            'Total Bill (TK)',
+            'Paid Bill (TK)',
+            'Remarks'
+        ];
+        rows.push(tableHeaders);
+
+        // 4. Data Rows
+        const sortedReportData = [...reportData].sort((a, b) => new Date(a.date || a.openingDate || 0) - new Date(b.date || b.openingDate || 0));
+
+        sortedReportData.forEach((record, index) => {
+            rows.push([
+                index + 1,
+                formatDate(record.date),
+                String(record.lcNo || '-').trim(),
+                String(record.importer || '-').trim(),
+                String(record.exporter || '-').trim(),
+                String(record.bank || '-').trim(),
+                String(record.product || '-').trim(),
+                record.bankCharges > 0 ? record.bankCharges : 0,
+                record.marginBill > 0 ? record.marginBill : 0,
+                record.cnfBill > 0 ? record.cnfBill : 0,
+                record.insuranceBill > 0 ? record.insuranceBill : 0,
+                record.other > 0 ? record.other : 0,
+                record.totalBill > 0 ? record.totalBill : 0,
+                record.paidBill > 0 ? record.paidBill : 0,
+                record.remarks || '-'
+            ]);
+        });
+
+        // 5. Grand Total Row
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            totals.totalBankCharges || 0,
+            totals.totalMarginBill || 0,
+            totals.totalCnfBill || 0,
+            totals.totalInsuranceBill || 0,
+            totals.totalOther || 0,
+            totals.totalBill || 0,
+            totals.totalPaidBill || 0,
+            ''
+        ]);
+
+        // 6. Build Worksheet & Workbook
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 14 }, // Date
+            { wch: 18 }, // LC No
+            { wch: 26 }, // Importer
+            { wch: 26 }, // Exporter
+            { wch: 16 }, // Bank
+            { wch: 22 }, // Product
+            { wch: 16 }, // Bank Bill
+            { wch: 16 }, // Margin Bill
+            { wch: 16 }, // C&F Bill
+            { wch: 16 }, // Insu. Bill
+            { wch: 14 }, // Other
+            { wch: 18 }, // Total Bill
+            { wch: 18 }, // Paid Bill
+            { wch: 24 }  // Remarks
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Bill Report');
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const fileName = `LC_Bill_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        console.error('Error exporting LC Bill Excel report:', err);
+        alert(`Failed to generate LC Bill Excel report: ${err.message}`);
+    }
+};
+
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for LC Expense Report.
+ * Matches all data, calculations, and layout of the PDF and UI reports.
+ * 
+ * @param {Array} expenses - Filtered and enriched LC expenses
+ * @param {Object} filters - Active filter settings
+ * @param {string} searchQuery - Search query string
+ */
+export const generateLCExpenseReportExcel = (expenses = [], filters = {}, searchQuery = '') => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['LC EXPENSE REPORT']);
+        rows.push([]);
+
+        // 2. Metadata
+        const printDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const start = filters?.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters?.endDate ? formatDate(filters.endDate) : 'Present';
+
+        rows.push([
+            'Date Range:',
+            `${start} to ${end}`,
+            '',
+            '',
+            'Printed On:',
+            printDateStr
+        ]);
+
+        const filterBadges = [];
+        if (searchQuery) filterBadges.push(`Search: "${searchQuery}"`);
+        if (filters?.expenseHead) filterBadges.push(`Expense Head: ${filters.expenseHead}`);
+        if (filters?.lcNo) filterBadges.push(`LC No: ${filters.lcNo}`);
+        if (filters?.bankName) filterBadges.push(`Bank: ${filters.bankName}`);
+        if (filters?.cnfAgent) filterBadges.push(`C&F Agent: ${filters.cnfAgent}`);
+        if (filters?.insuranceCompany) filterBadges.push(`Insurance Co: ${filters.insuranceCompany}`);
+
+        if (filterBadges.length > 0) {
+            rows.push(['Filters Applied:', filterBadges.join('  |  ')]);
+        }
+
+        rows.push(['Total Records:', expenses.length]);
+        rows.push([]);
+
+        // 3. Table Headers
+        const tableHeaders = ['SL', 'Date', 'LC No', 'Expense Head', 'Name', 'Remarks', 'Amount (TK)'];
+        rows.push(tableHeaders);
+
+        // 4. Data Rows & Total Calculation
+        const sortedExpenses = [...expenses].sort((a, b) => new Date(a.date || a.createdAt || 0) - new Date(b.date || b.createdAt || 0));
+        let grandTotal = 0;
+
+        sortedExpenses.forEach((exp, idx) => {
+            const amt = parseFloat(exp.amount) || 0;
+            grandTotal += amt;
+
+            rows.push([
+                idx + 1,
+                formatDate(exp.date),
+                String(exp.lcNo || '-').trim(),
+                String(exp.expenseHead || '-').trim(),
+                String(exp.displayName || exp.name || exp.bankName || exp.cnfAgent || '-').trim(),
+                String(exp.remarks || exp.description || '-').trim(),
+                amt > 0 ? amt : 0
+            ]);
+        });
+
+        // 5. Grand Total Row
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            grandTotal > 0 ? grandTotal : 0
+        ]);
+
+        // 6. Build Worksheet & Workbook
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 8 },  // SL
+            { wch: 14 }, // Date
+            { wch: 18 }, // LC No
+            { wch: 24 }, // Expense Head
+            { wch: 24 }, // Name
+            { wch: 28 }, // Remarks
+            { wch: 18 }  // Amount
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'LC Expenses');
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const fileName = `LC_Expense_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        console.error('Error exporting LC Expense Excel report:', err);
+        alert(`Failed to generate LC Expense Excel report: ${err.message}`);
+    }
+};
+
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for Margin Return Report.
+ * Matches all data, calculations, and layout of the PDF and UI reports.
+ * 
+ * @param {Array} records - Filtered margin return records
+ * @param {Object} filters - Active filter settings
+ * @param {Object} totals - Precalculated totals
+ * @param {Object} lcMarginMap - Map of lcId to LC details
+ * @param {string} searchQuery - Search query string
+ */
+export const generateMarginReturnReportExcel = (records = [], filters = {}, totals = {}, lcMarginMap = {}, searchQuery = '') => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['MARGIN RETURN REPORT']);
+        rows.push([]);
+
+        // 2. Metadata
+        const printDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const start = filters?.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters?.endDate ? formatDate(filters.endDate) : 'Present';
+
+        rows.push([
+            'Date Range:',
+            `${start} to ${end}`,
+            '',
+            '',
+            'Printed On:',
+            printDateStr
+        ]);
+
+        const filterBadges = [];
+        if (searchQuery) filterBadges.push(`Search: "${searchQuery}"`);
+        if (filters?.lcNo) filterBadges.push(`LC No: ${filters.lcNo}`);
+        if (filters?.importerName) filterBadges.push(`Importer: ${filters.importerName}`);
+        if (filters?.productName) filterBadges.push(`Product: ${filters.productName}`);
+        if (filters?.bankName) filterBadges.push(`Bank: ${filters.bankName}`);
+
+        if (filterBadges.length > 0) {
+            rows.push(['Filters Applied:', filterBadges.join('  |  ')]);
+        }
+
+        if (totals?.totalMarginPaid !== undefined) {
+            rows.push([
+                'Total Margin Paid (TK):', totals.totalMarginPaid || 0,
+                '',
+                'Total Returned (TK):', totals.totalReturned || 0,
+                '',
+                'Pending Margin (TK):', totals.totalPending || 0
+            ]);
+        }
+
+        rows.push(['Total Records:', records.length]);
+        rows.push([]);
+
+        // 3. Table Headers
+        const tableHeaders = ['SL', 'Date', 'LC No', 'Importer', 'Product', 'Bank', 'Branch', 'A/C No', 'Return Amount (TK)', 'Remarks'];
+        rows.push(tableHeaders);
+
+        // 4. Data Rows & Total Calculation
+        const sortedRecords = [...records].sort((a, b) => new Date(a.returnDate || a.createdAt || 0) - new Date(b.returnDate || b.createdAt || 0));
+        let grandTotal = 0;
+
+        sortedRecords.forEach((r, idx) => {
+            const lcDetails = lcMarginMap[r.lcId] || {};
+            const amt = parseFloat(r.returnAmount) || 0;
+            grandTotal += amt;
+
+            rows.push([
+                idx + 1,
+                formatDate(r.returnDate),
+                String(r.lcNo || '-').trim(),
+                String(r.importerName || lcDetails.importerName || '-').trim(),
+                String(lcDetails.productName || r.productName || '-').trim(),
+                String(r.bankName || lcDetails.bankName || '-').trim(),
+                String(lcDetails.bankBranch || r.bankBranch || '-').trim(),
+                String(lcDetails.accountNo || r.accountNo || '-').trim(),
+                amt > 0 ? amt : 0,
+                String(r.remarks || '-').trim()
+            ]);
+        });
+
+        // 5. Grand Total Row
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            grandTotal > 0 ? grandTotal : 0,
+            ''
+        ]);
+
+        // 6. Build Worksheet & Workbook
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 8 },  // SL
+            { wch: 14 }, // Date
+            { wch: 18 }, // LC No
+            { wch: 26 }, // Importer
+            { wch: 24 }, // Product
+            { wch: 18 }, // Bank
+            { wch: 18 }, // Branch
+            { wch: 20 }, // A/C No
+            { wch: 20 }, // Return Amount
+            { wch: 26 }  // Remarks
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Margin Returns');
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const fileName = `Margin_Return_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        console.error('Error exporting Margin Return Excel report:', err);
+        alert(`Failed to generate Margin Return Excel report: ${err.message}`);
+    }
+};
+
+
+
+
 
 
 

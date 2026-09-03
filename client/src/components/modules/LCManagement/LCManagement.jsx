@@ -10,6 +10,8 @@ import {
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { decryptData } from '../../../utils/encryption';
 import { generateLCManagementReportPDF, generateLCBillReportPDF } from '../../../utils/pdfGenerator';
+import { generateLCManagementReportExcel, generateLCBillReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getCogNetBillBdt, isProductMatch } from '../../../utils/lcValueUtils';
@@ -5087,6 +5089,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const [localHighlightId, setLocalHighlightId] = useState(null);
     const activeHighlightId = highlightId || localHighlightId;
     const [isRequestedOnly, setIsRequestedOnly] = useState(false);
+    const [lcReportModalType, setLcReportModalType] = useState(null);
     
     const [lcRecords, setLcRecords] = useState([]);
     const [banks, setBanks] = useState([]);
@@ -7830,7 +7833,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         );
     };
 
-    const generatePDFReport = () => {
+    const generatePDFReport = (isExcel = false) => {
         const recordsToUse = [...sortedRecords].sort((a, b) => new Date(a.openingDate || a.createdAt || 0) - new Date(b.openingDate || b.createdAt || 0));
         const reportData = recordsToUse.map(record => {
             const adj = getAdjustedLcValues(record);
@@ -7873,15 +7876,24 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
         const totalBillValueUsd = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).billValueUsd || 0), 0);
         const totalLessDollar = recordsToUse.reduce((sum, r) => sum + (getAdjustedLcValues(r).lessDollar || 0), 0);
 
-        generateLCManagementReportPDF(
-            reportData,
-            { totalQty, totalReceived, totalVal, totalBal, totalExp, totalBillValueUsd, totalLessDollar },
-            searchQuery,
-            lcFilters
-        );
+        if (isExcel) {
+            generateLCManagementReportExcel(
+                reportData,
+                { totalQty, totalReceived, totalVal, totalBal, totalExp, totalBillValueUsd, totalLessDollar },
+                searchQuery,
+                lcFilters
+            );
+        } else {
+            generateLCManagementReportPDF(
+                reportData,
+                { totalQty, totalReceived, totalVal, totalBal, totalExp, totalBillValueUsd, totalLessDollar },
+                searchQuery,
+                lcFilters
+            );
+        }
     };
 
-    const generateBillReport = () => {
+    const generateBillReport = (isExcel = false) => {
         const cleanLc = (no) => String(no || '').trim().toLowerCase();
         const recordsToUse = [...sortedRecords].sort((a, b) => new Date(a.openingDate || a.createdAt || 0) - new Date(b.openingDate || b.createdAt || 0));
 
@@ -8057,7 +8069,11 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             totalPaidBill: reportData.reduce((s, r) => s + r.paidBill, 0)
         };
 
-        generateLCBillReportPDF(reportData, totals, searchQuery, lcFilters);
+        if (isExcel) {
+            generateLCBillReportExcel(reportData, totals, searchQuery, lcFilters);
+        } else {
+            generateLCBillReportPDF(reportData, totals, searchQuery, lcFilters);
+        }
     };
 
     const amendmentDisplayProducts = selectedPiForAmendment
@@ -8363,8 +8379,8 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
                         {/* Report Dropdown Button & Menu */}
                         <ReportDropdown
-                            onGeneralReport={generatePDFReport}
-                            onBillReport={generateBillReport}
+                            onGeneralReport={() => setLcReportModalType('general')}
+                            onBillReport={() => setLcReportModalType('bill')}
                         />
 
                         {canManage && (
@@ -12145,6 +12161,28 @@ style={
                     </div>
                 </div>
             )}
+
+            {/* LC Management General / Bill Report Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={!!lcReportModalType}
+                onClose={() => setLcReportModalType(null)}
+                title={lcReportModalType === 'bill' ? 'LC Bill Report' : 'LC Management General Report'}
+                subtitle={lcReportModalType === 'bill' ? 'Select format to export or preview Bank, Margin, C&F & other bills' : 'Select format to export or preview LC status, quantities & balances'}
+                onExportPdf={() => {
+                    if (lcReportModalType === 'bill') {
+                        generateBillReport(false);
+                    } else {
+                        generatePDFReport(false);
+                    }
+                }}
+                onExportExcel={() => {
+                    if (lcReportModalType === 'bill') {
+                        generateBillReport(true);
+                    } else {
+                        generatePDFReport(true);
+                    }
+                }}
+            />
         </div>
     );
 };
