@@ -812,7 +812,7 @@ function App() {
   const [salesReportSearchQuery, setSalesReportSearchQuery] = useState('');
   const [saleFilters, setSaleFilters] = useState(() => {
     const saved = localStorage.getItem('sale_quick_range_default') || 'all';
-    return { quickRange: saved, selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' };
+    return { quickRange: saved, selectedMonth: new Date().getMonth() + 1, selectedYear: new Date().getFullYear(), startDate: '', endDate: '', companyName: '', invoiceNo: '', lcNo: '', port: '', productName: '', brand: '', indCnf: '', bdCnf: '' };
   });
 
   useEffect(() => {
@@ -3234,11 +3234,16 @@ function App() {
         isOpen={showSalesReport}
         onClose={() => setShowSalesReport(false)}
         salesRecords={filteredSalesForReport}
+        allSalesRecords={salesRecords}
         saleFilters={saleFilters}
         setSaleFilters={setSaleFilters}
         searchQuery={salesReportSearchQuery}
         saleType={currentView === 'order-sale-section' ? 'Order' : currentView === 'border-sale-section' ? 'Border' : 'General'}
         products={products}
+        stockRecords={allStockRecords && allStockRecords.length > 0 ? allStockRecords : stockRecords}
+        warehouseData={warehouseData}
+        damages={damages}
+        activeBaseline={activeBaseline}
       />
 
       {showProfile && (

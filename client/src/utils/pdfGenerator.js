@@ -3227,7 +3227,7 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
     }
 };
 
-export const generateSalesReportPDF = (reportData, filters, summary, saleType = 'General') => {
+export const generateSalesReportPDF = async (reportData, filters, summary, saleType = 'General', reportTab = 'general', productWiseData = [], productWiseTotals = null, lcWiseData = [], lcWiseTotals = null) => {
     try {
         const isOrderReport = (saleType || '').toUpperCase() === 'ORDER';
         const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
@@ -3237,40 +3237,104 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
         const pageHeight = doc.internal.pageSize.height;
         const margin = 5;
 
-        // --- Header ---
-        doc.setFontSize(22);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0);
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+        // Load company logo (same as Stock Report)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
 
-        doc.setFontSize(10);
+        // --- Header (matching Stock Report) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill (no black border)
+        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
 
-        // Separator
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, 32, pageWidth - margin, 32);
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
 
         // Report Title
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
-        doc.setFontSize(12);
+        const reportTitleText = reportTab === 'lc_wise'
+            ? 'LC WISE SALES REPORT'
+            : reportTab === 'product_wise'
+            ? 'PRODUCT WISE SALES REPORT'
+            : (saleType || '').toUpperCase() === 'ORDER' ? 'ORDER REPORT' : `${(saleType || '').toUpperCase()} SALES REPORT`;
+
+        // Title badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - 50, y, 100, 7, 2, 2, 'F');
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        const reportTitleText = (saleType || '').toUpperCase() === 'ORDER' ? 'ORDER REPORT' : `${(saleType || '').toUpperCase()} SALES REPORT`;
-        doc.text(reportTitleText, pageWidth / 2, 34, { align: 'center' });
+        doc.setTextColor(255, 255, 255);
+        doc.text(reportTitleText, pageWidth / 2, y + 5, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 47;
+        let yPos = y + 12;
         doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
 
         // Date Range
         doc.setFont('helvetica', 'bold');
         doc.text("Date Range:", margin, yPos);
         doc.setFont('helvetica', 'normal');
-        let dateRangeStr = `${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`;
+        let dateRangeStr = (filters.quickRange === 'all' || (!filters.startDate && !filters.endDate)) ? 'All Time' : `${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`;
         if (filters.quickRange && filters.quickRange !== 'all') {
             if (filters.quickRange === 'weekly') {
                 dateRangeStr = 'Weekly (Current Week)';
@@ -3298,8 +3362,268 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
             doc.text(filters.companyName, margin + 25, yPos);
         }
 
+        if (filters.lcNo) {
+            yPos += 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text("LC No:", margin, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.text(filters.lcNo, margin + 25, yPos);
+        }
+
         const dateStr = formatDate(new Date().toISOString().split('T')[0]);
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, y + 12, { align: 'right' });
+
+        if (reportTab === 'lc_wise') {
+            const lcList = lcWiseData || [];
+            const lcTableRows = [];
+            lcList.forEach((item, idx) => {
+                const row = [
+                    { content: String(idx + 1), styles: { halign: 'center' } },
+                    { content: item.lcNo, styles: { halign: 'center', fontStyle: 'bold' } },
+                    { content: item.product, styles: { fontStyle: 'bold' } },
+                    item.brand || '-',
+                    { content: item.pBag > 0 ? Number(item.pBag.toFixed(2)).toLocaleString('en-US') : '-', styles: { halign: 'right' } },
+                    { content: item.pQty > 0 ? Number(item.pQty.toFixed(2)).toLocaleString('en-US') : '0', styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: item.sBag > 0 ? Number(item.sBag.toFixed(2)).toLocaleString('en-US') : '-', styles: { halign: 'right' } },
+                    { content: item.sQty > 0 ? Number(item.sQty.toFixed(2)).toLocaleString('en-US') : '0', styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: item.rBag > 0 ? Number(item.rBag.toFixed(2)).toLocaleString('en-US') : '0', styles: { halign: 'right', fontStyle: 'bold', textColor: item.rBag < 0 ? [200, 0, 0] : [0, 0, 0] } },
+                    { content: item.rQty > 0 ? Number(item.rQty.toFixed(2)).toLocaleString('en-US') : '0', styles: { halign: 'right', fontStyle: 'bold', textColor: item.rQty < 0 ? [200, 0, 0] : [0, 0, 0] } }
+                ];
+                lcTableRows.push(row);
+            });
+
+            const tPBag = lcWiseTotals?.pBag ?? lcList.reduce((s, i) => s + (parseFloat(i.pBag) || 0), 0);
+            const tPQty = lcWiseTotals?.pQty ?? lcList.reduce((s, i) => s + (parseFloat(i.pQty) || 0), 0);
+            const tSBag = lcWiseTotals?.sBag ?? lcList.reduce((s, i) => s + (parseFloat(i.sBag) || 0), 0);
+            const tSQty = lcWiseTotals?.sQty ?? lcList.reduce((s, i) => s + (parseFloat(i.sQty) || 0), 0);
+            const tRBag = lcWiseTotals?.rBag ?? lcList.reduce((s, i) => s + (parseFloat(i.rBag) || 0), 0);
+            const tRQty = lcWiseTotals?.rQty ?? lcList.reduce((s, i) => s + (parseFloat(i.rQty) || 0), 0);
+
+            const lcFootRow = [[
+                { content: 'GRAND TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: tPBag > 0 ? Number(tPBag.toFixed(2)).toLocaleString('en-US') : '-', styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: Number(tPQty.toFixed(2)).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: tSBag > 0 ? Number(tSBag.toFixed(2)).toLocaleString('en-US') : '-', styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: Number(tSQty.toFixed(2)).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: Number(tRBag.toFixed(2)).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold', textColor: tRBag < 0 ? [200, 0, 0] : [0, 0, 0] } },
+                { content: Number(tRQty.toFixed(2)).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold', textColor: tRQty < 0 ? [200, 0, 0] : [0, 0, 0] } }
+            ]];
+
+            autoTable(doc, {
+                startY: yPos + 10,
+                head: [
+                    [
+                        { content: 'Sl', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+                        { content: 'LC No', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+                        { content: 'Product', rowSpan: 2, styles: { halign: 'left', valign: 'middle' } },
+                        { content: 'Brand', rowSpan: 2, styles: { halign: 'left', valign: 'middle' } },
+                        { content: 'Purchase', colSpan: 2, styles: { halign: 'center' } },
+                        { content: 'Sales', colSpan: 2, styles: { halign: 'center' } },
+                        { content: 'Remain', colSpan: 2, styles: { halign: 'center' } }
+                    ],
+                    [
+                        { content: 'Qty in Bag', styles: { halign: 'right' } },
+                        { content: 'Qty in KG', styles: { halign: 'right' } },
+                        { content: 'Qty in Bags', styles: { halign: 'right' } },
+                        { content: 'Qty in KG', styles: { halign: 'right' } },
+                        { content: 'Qty in Bags', styles: { halign: 'right' } },
+                        { content: 'Qty in KG', styles: { halign: 'right' } }
+                    ]
+                ],
+                body: lcTableRows,
+                foot: lcFootRow,
+                theme: 'grid',
+                showFoot: 'lastPage',
+                styles: {
+                    fontSize: 9,
+                    cellPadding: 1.5,
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.1,
+                    valign: 'middle',
+                    textColor: [0, 0, 0],
+                    overflow: 'linebreak'
+                },
+                headStyles: {
+                    fillColor: [240, 240, 240],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    lineWidth: 0.1,
+                    lineColor: [0, 0, 0],
+                    fontSize: 9
+                },
+                footStyles: {
+                    fillColor: [240, 240, 240],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    lineWidth: 0.1,
+                    lineColor: [0, 0, 0],
+                    fontSize: 9
+                },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 12 },
+                    1: { halign: 'center', cellWidth: 32 },
+                    2: { cellWidth: 42 },
+                    3: { cellWidth: 42 },
+                    4: { halign: 'right', cellWidth: 26 },
+                    5: { halign: 'right', cellWidth: 28 },
+                    6: { halign: 'right', cellWidth: 26 },
+                    7: { halign: 'right', cellWidth: 28 },
+                    8: { halign: 'right', cellWidth: 25 },
+                    9: { halign: 'right', cellWidth: 26 }
+                },
+                margin: { left: margin, right: margin }
+            });
+
+            let finalY = doc.lastAutoTable.finalY + 15;
+            if (finalY + 15 > pageHeight - margin) {
+                doc.addPage();
+                finalY = margin + 15;
+            }
+
+            const sigWidth = 45;
+            const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+            doc.setDrawColor(0);
+            doc.setLineWidth(0.3);
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0);
+            doc.line(margin, finalY, margin + sigWidth, finalY);
+            doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+            doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+            doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+            doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+            doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+            const pdfOutput = doc.output('blob');
+            const blobURL = URL.createObjectURL(pdfOutput);
+            window.open(blobURL, '_blank');
+            return;
+        }
+
+        if (reportTab === 'product_wise') {
+            const pList = (productWiseData && productWiseData.length > 0) ? productWiseData : (() => {
+                const map = {};
+                reportData.forEach(sale => {
+                    (sale.flatItems || []).forEach(item => {
+                        const prod = (item.productName || '-').trim();
+                        const brand = (item.brand || '-').trim();
+                        if (!map[prod]) map[prod] = {};
+                        if (!map[prod][brand]) {
+                            map[prod][brand] = { productName: prod, brand, bag: 0, quantity: 0, total: 0 };
+                        }
+                        map[prod][brand].bag += (parseFloat(item.bag) || 0);
+                        map[prod][brand].quantity += (parseFloat(item.quantity) || 0);
+                        map[prod][brand].total += (parseFloat(item.total) || 0);
+                    });
+                });
+                const res = [];
+                Object.keys(map).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(pName => {
+                    const bEntries = Object.values(map[pName]).sort((a, b) => a.brand.localeCompare(b.brand, undefined, { sensitivity: 'base' }));
+                    bEntries.forEach((entry, bIdx) => {
+                        res.push({ ...entry, isFirstInProduct: bIdx === 0, productSpan: bEntries.length });
+                    });
+                });
+                return res;
+            })();
+
+            const pTableRows = [];
+            let pSl = 1;
+            pList.forEach((item) => {
+                const row = [];
+                row.push({ content: String(pSl++), styles: { halign: 'center' } });
+                if (item.isFirstInProduct) {
+                    row.push({ content: item.productName, rowSpan: item.productSpan, styles: { fontStyle: 'bold' } });
+                }
+                row.push(item.brand || '-');
+                row.push({ content: item.bag > 0 ? parseFloat(item.bag).toLocaleString('en-US') : '-', styles: { halign: 'right' } });
+                row.push({ content: parseFloat(item.quantity || 0).toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } });
+                row.push({ content: parseFloat(item.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } });
+                pTableRows.push(row);
+            });
+
+            const totalBags = productWiseTotals?.totalBags ?? pList.reduce((s, i) => s + (parseFloat(i.bag) || 0), 0);
+            const totalQty = productWiseTotals?.totalQty ?? pList.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0);
+            const totalAmount = productWiseTotals?.totalAmount ?? pList.reduce((s, i) => s + (parseFloat(i.total) || 0), 0);
+
+            const pFootRow = [[
+                { content: 'GRAND TOTAL', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalBags > 0 ? totalBags.toLocaleString('en-US') : '-', styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalQty.toLocaleString('en-US'), styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]];
+
+            autoTable(doc, {
+                startY: yPos + 10,
+                head: [['SL', 'Product', 'Brand', 'Bag', 'Qty', 'Amount']],
+                body: pTableRows,
+                foot: pFootRow,
+                theme: 'grid',
+                showFoot: 'lastPage',
+                styles: {
+                    fontSize: 9,
+                    cellPadding: 2,
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.1,
+                    valign: 'middle',
+                    textColor: [0, 0, 0],
+                    overflow: 'linebreak'
+                },
+                headStyles: {
+                    fillColor: [240, 240, 240],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    halign: 'center',
+                    fontSize: 9
+                },
+                footStyles: {
+                    fillColor: [240, 240, 240],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    fontSize: 9
+                },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 15 },
+                    1: { cellWidth: 90 },
+                    2: { cellWidth: 65 },
+                    3: { halign: 'right', cellWidth: 35 },
+                    4: { halign: 'right', cellWidth: 35 },
+                    5: { halign: 'right', cellWidth: 47 }
+                },
+                margin: { left: margin, right: margin }
+            });
+
+            // --- Signatures ---
+            let finalY = doc.lastAutoTable.finalY + 15;
+            if (finalY + 15 > pageHeight - margin) {
+                doc.addPage();
+                finalY = margin + 15;
+            }
+
+            const sigWidth = 45;
+            const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
+
+            doc.setDrawColor(0);
+            doc.setLineWidth(0.3);
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0);
+            doc.line(margin, finalY, margin + sigWidth, finalY);
+            doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
+
+            doc.line(margin + sigWidth + sigGap, finalY, margin + sigWidth + sigGap + sigWidth, finalY);
+            doc.text("VERIFIED BY", margin + sigWidth + sigGap + sigWidth / 2, finalY + 5, { align: 'center' });
+
+            doc.line(pageWidth - margin - sigWidth, finalY, pageWidth - margin, finalY);
+            doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - sigWidth / 2, finalY + 5, { align: 'center' });
+
+            const pdfOutput = doc.output('blob');
+            const blobURL = URL.createObjectURL(pdfOutput);
+            window.open(blobURL, '_blank');
+            return;
+        }
 
         // --- Table --- 
         const tableRows = [];
@@ -3599,7 +3923,7 @@ export const generateSalesReportPDF = (reportData, filters, summary, saleType = 
 };
 
 
-export const generateCustomerReportPDF = (
+export const generateCustomerReportPDF = async (
     customers,
     typeFilter,
     grandTotalDue,
@@ -3631,57 +3955,116 @@ export const generateCustomerReportPDF = (
             return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
         });
 
-        // --- Header ---
-        doc.setFontSize(22);
-        doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
+        // Load company logo (same as Stock Report)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
 
-        doc.setFontSize(10);
+        // --- Header (matching Stock Report) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill (no black border)
+        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
 
-        // Separator
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, 32, pageWidth - margin, 32);
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
 
-        // Report Title
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 40, 29, 80, 8, 'FD');
-        doc.setFontSize(12);
+        // Title badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        doc.roundedRect((pageWidth / 2) - 40, y, 80, 7, 2, 2, 'F');
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0);
-        doc.text("CUSTOMER BALANCE REPORT", pageWidth / 2, 34, { align: 'center' });
+        doc.setTextColor(255, 255, 255);
+        doc.text("CUSTOMER REPORT", pageWidth / 2, y + 5, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = 47;
-        doc.setFontSize(10);
+        let yPos = y + 13;
+        doc.setFontSize(9);
 
         if (typeFilter && typeFilter !== 'All Customer') {
             doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 0, 0);
             doc.text("Customer Type:", margin, yPos);
             doc.setFont('helvetica', 'normal');
-            doc.text(typeFilter, margin + 30, yPos);
+            doc.text(typeFilter, margin + 26, yPos);
             yPos += 5;
         }
 
         if (asOfDate) {
             doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 0, 0);
             doc.text("Balance As Of:", margin, yPos);
             doc.setFont('helvetica', 'normal');
-            doc.text(formatDate(asOfDate), margin + 30, yPos);
+            doc.text(formatDate(asOfDate), margin + 26, yPos);
             yPos += 5;
         }
 
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
         doc.text("Total Records:", margin, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(customers.length.toString(), margin + 30, yPos);
+        doc.text(displayCustomers.length.toString(), margin + 26, yPos);
 
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, 47, { align: 'right' });
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, y + 13, { align: 'right' });
 
         const getLastTransDay = (customer) => {
             const targetCutoff = asOfDate ? getIsoDateString(asOfDate) : null;

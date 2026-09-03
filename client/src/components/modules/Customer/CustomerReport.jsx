@@ -21,8 +21,8 @@ const CustomerReport = ({
     const [typeFilter, setTypeFilter] = useState('General Customer');
     const [reportDate, setReportDate] = useState(asOfDate || '');
     const [showFilterCard, setShowFilterCard] = useState(false);
-    const mobileFilterContainerRef = useRef(null);
-    const desktopFilterContainerRef = useRef(null);
+    const filterButtonRef = useRef(null);
+    const filterPanelRef = useRef(null);
 
     useEffect(() => {
         setReportDate(asOfDate || '');
@@ -31,9 +31,7 @@ const CustomerReport = ({
     // Click outside listener for filter card
     useEffect(() => {
         const handleClickOutside = (e) => {
-            const inMobile = mobileFilterContainerRef.current && mobileFilterContainerRef.current.contains(e.target);
-            const inDesktop = desktopFilterContainerRef.current && desktopFilterContainerRef.current.contains(e.target);
-            if (!inMobile && !inDesktop) {
+            if (showFilterCard && filterPanelRef.current && !filterPanelRef.current.contains(e.target) && !filterButtonRef.current?.contains(e.target)) {
                 setShowFilterCard(false);
             }
         };
@@ -135,254 +133,108 @@ const CustomerReport = ({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
             <div className="bg-white w-full max-w-5xl max-h-[85vh] sm:max-h-[92vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
-                {/* Modal Header — hidden on print */}
-                
-                {/* MOBILE HEADER LAYOUT (visible on mobile only, hidden on tablet/desktop) */}
-                <div className="flex flex-col gap-3 px-4 py-3.5 border-b border-gray-100 print:hidden sm:hidden w-full">
-                    {/* Top row: Title and Action Buttons */}
-                    <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg">
-                                <BarChartIcon className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-black text-gray-800">Customer Report</h3>
-                                <div className="text-[10px] font-bold text-gray-400">
-                                    {reportDate ? `As of ${formatDate(reportDate)}` : 'Live balances'}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Actions (Filter, Print & X close at top right on mobile) */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0 relative" ref={mobileFilterContainerRef}>
-                            <button
-                                onClick={() => setShowFilterCard(!showFilterCard)}
-                                className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all ${
-                                    showFilterCard || reportDate
-                                        ? 'bg-blue-50 border-blue-300 text-blue-600'
-                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                                }`}
-                                title="Filter"
-                            >
-                                <FunnelIcon className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={handlePrint}
-                                className="w-8 h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
-                            >
-                                <PrinterIcon className="w-4 h-4 text-white" />
-                            </button>
-                            <button
-                                onClick={onClose}
-                                className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors no-print flex-shrink-0"
-                            >
-                                <XIcon className="w-4 h-4 text-gray-500" />
-                            </button>
-
-                            {/* Mobile Filter Card Popup */}
-                            {showFilterCard && (
-                                <div className="absolute right-0 top-10 w-[280px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                    <div className="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
-                                        <h4 className="text-xs font-bold text-gray-800">Filter Report</h4>
-                                        <div className="flex items-center gap-1.5">
-                                            {reportDate && (
-                                                <button
-                                                    onClick={() => setQuickReportDate('clear')}
-                                                    className="text-[11px] font-bold text-gray-500 hover:text-blue-600 px-2 py-0.5 bg-gray-50 rounded"
-                                                >
-                                                    Reset
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={() => setShowFilterCard(false)}
-                                                className="p-1 text-gray-400 hover:text-gray-600 rounded"
-                                            >
-                                                <XIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2.5">
-                                        <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider block">
-                                            Balance As Of Date
-                                        </label>
-                                        <div className="flex flex-wrap gap-1">
-                                            <button
-                                                type="button"
-                                                onClick={() => setQuickReportDate('today')}
-                                                className="px-2 py-1 rounded-md text-[11px] font-semibold border bg-gray-50 border-gray-200 text-gray-600"
-                                            >
-                                                Today
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setQuickReportDate('yesterday')}
-                                                className="px-2 py-1 rounded-md text-[11px] font-semibold border bg-gray-50 border-gray-200 text-gray-600"
-                                            >
-                                                Yesterday
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setQuickReportDate('lastMonthEnd')}
-                                                className="px-2 py-1 rounded-md text-[11px] font-semibold border bg-gray-50 border-gray-200 text-gray-600"
-                                            >
-                                                Last Month End
-                                            </button>
-                                        </div>
-                                        <CustomDatePicker
-                                            value={reportDate || ''}
-                                            onChange={(e) => setReportDate(e.target.value)}
-                                            placeholder="Select Date"
-                                            compact
-                                        />
-                                    </div>
-
-                                    <div className="mt-3 pt-2 border-t border-gray-100">
-                                        <button
-                                            onClick={() => setShowFilterCard(false)}
-                                            className="w-full py-1.5 bg-gray-900 text-white text-xs font-bold rounded-lg shadow-sm"
-                                        >
-                                            Apply
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Search Input — full width on mobile */}
-                    <div className="w-full">
-                        <div className="relative w-full">
-                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            <input
-                                type="text"
-                                placeholder="Search customers..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Type filter tabs — centered on mobile */}
-                    <div className="flex justify-center w-full">
-                        <div className="flex bg-gray-100/50 p-0.5 rounded-xl border border-gray-200/50 text-[11px] overflow-x-auto hide-scrollbar scroll-smooth flex-shrink-0">
-                            {['All Customer', 'General Customer', 'Party Customer'].map(type => (
-                                <button
-                                    key={type}
-                                    onClick={() => setTypeFilter(type)}
-                                    className={`px-3 py-1.5 rounded-md font-bold transition-all whitespace-nowrap ${typeFilter === type
-                                        ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
-                                        : 'text-gray-500 hover:text-gray-700'
-                                        }`}
-                                >
-                                    {type.replace(' Customer', '')}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* DESKTOP HEADER LAYOUT (visible on desktop only, hidden on mobile) */}
-                <div className="hidden sm:flex flex-row items-center justify-between px-8 py-3.5 border-b border-gray-100 print:hidden gap-3 w-full">
-                    <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
-                        <div className="w-10 sm:w-10 h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-xl">
-                            <BarChartIcon className="w-5 h-5 text-blue-600" />
+                {/* Modal Header/Toolbar (Hidden on Print) */}
+                <div className="flex flex-row items-center justify-between px-3 sm:px-8 py-2.5 sm:py-4 border-b border-gray-100 print:hidden gap-1.5 sm:gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-shrink-0">
+                        <div className="w-7 h-7 sm:w-10 sm:h-10 flex-shrink-0 flex items-center justify-center bg-blue-50 rounded-lg sm:rounded-xl">
+                            <BarChartIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-blue-600" />
                         </div>
                         <div>
-                            <h3 className="text-xl font-black text-gray-800 truncate leading-none">Customer Report</h3>
-                            <div className="text-[11px] font-bold text-gray-400 mt-1">
+                            <h3 className="text-xs sm:text-lg lg:text-xl font-black text-gray-800 truncate leading-none">Customer Report</h3>
+                            <div className="text-[9px] sm:text-[11px] font-bold text-gray-400 mt-0.5 sm:mt-1">
                                 {reportDate ? `As of ${formatDate(reportDate)}` : 'Live balances'}
                             </div>
                         </div>
                     </div>
 
-                    {/* Search Input — centered in desktop mode */}
-                    <div className="flex-1 max-w-sm mx-4">
-                        <div className="relative w-full">
-                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                            <input
-                                type="text"
-                                placeholder="Search customers..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                            />
+                    {/* Quick Search Bar */}
+                    <div className="hidden md:flex relative flex-1 max-w-sm mx-4 no-print">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <SearchIcon className="h-4 w-4 text-gray-400" />
                         </div>
+                        <input
+                            type="text"
+                            placeholder="Search customers..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="block w-full pl-10 pr-10 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold placeholder:font-normal"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                            >
+                                <XIcon className="h-4 w-4" />
+                            </button>
+                        )}
                     </div>
 
-                    <div className="flex flex-row items-center gap-3 flex-shrink-0">
-                        {/* Type filter tabs */}
-                        <div className="flex bg-gray-100/50 p-0.5 rounded-xl border border-gray-200/50 text-xs flex-shrink-0">
-                            {['All Customer', 'General Customer', 'Party Customer'].map(type => (
-                                <button
-                                    key={type}
-                                    onClick={() => setTypeFilter(type)}
-                                    className={`px-2.5 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap ${typeFilter === type
-                                        ? 'bg-white text-blue-600 shadow-sm border border-gray-100'
-                                        : 'text-gray-500 hover:text-gray-700'
-                                        }`}
-                                >
-                                    {type.replace(' Customer', '')}
-                                </button>
-                            ))}
+                    <div className="flex items-center justify-end gap-1 sm:gap-3 flex-shrink-0">
+                        <div className="relative group no-print">
+                            <select
+                                value={typeFilter}
+                                onChange={(e) => setTypeFilter(e.target.value)}
+                                className="appearance-none bg-white border border-gray-200 text-gray-700 py-1.5 sm:py-2.5 pl-2.5 sm:pl-4 pr-6 sm:pr-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all cursor-pointer hover:border-gray-300"
+                            >
+                                <option value="All Customer">All Customer</option>
+                                <option value="General Customer">General Customer</option>
+                                <option value="Party Customer">Party Customer</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 sm:px-3 text-gray-400">
+                                <svg className="fill-current h-3.5 w-3.5 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                                </svg>
+                            </div>
                         </div>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-2">
-                            {/* Filter Button & Filter Card Dropdown */}
-                            <div className="relative" ref={desktopFilterContainerRef}>
-                                <button
-                                    onClick={() => setShowFilterCard(!showFilterCard)}
-                                    className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-all shadow-sm ${
-                                        showFilterCard || reportDate
-                                            ? 'bg-blue-50 border-blue-300 text-blue-600 font-semibold'
-                                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                        <div className="relative flex items-center">
+                            <button
+                                ref={filterButtonRef}
+                                onClick={() => setShowFilterCard(!showFilterCard)}
+                                className={`w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl transition-all border ${showFilterCard || reportDate
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-200 hover:bg-blue-50/30'
                                     }`}
-                                    title="Filter"
-                                >
-                                    <FunnelIcon className="w-5 h-5" />
-                                </button>
+                                title="Advance Filter"
+                            >
+                                <FunnelIcon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${showFilterCard || reportDate ? 'text-white' : 'text-gray-400'}`} />
+                            </button>
 
-                                {showFilterCard && (
-                                    <div className="absolute right-0 top-12 w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                        <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
-                                            <h4 className="text-sm font-bold text-gray-800">Filter Report</h4>
+                            {/* Floating Filter Panel */}
+                            {showFilterCard && (
+                                <>
+                                    {/* Backdrop for mobile */}
+                                    <div className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[2005] md:hidden" onClick={() => setShowFilterCard(false)} />
+                                    <div ref={filterPanelRef} className="fixed inset-x-4 top-24 md:absolute md:top-full md:left-auto md:right-0 md:mt-2 w-auto md:w-[22rem] bg-white border border-gray-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[2010] p-4 flex flex-col mb-4 animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 flex-shrink-0">
+                                            <h4 className="font-bold text-gray-900 text-sm">Advance Filter</h4>
                                             <div className="flex items-center gap-2">
                                                 {reportDate && (
                                                     <button
                                                         onClick={() => setQuickReportDate('clear')}
-                                                        className="text-[12px] font-bold text-gray-500 hover:text-blue-600 transition-colors px-2 py-1 bg-gray-50 hover:bg-blue-50 rounded-md"
+                                                        className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-wider"
                                                     >
                                                         Reset
                                                     </button>
                                                 )}
-                                                <button
-                                                    onClick={() => setShowFilterCard(false)}
-                                                    className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                                >
+                                                <button onClick={() => setShowFilterCard(false)} className="text-gray-400 hover:text-gray-600 md:hidden">
                                                     <XIcon className="w-4 h-4" />
                                                 </button>
                                             </div>
                                         </div>
 
                                         <div className="space-y-3">
-                                            <div className="space-y-1.5">
-                                                <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block">
+                                            <div>
+                                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
                                                     Balance As Of Date
                                                 </label>
-                                                <p className="text-xs text-gray-500">
-                                                    View balances calculated up to this date.
-                                                </p>
-
-                                                {/* Quick Presets */}
-                                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                                <div className="flex flex-wrap gap-1 mb-2">
                                                     <button
                                                         type="button"
                                                         onClick={() => setQuickReportDate('today')}
                                                         className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
                                                             reportDate === getLocalDateString(new Date())
-                                                                ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold'
+                                                                ? 'bg-blue-600 border-blue-600 text-white'
                                                                 : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
                                                         }`}
                                                     >
@@ -403,43 +255,62 @@ const CustomerReport = ({
                                                         Last Month End
                                                     </button>
                                                 </div>
-
-                                                <div className="pt-1">
-                                                    <CustomDatePicker
-                                                        value={reportDate || ''}
-                                                        onChange={(e) => setReportDate(e.target.value)}
-                                                        placeholder="Select Date (YYYY-MM-DD)"
-                                                        compact
-                                                    />
-                                                </div>
+                                                <CustomDatePicker
+                                                    value={reportDate || ''}
+                                                    onChange={(e) => setReportDate(e.target.value)}
+                                                    placeholder="Select Date"
+                                                    compact
+                                                />
                                             </div>
-                                        </div>
 
-                                        <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end gap-2">
                                             <button
                                                 onClick={() => setShowFilterCard(false)}
-                                                className="w-full py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95"
+                                                className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all mt-2 flex-shrink-0 active:scale-[0.98]"
                                             >
-                                                Apply Filters
+                                                APPLY FILTERS
                                             </button>
                                         </div>
                                     </div>
-                                )}
-                            </div>
-
-                            <button
-                                onClick={handlePrint}
-                                className="w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
-                            >
-                                <PrinterIcon className="w-5 h-5 text-white" />
-                            </button>
-                            <button
-                                onClick={onClose}
-                                className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 rounded-xl transition-colors no-print flex-shrink-0"
-                            >
-                                <XIcon className="w-6 h-6 text-gray-500" />
-                            </button>
+                                </>
+                            )}
                         </div>
+
+                        <button
+                            onClick={handlePrint}
+                            className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
+                            title="Print"
+                        >
+                            <PrinterIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print flex-shrink-0"
+                            title="Close"
+                        >
+                            <XIcon className="w-3.5 h-3.5 sm:w-6 sm:h-6 text-gray-500" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Mobile Search Bar (Only shown on small screens below md) */}
+                <div className="md:hidden px-3 py-2 border-b border-gray-100 print:hidden bg-gray-50/50">
+                    <div className="relative w-full">
+                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Search customers..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600"
+                            >
+                                <XIcon className="w-3.5 h-3.5" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -447,19 +318,32 @@ const CustomerReport = ({
                 <div className="flex-1 overflow-y-auto p-4 sm:p-12 print:p-4 print:overflow-visible bg-white">
                     <div className="max-w-[1000px] mx-auto space-y-6 sm:space-y-8">
 
-                        {/* Company Header */}
-                        <div className="text-center space-y-1">
-                            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
-                            <p className="text-[12px] sm:text-[14px] text-gray-600">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[12px] sm:text-[14px] text-gray-600">+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd</p>
+                        {/* Header matching PDF layout */}
+                        <div className="flex justify-between items-center pb-1">
+                            {/* Left: Logo & Company Name */}
+                            <div className="flex items-center gap-3">
+                                <img src="/logo.png" alt="ANI Enterprise Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
+                                <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
+                                    ANI ENTERPRISE
+                                </h1>
+                            </div>
+
+                            {/* Right: Address Info */}
+                            <div className="text-right text-[11px] sm:text-[12px] text-gray-700 leading-tight">
+                                <p className="font-semibold text-gray-800">766, H.M Tower, Level-06</p>
+                                <p>Borogola, Bogura, Bangladesh</p>
+                                <p>Tel: +8802588813057</p>
+                                <p>Email: anienterprise051@gmail.com</p>
+                            </div>
                         </div>
 
-                        <div className="border-t-2 border-gray-900 w-full mt-4"></div>
+                        {/* Orange Divider Line */}
+                        <div className="border-t-2 border-[#f97316] w-full mt-3"></div>
 
-                        {/* Title */}
-                        <div className="flex justify-center -mt-6">
-                            <div className="bg-white border-2 border-gray-900 px-12 py-1.5 inline-block">
-                                <h2 className="text-xl font-bold text-gray-900 tracking-wide uppercase">Customer Balance Report</h2>
+                        {/* Centered Title Badge */}
+                        <div className="flex justify-center -mt-5">
+                            <div className="bg-[#f97316] text-white px-8 py-1 rounded shadow-sm">
+                                <h2 className="text-xs sm:text-sm font-bold tracking-wider uppercase">CUSTOMER REPORT</h2>
                             </div>
                         </div>
 
