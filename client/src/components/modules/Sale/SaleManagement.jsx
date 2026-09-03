@@ -3184,20 +3184,90 @@ const SaleManagement = ({
         }
     };
 
+    const handleOpenOrderDetails = async (orderNo, currentSale = null) => {
+        if (!orderNo || orderNo === '-') return;
+        const target = orderNo.trim().toUpperCase();
+
+        // 1. Look in allSalesRecords for matching Order record
+        let orderRecord = allSalesRecords.find(s => {
+            const inv = (s.invoiceNo || '').trim().toUpperCase();
+            const ord = (s.orderNo || '').trim().toUpperCase();
+            return (inv === target || ord === target) && (s.saleType === 'Order' || inv.startsWith('ORD') || s.isOrderEntry);
+        });
+
+        // 2. Look for any record where invoiceNo matches target
+        if (!orderRecord) {
+            orderRecord = allSalesRecords.find(s => (s.invoiceNo || '').trim().toUpperCase() === target);
+        }
+
+        if (orderRecord) {
+            setViewData(orderRecord);
+            return;
+        }
+
+        // 3. Fallback: try fetching fresh sales from API if not yet in memory
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/sales`);
+            const freshList = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            const found = freshList.find(s => {
+                const inv = (s.invoiceNo || '').trim().toUpperCase();
+                const ord = (s.orderNo || '').trim().toUpperCase();
+                return (inv === target || ord === target);
+            });
+            if (found) {
+                setViewData(found);
+                return;
+            }
+        } catch (err) {
+            console.error('Failed to fetch order details:', err);
+        }
+
+        // 4. Fallback using current sale info if order document is not found
+        if (currentSale) {
+            setViewData({
+                saleType: 'Order',
+                invoiceNo: orderNo,
+                orderNo: orderNo,
+                date: currentSale.date,
+                companyName: currentSale.companyName,
+                customerName: currentSale.customerName,
+                items: currentSale.items,
+                status: 'Confirmed',
+                totalAmount: currentSale.totalAmount,
+                paidAmount: currentSale.paidAmount,
+                dueAmount: currentSale.dueAmount
+            });
+        }
+    };
+
     const renderViewModal = () => {
         if (!viewData || typeof document === 'undefined' || !document.body) return null;
+        const isOrder = viewData.saleType === 'Order' || (viewData.invoiceNo || '').startsWith('ORD');
+        const targetOrderNo = (viewData.invoiceNo || viewData.orderNo || '').trim().toUpperCase();
+        const linkedDeliveries = isOrder
+            ? allSalesRecords.filter(s => {
+                const ord = (s.orderNo || '').trim().toUpperCase();
+                const inv = (s.invoiceNo || '').trim().toUpperCase();
+                return ord === targetOrderNo && inv !== targetOrderNo;
+            })
+            : [];
+
         return createPortal(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
                 <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
                 <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300 z-10">
                     <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-white">
                         <div className="flex items-center gap-4">
-                            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+                            <div className={`p-2.5 rounded-xl border ${isOrder ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
                                 <ReceiptIcon className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-gray-900 tracking-tight">Sale Invoice Details</h3>
-                                <p className="text-xs text-gray-500 font-medium">{viewData.invoiceNo || 'No Invoice Number'}</p>
+                                <h3 className="text-xl font-bold text-gray-900 tracking-tight">
+                                    {isOrder ? 'Order Details' : 'Sale Invoice Details'}
+                                </h3>
+                                <p className="text-xs text-gray-500 font-medium">
+                                    {isOrder ? (viewData.orderNo || viewData.invoiceNo || 'Order Record') : (viewData.invoiceNo || 'No Invoice Number')}
+                                </p>
                             </div>
                         </div>
                         <button onClick={() => setViewData(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all shadow-sm">
@@ -3206,10 +3276,28 @@ const SaleManagement = ({
                     </div>
 
                     <div className="overflow-y-auto max-h-[70vh] p-6 space-y-6 bg-gray-50/30">
+                        {isOrder && linkedDeliveries.length > 0 && (
+                            <div className="px-5 py-3 bg-blue-50/70 border border-blue-100 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                                <div className="flex items-center gap-2 text-blue-900 font-semibold">
+                                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                                    <span>Fulfilled / Invoiced In:</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {linkedDeliveries.map(del => (
+                                            <span key={del._id} className="px-2 py-0.5 bg-white border border-blue-200 text-blue-700 font-bold rounded-md font-mono text-[11px] shadow-2xs">
+                                                {del.invoiceNo} {del.date ? `(${formatDate(del.date)})` : ''}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="text-[11px] text-blue-600 font-medium">
+                                    {linkedDeliveries.length} {linkedDeliveries.length === 1 ? 'delivery' : 'deliveries'} recorded
+                                </div>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 p-6 bg-white rounded-2xl border border-gray-100/50 shadow-sm">
                             <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Transaction Date</span>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{isOrder ? 'Order Date' : 'Transaction Date'}</span>
                                 <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                                     {formatDate(viewData.date)}
@@ -3239,18 +3327,20 @@ const SaleManagement = ({
                                 </div>
                             </div>
                             <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / Payment</span>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{isOrder ? 'Order Status' : 'Status / Payment'}</span>
                                 <div className="flex flex-col gap-1.5">
                                     <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold uppercase tracking-wider ${viewData.status === 'Requested' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                                         viewData.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
                                             'bg-emerald-50 text-emerald-600 border border-emerald-100'
                                         }`}>
-                                        {viewData.status || 'Completed'}
+                                        {viewData.status || (isOrder ? 'Confirmed' : 'Completed')}
                                     </div>
-                                    <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold inline-flex items-center gap-1 ${parseFloat(viewData.dueAmount) > 0 ? 'bg-amber-50 text-amber-600 border border-amber-100/50' : 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'}`}>
-                                        <div className={`w-1 h-1 rounded-full ${parseFloat(viewData.dueAmount) > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
-                                        {parseFloat(viewData.dueAmount) > 0 ? 'Partial Pay' : 'Paid in Full'}
-                                    </div>
+                                    {!isOrder && (
+                                        <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold inline-flex items-center gap-1 ${parseFloat(viewData.dueAmount) > 0 ? 'bg-amber-50 text-amber-600 border border-amber-100/50' : 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'}`}>
+                                            <div className={`w-1 h-1 rounded-full ${parseFloat(viewData.dueAmount) > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
+                                            {parseFloat(viewData.dueAmount) > 0 ? 'Partial Pay' : 'Paid in Full'}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -3262,77 +3352,122 @@ const SaleManagement = ({
                                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest w-1/4">Product Description</th>
                                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Brand Information</th>
                                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Qty / Bag</th>
-                                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Unit Price</th>
+                                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Rate / Unit Price</th>
                                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Subtotal</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                    {viewData.items?.map((product, pIdx) => (
-                                        <React.Fragment key={pIdx}>
-                                            <tr className="bg-white transition-colors">
-                                                <td className="px-6 py-5 align-top border-r border-gray-50/50" rowSpan={product.brandEntries?.length ? product.brandEntries.length + 1 : 1}>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-1.5 h-4 bg-blue-600 rounded-sm"></div>
-                                                        <span className="text-[13px] font-bold text-blue-800">{resolveProductName(product.productName)}</span>
-                                                    </div>
-                                                </td>
-                                                {/* If there are no brand entries, render empty columns so layout doesn't break */}
-                                                {!product.brandEntries?.length && (
-                                                    <>
-                                                        <td className="px-6 py-4"></td>
-                                                        <td className="px-6 py-4"></td>
-                                                        <td className="px-6 py-4"></td>
-                                                        <td className="px-6 py-4"></td>
-                                                    </>
-                                                )}
-                                            </tr>
-                                            {product.brandEntries?.map((entry, eIdx) => (
-                                                <tr key={eIdx} className="bg-white hover:bg-gray-50/30 transition-all duration-200">
-                                                    <td className="px-6 py-4 align-middle">
-                                                        <div className="flex flex-col gap-0.5">
-                                                            <div className="text-[12px] font-bold text-gray-800">{entry.brand}</div>
-                                                            <div className="text-[9px] font-black text-blue-500 uppercase tracking-wider flex items-center gap-1">
-                                                                <div className="w-1 h-1 rounded-full bg-blue-400"></div>
-                                                                {entry.warehouseName}
-                                                            </div>
+                                    {viewData.items?.map((product, pIdx) => {
+                                        const hasBrandEntries = Array.isArray(product.brandEntries) && product.brandEntries.length > 0;
+                                        const entries = hasBrandEntries ? product.brandEntries : [{
+                                            brand: product.brand || '-',
+                                            warehouseName: product.warehouseName || '-',
+                                            bag: product.bag || product.packet || 0,
+                                            quantity: product.quantity || 0,
+                                            unitPrice: product.unitPrice || product.rate || 0,
+                                            totalAmount: product.totalAmount || product.amount || 0
+                                        }];
+                                        return (
+                                            <React.Fragment key={pIdx}>
+                                                <tr className="bg-white transition-colors">
+                                                    <td className="px-6 py-5 align-top border-r border-gray-50/50" rowSpan={entries.length + 1}>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-1.5 h-4 bg-blue-600 rounded-sm"></div>
+                                                            <span className="text-[13px] font-bold text-blue-800">{resolveProductName(product.productName)}</span>
                                                         </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right align-middle">
-                                                        <div className="text-[13px] font-bold text-gray-900">
-                                                            {product.uom === 'BAG'
-                                                                ? `${parseFloat(entry.bag || 0).toLocaleString('en-US')} Bag`
-                                                                : `${parseFloat(entry.quantity || 0).toLocaleString('en-US')} kg`}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right align-middle">
-                                                        <div className="text-[12px] font-bold text-gray-400">৳{parseFloat(entry.unitPrice || 0).toLocaleString('en-IN')}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right align-middle">
-                                                        <div className="text-[14px] font-black text-blue-900 group-hover:scale-[1.02] transition-transform origin-right">৳{parseFloat(entry.totalAmount || 0).toLocaleString('en-IN')}</div>
                                                     </td>
                                                 </tr>
-                                            ))}
-                                        </React.Fragment>
-                                    ))}
+                                                {entries.map((entry, eIdx) => {
+                                                    const qty = parseFloat(entry.quantity || 0);
+                                                    const bag = parseFloat(entry.bag || entry.packet || 0);
+                                                    const rate = parseFloat(entry.unitPrice || entry.rate || 0);
+                                                    const total = parseFloat(entry.totalAmount || entry.amount || (qty * rate) || (bag * rate) || 0);
+                                                    return (
+                                                        <tr key={eIdx} className="bg-white hover:bg-gray-50/30 transition-all duration-200">
+                                                            <td className="px-6 py-4 align-middle">
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <div className="text-[12px] font-bold text-gray-800">{entry.brand || entry.brandName || '-'}</div>
+                                                                    <div className="text-[9px] font-black text-blue-500 uppercase tracking-wider flex items-center gap-1">
+                                                                        <div className="w-1 h-1 rounded-full bg-blue-400"></div>
+                                                                        {entry.warehouseName || '-'}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right align-middle">
+                                                                <div className="text-[13px] font-bold text-gray-900">
+                                                                    {product.uom === 'BAG'
+                                                                        ? `${bag.toLocaleString('en-US')} Bag`
+                                                                        : `${qty.toLocaleString('en-US')} kg`}
+                                                                </div>
+                                                                {bag > 0 && product.uom !== 'BAG' && (
+                                                                    <div className="text-[10px] text-gray-400 font-medium">
+                                                                        ({bag.toLocaleString('en-US')} Bag)
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right align-middle">
+                                                                <div className="text-[12px] font-bold text-gray-400">৳{rate.toLocaleString('en-IN')}</div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right align-middle">
+                                                                <div className="text-[14px] font-black text-blue-900 group-hover:scale-[1.02] transition-transform origin-right">
+                                                                    ৳{total.toLocaleString('en-IN')}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </React.Fragment>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                            <div className="p-5 bg-orange-50/30 rounded-2xl border border-orange-100/50 group hover:bg-orange-50/50 transition-colors">
-                                <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1.5">Total Discount</div>
-                                <div className="text-xl font-black text-orange-600 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.discount || 0).toLocaleString('en-IN')}</div>
+                        {isOrder ? (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                                <div className="p-5 bg-blue-50/40 rounded-2xl border border-blue-100/60 group hover:bg-blue-50/70 transition-colors">
+                                    <div className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1.5">Total Quantity</div>
+                                    <div className="text-xl font-black text-blue-700 group-hover:scale-[1.02] transition-transform origin-left">
+                                        {viewData.items?.reduce((sum, it) => {
+                                            const entries = it.brandEntries?.length ? it.brandEntries : [it];
+                                            return sum + entries.reduce((s2, e) => s2 + (parseFloat(e.quantity) || 0), 0);
+                                        }, 0).toLocaleString('en-US')} kg
+                                    </div>
+                                </div>
+                                <div className="p-5 bg-indigo-50/40 rounded-2xl border border-indigo-100/60 group hover:bg-indigo-50/70 transition-colors">
+                                    <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1.5">Total Bags</div>
+                                    <div className="text-xl font-black text-indigo-700 group-hover:scale-[1.02] transition-transform origin-left">
+                                        {viewData.items?.reduce((sum, it) => {
+                                            const entries = it.brandEntries?.length ? it.brandEntries : [it];
+                                            return sum + entries.reduce((s2, e) => s2 + (parseFloat(e.bag || e.packet) || 0), 0);
+                                        }, 0).toLocaleString('en-US')} Bags
+                                    </div>
+                                </div>
+                                <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                                    <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1.5 relative z-10">Total Order Amount</div>
+                                    <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">
+                                        ৳{parseFloat(viewData.totalAmount || 0).toLocaleString('en-IN')}
+                                    </div>
+                                </div>
                             </div>
-                            <div className="p-5 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 group hover:bg-emerald-50/50 transition-colors">
-                                <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5">Truck Fare</div>
-                                <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString('en-IN')}</div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                                <div className="p-5 bg-orange-50/30 rounded-2xl border border-orange-100/50 group hover:bg-orange-50/50 transition-colors">
+                                    <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1.5">Total Discount</div>
+                                    <div className="text-xl font-black text-orange-600 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.discount || 0).toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="p-5 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 group hover:bg-emerald-50/50 transition-colors">
+                                    <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5">Truck Fare</div>
+                                    <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewData.paidAmount || 0).toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                                    <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1.5 relative z-10">Grand Total Invoice</div>
+                                    <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewData.totalAmount || 0).toLocaleString('en-IN')}</div>
+                                </div>
                             </div>
-                            <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-                                <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1.5 relative z-10">Grand Total Invoice</div>
-                                <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewData.totalAmount || 0).toLocaleString('en-IN')}</div>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>,
@@ -5904,7 +6039,23 @@ const SaleManagement = ({
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
-                                                <td className="px-3 py-4 whitespace-nowrap text-center font-semibold text-gray-800">{sale.orderNo || '-'}</td>
+                                                <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                    {sale.orderNo ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleOpenOrderDetails(sale.orderNo, sale);
+                                                            }}
+                                                            className="inline-flex items-center justify-center px-2.5 py-1 text-[12px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-100 hover:text-blue-900 border border-blue-200/90 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer"
+                                                            title={`View Order Details (${sale.orderNo})`}
+                                                        >
+                                                            {sale.orderNo}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-gray-400 font-medium">-</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-center font-semibold text-gray-800">{sale.invoiceNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.lcNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.importer) || '-'}</td>
@@ -6058,7 +6209,21 @@ const SaleManagement = ({
                                                 <div className="text-[13px] font-medium text-gray-600">{formatDate(sale.date)}</div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                <div className="text-[13px] font-semibold text-gray-800">{sale.orderNo || '-'}</div>
+                                                {sale.orderNo ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleOpenOrderDetails(sale.orderNo, sale);
+                                                        }}
+                                                        className="inline-flex items-center justify-center px-2.5 py-1 text-[12px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-100 hover:text-blue-900 border border-blue-200/90 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer"
+                                                        title={`View Order Details (${sale.orderNo})`}
+                                                    >
+                                                        {sale.orderNo}
+                                                    </button>
+                                                ) : (
+                                                    <div className="text-[13px] font-semibold text-gray-400">-</div>
+                                                )}
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="text-[13px] font-semibold text-gray-800">{sale.invoiceNo || '-'}</div>

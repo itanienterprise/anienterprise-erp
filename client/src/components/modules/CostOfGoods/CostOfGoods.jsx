@@ -761,6 +761,12 @@ const CostOfGoods = ({
                 prodList.push(lcMatch.productName || lcMatch.product || lcMatch.commodity || lcMatch.item);
             }
             group.product = prodList.join(', ');
+
+            const portList = [...new Set(group.records.map(r => r.port || r.portName).filter(Boolean))];
+            if (portList.length === 0 && lcMatch && (lcMatch.port || lcMatch.portOfDischarge || lcMatch.portName)) {
+                portList.push(lcMatch.port || lcMatch.portOfDischarge || lcMatch.portName);
+            }
+            group.port = portList.join(', ');
         });
         
         return groups;
@@ -1038,6 +1044,13 @@ const CostOfGoods = ({
                                                                     {group.product && (
                                                                         <span className="inline-block leading-none text-[11px] font-bold text-gray-700 bg-white border border-gray-200/90 px-2.5 py-1 rounded-md shadow-2xs max-w-full truncate select-none" title={`Product: ${group.product}`}>
                                                                             {group.product}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="w-[140px] shrink-0 flex items-center">
+                                                                    {group.port && (
+                                                                        <span className="inline-block leading-none text-[11px] font-bold text-gray-700 bg-white border border-gray-200/90 px-2.5 py-1 rounded-md shadow-2xs max-w-full truncate select-none" title={`Port: ${group.port}`}>
+                                                                            {group.port}
                                                                         </span>
                                                                     )}
                                                                 </div>
