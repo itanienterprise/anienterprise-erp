@@ -2,12 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { XIcon, PrinterIcon, SearchIcon, FunnelIcon, ChevronDownIcon } from '../../Icons';
 import { generateCnFAgentListReportPDF } from '../../../utils/pdfGenerator';
+import { generateCnFAgentListReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import { formatDate } from '../../../utils/helpers';
 
 const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
-    if (!isOpen) return null;
-
     const [showFilterPanel, setShowFilterPanel] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [filters, setFilters] = useState({ name: '', status: '', uom: '' });
     const [filterSearchInputs, setFilterSearchInputs] = useState({ nameSearch: '' });
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ name: false });
@@ -40,7 +41,7 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('keydown', handleEscape);
         };
-    }, [showFilterPanel, filterDropdownOpen]);
+    }, [showFilterPanel, filterDropdownOpen, onClose]);
 
     const hasActiveFilters = Object.values(filters).some(v => v !== '');
 
@@ -70,8 +71,10 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
         setFilterDropdownOpen({ name: false });
     };
 
-    if (typeof document === 'undefined' || !document.body) return null;
-    return createPortal(
+    if (!isOpen || typeof document === 'undefined' || !document.body) return null;
+    return (
+        <>
+            {createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 app-modal-overlay">
             <div className="bg-white w-full max-w-[1200px] max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col">
 
@@ -202,11 +205,11 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                             )}
                         </div>
 
-                        {/* Print PDF Button */}
+                        {/* Print / Export Report Button */}
                         <button
-                            onClick={() => generateCnFAgentListReportPDF(filteredAgents, moduleType)}
+                            onClick={() => setShowReportFormatModal(true)}
                             className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-500/30 transition-all"
-                            title="Download PDF Report"
+                            title="Export Report (PDF / Excel)"
                         >
                             <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
@@ -265,7 +268,6 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                                 <tbody className="divide-y divide-gray-200">
                                     {filteredAgents.length > 0 ? filteredAgents.map((agent, idx) => {
                                         const balance = parseFloat(agent.totalBalance) || 0;
-                                        const isActive = (agent.status || '').toLowerCase() === 'active';
                                         return (
                                             <tr key={agent._id || idx} className="hover:bg-indigo-50/30 transition-colors">
                                                 <td className="border-r border-gray-200 px-2 py-2 text-[12px] text-gray-600 text-center">{idx + 1}</td>
@@ -299,7 +301,6 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
                         <div className="md:hidden space-y-3">
                             {filteredAgents.length > 0 ? filteredAgents.map((agent, idx) => {
                                 const balance = parseFloat(agent.totalBalance) || 0;
-                                const isActive = (agent.status || '').toLowerCase() === 'active';
                                 return (
                                     <div key={agent._id || idx} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                                         <div className="flex items-start justify-between">
@@ -377,6 +378,18 @@ const CnFReport = ({ isOpen, onClose, agents = [], moduleType = '' }) => {
             </div>
         </div>,
         document.body
+    )}
+
+    {/* Export Format Selection Modal */}
+    <ReportFormatModal
+        isOpen={showReportFormatModal}
+        onClose={() => setShowReportFormatModal(false)}
+        title={`${moduleType ? `${moduleType} C&F` : 'C&F'} Agent Report`}
+        subtitle="Select your preferred format to export or preview agent list"
+        onExportPdf={() => generateCnFAgentListReportPDF(filteredAgents, moduleType)}
+        onExportExcel={() => generateCnFAgentListReportExcel(filteredAgents, moduleType)}
+    />
+    </>
     );
 };
 

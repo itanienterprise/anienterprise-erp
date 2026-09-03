@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, EyeIcon, XIcon, BoxIcon, SearchIcon, ChevronDownIcon, ChevronUpIcon, TrendingUpIcon, DollarSignIcon, FunnelIcon, PrinterIcon, BarChartIcon, ReceiptIcon, TruckIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateCnFHistoryReportPDF, generateCnFAgentListReportPDF, generateCnFExpenseReportPDF, generateCnFPaymentReportPDF, generateCnFAllReportPDF } from '../../../utils/pdfGenerator';
+import { generateCnFHistoryExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import './CnF.css';
@@ -126,6 +128,7 @@ const CnF = ({
     const historyFilterButtonRef = useRef(null);
     const historyFilterButtonMobileRef = useRef(null);
     const historyFilterPanelRef = useRef(null);
+    const [showAgentHistoryFormatModal, setShowAgentHistoryFormatModal] = useState(false);
     const [historyFilterSearchInputs, setHistoryFilterSearchInputs] = useState({ lcNo: '', product: '', port: '' });
     const [historyFilterDropdownOpen, setHistoryFilterDropdownOpen] = useState({ lcNo: false, product: false, port: false });
     const lcNoFilterRef = useRef(null);
@@ -446,17 +449,7 @@ const CnF = ({
 
     const handlePrintHistory = () => {
         if (!viewData) return;
-        const agentInfo = { name: viewData.name, cnfId: viewData.cnfId, phone: viewData.phone };
-
-        if (historyViewMode === 'earnings') {
-            generateCnFHistoryReportPDF(filteredHistory, agentInfo, historyFilters);
-        } else if (historyViewMode === 'expense') {
-            generateCnFExpenseReportPDF(filteredExpenses, agentInfo, historyFilters);
-        } else if (historyViewMode === 'payments') {
-            generateCnFPaymentReportPDF(filteredPayments, agentInfo, historyFilters);
-        } else if (historyViewMode === 'all') {
-            generateCnFAllReportPDF(filteredAll, agentInfo, historyFilters);
-        }
+        setShowAgentHistoryFormatModal(true);
     };
 
     const fetchCnFs = async () => {
@@ -1510,8 +1503,8 @@ const CnF = ({
             })()}
 
             {viewData && typeof document !== 'undefined' && document.body && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">
-                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewData(null)}></div>
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 app-modal-overlay">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); }}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl max-w-[96vw] xl:max-w-[1750px] w-full flex flex-col max-h-[90vh] animate-in zoom-in duration-200 z-10">
                         <div className="relative px-4 py-4 md:px-8 md:py-6 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-4 bg-white flex-shrink-0 z-10 rounded-t-2xl">
                             <div className="flex-1 text-left w-full flex items-center justify-between md:block pr-12 md:pr-0">
@@ -1635,7 +1628,7 @@ const CnF = ({
                                         Bulk Edit ({selectedHistoryIds.size})
                                     </button>
                                 )}
-                                <button onClick={() => setViewData(null)} className="p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
+                                <button onClick={() => { setViewData(null); setShowAgentHistoryFormatModal(false); }} className="p-2 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-full transition-all">
                                     <XIcon className="w-5 h-5" />
                                 </button>
                             </div>
@@ -2520,6 +2513,35 @@ const CnF = ({
                 </div>,
                 document.body
             )}
+
+            {/* C&F Agent History Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showAgentHistoryFormatModal}
+                onClose={() => setShowAgentHistoryFormatModal(false)}
+                title={`${viewData?.name || 'Agent'} History Report (${(historyViewMode || '').toUpperCase()})`}
+                subtitle="Select your preferred format to export or preview history records"
+                onExportPdf={() => {
+                    if (!viewData) return;
+                    const agentInfo = { name: viewData.name, cnfId: viewData.cnfId, phone: viewData.phone };
+                    if (historyViewMode === 'earnings') {
+                        generateCnFHistoryReportPDF(filteredHistory, agentInfo, historyFilters);
+                    } else if (historyViewMode === 'expense') {
+                        generateCnFExpenseReportPDF(filteredExpenses, agentInfo, historyFilters);
+                    } else if (historyViewMode === 'payments') {
+                        generateCnFPaymentReportPDF(filteredPayments, agentInfo, historyFilters);
+                    } else if (historyViewMode === 'all') {
+                        generateCnFAllReportPDF(filteredAll, agentInfo, historyFilters);
+                    }
+                }}
+                onExportExcel={() => {
+                    if (!viewData) return;
+                    const agentInfo = { name: viewData.name, cnfId: viewData.cnfId, phone: viewData.phone };
+                    const data = historyViewMode === 'earnings' ? filteredHistory :
+                                 historyViewMode === 'expense' ? filteredExpenses :
+                                 historyViewMode === 'payments' ? filteredPayments : filteredAll;
+                    generateCnFHistoryExcel(historyViewMode, data, agentInfo, historyFilters);
+                }}
+            />
 
             {editRecord && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 app-modal-overlay">

@@ -5,6 +5,8 @@ import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import axios from '../../../utils/api';
 import { generateLcBillHistoryReportPDF } from '../../../utils/pdfGenerator';
+import { generateLcBillHistoryReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 
@@ -51,6 +53,7 @@ const Bank = ({ onDeleteConfirm }) => {
         importer: ''
     });
     const [showHistoryFilterPanel, setShowHistoryFilterPanel] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [historyFilterSearchInputs, setHistoryFilterSearchInputs] = useState({
         billTypeSearch: '',
         lcNoSearch: '',
@@ -108,6 +111,7 @@ const Bank = ({ onDeleteConfirm }) => {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'auto';
+            setShowReportFormatModal(false);
         }
         return () => {
             document.body.style.overflow = 'auto';
@@ -1925,8 +1929,9 @@ const Bank = ({ onDeleteConfirm }) => {
 
                                 {/* Report Button */}
                                 <button
-                                    onClick={() => generateLcBillHistoryReportPDF(filteredLcBillHistoryRows, lcBillHistoryBank, historyFilters)}
+                                    onClick={() => setShowReportFormatModal(true)}
                                     className="flex items-center justify-center sm:gap-2 w-9 h-9 sm:w-auto sm:h-10 sm:px-4 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm"
+                                    title="Export Report (PDF / Excel)"
                                 >
                                     <BarChartIcon className="w-4 h-4 text-blue-500" />
                                     <span className="hidden sm:block text-sm font-medium ml-2">Report</span>
@@ -1934,7 +1939,10 @@ const Bank = ({ onDeleteConfirm }) => {
 
                                 {/* Close Button */}
                                 <button
-                                    onClick={() => setLcBillHistoryBank(null)}
+                                    onClick={() => {
+                                        setLcBillHistoryBank(null);
+                                        setShowReportFormatModal(false);
+                                    }}
                                     className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-white transition-all"
                                 >
                                     <XIcon className="w-5 h-5" />
@@ -2248,6 +2256,20 @@ const Bank = ({ onDeleteConfirm }) => {
                 </div>,
                 document.body
             )}
+
+            {/* Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title={`${lcBillHistoryBank || 'Bank'} LC Bill History`}
+                subtitle="Select your preferred format to export or preview transactions"
+                onExportPdf={() => {
+                    generateLcBillHistoryReportPDF(filteredLcBillHistoryRows, lcBillHistoryBank, historyFilters);
+                }}
+                onExportExcel={() => {
+                    generateLcBillHistoryReportExcel(filteredLcBillHistoryRows, lcBillHistoryBank, historyFilters);
+                }}
+            />
         </div>
     );
 };
