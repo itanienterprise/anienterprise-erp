@@ -746,9 +746,25 @@ const CostOfGoods = ({
             }
             groupMap[lc].records.push(record);
         });
+
+        groups.forEach(group => {
+            const lcMatch = lcs.find(l => (l.lcNo || '').trim().toLowerCase() === (group.lcNo || '').trim().toLowerCase());
+            
+            const expList = [...new Set(group.records.map(r => r.exporter || r.exporterName).filter(Boolean))];
+            if (expList.length === 0 && lcMatch && (lcMatch.exporterName || lcMatch.exporter)) {
+                expList.push(lcMatch.exporterName || lcMatch.exporter);
+            }
+            group.exporter = expList.join(', ');
+
+            const prodList = [...new Set(group.records.map(r => r.product || r.productName).filter(Boolean))];
+            if (prodList.length === 0 && lcMatch && (lcMatch.productName || lcMatch.product || lcMatch.commodity || lcMatch.item)) {
+                prodList.push(lcMatch.productName || lcMatch.product || lcMatch.commodity || lcMatch.item);
+            }
+            group.product = prodList.join(', ');
+        });
         
         return groups;
-    }, [sortedRecords]);
+    }, [sortedRecords, lcs]);
 
     return (
         <div style={{ animation: 'fadeIn 0.5s ease-out' }} className="space-y-6">
@@ -1000,15 +1016,33 @@ const CostOfGoods = ({
                                                     onClick={() => setExpandedLc(prev => prev === group.lcNo ? null : group.lcNo)}
                                                 >
                                                     <td colSpan={isSelectionMode ? 15 : 14} className="px-4 py-3.5 text-[13px] font-bold text-blue-700">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <ChevronDownIcon className={`w-4.5 h-4.5 text-blue-600 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-                                                                <span>LC No: {group.lcNo}</span>
-                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-lg ml-2">
-                                                                    {group.records.length} {group.records.length === 1 ? 'record' : 'records'}
-                                                                </span>
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div className="flex items-center gap-3 whitespace-nowrap shrink-0">
+                                                                <div className="flex items-center gap-1.5 w-[190px] shrink-0 leading-none">
+                                                                    <ChevronDownIcon className={`w-4 h-4 text-blue-600 transition-transform duration-200 shrink-0 ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                    <span className="leading-none select-none">LC No: {group.lcNo}</span>
+                                                                </div>
+                                                                <div className="w-[75px] shrink-0 flex items-center">
+                                                                    <span className="inline-flex items-center justify-center leading-none text-[10px] font-bold text-blue-600 bg-blue-100/60 px-2 py-1 rounded-md select-none">
+                                                                        {group.records.length} {group.records.length === 1 ? 'record' : 'records'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="w-[240px] shrink-0 flex items-center">
+                                                                    {group.exporter && (
+                                                                        <span className="inline-block leading-none text-[11px] font-bold text-gray-700 bg-white border border-gray-200/90 px-2.5 py-1 rounded-md shadow-2xs max-w-full truncate select-none" title={`Exporter: ${group.exporter}`}>
+                                                                            {group.exporter}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="w-[220px] shrink-0 flex items-center">
+                                                                    {group.product && (
+                                                                        <span className="inline-block leading-none text-[11px] font-bold text-gray-700 bg-white border border-gray-200/90 px-2.5 py-1 rounded-md shadow-2xs max-w-full truncate select-none" title={`Product: ${group.product}`}>
+                                                                            {group.product}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <div className="flex items-center gap-6 text-xs text-gray-500 pr-2">
+                                                            <div className="flex items-center gap-6 text-xs text-gray-500 pr-2 shrink-0">
                                                                 <div>Total Qty: <span className="font-extrabold text-gray-800">{group.records.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0).toLocaleString()} kg</span></div>
                                                                 <div>Total Net Bill: <span className="font-extrabold text-gray-800">{group.records.reduce((sum, r) => {
                                                                     const isChina = r.country === 'CHINA';
