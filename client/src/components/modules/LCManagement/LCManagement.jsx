@@ -5849,11 +5849,28 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             }
 
             if (field === 'bankBranch') {
-                if (value) {
-                    const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (newState.bankName || prev.bankName || '').trim().toUpperCase());
-                    const selectedBranch = selectedBank?.branches?.find(br => br.branch === value);
+                const branchObj = typeof value === 'object' && value !== null ? value : null;
+                const branchName = branchObj ? (branchObj.branch || '') : value;
+
+                if (branchName) {
+                    let selectedBranch = branchObj;
+                    if (!selectedBranch) {
+                        const targetBank = (newState.bankName || prev.bankName || '').trim().toUpperCase();
+                        const matchedBanks = banksRaw.filter(b => (b.bankName || '').trim().toUpperCase() === targetBank);
+                        for (const b of matchedBanks) {
+                            const list = Array.isArray(b.branches) && b.branches.length > 0
+                                ? b.branches
+                                : (b.branch ? [{ branch: b.branch, accountName: b.accountName, accountNo: b.accountNo, lcCommission: b.lcCommission, vatOnCommission: b.vatOnCommission, swiftCharge: b.swiftCharge, vatOnSwiftCharge: b.vatOnSwiftCharge, lcApplicationForm: b.lcApplicationForm, mpCharge: b.mpCharge, stampCharge: b.stampCharge }] : []);
+                            const found = list.find(br => br.branch === branchName);
+                            if (found) {
+                                selectedBranch = found;
+                                break;
+                            }
+                        }
+                    }
+
+                    newState.bankBranch = branchName;
                     if (selectedBranch) {
-                        newState.bankBranch = value;
                         newState.bankLcCommission = selectedBranch.lcCommission || '';
                         newState.bankVatOnCommission = selectedBranch.vatOnCommission || '';
                         newState.bankSwiftCharge = selectedBranch.swiftCharge || '';
@@ -9114,11 +9131,12 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         value={formData.bankName}
                                         onChange={handleInputChange}
                                         onFocus={() => { setActiveDropdown('bankName'); setHighlightedIndex(-1); }}
-                                        onKeyDown={(e) => handleDropdownKeyDown(e, 'bankName', 'bankName', banks.filter(b => {
-                                            const bName = typeof b === 'string' ? b : (b?.bankName || '');
-                                            const searchVal = typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '');
-                                            return !searchVal || bName.toLowerCase().includes(searchVal.toLowerCase());
-                                        }))}
+                                        onKeyDown={(e) => {
+                                            const searchVal = (typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '')).trim().toLowerCase();
+                                            const uniqueBanks = [...new Set(banks.map(b => (typeof b === 'string' ? b : (b?.bankName || '')).trim()).filter(Boolean))].sort();
+                                            const options = uniqueBanks.filter(bName => !searchVal || bName.toLowerCase().includes(searchVal));
+                                            handleDropdownKeyDown(e, 'bankName', 'bankName', options);
+                                        }}
                                         placeholder="Select Bank"
                                         autoComplete="off"
                                         required
@@ -9133,29 +9151,32 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         <SearchIcon className="w-4 h-4 text-gray-300 pointer-events-none" />
                                     </div>
                                 </div>
-                                {activeDropdown === 'bankName' && (
-                                    <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                        {banks.filter(b => {
-                                            const bName = typeof b === 'string' ? b : (b?.bankName || '');
-                                            const searchVal = typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '');
-                                            return !searchVal || bName.toLowerCase().includes(searchVal.toLowerCase());
-                                        }).map((bank, idx) => {
-                                            const bName = typeof bank === 'string' ? bank : (bank?.bankName || '');
-                                            const searchVal = typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '');
-                                            return (
-                                                <button
-                                                    key={idx}
-                                                    type="button"
-                                                    onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankName', bName); }}
-                                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${searchVal === bName ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                >
-                                                    {bName}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                {activeDropdown === 'bankName' && (() => {
+                                    const searchVal = (typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '')).trim().toLowerCase();
+                                    const uniqueBanks = [...new Set(banks.map(b => (typeof b === 'string' ? b : (b?.bankName || '')).trim()).filter(Boolean))].sort();
+                                    const filteredBanks = uniqueBanks.filter(bName => !searchVal || bName.toLowerCase().includes(searchVal));
+                                    return (
+                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                            {filteredBanks.length > 0 ? (
+                                                filteredBanks.map((bName, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankName', bName); }}
+                                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                                        className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${searchVal === bName.toLowerCase() ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                    >
+                                                        {bName}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="px-4 py-3 text-xs text-gray-400 text-center font-medium">
+                                                    No banks found
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             {/* Branch Dropdown Input */}
@@ -9169,9 +9190,15 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                         onChange={handleInputChange}
                                         onFocus={() => { setActiveDropdown('bankBranch'); setHighlightedIndex(-1); }}
                                         onKeyDown={(e) => {
-                                            const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (formData.bankName || '').trim().toUpperCase());
-                                            const branchesList = selectedBank?.branches || [];
-                                            const options = branchesList.filter(br => !formData.bankBranch || br.branch.toLowerCase().includes(formData.bankBranch.toLowerCase())).map(br => br.branch);
+                                            const selectedBankName = (formData.bankName || '').trim().toUpperCase();
+                                            const matchedBanks = banksRaw.filter(b => (b.bankName || '').trim().toUpperCase() === selectedBankName);
+                                            const branchesList = matchedBanks.flatMap(b => {
+                                                if (Array.isArray(b.branches) && b.branches.length > 0) return b.branches;
+                                                if (b.branch) return [{ branch: b.branch, accountName: b.accountName, accountNo: b.accountNo }];
+                                                return [];
+                                            });
+                                            const searchVal = (formData.bankBranch || '').trim().toLowerCase();
+                                            const options = branchesList.filter(br => !searchVal || (br.branch || '').toLowerCase().includes(searchVal) || (br.accountName && br.accountName.toLowerCase().includes(searchVal)) || (br.accountNo && br.accountNo.toLowerCase().includes(searchVal)));
                                             handleDropdownKeyDown(e, 'bankBranch', 'bankBranch', options);
                                         }}
                                         placeholder="Select Branch"
@@ -9188,22 +9215,56 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                     </div>
                                 </div>
                                 {activeDropdown === 'bankBranch' && (() => {
-                                    const selectedBank = banksRaw.find(b => (b.bankName || '').trim().toUpperCase() === (formData.bankName || '').trim().toUpperCase());
-                                    const branchesList = selectedBank?.branches || [];
-                                    const filteredBranches = branchesList.filter(br => !formData.bankBranch || br.branch.toLowerCase().includes(formData.bankBranch.toLowerCase()));
+                                    const selectedBankName = (formData.bankName || '').trim().toUpperCase();
+                                    const matchedBanks = banksRaw.filter(b => (b.bankName || '').trim().toUpperCase() === selectedBankName);
+                                    const branchesList = matchedBanks.flatMap(b => {
+                                        if (Array.isArray(b.branches) && b.branches.length > 0) return b.branches;
+                                        if (b.branch) return [{ branch: b.branch, accountName: b.accountName, accountNo: b.accountNo, lcCommission: b.lcCommission, vatOnCommission: b.vatOnCommission, swiftCharge: b.swiftCharge, vatOnSwiftCharge: b.vatOnSwiftCharge, lcApplicationForm: b.lcApplicationForm, mpCharge: b.mpCharge, stampCharge: b.stampCharge }];
+                                        return [];
+                                    });
+                                    const searchVal = (formData.bankBranch || '').trim().toLowerCase();
+                                    const filteredBranches = branchesList.filter(br => {
+                                        if (!searchVal) return true;
+                                        return (br.branch || '').toLowerCase().includes(searchVal) ||
+                                            (br.accountName && br.accountName.toLowerCase().includes(searchVal)) ||
+                                            (br.accountNo && br.accountNo.toLowerCase().includes(searchVal));
+                                    });
                                     return (
-                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
-                                            {filteredBranches.map((br, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    type="button"
-                                                    onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankBranch', br.branch); }}
-                                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                                    className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${formData.bankBranch === br.branch ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                >
-                                                    {br.branch}
-                                                </button>
-                                            ))}
+                                        <div className="absolute z-[60] w-full min-w-[320px] mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto py-1">
+                                            {filteredBranches.length > 0 ? (
+                                                filteredBranches.map((br, idx) => {
+                                                    const isSelected = formData.bankBranch === br.branch;
+                                                    return (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankBranch', br); }}
+                                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                                            className={`w-full px-4 py-2.5 text-left text-sm transition-colors border-b border-gray-50 last:border-0 ${isSelected ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                        >
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <div className="font-bold text-gray-800 text-[13px] flex items-center justify-between gap-2">
+                                                                    <span className="truncate">{br.branch}</span>
+                                                                    {br.accountNo && (
+                                                                        <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/80 font-mono shrink-0">
+                                                                            A/C: {br.accountNo}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {br.accountName && (
+                                                                    <div className="text-[11px] text-gray-500 font-medium truncate">
+                                                                        {br.accountName}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="px-4 py-3 text-xs text-gray-400 text-center font-medium">
+                                                    {formData.bankName ? `No branches found for "${formData.bankName}"` : 'Please select a bank first'}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })()}
