@@ -3,13 +3,26 @@ import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import {
     PlusIcon, EditIcon, TrashIcon, SearchIcon, FunnelIcon, EyeIcon, XIcon,
-    ShoppingCartIcon, ChevronDownIcon, ChevronUpIcon, RotateCcwIcon, DownloadIcon, CheckIcon, BarChartIcon
+    ShoppingCartIcon, ChevronDownIcon, ChevronUpIcon, RotateCcwIcon, DownloadIcon, CheckIcon, BarChartIcon, ReceiptIcon
 } from '../../Icons';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { calculatePktRemainder, calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 import { hasPermission } from '../../../utils/permissionHelper';
+
+const getSafeString = (val) => {
+    if (!val) return '';
+    if (typeof val === 'object') return val.customerName || val.companyName || val.name || '';
+    return String(val);
+};
+
+const getDisplayName = (code, name) => {
+    if (name && !name.startsWith('E-') && !name.startsWith('A-') && name !== code) {
+        return name;
+    }
+    return name || code || '';
+};
 
 const OrderManagement = ({
     currentUser,
@@ -813,10 +826,20 @@ const OrderManagement = ({
                     }
                 }
             } else {
+                const actionBy = currentUser ? (currentUser.name || currentUser.username || 'Administrator') : 'Administrator';
+                const actionUsername = currentUser ? (currentUser.username || 'admin') : 'admin';
                 const payload = {
                     ...order,
                     status: newStatus,
-                    isEdited: false
+                    isEdited: false,
+                    ...((newStatus || '').toLowerCase() === 'accepted' ? {
+                        acceptedBy: order.acceptedBy || actionBy,
+                        acceptedByName: order.acceptedByName || actionBy,
+                        acceptedByUsername: order.acceptedByUsername || actionUsername,
+                        approvedBy: order.approvedBy || actionBy,
+                        approvedByName: order.approvedByName || actionBy,
+                        approvedByUsername: order.approvedByUsername || actionUsername,
+                    } : {})
                 };
                 await axios.put(`${API_BASE_URL}/api/sales/${order._id}`, payload);
                 if (addNotification) {
@@ -2599,54 +2622,179 @@ const OrderManagement = ({
             )}
 
             {/* View Order Modal */}
-            {viewRecord && typeof document !== 'undefined' && document.body && createPortal(
+            {viewRecord && typeof document !== 'undefined' && document.body && (() => {
+                const targetOrderNo = (viewRecord.invoiceNo || viewRecord.orderNo || '').trim().toUpperCase();
+                const linkedDelivery = allSalesRecords.find(s => {
+                    const ord = (s.orderNo || '').trim().toUpperCase();
+                    const inv = (s.invoiceNo || '').trim().toUpperCase();
+                    return ord === targetOrderNo && inv !== targetOrderNo && (s.acceptedBy || s.acceptedByName);
+                });
+                const resolvedAcceptedBy = viewRecord.acceptedBy || viewRecord.acceptedByName || linkedDelivery?.acceptedBy || linkedDelivery?.acceptedByName || viewRecord.approvedByName || viewRecord.approvedBy;
+                const resolvedAcceptedByUsername = viewRecord.acceptedByUsername || linkedDelivery?.acceptedByUsername || viewRecord.approvedByUsername;
+
+                return createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
                     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setViewRecord(null)}></div>
-                    <div className="relative bg-white border border-gray-100 rounded-3xl shadow-2xl max-w-2xl w-full p-6 md:p-8 animate-in zoom-in duration-200 z-10">
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4">
-                            <div>
-                                <h3 className="text-xl font-black text-gray-900">Order Details - {viewRecord.invoiceNo || viewRecord.orderNo}</h3>
-                                <p className="text-xs text-gray-500 font-medium">Date: {formatDate(viewRecord.date)}</p>
+                    <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300 z-10">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-white">
+                            <div className="flex items-center gap-4">
+                                <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+                                    <ReceiptIcon className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 tracking-tight">Order Details</h3>
+                                    <p className="text-xs text-gray-500 font-medium">{viewRecord.invoiceNo || viewRecord.orderNo || 'No Order Number'}</p>
+                                </div>
                             </div>
-                            <button onClick={() => setViewRecord(null)} className="text-gray-400 hover:text-gray-600">
+                            <button onClick={() => setViewRecord(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all shadow-sm">
                                 <XIcon className="w-5 h-5" />
                             </button>
                         </div>
 
-                        <div className="space-y-4">
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Customer Info</div>
-                                <div className="text-base font-bold text-gray-900 mt-1">{viewRecord.companyName || viewRecord.customerName}</div>
-                                {viewRecord.phone && <div className="text-xs text-gray-600 mt-0.5">Phone: {viewRecord.phone}</div>}
-                            </div>
-
-                            <div className="space-y-2">
-                                <div className="text-xs font-bold text-gray-500 uppercase">Items Breakdown</div>
-                                {(viewRecord.items || []).map((item, idx) => (
-                                    <div key={idx} className="p-3 bg-white border border-gray-100 rounded-xl space-y-2">
-                                        <div className="font-bold text-gray-900 text-sm">{item.productName}</div>
-                                        <div className="space-y-1">
-                                            {(item.brandEntries || []).map((b, bIdx) => (
-                                                <div key={bIdx} className="flex items-center justify-between text-xs text-gray-600 border-t border-gray-50 pt-1">
-                                                    <span>Brand: <strong>{b.brand || '-'}</strong></span>
-                                                    <span>{b.packet ? `${b.packet} Bag` : ''} ({b.quantity} kg)</span>
-                                                    <span className="font-bold text-gray-900">৳{b.amount || (b.quantity * b.rate)}</span>
-                                                </div>
-                                            ))}
+                        <div className="overflow-y-auto max-h-[70vh] p-6 space-y-6 bg-gray-50/30">
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 p-6 bg-white rounded-2xl border border-gray-100/50 shadow-sm">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Transaction Date</span>
+                                    <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                        {formatDate(viewRecord.date)}
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Company Name</span>
+                                    <div className="text-sm font-bold text-gray-900 truncate" title={getSafeString(viewRecord.companyName)}>{getSafeString(viewRecord.companyName) || '-'}</div>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Customer</span>
+                                    <div className="text-sm font-bold text-gray-900">{getSafeString(viewRecord.customerName) || '-'}</div>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Entry / Audit</span>
+                                    <div className="text-xs space-y-0.5">
+                                        <div className="font-bold text-gray-900"><span className="text-gray-500 font-normal">Entry:</span> {getDisplayName(viewRecord.requestedByUsername || viewRecord.createdByUsername, viewRecord.requestedBy || viewRecord.createdByName || 'N/A')}</div>
+                                        {resolvedAcceptedBy && (
+                                            <div className="text-emerald-600 font-semibold"><span className="text-emerald-500 font-normal">Accepted:</span> ✓ {getDisplayName(resolvedAcceptedByUsername, resolvedAcceptedBy)}</div>
+                                        )}
+                                        {(viewRecord.editedByName || viewRecord.editedBy || viewRecord.editRequestedBy) && (
+                                            <div className="text-amber-600 font-medium"><span className="text-amber-500 font-normal">Edited:</span> ✎ {getDisplayName(viewRecord.editedByUsername || viewRecord.editRequestedByUsername, viewRecord.editedByName || viewRecord.editedBy || viewRecord.editRequestedBy)}</div>
+                                        )}
+                                        {(viewRecord.editApprovedByName || viewRecord.editApprovedBy) && !viewRecord.isEdited && (
+                                            <div className="text-purple-600 font-medium"><span className="text-purple-500 font-normal">Edit Approved:</span> ✓✎ {getDisplayName(viewRecord.editApprovedByUsername, viewRecord.editApprovedByName || viewRecord.editApprovedBy)}</div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / Payment</span>
+                                    <div className="flex flex-col gap-1.5">
+                                        <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold uppercase tracking-wider ${viewRecord.status === 'Requested' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                            viewRecord.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                            }`}>
+                                            {viewRecord.status || 'Completed'}
+                                        </div>
+                                        <div className={`px-2 py-0.5 w-fit rounded text-[10px] font-bold inline-flex items-center gap-1 ${parseFloat(viewRecord.dueAmount) > 0 ? 'bg-amber-50 text-amber-600 border border-amber-100/50' : 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'}`}>
+                                            <div className={`w-1 h-1 rounded-full ${parseFloat(viewRecord.dueAmount) > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
+                                            {parseFloat(viewRecord.dueAmount) > 0 ? 'Partial Pay' : 'Paid in Full'}
                                         </div>
                                     </div>
-                                ))}
+                                </div>
                             </div>
 
-                            <div className="flex justify-between items-center bg-blue-50/50 p-4 rounded-xl border border-blue-100 mt-4">
-                                <span className="font-bold text-blue-900 text-sm">Total Order Value:</span>
-                                <span className="text-lg font-black text-blue-950">৳{Math.round(calculateOrderTotal(viewRecord.items)).toLocaleString('en-US')}</span>
+                            <div className="bg-white rounded-2xl border border-gray-100/50 overflow-hidden shadow-sm">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-white border-b border-gray-50 group">
+                                            <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest w-1/4">Product Description</th>
+                                            <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Brand Information</th>
+                                            <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Qty / Bag</th>
+                                            <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Unit Price</th>
+                                            <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {viewRecord.items?.map((product, pIdx) => {
+                                            const entries = (product.brandEntries && product.brandEntries.length > 0)
+                                                ? product.brandEntries
+                                                : [{
+                                                    brand: product.brand || '-',
+                                                    warehouseName: product.warehouseName || '-',
+                                                    bag: product.bag || product.packet || 0,
+                                                    quantity: product.quantity || 0,
+                                                    unitPrice: product.unitPrice || product.rate || 0,
+                                                    totalAmount: product.totalAmount || product.amount || 0
+                                                }];
+                                            return (
+                                                <React.Fragment key={pIdx}>
+                                                    <tr className="bg-white transition-colors">
+                                                        <td className="px-6 py-5 align-top border-r border-gray-50/50" rowSpan={entries.length ? entries.length + 1 : 1}>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-1.5 h-4 bg-blue-600 rounded-sm"></div>
+                                                                <span className="text-[13px] font-bold text-blue-800">{product.productName || '-'}</span>
+                                                            </div>
+                                                        </td>
+                                                        {!entries.length && (
+                                                            <>
+                                                                <td className="px-6 py-4"></td>
+                                                                <td className="px-6 py-4"></td>
+                                                                <td className="px-6 py-4"></td>
+                                                                <td className="px-6 py-4"></td>
+                                                            </>
+                                                        )}
+                                                    </tr>
+                                                    {entries.map((entry, eIdx) => (
+                                                        <tr key={eIdx} className="bg-white hover:bg-gray-50/30 transition-all duration-200">
+                                                            <td className="px-6 py-4 align-middle">
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <div className="text-[12px] font-bold text-gray-800">{entry.brand || entry.brandName || '-'}</div>
+                                                                    <div className="text-[9px] font-black text-blue-500 uppercase tracking-wider flex items-center gap-1">
+                                                                        <div className="w-1 h-1 rounded-full bg-blue-400"></div>
+                                                                        {entry.warehouseName || '-'}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right align-middle">
+                                                                <div className="text-[13px] font-bold text-gray-900">
+                                                                    {product.uom === 'BAG'
+                                                                        ? `${parseFloat(entry.bag || entry.packet || 0).toLocaleString('en-US')} Bag`
+                                                                        : `${parseFloat(entry.quantity || 0).toLocaleString('en-US')} kg`}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right align-middle">
+                                                                <div className="text-[12px] font-bold text-gray-400">৳{parseFloat(entry.unitPrice || entry.rate || 0).toLocaleString('en-IN')}</div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right align-middle">
+                                                                <div className="text-[14px] font-black text-blue-900 group-hover:scale-[1.02] transition-transform origin-right">৳{parseFloat(entry.totalAmount || entry.amount || (parseFloat(entry.quantity || 0) * parseFloat(entry.rate || entry.unitPrice || 0)) || 0).toLocaleString('en-IN')}</div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                                <div className="p-5 bg-orange-50/30 rounded-2xl border border-orange-100/50 group hover:bg-orange-50/50 transition-colors">
+                                    <div className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1.5">Total Discount</div>
+                                    <div className="text-xl font-black text-orange-600 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewRecord.discount || 0).toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="p-5 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 group hover:bg-emerald-50/50 transition-colors">
+                                    <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5">Truck Fare</div>
+                                    <div className="text-xl font-black text-emerald-500 group-hover:scale-[1.02] transition-transform origin-left">৳{parseFloat(viewRecord.paidAmount || 0).toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="p-5 bg-[#1a368b] rounded-2xl border border-blue-900 shadow-xl shadow-blue-500/10 group overflow-hidden relative">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                                    <div className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1.5 relative z-10">Grand Total Invoice</div>
+                                    <div className="text-2xl font-black text-white relative z-10 group-hover:scale-[1.02] transition-transform origin-left tracking-tight">৳{parseFloat(viewRecord.totalAmount || calculateOrderTotal(viewRecord.items) || 0).toLocaleString('en-IN')}</div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>,
                 document.body
-            )}
+            );
+        })()}
 
             {confirmModalConfig && (
                 <ConfirmModal

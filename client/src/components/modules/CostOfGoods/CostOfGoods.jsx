@@ -7,6 +7,7 @@ import './CostOfGoods.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { generateCostOfGoodsReportPDF } from '../../../utils/pdfGenerator';
+import { ViewDetailsModal } from '../LCManagement/LCManagement';
 
 const CostOfGoods = ({
     currentUser,
@@ -52,6 +53,65 @@ const CostOfGoods = ({
     const [lcs, setLcs] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
     const [products, setProducts] = useState([]);
+
+    // LC Consumption History Modal state
+    const [selectedLcForHistory, setSelectedLcForHistory] = useState(null);
+    const [lcHistoryMetadata, setLcHistoryMetadata] = useState({
+        stocks: [],
+        sales: [],
+        gps: [],
+        expenses: [],
+        marginReturns: []
+    });
+    const [isLoadingLcHistory, setIsLoadingLcHistory] = useState(false);
+
+    const handleOpenLcConsumption = async (lcNo) => {
+        if (!lcNo) return;
+        const cleanTarget = String(lcNo).trim().toLowerCase();
+
+        let targetLc = lcs.find(l => String(l.lcNo || '').trim().toLowerCase() === cleanTarget);
+
+        if (!targetLc) {
+            try {
+                const res = await axios.get(`${API_BASE_URL}/api/lc-management`);
+                const freshLcs = Array.isArray(res.data) ? res.data : [];
+                setLcs(freshLcs);
+                targetLc = freshLcs.find(l => String(l.lcNo || '').trim().toLowerCase() === cleanTarget);
+            } catch (err) {
+                console.error('Error fetching LC:', err);
+            }
+        }
+
+        if (!targetLc) {
+            targetLc = { lcNo: lcNo };
+        }
+
+        if (lcHistoryMetadata.stocks.length === 0) {
+            setIsLoadingLcHistory(true);
+            try {
+                const [stockRes, saleRes, gpRes, expRes, marginRes] = await Promise.all([
+                    axios.get(`${API_BASE_URL}/api/stock`).catch(() => ({ data: [] })),
+                    axios.get(`${API_BASE_URL}/api/sales`).catch(() => ({ data: [] })),
+                    axios.get(`${API_BASE_URL}/api/lc-gp`).catch(() => ({ data: [] })),
+                    axios.get(`${API_BASE_URL}/api/lc-expenses`).catch(() => ({ data: [] })),
+                    axios.get(`${API_BASE_URL}/api/margin-returns`).catch(() => ({ data: [] }))
+                ]);
+                setLcHistoryMetadata({
+                    stocks: Array.isArray(stockRes.data) ? stockRes.data : [],
+                    sales: Array.isArray(saleRes.data) ? saleRes.data : [],
+                    gps: Array.isArray(gpRes.data) ? gpRes.data : [],
+                    expenses: Array.isArray(expRes.data) ? expRes.data : [],
+                    marginReturns: Array.isArray(marginRes.data) ? marginRes.data : []
+                });
+            } catch (err) {
+                console.error('Error loading LC consumption metadata:', err);
+            } finally {
+                setIsLoadingLcHistory(false);
+            }
+        }
+
+        setSelectedLcForHistory(targetLc);
+    };
 
     // Dropdown search & toggle states
     const [lcDropdownOpen, setLcDropdownOpen] = useState(false);
@@ -1024,9 +1084,29 @@ const CostOfGoods = ({
                                                     <td colSpan={isSelectionMode ? 15 : 14} className="px-4 py-3.5 text-[13px] font-bold text-blue-700">
                                                         <div className="flex items-center justify-between gap-4">
                                                             <div className="flex items-center gap-3 whitespace-nowrap shrink-0">
-                                                                <div className="flex items-center gap-1.5 w-[190px] shrink-0 leading-none">
-                                                                    <ChevronDownIcon className={`w-4 h-4 text-blue-600 transition-transform duration-200 shrink-0 ${isCollapsed ? '-rotate-90' : ''}`} />
-                                                                    <span className="leading-none select-none">LC No: {group.lcNo}</span>
+                                                                <div className="flex items-center gap-2 shrink-0 leading-none">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setExpandedLc(prev => prev === group.lcNo ? null : group.lcNo);
+                                                                        }}
+                                                                        className="p-1 hover:bg-blue-100/80 rounded-md transition-colors text-blue-600 shrink-0 cursor-pointer"
+                                                                        title={isCollapsed ? "Expand Group" : "Collapse Group"}
+                                                                    >
+                                                                        <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 shrink-0 ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleOpenLcConsumption(group.lcNo);
+                                                                        }}
+                                                                        className="inline-flex items-center justify-center px-2.5 py-1 text-[12px] font-bold text-blue-700 bg-white hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                        title={`View LC Consumption History (${group.lcNo})`}
+                                                                    >
+                                                                        LC No: {group.lcNo}
+                                                                    </button>
                                                                 </div>
                                                                 <div className="w-[75px] shrink-0 flex items-center">
                                                                     <span className="inline-flex items-center justify-center leading-none text-[10px] font-bold text-blue-600 bg-blue-100/60 px-2 py-1 rounded-md select-none">
@@ -1129,13 +1209,12 @@ const CostOfGoods = ({
                                                                         type="button"
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            if (onNavigate) onNavigate('lc-management-section', record.lcNo);
+                                                                            handleOpenLcConsumption(record.lcNo);
                                                                         }}
-                                                                        className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold cursor-pointer"
-                                                                        title={`Open LC ${record.lcNo} in LC Management`}
+                                                                        className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                        title={`View LC Consumption History (${record.lcNo})`}
                                                                     >
-                                                                        <span>{record.lcNo.slice(-5)}</span>
-                                                                        <ArrowUpRightIcon className="w-3 h-3 opacity-60 hover:opacity-100" />
+                                                                        {record.lcNo}
                                                                     </button>
                                                                 ) : '—'}
                                                             </td>
@@ -1949,6 +2028,19 @@ const CostOfGoods = ({
                     </div>
                 </div>,
                 document.body
+            )}
+            {selectedLcForHistory && (
+                <ViewDetailsModal
+                    data={selectedLcForHistory}
+                    onClose={() => setSelectedLcForHistory(null)}
+                    allStockRecords={lcHistoryMetadata.stocks}
+                    allSalesRecords={lcHistoryMetadata.sales}
+                    gpRecords={lcHistoryMetadata.gps}
+                    lcExpenses={lcHistoryMetadata.expenses}
+                    marginReturns={lcHistoryMetadata.marginReturns}
+                    lcRecords={lcs}
+                    currentUser={currentUser}
+                />
             )}
 
             <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } table th, table td { white-space: nowrap; }`}</style>
