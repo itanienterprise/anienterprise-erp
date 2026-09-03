@@ -10,6 +10,8 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import './IPManagement.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateIPManagementReportPDF } from '../../../utils/pdfGenerator';
+import { generateIPManagementReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 
 // Modal to show all LCs using a specific IP
 const ViewIPLCsModal = ({ ipRecord, lcRecords, ipRecords = [], allStockRecords = [], allSalesRecords = [], piRecords = [], onClose }) => {
@@ -936,6 +938,7 @@ function IPManagement({
 }) {
 
     const [showIpForm, setShowIpForm] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [ipRecords, setIpRecords] = useState([]);
     const [lcRecords, setLcRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -2216,8 +2219,9 @@ function IPManagement({
                         </div>
 
                         <button
-                            onClick={generatePDFReport}
+                            onClick={() => setShowReportFormatModal(true)}
                             className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all h-[40px] shadow-sm transform active:scale-95 md:hover:scale-105"
+                            title="Export Report (PDF / Excel)"
                         >
                             <BarChartIcon className="w-4 h-4 text-gray-400" />
                             <span className="text-sm font-medium">Report</span>
@@ -2960,6 +2964,27 @@ function IPManagement({
                     onDownload={downloadPDF}
                 />
             )}
+
+            {/* IP Management Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title="IP Management Report"
+                subtitle="Select your preferred format to export or preview IP records"
+                onExportPdf={() => {
+                    generatePDFReport();
+                }}
+                onExportExcel={() => {
+                    const sortedData = sortData(filteredIpRecords);
+                    const totals = {
+                        totalQuantity: sortedData.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0), 0),
+                        totalRemainingQuantity: sortedData.reduce((sum, r) => sum + (parseFloat(r.remainingQuantity) || 0), 0),
+                        totalIpBalance: sortedData.reduce((sum, r) => sum + (parseFloat(r.ipBalance) || 0), 0),
+                        totalLcCount: sortedData.reduce((sum, r) => sum + (parseInt(r.totalLcCount) || 0), 0)
+                    };
+                    generateIPManagementReportExcel(sortedData, totals, searchQuery, filters);
+                }}
+            />
         </div>
     );
 }

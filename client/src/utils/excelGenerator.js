@@ -837,6 +837,418 @@ export const generateCnFHistoryExcel = (mode = 'earnings', reportData = [], agen
     }
 };
 
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for C&F Payment Report.
+ * Matches all data, calculations, and layout of the PDF and UI reports.
+ * 
+ * @param {Array} payments - Filtered payments list
+ * @param {Object} filters - Active filter settings
+ */
+export const generateCnFPaymentsListReportExcel = (payments = [], filters = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['C&F PAYMENT REPORT']);
+        rows.push([]);
+
+        // 2. Metadata
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        rows.push([
+            'Total Records:',
+            payments.length,
+            '',
+            '',
+            'Printed On:',
+            dateStr
+        ]);
+
+        const filterBadges = [];
+        if (filters?.cnfName) filterBadges.push(`C&F Agent: ${filters.cnfName}`);
+        if (filters?.type || filters?.cnfType) filterBadges.push(`Type: ${filters.type || filters.cnfType}`);
+        if (filters?.startDate || filters?.endDate) {
+            const start = formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate);
+            const end = formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate);
+            filterBadges.push(`Date: ${start} to ${end}`);
+        }
+
+        if (filterBadges.length > 0) {
+            rows.push(['Filters Applied:', filterBadges.join('  |  ')]);
+        }
+        rows.push([]);
+
+        // 3. Table Headers
+        const tableHeaders = ['SL', 'Date', 'C&F Agent', 'Type', 'Method', 'Reference / Bank', 'Amount (TK)', 'Discount (TK)'];
+        rows.push(tableHeaders);
+
+        // 4. Data Rows & Total Calculation
+        let totalAmount = 0;
+        let totalDiscount = 0;
+
+        payments.forEach((p, index) => {
+            const amt = parseFloat(p.amount) || 0;
+            const disc = parseFloat(p.discount) || 0;
+            totalAmount += amt;
+            totalDiscount += disc;
+
+            const refBank = p.bankName ? (p.reference ? `${p.bankName} (${p.reference})` : p.bankName) : (p.reference || '-');
+            const billRange = (p.billFrom && p.billTo) ? ` (${formatDate(p.billFrom)} - ${formatDate(p.billTo)})` : '';
+
+            rows.push([
+                index + 1,
+                formatDate(p.date),
+                p.cnfName || '-',
+                p.cnfType || '-',
+                p.method || '-',
+                refBank + billRange,
+                amt > 0 ? amt : 0,
+                disc > 0 ? disc : 0
+            ]);
+        });
+
+        // 5. Grand Total Row
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            totalAmount > 0 ? totalAmount : 0,
+            totalDiscount > 0 ? totalDiscount : 0
+        ]);
+
+        // 6. Build Worksheet & Workbook
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 8 },  // SL
+            { wch: 14 }, // Date
+            { wch: 24 }, // C&F Agent
+            { wch: 14 }, // Type
+            { wch: 16 }, // Method
+            { wch: 32 }, // Reference / Bank
+            { wch: 18 }, // Amount
+            { wch: 18 }  // Discount
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'C&F Payments');
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const fileName = `CnF_Payment_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        console.error('Error exporting C&F Payment Excel report:', err);
+        alert(`Failed to generate C&F Payment Excel report: ${err.message}`);
+    }
+};
+
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for IP Management Report.
+ * Matches all data, calculations, and layout of the PDF and UI reports.
+ * 
+ * @param {Array} reportData - Filtered IP records
+ * @param {Object} totals - Precalculated totals (quantity, remainingQuantity, ipBalance, totalLcCount)
+ * @param {string} searchQuery - Current search filter text
+ * @param {Object} filters - Active filter settings (startDate, endDate, importer, port, productName)
+ */
+export const generateIPManagementReportExcel = (reportData = [], totals = {}, searchQuery = '', filters = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['IP MANAGEMENT REPORT']);
+        rows.push([]);
+
+        // 2. Metadata
+        const currentDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const start = filters.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters.endDate ? formatDate(filters.endDate) : 'Present';
+
+        rows.push([
+            'Date Range:',
+            `${start} to ${end}`,
+            '',
+            '',
+            'Printed On:',
+            currentDateStr
+        ]);
+
+        const filterBadges = [];
+        if (searchQuery) filterBadges.push(`Search: "${searchQuery}"`);
+        if (filters.importer) filterBadges.push(`Importer: ${filters.importer}`);
+        if (filters.port) filterBadges.push(`Port: ${filters.port}`);
+        if (filters.productName) filterBadges.push(`Product: ${filters.productName}`);
+
+        if (filterBadges.length > 0) {
+            rows.push(['Filters Applied:', filterBadges.join('  |  ')]);
+        }
+        rows.push([]);
+
+        // 3. Table Headers
+        const tableHeaders = [
+            'SL',
+            'Date',
+            'Close Date',
+            'IP Number',
+            'Reference No',
+            'Importer',
+            'Port',
+            'Product Name',
+            'Quantity (KG)',
+            'LC Rem (KG)',
+            'IP Balance (KG)',
+            'Total LC',
+            'Status'
+        ];
+        rows.push(tableHeaders);
+
+        // 4. Data Rows
+        reportData.forEach((record, index) => {
+            rows.push([
+                index + 1,
+                formatDate(record.openingDate),
+                formatDate(record.closeDate),
+                String(record.ipNumber || '-').trim(),
+                String(record.referenceNo || '-').trim(),
+                String(record.ipParty || '-').trim(),
+                String(record.port || '-').trim(),
+                String(record.productName || '-').trim(),
+                parseFloat(record.quantity) || 0,
+                parseFloat(record.remainingQuantity) || 0,
+                parseFloat(record.ipBalance) || 0,
+                parseInt(record.totalLcCount) || 0,
+                String(record.computedStatus || record.status || 'Active')
+            ]);
+        });
+
+        // 5. Grand Total Row
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            totals.totalQuantity || 0,
+            totals.totalRemainingQuantity || 0,
+            totals.totalIpBalance || 0,
+            totals.totalLcCount || 0,
+            ''
+        ]);
+
+        // 6. Build Worksheet & Workbook
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 14 }, // Date
+            { wch: 14 }, // Close Date
+            { wch: 20 }, // IP Number
+            { wch: 16 }, // Ref No
+            { wch: 28 }, // Importer
+            { wch: 18 }, // Port
+            { wch: 26 }, // Product Name
+            { wch: 18 }, // Quantity
+            { wch: 18 }, // LC Rem
+            { wch: 18 }, // IP Balance
+            { wch: 12 }, // Total LC
+            { wch: 14 }  // Status
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'IP Management');
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const fileName = `IP_Management_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        console.error('Error exporting IP Management Excel report:', err);
+        alert(`Failed to generate IP Management Excel report: ${err.message}`);
+    }
+};
+
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for Insurance Payment Report.
+ * Matches all data, calculations, and layout of the PDF and UI reports.
+ * 
+ * @param {Array} payments - Filtered insurance payments
+ * @param {Object} filters - Active filter settings (startDate, endDate, companyName)
+ * @param {Array} lcs - LC records list for gross premium and expected return mapping
+ */
+export const generateInsurancePaymentReportExcel = (payments = [], filters = {}, lcs = []) => {
+    try {
+        const rows = [];
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push(['INSURANCE PAYMENT REPORT']);
+        rows.push([]);
+
+        // 2. Metadata
+        const currentDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const dateRangeStr = (filters?.startDate || filters?.endDate)
+            ? `${filters.startDate ? formatDate(filters.startDate) : 'Start'} to ${filters.endDate ? formatDate(filters.endDate) : 'Present'}`
+            : 'All Time';
+
+        rows.push([
+            'Date Range:',
+            dateRangeStr,
+            '',
+            '',
+            'Printed On:',
+            currentDateStr
+        ]);
+
+        const filterBadges = [];
+        if (filters?.companyName) filterBadges.push(`Company: ${filters.companyName}`);
+
+        if (filterBadges.length > 0) {
+            rows.push(['Filters Applied:', filterBadges.join('  |  ')]);
+        }
+
+        rows.push(['Total Records:', payments.length]);
+        rows.push([]);
+
+        // 3. Table Headers
+        const tableHeaders = [
+            'SL',
+            'Date',
+            'Insurance Company',
+            'LC No',
+            'Method',
+            'Reference',
+            'Gross Premium (TK)',
+            'Return Amount (TK)',
+            'Paid (TK)',
+            'Adjusted (TK)',
+            'Status'
+        ];
+        rows.push(tableHeaders);
+
+        // 4. Data Rows & Total Calculation
+        let totalPaid = 0;
+        let totalAdjusted = 0;
+
+        const sortedPayments = [...payments].sort((a, b) => new Date(b.date) - new Date(a.date));
+        sortedPayments.forEach((p, idx) => {
+            const lc = (lcs || []).find(l => l.lcNo === p.lcNo);
+            const paidVal = p.type === 'Return Collection' ? 0 : (parseFloat(p.amount) || 0);
+            const adjVal = parseFloat(p.adjustedAmount) || 0;
+            const grossPrem = lc ? (parseFloat(lc.grossPremium) || 0) : 0;
+            const returnAmt = (p.isAdjustReturn || p.type === 'Return Collection')
+                ? (lc ? (parseFloat(lc.expectedReturnAmount) || 0) : 0)
+                : 0;
+
+            totalPaid += paidVal;
+            totalAdjusted += adjVal;
+
+            rows.push([
+                idx + 1,
+                formatDate(p.date),
+                p.companyName || '-',
+                p.lcNo || '-',
+                p.method || '-',
+                (p.reference || '').trim() || '-',
+                grossPrem > 0 ? grossPrem : '-',
+                returnAmt > 0 ? returnAmt : 0,
+                paidVal > 0 ? paidVal : 0,
+                adjVal > 0 ? adjVal : '-',
+                p.status || 'Adjusted'
+            ]);
+        });
+
+        // 5. Grand Total Row
+        rows.push([
+            'GRAND TOTAL',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            totalPaid > 0 ? totalPaid : 0,
+            totalAdjusted > 0 ? totalAdjusted : 0,
+            ''
+        ]);
+
+        // 6. Build Worksheet & Workbook
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 6 },  // SL
+            { wch: 14 }, // Date
+            { wch: 28 }, // Insurance Company
+            { wch: 18 }, // LC No
+            { wch: 14 }, // Method
+            { wch: 18 }, // Reference
+            { wch: 20 }, // Gross Premium
+            { wch: 20 }, // Return Amount
+            { wch: 18 }, // Paid
+            { wch: 18 }, // Adjusted
+            { wch: 14 }  // Status
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Insurance Payments');
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const fileName = `Insurance_Payment_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        console.error('Error exporting Insurance Payment Excel report:', err);
+        alert(`Failed to generate Insurance Payment Excel report: ${err.message}`);
+    }
+};
+
+
+
+
 
 
 

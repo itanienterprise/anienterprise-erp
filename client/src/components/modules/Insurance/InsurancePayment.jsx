@@ -6,11 +6,14 @@ import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateInsurancePaymentReportPDF } from '../../../utils/pdfGenerator';
+import { generateInsurancePaymentReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 
 const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif }) => {
     
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
 
@@ -527,8 +530,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     };
 
     const handleGenerateReport = () => {
-        const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        generateInsurancePaymentReportPDF(filteredPayments, filters, todayStr, lcs);
+        setShowReportFormatModal(true);
     };
 
     const filteredPayments = payments.filter(p => {
@@ -1543,6 +1545,21 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 </div>,
                 document.body
             )}
+
+            {/* Insurance Payment Report Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title="Insurance Payment Report"
+                subtitle="Select your preferred format to export or preview payments"
+                onExportPdf={() => {
+                    const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    generateInsurancePaymentReportPDF(filteredPayments, filters, todayStr, lcs);
+                }}
+                onExportExcel={() => {
+                    generateInsurancePaymentReportExcel(filteredPayments, filters, lcs);
+                }}
+            />
         </div>
     );
 };

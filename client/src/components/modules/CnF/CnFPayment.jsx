@@ -5,6 +5,8 @@ import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { decryptData, encryptData } from '../../../utils/encryption';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateCnFPaymentsListReportPDF } from '../../../utils/pdfGenerator';
+import { generateCnFPaymentsListReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 
@@ -27,6 +29,7 @@ const toYYYYMMDD = (dateVal) => {
 const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif, refreshPendingIndicators }) => {
     const [payments, setPayments] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
     const [localCurrentUser] = useState(() => {
@@ -1070,8 +1073,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
     });
 
     const handleGenerateReport = () => {
-        const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        generateCnFPaymentsListReportPDF(filteredPayments, filters, todayStr);
+        setShowReportFormatModal(true);
     };
 
     const totalPaid = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
@@ -1885,6 +1887,21 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                 </div>,
                 document.body
             )}
+
+            {/* Payment Report Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title="C&F Payment Report"
+                subtitle="Select your preferred format to export or preview payments"
+                onExportPdf={() => {
+                    const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    generateCnFPaymentsListReportPDF(filteredPayments, filters, todayStr);
+                }}
+                onExportExcel={() => {
+                    generateCnFPaymentsListReportExcel(filteredPayments, filters);
+                }}
+            />
         </div>
     );
 };
