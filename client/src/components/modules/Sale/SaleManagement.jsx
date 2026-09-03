@@ -5819,9 +5819,6 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th cursor-pointer group" onClick={() => handleSort('date')}>
                                             <div className="flex items-center">Date {renderSortIcon('date')}</div>
                                         </th>
-                                        <th className="sale-mgmt-th text-center cursor-pointer group whitespace-nowrap" onClick={() => handleSort('orderNo')}>
-                                            <div className="flex items-center justify-center">Order No {renderSortIcon('orderNo')}</div>
-                                        </th>
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('invoiceNo')}>
                                             <div className="flex items-center justify-center">Invoice {renderSortIcon('invoiceNo')}</div>
                                         </th>
@@ -6012,23 +6009,6 @@ const SaleManagement = ({
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-gray-600">{formatDate(sale.date)}</td>
-                                                <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                    {sale.orderNo ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleOpenOrderDetails(sale.orderNo, sale);
-                                                            }}
-                                                            className="inline-flex items-center justify-center px-2.5 py-1 text-[12px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-100 hover:text-blue-900 border border-blue-200/90 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer"
-                                                            title={`View Order Details (${sale.orderNo})`}
-                                                        >
-                                                            {sale.orderNo}
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-gray-400 font-medium">-</span>
-                                                    )}
-                                                </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-center font-semibold text-gray-800">{sale.invoiceNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{sale.lcNo || '-'}</td>
                                                 <td className="px-3 py-4 whitespace-nowrap font-semibold text-gray-800">{getSafeString(sale.importer) || '-'}</td>
