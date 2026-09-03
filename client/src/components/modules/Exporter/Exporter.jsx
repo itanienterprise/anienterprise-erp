@@ -5,6 +5,8 @@ import { API_BASE_URL, SortIcon, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
 import { generateExporterProfileReportPDF } from '../../../utils/pdfGenerator';
+import { generateExporterProfileReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './Exporter.css';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -177,6 +179,7 @@ const Exporter = ({
     const [historyLoading, setHistoryLoading] = useState(false);
     const [expandedHistoryIdx, setExpandedHistoryIdx] = useState(null);
     const [expandedExporterId, setExpandedExporterId] = useState(null);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
         address: '',
@@ -199,6 +202,7 @@ const Exporter = ({
             setHistorySearchQuery('');
             setExpandedHistoryIdx(null); // Reset expansion on new view
             setShowHistoryFilterPanel(false);
+            setShowReportFormatModal(false);
             setHistoryFilters({
                 quickRange: 'all',
                 startDate: '',
@@ -1246,8 +1250,9 @@ const Exporter = ({
 
                                 {/* Report Button */}
                                 <button
-                                    onClick={() => generateExporterProfileReportPDF(viewData, getFilteredHistory(), historyFilters)}
+                                    onClick={() => setShowReportFormatModal(true)}
                                     className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-10 sm:px-4 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm"
+                                    title="Export Report (PDF / Excel)"
                                 >
                                     <FileTextIcon className="w-4 h-4" />
                                     <span className="hidden sm:block text-sm font-medium ml-2">Report</span>
@@ -1258,6 +1263,7 @@ const Exporter = ({
                                         setViewData(null);
                                         setHistorySearchQuery('');
                                         setExpandedHistoryIdx(null);
+                                        setShowReportFormatModal(false);
                                     }} 
                                     className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
                                 >
@@ -1501,6 +1507,20 @@ const Exporter = ({
                 </div>,
                 document.body
             )}
+
+            {/* Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title={`${viewData?.name || 'Exporter'} Report`}
+                subtitle="Select your preferred format to export or preview transactions"
+                onExportPdf={() => {
+                    generateExporterProfileReportPDF(viewData, getFilteredHistory(), historyFilters);
+                }}
+                onExportExcel={() => {
+                    generateExporterProfileReportExcel(viewData, getFilteredHistory(), historyFilters);
+                }}
+            />
         </div>
     );
 };
