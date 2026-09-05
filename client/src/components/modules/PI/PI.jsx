@@ -12,6 +12,7 @@ import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './PI.css';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { IPDetailsModal } from '../IPManagement/IPDetailsModal';
 
 function PI({
     importers,
@@ -93,6 +94,52 @@ function PI({
     const [toast, setToast] = useState(null);
     const [expandedCardId, setExpandedCardId] = useState(null);
     const [showReviseForm, setShowReviseForm] = useState(false);
+    const [selectedIpForDetails, setSelectedIpForDetails] = useState(null);
+
+    const handleOpenIpDetails = (ipNumber, piRecord) => {
+        if (!ipNumber) return;
+        const cleanNum = String(ipNumber).trim().toLowerCase();
+        const cleanDigits = String(ipNumber).replace(/\D/g, '');
+
+        let targetIp = (ipRecords || []).find(ip => {
+            const ipNo = String(ip.ipNumber || '').trim().toLowerCase();
+            const ipDigits = ipNo.replace(/\D/g, '');
+            return ipNo === cleanNum || (cleanDigits && ipDigits && ipDigits === cleanDigits);
+        });
+
+        if (!targetIp) {
+            targetIp = {
+                ipNumber: ipNumber,
+                ipParty: piRecord?.partyName || 'M/S. ANI ENTERPRISE',
+                productName: piRecord?.productName || (piRecord?.productsList?.[0]?.productName) || '',
+                port: piRecord?.port || piRecord?.portOfLoading || piRecord?.portOfDischarge || '',
+                openingDate: piRecord?.date || '',
+                closeDate: piRecord?.validityDate || '',
+                referenceNo: piRecord?.buyerOrderNo || piRecord?.piNumber || '',
+                quantity: piRecord?.grandTotalQuantity || piRecord?.quantity || 0,
+                status: 'Active',
+                isPlaceholder: true
+            };
+        }
+
+        const resolvedEntryByName = targetIp.entryByName || (targetIp.entryBy && employeesMap[targetIp.entryBy]) || piRecord?.entryByName || (piRecord?.entryBy && employeesMap[piRecord?.entryBy]) || '';
+
+        const enrichedIp = {
+            ...targetIp,
+            exporterName: targetIp.exporterName || targetIp.exporter || piRecord?.exporterName || '',
+            ipParty: targetIp.ipParty || piRecord?.partyName || '',
+            productName: targetIp.productName || piRecord?.productName || (piRecord?.productsList?.[0]?.productName) || '',
+            port: targetIp.port || piRecord?.port || piRecord?.portOfLoading || piRecord?.portOfDischarge || '',
+            openingDate: targetIp.openingDate || piRecord?.date || '',
+            closeDate: targetIp.closeDate || piRecord?.validityDate || '',
+            referenceNo: targetIp.referenceNo || piRecord?.buyerOrderNo || piRecord?.piNumber || '',
+            entryBy: targetIp.entryBy || piRecord?.entryBy || '',
+            entryByName: resolvedEntryByName,
+            currentPi: piRecord || null,
+        };
+
+        setSelectedIpForDetails(enrichedIp);
+    };
     const [selectedRevisePiId, setSelectedRevisePiId] = useState('');
     const [reviseSearchQuery, setReviseSearchQuery] = useState('');
     const [isReviseSaving, setIsReviseSaving] = useState(false);
@@ -5012,11 +5059,20 @@ function PI({
                                                     </td>
                                                     <td className="px-2 py-3.5 text-sm font-semibold text-gray-700 whitespace-nowrap">
                                                         {ipList.length > 0 ? (
-                                                            <div className="flex flex-col gap-1">
+                                                            <div className="flex flex-col gap-1 items-start">
                                                                 {ipList.map((ip, idx) => (
-                                                                    <div key={idx} className="whitespace-nowrap font-semibold text-gray-800" title={ip}>
+                                                                    <button
+                                                                        key={idx}
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleOpenIpDetails(ip, record);
+                                                                        }}
+                                                                        className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                        title={`View IP Details (${ip})`}
+                                                                    >
                                                                         {ip}
-                                                                    </div>
+                                                                    </button>
                                                                 ))}
                                                             </div>
                                                         ) : (
@@ -5267,11 +5323,20 @@ function PI({
                                                         <span className="text-gray-400 font-bold mx-2 mt-0.5">-</span>
                                                         <div className="flex-1 text-sm font-bold text-gray-800">
                                                             {ipList.length > 0 ? (
-                                                                <div className="flex flex-col gap-1">
+                                                                <div className="flex flex-wrap gap-1.5">
                                                                     {ipList.map((ip, idx) => (
-                                                                        <div key={idx} className="whitespace-nowrap">
+                                                                        <button
+                                                                            key={idx}
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleOpenIpDetails(ip, record);
+                                                                            }}
+                                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                            title={`View IP Details (${ip})`}
+                                                                        >
                                                                             {ip}
-                                                                        </div>
+                                                                        </button>
                                                                     ))}
                                                                 </div>
                                                             ) : (
@@ -5654,9 +5719,18 @@ function PI({
                                                             <div className="flex flex-wrap gap-1.5 mt-1">
                                                                 {activeIps.length > 0 ? (
                                                                     activeIps.map((ip, i) => (
-                                                                        <span key={i} className="text-sm font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg border border-blue-100 font-mono">
+                                                                        <button
+                                                                            key={i}
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleOpenIpDetails(ip, viewHistoryRecord);
+                                                                            }}
+                                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                            title={`View IP Details (${ip})`}
+                                                                        >
                                                                             {ip}
-                                                                        </span>
+                                                                        </button>
                                                                     ))
                                                                 ) : (
                                                                     <span className="text-gray-500 font-bold text-sm">N/A</span>
@@ -5941,6 +6015,21 @@ function PI({
                     document.body
                 );
             })()}
+
+            {/* IP Details Card Modal */}
+            {selectedIpForDetails && (
+                <IPDetailsModal
+                    ipRecord={selectedIpForDetails}
+                    lcRecords={lcRecords}
+                    ipRecords={ipRecords}
+                    allStockRecords={allStockRecords}
+                    allSalesRecords={allSalesRecords}
+                    piRecords={records}
+                    employeesMap={employeesMap}
+                    currentPi={selectedIpForDetails?.currentPi || null}
+                    onClose={() => setSelectedIpForDetails(null)}
+                />
+            )}
         </div>
     );
 }
