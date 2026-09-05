@@ -2044,6 +2044,7 @@ const CostOfGoods = ({
                     marginReturns={lcHistoryMetadata.marginReturns}
                     lcRecords={lcs}
                     currentUser={currentUser}
+                    showDetailsFirst={true}
                 />
             )}
 

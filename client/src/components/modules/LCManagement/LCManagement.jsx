@@ -66,9 +66,13 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     }
 };
 
-export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onDeleteAmendment, onUpdateDollarRate, canManage, canDelete, canDeleteAmendment, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [] }) => {
+export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onDeleteAmendment, onUpdateDollarRate, canManage, canDelete, canDeleteAmendment, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [], showDetailsFirst = false, initialShowDetails = false }) => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
-    const [showConsumption, setShowConsumption] = useState(true);
+    const [showConsumption, setShowConsumption] = useState(!(showDetailsFirst || initialShowDetails));
+
+    useEffect(() => {
+        setShowConsumption(!(showDetailsFirst || initialShowDetails));
+    }, [data?._id, data?.lcNo, showDetailsFirst, initialShowDetails]);
     const [consumptionSearchQuery, setConsumptionSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('history');
     const [expandedSubRowKey, setExpandedSubRowKey] = useState(null);

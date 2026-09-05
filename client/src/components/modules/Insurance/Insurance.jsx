@@ -8,6 +8,7 @@ import { hasPermission } from '../../../utils/permissionHelper';
 import { generateInsuranceHistoryReportPDF } from '../../../utils/pdfGenerator';
 import { generateInsuranceHistoryReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
+import { ViewDetailsModal } from '../LCManagement/LCManagement';
 const getLcInsuranceStatus = (lc, payments) => {
     const lcNo = lc.lcNo;
     const lcPayments = payments.filter(p => p.lcNo === lcNo);
@@ -119,6 +120,65 @@ const Insurance = ({ onDeleteConfirm }) => {
     const [activeHistoryTab, setActiveHistoryTab] = useState('payments'); // 'payments' or 'lc'
     const [expandedHistoryIdx, setExpandedHistoryIdx] = useState(null);
     const [showHistoryReportFormatModal, setShowHistoryReportFormatModal] = useState(false);
+
+    // LC Consumption History Modal state (like Cost of Goods)
+    const [selectedLcForHistory, setSelectedLcForHistory] = useState(null);
+    const [lcHistoryMetadata, setLcHistoryMetadata] = useState({
+        stocks: [],
+        sales: [],
+        gps: [],
+        expenses: [],
+        marginReturns: []
+    });
+    const [_isLoadingLcHistory, setIsLoadingLcHistory] = useState(false);
+
+    const handleOpenLcConsumption = async (lcNo) => {
+        if (!lcNo) return;
+        const cleanTarget = String(lcNo).trim().toLowerCase();
+
+        let targetLc = lcRecords.find(l => String(l.lcNo || '').trim().toLowerCase() === cleanTarget);
+
+        if (!targetLc) {
+            try {
+                const res = await axios.get(`${API_BASE_URL}/api/lc-management`);
+                const freshLcs = Array.isArray(res.data) ? res.data : [];
+                setLcRecords(freshLcs);
+                targetLc = freshLcs.find(l => String(l.lcNo || '').trim().toLowerCase() === cleanTarget);
+            } catch (err) {
+                console.error('Error fetching LC:', err);
+            }
+        }
+
+        if (!targetLc) {
+            targetLc = { lcNo: lcNo };
+        }
+
+        if (lcHistoryMetadata.stocks.length === 0) {
+            setIsLoadingLcHistory(true);
+            try {
+                const [stockRes, saleRes, gpRes, expRes, marginRes] = await Promise.all([
+                    axios.get(`${API_BASE_URL}/api/stock`).catch(() => ({ data: [] })),
+                    axios.get(`${API_BASE_URL}/api/sales`).catch(() => ({ data: [] })),
+                    axios.get(`${API_BASE_URL}/api/lc-gp`).catch(() => ({ data: [] })),
+                    axios.get(`${API_BASE_URL}/api/lc-expenses`).catch(() => ({ data: [] })),
+                    axios.get(`${API_BASE_URL}/api/margin-returns`).catch(() => ({ data: [] }))
+                ]);
+                setLcHistoryMetadata({
+                    stocks: Array.isArray(stockRes.data) ? stockRes.data : [],
+                    sales: Array.isArray(saleRes.data) ? saleRes.data : [],
+                    gps: Array.isArray(gpRes.data) ? gpRes.data : [],
+                    expenses: Array.isArray(expRes.data) ? expRes.data : [],
+                    marginReturns: Array.isArray(marginRes.data) ? marginRes.data : []
+                });
+            } catch (err) {
+                console.error('Error loading LC consumption metadata:', err);
+            } finally {
+                setIsLoadingLcHistory(false);
+            }
+        }
+
+        setSelectedLcForHistory(targetLc);
+    };
 
     // History Filter State
     const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', lcNo: '' });
@@ -1034,7 +1094,7 @@ const Insurance = ({ onDeleteConfirm }) => {
 
             {/* Insurance Detail Modal (History Card) */}
             {viewData && createPortal(
-                <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 app-modal-overlay">
+                <div className="fixed inset-0 z-[4500] flex items-center justify-center p-4 app-modal-overlay">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setViewData(null)}></div>
                     <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl w-full max-w-[1450px] 2xl:max-w-[1600px] flex flex-col max-h-[90vh] animate-in zoom-in duration-300">
 
@@ -1350,7 +1410,21 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                     return activeHistoryTab === 'payments' ? (
                                                         <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
                                                             <td className="px-6 py-4 text-xs font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
-                                                            <td className="px-6 py-4 text-xs font-bold text-gray-500 whitespace-nowrap">{item.lcNo || '-'}</td>
+                                                            <td className="px-6 py-4 text-xs font-bold whitespace-nowrap">
+                                                                {item.lcNo ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleOpenLcConsumption(item.lcNo);
+                                                                        }}
+                                                                        className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                        title={`View LC Details (${item.lcNo})`}
+                                                                    >
+                                                                        {item.lcNo}
+                                                                    </button>
+                                                                ) : '-'}
+                                                            </td>
                                                             <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">{item.method}</td>
                                                             <td className="px-6 py-4 text-xs text-gray-500 italic truncate max-w-[120px]" title={item.reference}>{item.reference || '-'}</td>
                                                             <td className="px-6 py-4 text-xs font-bold text-blue-600 text-right whitespace-nowrap">
@@ -1393,7 +1467,21 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                                     </div>
                                                                 ))}
                                                             </td>
-                                                            <td className="px-6 py-4 text-xs font-bold text-blue-600 whitespace-nowrap">{item.lcNo}</td>
+                                                            <td className="px-6 py-4 text-xs font-bold whitespace-nowrap">
+                                                                {item.lcNo ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleOpenLcConsumption(item.lcNo);
+                                                                        }}
+                                                                        className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                        title={`View LC Details (${item.lcNo})`}
+                                                                    >
+                                                                        {item.lcNo}
+                                                                    </button>
+                                                                ) : '-'}
+                                                            </td>
                                                             <td className="px-6 py-4 text-xs whitespace-nowrap">
                                                                 <div className="font-bold text-gray-800">{getLcCoverNote(item)}</div>
                                                                 {getLcRevisedCoverNotes(item).map((rcn, rIdx) => (
@@ -1468,10 +1556,21 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                                 <span className="font-bold text-gray-800 truncate max-w-[120px] shrink-0" title={activeHistoryTab === 'payments' ? item.method : item.exporterName}>
                                                                     {activeHistoryTab === 'payments' ? item.method : item.exporterName || '-'}
                                                                 </span>
-                                                                <span className="text-gray-300 font-bold shrink-0">•</span>
-                                                                <span className="font-black text-blue-600 truncate min-w-0" title={item.lcNo}>
-                                                                    {item.lcNo || '-'}
-                                                                </span>
+                                                                {item.lcNo ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleOpenLcConsumption(item.lcNo);
+                                                                        }}
+                                                                        className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white border border-blue-200 rounded-md font-mono active:scale-95 transition-all"
+                                                                        title={`View LC Details (${item.lcNo})`}
+                                                                    >
+                                                                        {item.lcNo}
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className="font-black text-blue-600 truncate min-w-0">-</span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-2 shrink-0">
@@ -1531,7 +1630,23 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                                     <>
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-semibold text-gray-700 uppercase truncate text-[11px]">{item.lcNo || '-'}</span>
+                                                                        <div>
+                                                                            {item.lcNo ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleOpenLcConsumption(item.lcNo);
+                                                                                    }}
+                                                                                    className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white border border-blue-200 rounded-md font-mono active:scale-95 transition-all"
+                                                                                    title={`View LC Details (${item.lcNo})`}
+                                                                                >
+                                                                                    {item.lcNo}
+                                                                                </button>
+                                                                            ) : (
+                                                                                <span className="font-semibold text-gray-700 uppercase truncate text-[11px]">-</span>
+                                                                            )}
+                                                                        </div>
 
                                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Method</span>
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
@@ -1635,6 +1750,22 @@ const Insurance = ({ onDeleteConfirm }) => {
                 onExportPdf={handleExportHistoryPdf}
                 onExportExcel={handleExportHistoryExcel}
             />
+
+            {/* LC Details Modal (Matching Cost of Goods) */}
+            {selectedLcForHistory && (
+                <ViewDetailsModal
+                    data={selectedLcForHistory}
+                    onClose={() => setSelectedLcForHistory(null)}
+                    allStockRecords={lcHistoryMetadata.stocks}
+                    allSalesRecords={lcHistoryMetadata.sales}
+                    gpRecords={lcHistoryMetadata.gps}
+                    lcExpenses={lcHistoryMetadata.expenses}
+                    marginReturns={lcHistoryMetadata.marginReturns}
+                    lcRecords={lcRecords}
+                    currentUser={currentUser}
+                    showDetailsFirst={true}
+                />
+            )}
         </div>
     );
 };
