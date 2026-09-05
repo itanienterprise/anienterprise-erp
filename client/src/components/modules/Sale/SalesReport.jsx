@@ -4,6 +4,8 @@ import axios from '../../../utils/api';
 import { SearchIcon, XIcon, BarChartIcon, FunnelIcon, PrinterIcon, ChevronDownIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateSalesReportPDF } from '../../../utils/pdfGenerator';
+import { generateSalesReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import { formatDate } from '../../../utils/helpers';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 
@@ -58,6 +60,7 @@ const SalesReport = ({
 
     const [reportTab, setReportTab] = useState('general');
     const [showFilterPanel, setShowFilterPanel] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [expandedRows, setExpandedRows] = useState([]);
     const [filterSearchInputs, setFilterSearchInputs] = useState({ companySearch: '', invoiceSearch: '', lcSearch: '', productSearch: '', brandSearch: '', portSearch: '', indCnfSearch: '', bdCnfSearch: '' });
     const [filterDropdownOpen, setFilterDropdownOpen] = useState({ company: false, invoice: false, lc: false, product: false, brand: false, port: false, indCnf: false, bdCnf: false, from: false, to: false });
@@ -689,8 +692,38 @@ const SalesReport = ({
         return acc;
     }, { pBag: 0, pQty: 0, sBag: 0, sQty: 0, rBag: 0, rQty: 0 });
 
+    const handleExportExcel = () => {
+        generateSalesReportExcel(
+            salesWithItems,
+            saleFilters,
+            summary,
+            saleType,
+            reportTab,
+            productWiseList,
+            productWiseTotals,
+            lcWiseList,
+            lcWiseTotals
+        );
+    };
+
+    const handleExportPdf = () => {
+        generateSalesReportPDF(
+            salesWithItems,
+            saleFilters,
+            summary,
+            saleType,
+            reportTab,
+            productWiseList,
+            productWiseTotals,
+            lcWiseList,
+            lcWiseTotals
+        );
+    };
+
     if (typeof document === 'undefined' || !document.body) return null;
-    return createPortal(
+    return (
+        <>
+            {createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
             <div className="bg-white w-full max-w-[96vw] xl:max-w-[94vw] 2xl:max-w-[1700px] max-h-[92vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar */}
@@ -1473,7 +1506,12 @@ const SalesReport = ({
                                 </>
                             )}
                         </div>
-                        <button onClick={() => generateSalesReportPDF(salesWithItems, saleFilters, summary, saleType, reportTab, productWiseList, productWiseTotals, lcWiseList, lcWiseTotals)} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
+                        <button
+                            type="button"
+                            onClick={() => setShowReportFormatModal(true)}
+                            className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print"
+                            title="Export Report (PDF / Excel)"
+                        >
                             <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
                         <button onClick={onClose} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-4 h-4 sm:w-6 sm:h-6 text-gray-500" /></button>
@@ -2264,6 +2302,24 @@ const SalesReport = ({
             </div>
         </div>,
         document.body
+    )}
+
+    {/* Export Format Selection Modal */}
+    <ReportFormatModal
+        isOpen={showReportFormatModal}
+        onClose={() => setShowReportFormatModal(false)}
+        title={
+            reportTab === 'lc_wise'
+                ? (saleType === 'Order' ? 'LC Wise Order Report' : 'LC Wise Sales Report')
+                : reportTab === 'product_wise'
+                ? (saleType === 'Order' ? 'Product Wise Order Report' : 'Product Wise Sales Report')
+                : (saleType === 'Order' ? 'Order Report' : `${saleType} Sales Report`)
+        }
+        subtitle="Select your preferred format to export or preview transactions"
+        onExportPdf={handleExportPdf}
+        onExportExcel={handleExportExcel}
+    />
+    </>
     );
 };
 

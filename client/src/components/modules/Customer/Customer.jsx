@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom';
 import { EditIcon, TrashIcon, UserIcon, XIcon, SearchIcon, FunnelIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, BoxIcon, FileTextIcon, BarChartIcon, PrinterIcon, RefreshIcon } from '../../Icons';
 import { API_BASE_URL, SortIcon, formatDate, computeCustomerBalance, compareTransactions, getItemTimestamp, getLocalDateString } from '../../../utils/helpers';
 import { generateSaleInvoicePDF, generateCustomerHistoryPDF, generateMoneyReceiptPDF, generatePayToCustomerVoucherPDF } from '../../../utils/pdfGenerator';
+import { generateCustomerHistoryExcel } from '../../../utils/excelGenerator';
 import { api } from '../../../utils/api';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomerReport from './CustomerReport';
 import './Customer.css';
 
@@ -34,6 +36,7 @@ const Customer = ({
         status: 'All'
     });
     const [showReport, setShowReport] = useState(false);
+    const [showHistoryReportFormatModal, setShowHistoryReportFormatModal] = useState(false);
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -2063,16 +2066,9 @@ const Customer = ({
                                             </button>
                                         </div>
                                     </div>
-
                                     <div className="w-full md:flex-1 flex md:self-start justify-center md:justify-end gap-2 md:relative">
                                         <button
-                                            onClick={() => generateCustomerHistoryPDF(
-                                                viewData,
-                                                activeHistoryTab === 'purchase' ? filteredPurchaseHistory : activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
-                                                { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
-                                                historyFilters,
-                                                activeHistoryTab
-                                            )}
+                                            onClick={() => setShowHistoryReportFormatModal(true)}
                                             className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm group"
                                         >
                                             <PrinterIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
@@ -3966,6 +3962,32 @@ const Customer = ({
                 purchaseReceivesList={purchaseReceivesList}
                 stockList={stockList}
                 asOfDate={filters.asOfDate}
+            />
+
+            {/* Customer History Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showHistoryReportFormatModal}
+                onClose={() => setShowHistoryReportFormatModal(false)}
+                title={`${viewData?.companyName || viewData?.customerName || 'Customer'} History Report`}
+                subtitle={`Select format to export ${activeHistoryTab.toUpperCase()} history`}
+                onExportPdf={() => {
+                    generateCustomerHistoryPDF(
+                        viewData,
+                        activeHistoryTab === 'purchase' ? filteredPurchaseHistory : activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
+                        { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
+                        historyFilters,
+                        activeHistoryTab
+                    );
+                }}
+                onExportExcel={() => {
+                    generateCustomerHistoryExcel(
+                        viewData,
+                        activeHistoryTab === 'purchase' ? filteredPurchaseHistory : activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
+                        { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
+                        historyFilters,
+                        activeHistoryTab
+                    );
+                }}
             />
         </>
     );

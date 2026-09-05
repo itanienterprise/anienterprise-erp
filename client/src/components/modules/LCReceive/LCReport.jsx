@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { XIcon, PrinterIcon, BarChartIcon, FunnelIcon, SearchIcon, ChevronDownIcon } from '../../Icons';
 import { formatDate } from '../../../utils/helpers';
 import { generateLCReceiveReportPDF } from '../../../utils/pdfGenerator';
+import { generateLCReceiveReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './LCReceive.css';
 
@@ -16,6 +18,7 @@ const LCReport = ({
     lcReceiveSummary
 }) => {
     const [showFilterPanel, setShowFilterPanel] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null);
     const [filterSearchInputs, setFilterSearchInputs] = useState({
         lcNoSearch: '',
@@ -612,14 +615,14 @@ const LCReport = ({
                             )}
                         </div>
                         <button
-                            onClick={() => generateLCReceiveReportPDF(lcReceiveRecords, lcFilters, lcReceiveSummary)}
+                            onClick={() => setShowReportFormatModal(true)}
                             className="hidden md:flex px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all items-center gap-2 no-print"
                         >
                             <PrinterIcon className="w-4 h-4" />
                             Print Report
                         </button>
                         <button
-                            onClick={() => generateLCReceiveReportPDF(lcReceiveRecords, lcFilters, lcReceiveSummary)}
+                            onClick={() => setShowReportFormatModal(true)}
                             className="md:hidden p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors no-print"
                         >
                             <PrinterIcon className="w-5 h-5 text-blue-600" />
@@ -946,6 +949,20 @@ const LCReport = ({
                     </div>
                 </div>
             </div>
+
+            {/* LC Receive Print/Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title="LC Receive Report"
+                subtitle="Select your preferred format to print or export LC receive records"
+                onExportPdf={() => {
+                    generateLCReceiveReportPDF(lcReceiveRecords, lcFilters, lcReceiveSummary);
+                }}
+                onExportExcel={() => {
+                    generateLCReceiveReportExcel(lcReceiveRecords, lcFilters, lcReceiveSummary);
+                }}
+            />
         </div>,
         document.body
     );

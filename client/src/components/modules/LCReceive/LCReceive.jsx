@@ -8,6 +8,8 @@ import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
+import { generateLCReceiveReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import './LCReceive.css';
 
 const formatRequestedBy = (requestedBy, requestedByUsername, employeesMap = {}) => {
@@ -481,6 +483,7 @@ function LCReceive({
     const isAccountManager = (currentUser?.role || '').toLowerCase() === 'accounts manager' || (currentUser?.role || '').toLowerCase() === 'account manager';
     const [cnfs, setCnfs] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
@@ -3061,7 +3064,7 @@ function LCReceive({
 
                         <div className="flex-1 md:flex-none">
                             <button
-                                onClick={() => setShowLcReport(true)}
+                                onClick={() => setShowReportFormatModal(true)}
                                 className="w-full h-11 md:h-auto flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95 text-sm font-medium"
                             >
                                 <BarChartIcon className="w-4 h-4 text-gray-400" />
@@ -4921,6 +4924,19 @@ function LCReceive({
                     onClose={confirmModalConfig.onClose || (() => setConfirmModalConfig(null))}
                 />
             )}
+            {/* LC Receive Report Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title="LC Receive Report"
+                subtitle="Select your preferred format to export or preview LC receive records"
+                onExportPdf={() => {
+                    setShowLcReport(true);
+                }}
+                onExportExcel={() => {
+                    generateLCReceiveReportExcel(lcReceiveRecords, lcFilters, lcReceiveSummary);
+                }}
+            />
         </div>
     );
 }

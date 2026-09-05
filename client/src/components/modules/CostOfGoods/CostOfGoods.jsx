@@ -7,6 +7,8 @@ import './CostOfGoods.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { generateCostOfGoodsReportPDF } from '../../../utils/pdfGenerator';
+import { generateCostOfGoodsReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import { ViewDetailsModal } from '../LCManagement/LCManagement';
 
 const CostOfGoods = ({
@@ -18,7 +20,6 @@ const CostOfGoods = ({
     editingId,
     setEditingId,
     onDeleteConfirm,
-    addNotification,
     onNavigate,
 }) => {
     const canEdit = hasPermission(currentUser, 'costOfGoods', 'edit');
@@ -45,6 +46,7 @@ const CostOfGoods = ({
         product: '',
         brand: ''
     });
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
 
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
@@ -63,7 +65,7 @@ const CostOfGoods = ({
         expenses: [],
         marginReturns: []
     });
-    const [isLoadingLcHistory, setIsLoadingLcHistory] = useState(false);
+    const [_isLoadingLcHistory, setIsLoadingLcHistory] = useState(false);
 
     const handleOpenLcConsumption = async (lcNo) => {
         if (!lcNo) return;
@@ -193,32 +195,6 @@ const CostOfGoods = ({
         });
     };
 
-    useEffect(() => {
-        fetchRecords();
-        fetchLCs();
-        fetchSuppliers();
-        fetchProducts();
-    }, []);
-
-    useEffect(() => {
-        function handleClickOutside(event) {
-            if (lcDropdownRef.current && !lcDropdownRef.current.contains(event.target)) {
-                setLcDropdownOpen(false);
-            }
-            if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(event.target)) {
-                setSupplierDropdownOpen(false);
-            }
-            if (productDropdownRef.current && !productDropdownRef.current.contains(event.target)) {
-                setProductDropdownOpen(false);
-            }
-            if (brandDropdownRef.current && !brandDropdownRef.current.contains(event.target)) {
-                setBrandDropdownOpen(false);
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
@@ -257,6 +233,32 @@ const CostOfGoods = ({
             console.error('Error fetching products:', error);
         }
     };
+
+    useEffect(() => {
+        fetchRecords();
+        fetchLCs();
+        fetchSuppliers();
+        fetchProducts();
+    }, []);
+
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (lcDropdownRef.current && !lcDropdownRef.current.contains(event.target)) {
+                setLcDropdownOpen(false);
+            }
+            if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(event.target)) {
+                setSupplierDropdownOpen(false);
+            }
+            if (productDropdownRef.current && !productDropdownRef.current.contains(event.target)) {
+                setProductDropdownOpen(false);
+            }
+            if (brandDropdownRef.current && !brandDropdownRef.current.contains(event.target)) {
+                setBrandDropdownOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -987,8 +989,10 @@ const CostOfGoods = ({
                                 )}
                             </div>
                             <button
-                                onClick={() => generateCostOfGoodsReportPDF(filteredRecords, filters)}
+                                type="button"
+                                onClick={() => setShowReportFormatModal(true)}
                                 className="h-[38px] flex items-center justify-center gap-2 px-4 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all active:scale-95 text-xs font-semibold shadow-sm"
+                                title="Export Report (PDF / Excel)"
                             >
                                 <PrinterIcon className="w-4 h-4 text-gray-500" />
                                 <span>Report</span>
@@ -2042,6 +2046,16 @@ const CostOfGoods = ({
                     currentUser={currentUser}
                 />
             )}
+
+            {/* Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title="Cost of Goods Report"
+                subtitle="Select your preferred format to export or preview cost of goods records"
+                onExportPdf={() => generateCostOfGoodsReportPDF(filteredRecords, filters)}
+                onExportExcel={() => generateCostOfGoodsReportExcel(filteredRecords, filters, searchQuery)}
+            />
 
             <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } table th, table td { white-space: nowrap; }`}</style>
         </div>

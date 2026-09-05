@@ -22,7 +22,6 @@ import {
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import StockReport from './StockReport';
 import { encryptData, decryptData } from '../../../utils/encryption';
-import { API_BASE_URL } from '../../../utils/helpers';
 import { calculateStockData, calculatePktRemainder, getGroupedBrandList, safeParse } from '../../../utils/stockHelpers';
 import { generateStockReportPDF, generateProductHistoryPDF } from '../../../utils/pdfGenerator';
 import axios from '../../../utils/api';
@@ -5208,6 +5207,7 @@ const StockManagement = ({
                 </div>,
                 document.body
             )}
+
         </div >
     );
 };

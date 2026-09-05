@@ -1,18 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { XIcon, BarChartIcon, PrinterIcon, FunnelIcon, ChevronDownIcon, CheckIcon, SearchIcon } from '../../Icons';
+import { XIcon, BarChartIcon, PrinterIcon, FunnelIcon } from '../../Icons';
 import { formatDate } from '../../../utils/helpers';
 import { generatePayToCustomerReportPDF } from '../../../utils/pdfGenerator';
+import { generatePayToCustomerReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const PayToCustomerReport = ({ isOpen, onClose, payments = [] }) => {
     const [showFilterPanel, setShowFilterPanel] = useState(false);
-    const [filterDropdownOpen, setFilterDropdownOpen] = useState(null);
-    const [filterSearchInputs, setFilterSearchInputs] = useState({
-        customer: '',
-        bankName: '',
-        branch: ''
-    });
 
     const [filters, setFilters] = useState({
         startDate: '',
@@ -23,10 +19,13 @@ const PayToCustomerReport = ({ isOpen, onClose, payments = [] }) => {
         branch: ''
     });
 
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
+
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
 
     useEffect(() => {
+        if (!isOpen) return;
         const handleClickOutside = (event) => {
             if (filterPanelRef.current && !filterPanelRef.current.contains(event.target) &&
                 filterButtonRef.current && !filterButtonRef.current.contains(event.target)) {
@@ -37,9 +36,7 @@ const PayToCustomerReport = ({ isOpen, onClose, payments = [] }) => {
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    if (!isOpen) return null;
+    }, [isOpen]);
 
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({ ...prev, [key]: value }));
@@ -50,11 +47,6 @@ const PayToCustomerReport = ({ isOpen, onClose, payments = [] }) => {
             startDate: '',
             endDate: '',
             method: '',
-            customer: '',
-            bankName: '',
-            branch: ''
-        });
-        setFilterSearchInputs({
             customer: '',
             bankName: '',
             branch: ''
@@ -106,8 +98,16 @@ const PayToCustomerReport = ({ isOpen, onClose, payments = [] }) => {
         generatePayToCustomerReportPDF(filteredPayments, filters, dateStr);
     };
 
+    const handleExportExcel = () => {
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        generatePayToCustomerReportExcel(filteredPayments, filters, dateStr);
+    };
+
+    if (!isOpen) return null;
     if (typeof document === 'undefined' || !document.body) return null;
-    return createPortal(
+    return (
+        <>
+            {createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
             <div className="bg-white w-full max-w-5xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
@@ -243,13 +243,14 @@ const PayToCustomerReport = ({ isOpen, onClose, payments = [] }) => {
                             )}
                         </div>
 
-                        {/* Export PDF Button */}
+                        {/* Export Report Button */}
                         <button
-                            onClick={handlePrint}
+                            onClick={() => setShowReportFormatModal(true)}
                             className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-lg shadow-rose-500/20"
+                            title="Export Report (PDF / Excel)"
                         >
                             <PrinterIcon className="w-4 h-4" />
-                            <span>Export PDF</span>
+                            <span>Report</span>
                         </button>
 
                         {/* Close Modal Button */}
@@ -362,6 +363,18 @@ const PayToCustomerReport = ({ isOpen, onClose, payments = [] }) => {
             </div>
         </div>,
         document.body
+    )}
+
+    {/* Export Format Selection Modal */}
+    <ReportFormatModal
+        isOpen={showReportFormatModal}
+        onClose={() => setShowReportFormatModal(false)}
+        title="Pay To Customer Report"
+        subtitle="Select your preferred format to export or preview payout summary"
+        onExportPdf={handlePrint}
+        onExportExcel={handleExportExcel}
+    />
+    </>
     );
 };
 

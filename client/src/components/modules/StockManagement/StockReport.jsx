@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { SearchIcon, XIcon, BarChartIcon, FunnelIcon, PrinterIcon } from '../../Icons';
 import CustomDatePicker from "../../shared/CustomDatePicker";
 import { generateStockReportPDF } from '../../../utils/pdfGenerator';
+import { generateStockReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import { formatDate } from '../../../utils/helpers';
 import { calculateStockData, calculatePktRemainder, getGroupedBrandList } from '../../../utils/stockHelpers';
 import { hasPermission } from '../../../utils/permissionHelper';
@@ -21,12 +23,11 @@ const StockReport = ({
     showRate,
     activeBaseline
 }) => {
-    if (!isOpen) return null;
-
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const canShowRate = hasPermission(currentUser, 'stock', 'showRate');
 
     const [showFilterPanel, setShowFilterPanel] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [reportType, setReportType] = useState('short'); // 'short' or 'detailed'
     const [searchQuery, setSearchQuery] = useState('');
     const [filterSearchInputs, setFilterSearchInputs] = useState({ warehouseSearch: '', brandSearch: '', productSearch: '' });
@@ -121,8 +122,20 @@ const StockReport = ({
 
     // --- Stock Data for Report (uses unified calculated stockData) ---
     const activeStockData = React.useMemo(() => {
+        if (stockRecords) {
+            return calculateStockData(
+                stockRecords,
+                { ...stockFilters, reportType },
+                searchQuery,
+                warehouseData,
+                salesRecords,
+                products,
+                damages,
+                activeBaseline
+            );
+        }
         return stockData;
-    }, [stockData]);
+    }, [stockData, stockRecords, stockFilters, reportType, searchQuery, warehouseData, salesRecords, products, damages, activeBaseline]);
 
     // --- Search & Filter Logic ---
     const filteredRecords = React.useMemo(() => {
@@ -203,7 +216,7 @@ const StockReport = ({
             }
             return null;
         }).filter(Boolean);
-    }, [activeStockData.displayRecords, searchQuery, stockFilters.brand]);
+    }, [activeStockData.displayRecords, searchQuery, stockFilters.brand, reportType]);
 
     // Recalculate totals based on filteredRecords
     const totals = React.useMemo(() => {
@@ -317,7 +330,7 @@ const StockReport = ({
         return [...new Set(stockRecords.map(item => (item[key] || '').trim()).filter(Boolean))].sort();
     };
 
-    const renderStockTable = (rawRecords, data) => {
+    const renderStockTable = (rawRecords, _data) => {
         const records = (rawRecords || []).map(item => {
             const validBrands = (item.brandList || []).filter(b => {
                 if (reportType === 'short') {
@@ -948,7 +961,7 @@ const StockReport = ({
         );
     };
 
-    if (typeof document === 'undefined' || !document.body) return null;
+    if (!isOpen || typeof document === 'undefined' || !document.body) return null;
     return createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-2 pt-10 sm:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
             <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
@@ -1274,7 +1287,7 @@ const StockReport = ({
                                 </>
                             )}
                         </div>
-                        <button onClick={async () => { await generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages, searchQuery, activeBaseline); }} className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
+                        <button onClick={() => setShowReportFormatModal(true)} className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print">
                             <PrinterIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                         </button>
                         <button onClick={onClose} className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors no-print"><XIcon className="w-3.5 h-3.5 sm:w-6 sm:h-6 text-gray-500" /></button>
@@ -1436,6 +1449,31 @@ const StockReport = ({
                     </div>
                 </div>
             </div>
+
+            {/* Stock Report Export Format Selection Modal */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title={`Stock Management Report (${reportType === 'detailed' ? 'Details' : (reportType === 'price' ? 'Price' : 'Short')})`}
+                subtitle="Select your preferred format to print or export stock records"
+                onExportPdf={async () => {
+                    await generateStockReportPDF(filteredStockData, stockFilters, reportType, stockRecords, warehouseData, salesRecords, products, damages, searchQuery, activeBaseline);
+                }}
+                onExportExcel={() => {
+                    generateStockReportExcel(
+                        filteredStockData,
+                        stockFilters,
+                        searchQuery,
+                        reportType,
+                        stockRecords,
+                        warehouseData,
+                        salesRecords,
+                        products,
+                        damages,
+                        activeBaseline
+                    );
+                }}
+            />
         </div>,
         document.body
     );

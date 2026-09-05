@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { XIcon, BarChartIcon, PrinterIcon, SearchIcon, FunnelIcon } from '../../Icons';
 import { formatDate, computeCustomerBalance, getLocalDateString, getIsoDateString } from '../../../utils/helpers';
 import { generateCustomerReportPDF } from '../../../utils/pdfGenerator';
+import { generateCustomerReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const CustomerReport = ({
@@ -15,21 +17,23 @@ const CustomerReport = ({
     stockList = [],
     asOfDate = ''
 }) => {
-    if (!isOpen) return null;
-
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState('General Customer');
     const [reportDate, setReportDate] = useState(asOfDate || '');
+    const [prevAsOfDate, setPrevAsOfDate] = useState(asOfDate || '');
     const [showFilterCard, setShowFilterCard] = useState(false);
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const filterButtonRef = useRef(null);
     const filterPanelRef = useRef(null);
 
-    useEffect(() => {
+    if (asOfDate !== prevAsOfDate) {
+        setPrevAsOfDate(asOfDate || '');
         setReportDate(asOfDate || '');
-    }, [asOfDate]);
+    }
 
     // Click outside listener for filter card
     useEffect(() => {
+        if (!isOpen) return;
         const handleClickOutside = (e) => {
             if (showFilterCard && filterPanelRef.current && !filterPanelRef.current.contains(e.target) && !filterButtonRef.current?.contains(e.target)) {
                 setShowFilterCard(false);
@@ -41,7 +45,9 @@ const CustomerReport = ({
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [showFilterCard]);
+    }, [showFilterCard, isOpen]);
+
+    if (!isOpen) return null;
 
     // --- Calculate running balance per customer from all history (sales, payments, payouts, purchases) ---
     const computeDue = (customer) => {
@@ -129,7 +135,23 @@ const CustomerReport = ({
         );
     };
 
-    return createPortal(
+    const handleExportExcel = () => {
+        generateCustomerReportExcel(
+            filtered,
+            typeFilter,
+            grandTotalDue,
+            reportDate ? formatDate(reportDate) : formatDate(getLocalDateString(new Date())),
+            purchasesList,
+            salesRecords,
+            purchaseReceivesList,
+            reportDate,
+            stockList
+        );
+    };
+
+    return (
+        <>
+            {createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
             <div className="bg-white w-full max-w-5xl max-h-[85vh] sm:max-h-[92vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
@@ -276,9 +298,9 @@ const CustomerReport = ({
                         </div>
 
                         <button
-                            onClick={handlePrint}
+                            onClick={() => setShowReportFormatModal(true)}
                             className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print flex-shrink-0"
-                            title="Print"
+                            title="Export Report (PDF / Excel)"
                         >
                             <PrinterIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                         </button>
@@ -518,6 +540,18 @@ const CustomerReport = ({
             </div>
         </div>,
         document.body
+    )}
+
+    {/* Export Format Selection Modal */}
+    <ReportFormatModal
+        isOpen={showReportFormatModal}
+        onClose={() => setShowReportFormatModal(false)}
+        title="Customer Report"
+        subtitle={`Select your preferred format to export (${typeFilter})`}
+        onExportPdf={handlePrint}
+        onExportExcel={handleExportExcel}
+    />
+    </>
     );
 };
 

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { XIcon, BarChartIcon, PrinterIcon, FunnelIcon, ChevronDownIcon, CheckIcon, SearchIcon } from '../../Icons';
 import { formatDate } from '../../../utils/helpers';
 import { generatePaymentCollectionReportPDF } from '../../../utils/pdfGenerator';
+import { generatePaymentCollectionReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
@@ -23,11 +25,14 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
         branch: ''
     });
 
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
+
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
 
     // Handle clicking outside to close filter panel
     useEffect(() => {
+        if (!isOpen) return;
         const handleClickOutside = (event) => {
             if (filterPanelRef.current && !filterPanelRef.current.contains(event.target) &&
                 filterButtonRef.current && !filterButtonRef.current.contains(event.target)) {
@@ -38,7 +43,7 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -114,8 +119,16 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
         generatePaymentCollectionReportPDF(filteredPayments, filters, dateStr);
     };
 
+    const handleExportExcel = () => {
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        generatePaymentCollectionReportExcel(filteredPayments, filters, dateStr);
+    };
+
+    if (!isOpen) return null;
     if (typeof document === 'undefined' || !document.body) return null;
-    return createPortal(
+    return (
+        <>
+            {createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
             <div className="bg-white w-full max-w-7xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto overflow-hidden">
 
@@ -140,8 +153,9 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
                         </button>
 
                         <button
-                            onClick={handlePrint}
+                            onClick={() => setShowReportFormatModal(true)}
                             className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print"
+                            title="Export Report (PDF / Excel)"
                         >
                             <PrinterIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </button>
@@ -478,6 +492,18 @@ const PaymentCollectionReport = ({ isOpen, onClose, payments = [] }) => {
             </div>
         </div>,
         document.body
+    )}
+
+    {/* Export Format Selection Modal */}
+    <ReportFormatModal
+        isOpen={showReportFormatModal}
+        onClose={() => setShowReportFormatModal(false)}
+        title="Payment Collection Report"
+        subtitle="Select your preferred format to export or preview collections"
+        onExportPdf={handlePrint}
+        onExportExcel={handleExportExcel}
+    />
+    </>
     );
 };
 
