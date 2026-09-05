@@ -1166,7 +1166,10 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
     }
 
     // 2. Bank Bill (Original)
-    const bankBillAmt = parseFloat(dynamicBills.bankBill) || (parseFloat(data.totalBankBill || data.bankBill) || 0);
+    const isNewBilling = data.marginPaid !== undefined || data.marginBill !== undefined;
+    const bankBillAmt = isNewBilling
+        ? (parseFloat(dynamicBills.bankBill) || parseFloat(data.bankBill) || 0)
+        : (parseFloat(data.totalBankBill || data.bankBill) || 0);
     if (bankBillAmt > 0) {
         const paid = Math.min(remainingBankPaid, bankBillAmt);
         remainingBankPaid -= paid;

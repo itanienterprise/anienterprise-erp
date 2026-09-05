@@ -2697,8 +2697,8 @@ export const generateCustomerReportExcel = (
         });
 
         // 5. Grand Total Row
-        const finalGrandTotal = grandTotalDue !== null && grandTotalDue !== undefined 
-            ? Math.round(grandTotalDue) 
+        const finalGrandTotal = grandTotalDue !== null && grandTotalDue !== undefined
+            ? Math.round(grandTotalDue)
             : Math.round(calculatedGrandTotal);
 
         rows.push([
@@ -2846,15 +2846,15 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
             sortedHistory.forEach(item => {
                 const typeLabel = item.type === 'sale' ? 'SALE' : (item.type === 'payment' ? 'COLLECTION' : (item.type === 'payToCustomer' ? 'PAYOUT' : 'PURCHASE'));
                 const refNo = item.invoiceNo || item.lcNo || item.purchaseNo || item.receiptNo || '-';
-                
+
                 let particulars = item.product || '';
                 if (item.brand && item.brand !== '-') particulars += ` (${item.brand})`;
                 if (item.method) particulars += (particulars ? ' - ' : '') + item.method;
                 if (item.bankName) particulars += ` (${item.bankName})`;
 
                 const debitVal = (item.type === 'sale' || item.type === 'payToCustomer') ? (parseFloat(item.amount || 0)) : 0;
-                const creditVal = (item.type === 'payment' || item.type === 'purchase') 
-                    ? (parseFloat(item.amount || 0)) 
+                const creditVal = (item.type === 'payment' || item.type === 'purchase')
+                    ? (parseFloat(item.amount || 0))
                     : (item.type === 'sale' && parseFloat(item.paid || 0) > 0 ? parseFloat(item.paid || 0) : 0);
                 const discVal = parseFloat(item.discount || 0);
                 const qtyVal = (item.type === 'sale' || item.type === 'purchase') ? parseFloat(item.quantity || item.qty || 0) : 0;
@@ -3219,11 +3219,11 @@ export const generatePaymentCollectionReportExcel = (payments = [], filters = {}
                 remark = remark ? `${remark}, ${discountText}` : discountText;
             }
 
-            const bankOrReceiver = p.method === 'Cash' 
-                ? (p.receiveBy || '-') 
+            const bankOrReceiver = p.method === 'Cash'
+                ? (p.receiveBy || '-')
                 : (p.bankName || '-');
-            const branchOrPlace = p.method === 'Cash' 
-                ? (p.place || '-') 
+            const branchOrPlace = p.method === 'Cash'
+                ? (p.place || '-')
                 : (p.branch || '-');
 
             rows.push([
@@ -3382,11 +3382,11 @@ export const generatePayToCustomerReportExcel = (payments = [], filters = {}, da
             const amount = parseFloat(p.amount) || 0;
             grandTotal += amount;
 
-            const bankOrPaidBy = p.method === 'Cash' 
-                ? (p.receiveBy || '-') 
+            const bankOrPaidBy = p.method === 'Cash'
+                ? (p.receiveBy || '-')
                 : (p.bankName || '-');
-            const branchOrPlace = p.method === 'Cash' 
-                ? (p.place || '-') 
+            const branchOrPlace = p.method === 'Cash'
+                ? (p.place || '-')
                 : (p.branch || '-');
 
             rows.push([
@@ -3624,7 +3624,7 @@ export const generateSalesReportExcel = (
                 { wch: 20 }  // Remain Qty
             ];
 
-        // --- Tab 2: Product Wise ---
+            // --- Tab 2: Product Wise ---
         } else if (reportTab === 'product_wise') {
             const pHeaders = [
                 'SL',
@@ -3670,7 +3670,7 @@ export const generateSalesReportExcel = (
                 { wch: 22 }  // Total Amount
             ];
 
-        // --- Tab 3: General / Order View ---
+            // --- Tab 3: General / Order View ---
         } else {
             let grandQty = 0;
             let grandTotalAmount = 0;
