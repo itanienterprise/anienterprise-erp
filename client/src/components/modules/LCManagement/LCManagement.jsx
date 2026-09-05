@@ -316,9 +316,24 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
     const activeBankInfo = useMemo(() => {
         if (!data) return { marginBill: 0, bankBill: 0, totalBankBill: 0 };
 
-        const origMarginBill = parseFloat(data.marginBill) || 0;
+        const origTotalAmount = parseFloat(timeline[0]?.totalAmount) || parseFloat(data.totalAmount) || parseFloat(data.marginBill) || 0;
+        const origMarginBill = origTotalAmount;
         const origBankBill = parseFloat(data.bankBill) || 0;
-        const origMarginPaid = parseFloat(data.marginPaid) || 0;
+
+        const marginPct = parseFloat(data.bankMargin) || 0;
+        const origMarginPaid = (data.openingMarginPaid !== undefined && data.openingMarginPaid !== null && data.openingMarginPaid !== '')
+            ? (parseFloat(data.openingMarginPaid) || 0)
+            : (() => {
+                const openingDollarRate = parseFloat(data.openingDollarRate) || 0;
+                const currentDollarRate = parseFloat(data.updatedDollarRate || data.dollarRate) || 0;
+                if (openingDollarRate > 0 && currentDollarRate > 0 && Math.abs(openingDollarRate - currentDollarRate) > 0.001) {
+                    const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || data;
+                    const openingTotalDollar = parseFloat(originalLc.totalDollar || data.totalDollar) || 0;
+                    const openingTotalAmount = parseFloat(data.openingTotalAmount) || (openingTotalDollar * openingDollarRate) || 0;
+                    if (openingTotalAmount > 0) return openingTotalAmount * (marginPct / 100);
+                }
+                return parseFloat(data.marginPaid) || (origMarginBill * (marginPct / 100));
+            })();
 
         if (activeMilestoneIndex === 0) {
             return {
@@ -1096,9 +1111,34 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
     // 1. Margin Bill (Original)
     const marginBillAmt = parseFloat(dynamicBills.marginBill) || activeTotalAmount || 0;
     if (marginBillAmt > 0) {
-        const origMarginPaidBase = parseFloat(dynamicBills.marginPaid) || (() => {
+        const origMarginPaidBase = (() => {
+            if (data.openingMarginPaid !== undefined && data.openingMarginPaid !== null && data.openingMarginPaid !== '') {
+                return parseFloat(data.openingMarginPaid) || 0;
+            }
+
             const margin = parseFloat(data.bankMargin) || 0;
-            return marginBillAmt * (margin / 100);
+            const openingDollarRate = parseFloat(data.openingDollarRate) || 0;
+            const currentDollarRate = parseFloat(data.updatedDollarRate || data.dollarRate) || 0;
+
+            // If dollar rate was edited
+            if (openingDollarRate > 0 && currentDollarRate > 0 && Math.abs(openingDollarRate - currentDollarRate) > 0.001) {
+                const originalLc = timeline.find(m => m.isOriginal) || timeline[0] || data;
+                const openingTotalDollar = parseFloat(originalLc.totalDollar || data.totalDollar) || (() => {
+                    const prods = (originalLc.productsList && originalLc.productsList.length > 0) ? originalLc.productsList : (data.productsList || []);
+                    return prods.reduce((sum, p) => sum + (parseFloat(p.totalDollar) || ((parseFloat(p.quantity) || 0) * (parseFloat(p.rate) || 0))), 0);
+                })();
+                const openingTotalAmount = parseFloat(data.openingTotalAmount) || (openingTotalDollar * openingDollarRate) || 0;
+                if (openingTotalAmount > 0) {
+                    return openingTotalAmount * (margin / 100);
+                }
+            }
+
+            // If adj has openingValue that differs from adjustedTotalAmount
+            if (adj.isEnabled && adj.openingValue > 0 && Math.abs(adj.openingValue - activeTotalAmount) > 1) {
+                return adj.openingValue * (margin / 100);
+            }
+
+            return parseFloat(data.marginPaid) || (marginBillAmt * (margin / 100));
         })();
 
         const paidForOrig = Math.min(remainingMarginPaid, Math.max(0, marginBillAmt - origMarginPaidBase));
@@ -4068,6 +4108,16 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
             let updatedRecord;
             const isReset = newTotalDollar === '' || parseFloat(newTotalDollar) === 0;
 
+            const openingDollarRate = record.openingDollarRate || record.dollarRate;
+            const openingTotalAmount = record.openingTotalAmount || record.totalAmount;
+            const origMarginPaid = (record.openingMarginPaid !== undefined && record.openingMarginPaid !== null && record.openingMarginPaid !== '')
+                ? parseFloat(record.openingMarginPaid)
+                : (() => {
+                    const margin = parseFloat(record.bankMargin) || 0;
+                    const origTotAmt = parseFloat(record.openingTotalAmount) || (parseFloat(record.totalDollar) * parseFloat(openingDollarRate)) || parseFloat(record.totalAmount) || 0;
+                    return origTotAmt * (margin / 100);
+                })();
+
             if (isReset) {
                 const tempRec = { ...record, billValueUsd: '' };
                 const dynamicVal = getAdjustedLcValues(tempRec).billValueUsd || 0;
@@ -4075,7 +4125,9 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
 
                 updatedRecord = {
                     ...record,
-                    openingDollarRate: record.openingDollarRate || record.dollarRate,
+                    openingDollarRate: openingDollarRate,
+                    openingTotalAmount: openingTotalAmount,
+                    openingMarginPaid: origMarginPaid > 0 ? origMarginPaid.toFixed(2) : (record.openingMarginPaid || ''),
                     updatedDollarRate: String(newDollarRate),
                     dollarRate: String(newDollarRate),
                     billValueUsd: '',
@@ -4096,7 +4148,9 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
 
                 updatedRecord = {
                     ...record,
-                    openingDollarRate: record.openingDollarRate || record.dollarRate,
+                    openingDollarRate: openingDollarRate,
+                    openingTotalAmount: openingTotalAmount,
+                    openingMarginPaid: origMarginPaid > 0 ? origMarginPaid.toFixed(2) : (record.openingMarginPaid || ''),
                     updatedDollarRate: String(newDollarRate),
                     dollarRate: String(newDollarRate),
                     billValueUsd: parsedNewDollar,
@@ -4105,7 +4159,26 @@ const UpdateDollarRateModal = ({ record, adj, getAdjustedLcValues, onClose, onUp
                 };
             }
 
-            syncBankBills(updatedRecord);
+            // Sync bank bills without overwriting marginPaid with increased amount
+            const newMarginBill = parseFloat(updatedRecord.totalAmount) || 0;
+            const effectiveMarginPaid = origMarginPaid > 0 ? origMarginPaid : (parseFloat(record.marginPaid) || 0);
+
+            const isLcBillActive = updatedRecord.lcBillEnabled !== undefined
+                ? updatedRecord.lcBillEnabled
+                : !!(updatedRecord.bankLcCommission || updatedRecord.bankSwiftCharge || updatedRecord.bankLcApplicationForm || updatedRecord.bankMpCharge || updatedRecord.bankStampCharge);
+
+            let bankBill = 0;
+            if (isLcBillActive) {
+                const tempBills = calculateBankBills(updatedRecord);
+                bankBill = parseFloat(tempBills.bankBill) || 0;
+            }
+
+            const totalBankBill = (newMarginBill + bankBill) - effectiveMarginPaid;
+
+            updatedRecord.marginBill = newMarginBill > 0 ? newMarginBill.toFixed(2) : '';
+            updatedRecord.marginPaid = effectiveMarginPaid > 0 ? effectiveMarginPaid.toFixed(2) : '';
+            updatedRecord.bankBill = bankBill > 0 ? bankBill.toFixed(2) : '';
+            updatedRecord.totalBankBill = totalBankBill > 0 ? totalBankBill.toFixed(2) : '0.00';
 
             await onUpdateSuccess(record._id, updatedRecord);
             onClose();
@@ -6157,6 +6230,8 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 const dataToSave = {
                     ...formData,
                     openingDollarRate: formData.dollarRate,
+                    openingTotalAmount: formData.totalAmount,
+                    openingMarginPaid: formData.marginPaid,
                     // Preserve the separately-edited dollar rate so it isn't wiped by the LC edit form
                     ...(editingRecord?.updatedDollarRate ? { updatedDollarRate: editingRecord.updatedDollarRate } : {}),
                 };
@@ -6201,7 +6276,13 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
                 addNotification?.('LC record updated successfully', 'success');
             } else {
-                await axios.post(`${API_BASE_URL}/api/lc-management`, formData);
+                const dataToSave = {
+                    ...formData,
+                    openingDollarRate: formData.dollarRate,
+                    openingTotalAmount: formData.totalAmount,
+                    openingMarginPaid: formData.marginPaid,
+                };
+                await axios.post(`${API_BASE_URL}/api/lc-management`, dataToSave);
 
                 // Add persistent notification for management roles
                 if (addNotification) {
@@ -6287,6 +6368,9 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             bankStampCharge: record.bankStampCharge || '',
             marginBill: record.marginBill || '',
             marginPaid: record.marginPaid || '',
+            openingDollarRate: record.openingDollarRate || record.dollarRate || '',
+            openingTotalAmount: record.openingTotalAmount || record.totalAmount || '',
+            openingMarginPaid: record.openingMarginPaid || record.marginPaid || '',
             bankBill: record.bankBill || '',
             totalBankBill: record.totalBankBill || '',
             lcBillEnabled: record.lcBillEnabled !== undefined
