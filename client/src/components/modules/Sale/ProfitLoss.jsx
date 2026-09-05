@@ -5,7 +5,7 @@ import {
 } from '../../Icons';
 import axios from '../../../utils/api';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
-import { getAdjustedLcValues, getCogNetBillBdt } from '../../../utils/lcValueUtils';
+import { getAdjustedLcValues, getCogNetBillBdt, getRecCostingKg } from '../../../utils/lcValueUtils';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { generateProfitLossPDF } from '../../../utils/pdfGenerator';
 
@@ -916,7 +916,8 @@ export default function ProfitLoss({ salesRecords, products }) {
       saleTypeFilter,
       selectedProduct,
       selectedLcNo,
-      pieData
+      pieData,
+      adjustedLcValues
     });
   };
 
@@ -1408,6 +1409,16 @@ export default function ProfitLoss({ salesRecords, products }) {
                           <div className="text-xs font-black text-gray-800">৳ {((parseFloat(selectedLc.totalDollar || 0) * parseFloat(selectedLc.dollarRate || 0)) || parseFloat(selectedLc.totalAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </div>
                       </div>
+                      <div className="grid grid-cols-2 gap-2 border-t border-gray-200/60 pt-2 mt-1">
+                        <div>
+                          <div className="text-[10px] text-gray-400 font-black uppercase">Margin (%)</div>
+                          <div className="text-xs font-bold text-gray-800">{selectedLc.bankMargin || '0'} %</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-gray-400 font-black uppercase">Margin Paid</div>
+                          <div className="text-xs font-black text-emerald-600">৳ {parseFloat(selectedLc.marginPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </div>
+                      </div>
                       <div className="border-t border-gray-200/60 pt-2 mt-1">
                         <div className="text-[10px] text-gray-400 font-black uppercase">Bill Value ($)</div>
                         <div className="text-sm font-black text-blue-600">$ {(adjustedLcValues?.billValueUsd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -1420,16 +1431,6 @@ export default function ProfitLoss({ salesRecords, products }) {
                         <div>
                           <div className="text-[10px] text-gray-400 font-black uppercase">Bill Total (BDT)</div>
                           <div className="text-xs font-black text-blue-600">৳ {parseFloat(adjustedLcValues?.adjustedTotalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 border-t border-gray-200/60 pt-2 mt-1">
-                        <div>
-                          <div className="text-[10px] text-gray-400 font-black uppercase">Margin (%)</div>
-                          <div className="text-xs font-bold text-gray-800">{selectedLc.bankMargin || '0'} %</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-gray-400 font-black uppercase">Margin Paid</div>
-                          <div className="text-xs font-black text-emerald-600">৳ {parseFloat(selectedLc.marginPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </div>
                       </div>
                     </div>
@@ -1596,22 +1597,9 @@ export default function ProfitLoss({ salesRecords, products }) {
                         </tr>
                       ) : (
                         selectedLcCostOfGoods.map((rec, idx) => {
-                          const costingKgVal = rec.costingKg !== undefined && rec.costingKg !== null
-                            ? parseFloat(rec.costingKg)
-                            : (() => {
-                              const billSum = rec.totalBill !== undefined ? rec.totalBill : ((parseFloat(rec.amount) || 0) + (parseFloat(rec.indTruckFare) || 0) + (parseFloat(rec.slofCf) || 0));
-                              const rebatePct = rec.rebate !== undefined ? rec.rebate : (rec.redate !== undefined ? rec.redate : '2.9');
-                              const rebateVal = rec.rebateAmount !== undefined ? rec.rebateAmount : (rec.redateAmount !== undefined ? rec.redateAmount : ((billSum * (parseFloat(rebatePct) || 0)) / 100));
-                              const netBillVal = rec.netBill !== undefined ? rec.netBill : (billSum - rebateVal);
-                              const qtyVal = parseFloat(rec.quantity) || 0;
-                              const rateKgVal = qtyVal ? (netBillVal / qtyVal) : 0;
-                              const dollarRateVal = parseFloat(rec.rsToDollar) || 0;
-                              const rateKgUsdVal = dollarRateVal ? (rateKgVal / dollarRateVal) : 0;
-                              const bdtRateVal = parseFloat(rec.dollarRateBdt) || 0;
-                              const rateKgBdtVal = rateKgUsdVal * bdtRateVal;
-                              const cfExpVal = rec.cfOtherExpense !== undefined ? rec.cfOtherExpense : '9';
-                              return rateKgBdtVal + (parseFloat(cfExpVal) || 0);
-                            })();
+                          const costingKgVal = getRecCostingKg(rec);
+                          const rowQty = parseFloat(rec.quantity || 0);
+                          const rowNetBill = Math.round(costingKgVal * rowQty);
 
                           return (
                             <tr key={`cog-${rec._id || idx}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
@@ -1625,8 +1613,8 @@ export default function ProfitLoss({ salesRecords, products }) {
                                 <div className="text-xs text-black font-semibold mt-0.5">{rec.brand || '-'}</div>
                               </td>
                               <td className="py-2.5 px-4 text-right font-bold text-gray-900">৳{costingKgVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              <td className="py-2.5 px-4 text-right font-semibold text-gray-900">{parseFloat(rec.quantity || 0).toLocaleString()} KG</td>
-                              <td className="py-2.5 px-6 text-right font-black text-blue-600">৳ {Math.round(costingKgVal * (parseFloat(rec.quantity) || 0)).toLocaleString('en-IN')}</td>
+                              <td className="py-2.5 px-4 text-right font-semibold text-gray-900">{rowQty.toLocaleString()} KG</td>
+                              <td className="py-2.5 px-6 text-right font-black text-blue-600">৳ {rowNetBill.toLocaleString('en-IN')}</td>
                             </tr>
                           );
                         })

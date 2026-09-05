@@ -4,6 +4,7 @@ import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
 import { computeCustomerBalance, compareTransactions, getIsoDateString } from './helpers';
 import { api } from './api';
+import { getAdjustedLcValues, getRecCostingKg } from './lcValueUtils';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -7695,7 +7696,8 @@ export const generateProfitLossPDF = async (params) => {
             saleTypeFilter,
             selectedProduct,
             selectedLcNo,
-            pieData
+            pieData,
+            adjustedLcValues
         } = params;
 
         const doc = new jsPDF({
@@ -7753,7 +7755,7 @@ export const generateProfitLossPDF = async (params) => {
 
         // --- Invoice Header Title Badge ---
         let y = margin + 26;
-        doc.setFillColor(249, 115, 22);
+        doc.setFillColor(251, 146, 60);
         doc.roundedRect((pageWidth / 2) - 45, y - 6, 90, 8, 2, 2, 'F');
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
@@ -7990,11 +7992,17 @@ export const generateProfitLossPDF = async (params) => {
 
         // SECTION 2: LC Details
         if (selectedLc) {
-            renderTableTag("LC DETAILS OVERVIEW", [30, 41, 59]);
+            renderTableTag("LC DETAILS OVERVIEW", [85, 105, 125]);
             const lcValUsd = parseFloat(selectedLc.totalDollar || selectedLc.lcValueUsd || selectedLc.lcValue || selectedLc.amountUsd || 0);
             const exRateBdt = parseFloat(selectedLc.dollarRate || selectedLc.dollarRateBdt || selectedLc.exchangeRate || 0);
             const totalLcValBdt = (lcValUsd * exRateBdt) || parseFloat(selectedLc.totalAmount || selectedLc.totalLcValueBdt || 0);
             const bankStr = (typeof selectedLc.bankName === 'object' ? (selectedLc.bankName?.bankName || selectedLc.bankName?.name || selectedLc.bankName?.shortName) : selectedLc.bankName) || selectedLc.issuingBank || '-';
+
+            const adjValues = adjustedLcValues || (typeof getAdjustedLcValues === 'function' ? getAdjustedLcValues(selectedLc, selectedLcStocks, selectedLcSales) : null);
+            const billValueUsd = parseFloat(adjValues?.billValueUsd || 0);
+            const billExRateBdt = parseFloat(adjValues?.dollarRate || selectedLc.dollarRate || 0);
+            const billTotalBdt = parseFloat(adjValues?.adjustedTotalAmount || (billValueUsd > 0 && billExRateBdt > 0 ? billValueUsd * billExRateBdt : 0));
+            const formattedBillTotal = billTotalBdt % 1 === 0 ? Math.round(billTotalBdt).toLocaleString('en-IN') : billTotalBdt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             autoTable(doc, {
                 startY: currentY,
@@ -8008,10 +8016,13 @@ export const generateProfitLossPDF = async (params) => {
                     ['LC Value (USD)', `$ ${lcValUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
                     ['Exchange Rate (BDT)', `Tk ${exRateBdt.toFixed(2)}`],
                     ['Total LC Value (BDT)', `Tk ${Math.round(totalLcValBdt).toLocaleString('en-IN')}`],
+                    ['LC Bill Value ($)', `$ ${billValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+                    ['Exchange Rate of Bill Value', `Tk ${billExRateBdt.toFixed(2)}`],
+                    ['Bill Total (BDT)', `Tk ${formattedBillTotal}`],
                     ['Status', selectedLc.status || 'Opened']
                 ],
                 theme: 'grid',
-                headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                headStyles: { fillColor: [85, 105, 125], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
                 bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
                 columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } }
             });
@@ -8020,7 +8031,7 @@ export const generateProfitLossPDF = async (params) => {
 
         // SECTION 3: LC Expenses
         if (selectedLcExpenses.length > 0) {
-            renderTableTag("LC EXPENSES", [225, 29, 72]);
+            renderTableTag("LC EXPENSES", [244, 63, 94]);
             autoTable(doc, {
                 startY: currentY,
                 margin: { left: margin, right: margin },
@@ -8034,7 +8045,7 @@ export const generateProfitLossPDF = async (params) => {
                     [{ content: 'Total LC Expenses', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } }, { content: `Tk ${Math.round(totalLcExpensesAmount).toLocaleString('en-IN')}`, styles: { fontStyle: 'bold' } }]
                 ],
                 theme: 'grid',
-                headStyles: { fillColor: [225, 29, 72], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                headStyles: { fillColor: [244, 63, 94], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
                 bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
                 columnStyles: { 2: { halign: 'right', fontStyle: 'bold' } }
             });
@@ -8043,47 +8054,92 @@ export const generateProfitLossPDF = async (params) => {
 
         // SECTION 4: Product Details (Product Stock & Arrivals / Summary)
         if (productSummary.length > 0) {
-            renderTableTag("PRODUCT STOCK & ARRIVALS SUMMARY", [79, 70, 229]);
+            renderTableTag("PRODUCT STOCK & ARRIVALS SUMMARY", [99, 102, 241]);
+
+            const totalStockQty = productSummary.reduce((sum, p) => sum + Math.max(0, Math.round((p.inhouseQty || 0) - (p.saleQty || 0) - (p.damageQty || 0))), 0);
+
+            let calcTotalStockValue = 0;
+            const tableRows = productSummary.map(p => {
+                const currentStockQty = Math.max(0, Math.round((p.inhouseQty || 0) - (p.saleQty || 0) - (p.damageQty || 0)));
+                let stockVal = 0;
+                if (p.purchaseQty > 0 && p.purchasePrice > 0) {
+                    const avgPrice = p.purchasePrice / p.purchaseQty;
+                    stockVal = Math.round(currentStockQty * avgPrice);
+                } else if (profitLossData?.summary?.currentStockValue && productSummary.length === 1) {
+                    stockVal = Math.round(profitLossData.summary.currentStockValue);
+                } else if (profitLossData?.summary?.currentStockValue && totalStockQty > 0) {
+                    stockVal = Math.round((currentStockQty / totalStockQty) * profitLossData.summary.currentStockValue);
+                }
+                calcTotalStockValue += stockVal;
+
+                return [
+                    p.productName || '-',
+                    `${Math.round(p.purchaseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `${Math.round(p.inhouseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `${Math.round(p.shortQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `${Math.round(p.damageQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `${Math.round(p.saleQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
+                    `${currentStockQty.toLocaleString()} ${p.unit || 'KG'}`,
+                    `Tk ${stockVal.toLocaleString('en-IN')}`
+                ];
+            });
+
+            const finalTotalStockValue = (profitLossData?.summary?.currentStockValue && productSummary.length === 1)
+                ? Math.round(profitLossData.summary.currentStockValue)
+                : calcTotalStockValue;
+
             autoTable(doc, {
                 startY: currentY,
                 margin: { left: margin, right: margin },
-                head: [['Product Name', 'Purchase Qty', 'In-house Qty', 'Short Qty', 'Damage Qty', 'Sold Qty', 'Current Stock Qty']],
-                body: productSummary.map(p => {
-                    const currentStockQty = Math.max(0, Math.round((p.inhouseQty || 0) - (p.saleQty || 0) - (p.damageQty || 0)));
-                    return [
-                        p.productName || '-',
-                        `${Math.round(p.purchaseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                        `${Math.round(p.inhouseQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                        `${Math.round(p.shortQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                        `${Math.round(p.damageQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                        `${Math.round(p.saleQty || 0).toLocaleString()} ${p.unit || 'KG'}`,
-                        `${currentStockQty.toLocaleString()} ${p.unit || 'KG'}`
-                    ];
-                }),
+                head: [['Product Name', 'Purchase Qty', 'In-house Qty', 'Short Qty', 'Damage Qty', 'Sold Qty', 'Current Stock Qty', 'Stock Value (BDT)']],
+                body: [
+                    ...tableRows,
+                    [
+                        { content: 'Total Current Stock', colSpan: 6, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `${totalStockQty.toLocaleString()} KG`, styles: { fontStyle: 'bold', halign: 'right' } },
+                        { content: `Tk ${finalTotalStockValue.toLocaleString('en-IN')}`, styles: { fontStyle: 'bold', halign: 'right' } }
+                    ]
+                ],
                 theme: 'grid',
-                headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                headStyles: { fillColor: [99, 102, 241], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
                 bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
-                columnStyles: { 6: { halign: 'right', fontStyle: 'bold' } }
+                columnStyles: {
+                    0: { cellWidth: 32 },
+                    1: { cellWidth: 22, halign: 'right' },
+                    2: { cellWidth: 22, halign: 'right' },
+                    3: { cellWidth: 18, halign: 'right' },
+                    4: { cellWidth: 18, halign: 'right' },
+                    5: { cellWidth: 22, halign: 'right' },
+                    6: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
+                    7: { cellWidth: 32, halign: 'right', fontStyle: 'bold' }
+                }
             });
             currentY = doc.lastAutoTable.finalY + 6;
         }
 
         // SECTION 5: Cost of Goods (COG)
         if (selectedLcCostOfGoods.length > 0) {
-            renderTableTag("COST OF GOODS (COG)", [2, 132, 199]);
+            renderTableTag("COST OF GOODS (COG)", [14, 165, 233]);
             autoTable(doc, {
                 startY: currentY,
                 margin: { left: margin, right: margin },
                 head: [['Date', 'Invoice / Truck', 'Product & Brand', 'Cost/KG', 'Quantity', 'Net Bill']],
                 body: [
-                    ...selectedLcCostOfGoods.map(rec => [
-                        formatDate(rec.date),
-                        `${rec.invoiceNo || '-'} / ${rec.truckNo || '-'}`,
-                        `${rec.product || '-'} (${rec.brand || '-'})`,
-                        `Tk ${parseFloat(rec.costingKg || 0).toFixed(2)}`,
-                        `${Math.round(parseFloat(rec.quantity || 0)).toLocaleString()} KG`,
-                        `Tk ${Math.round((parseFloat(rec.costingKg || 0)) * (parseFloat(rec.quantity || 0))).toLocaleString('en-IN')}`
-                    ]),
+                    ...selectedLcCostOfGoods.map(rec => {
+                        const costingKgVal = typeof getRecCostingKg === 'function'
+                            ? getRecCostingKg(rec)
+                            : (Math.round(parseFloat(rec.costingKg || 0) * 100) / 100);
+                        const qty = parseFloat(rec.quantity || 0);
+                        const rowNetBill = Math.round(costingKgVal * qty);
+                        return [
+                            formatDate(rec.date),
+                            `${rec.invoiceNo || '-'} / ${rec.truckNo || '-'}`,
+                            `${rec.product || '-'} (${rec.brand || '-'})`,
+                            `Tk ${costingKgVal.toFixed(2)}`,
+                            `${Math.round(qty).toLocaleString()} KG`,
+                            `Tk ${rowNetBill.toLocaleString('en-IN')}`
+                        ];
+                    }),
                     [
                         { content: 'Total Cost of Goods (COG)', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
                         { content: `${Math.round(totalLcCostOfGoodsQty).toLocaleString()} KG`, styles: { fontStyle: 'bold' } },
@@ -8091,7 +8147,7 @@ export const generateProfitLossPDF = async (params) => {
                     ]
                 ],
                 theme: 'grid',
-                headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                headStyles: { fillColor: [14, 165, 233], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
                 bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
                 columnStyles: {
                     0: { cellWidth: 22 },
@@ -8107,7 +8163,7 @@ export const generateProfitLossPDF = async (params) => {
 
         // SECTION 6: LC Receive History
         if (selectedLcStocks.length > 0) {
-            renderTableTag("LC RECEIVE HISTORY", [30, 41, 59]);
+            renderTableTag("LC RECEIVE HISTORY", [85, 105, 125]);
             autoTable(doc, {
                 startY: currentY,
                 margin: { left: margin, right: margin },
@@ -8139,7 +8195,7 @@ export const generateProfitLossPDF = async (params) => {
                     ]
                 ],
                 theme: 'grid',
-                headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                headStyles: { fillColor: [85, 105, 125], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
                 bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
                 columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } }
             });
@@ -8148,7 +8204,7 @@ export const generateProfitLossPDF = async (params) => {
 
         // SECTION 7: Sales History
         if (selectedLcSales.length > 0) {
-            renderTableTag("SALES HISTORY", [16, 185, 129]);
+            renderTableTag("SALES HISTORY", [34, 197, 94]);
             autoTable(doc, {
                 startY: currentY,
                 margin: { left: margin, right: margin },
@@ -8168,7 +8224,7 @@ export const generateProfitLossPDF = async (params) => {
                     ]
                 ],
                 theme: 'grid',
-                headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
+                headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, strokeColor: [255, 255, 255] },
                 bodyStyles: { fontSize: 9, textColor: [30, 41, 59] },
                 columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right', fontStyle: 'bold' } }
             });

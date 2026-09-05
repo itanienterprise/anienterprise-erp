@@ -102,33 +102,36 @@ export const getLCHistoryTimeline = (lc) => {
  */
 export const getRecCostingKg = (rec) => {
     if (!rec) return 0;
+    let cost = 0;
     if (rec.costingKg !== undefined && rec.costingKg !== null && rec.costingKg !== '') {
-        return parseFloat(rec.costingKg) || 0;
-    }
-    const isChina = rec.country === 'CHINA';
-    const amount = parseFloat(rec.amount) || 0;
-    const qty = parseFloat(rec.quantity) || 0;
-    const bdtRate = parseFloat(rec.dollarRateBdt) || 0;
-    const expense = parseFloat(rec.cfOtherExpense !== undefined ? rec.cfOtherExpense : 9) || 0;
-
-    if (isChina) {
-        const rateKgUsd = qty ? (amount / qty) : 0;
-        const rateKgBdt = rateKgUsd * bdtRate;
-        return rateKgBdt + expense;
+        cost = parseFloat(rec.costingKg) || 0;
     } else {
-        const indTruckFare = parseFloat(rec.indTruckFare) || 0;
-        const truckChangeFare = parseFloat(rec.truckChangeFare) || 0;
-        const slofCf = parseFloat(rec.slofCf) || 0;
-        const totalBill = rec.totalBill !== undefined ? parseFloat(rec.totalBill) : (amount + indTruckFare + truckChangeFare + slofCf);
-        const rebatePct = parseFloat(rec.rebate !== undefined ? rec.rebate : (rec.redate !== undefined ? rec.redate : 2.9)) || 0;
-        const rebateAmount = rec.rebateAmount !== undefined ? parseFloat(rec.rebateAmount) : (rec.redateAmount !== undefined ? parseFloat(rec.redateAmount) : ((totalBill * rebatePct) / 100));
-        const netBill = rec.netBill !== undefined && rec.netBill !== null && rec.netBill !== '' ? parseFloat(rec.netBill) : (totalBill - rebateAmount);
-        const rateKg = qty ? (netBill / qty) : 0;
-        const dollarRate = parseFloat(rec.rsToDollar) || 0;
-        const rateKgUsd = dollarRate ? (rateKg / dollarRate) : 0;
-        const rateKgBdt = rateKgUsd * bdtRate;
-        return rateKgBdt + expense;
+        const isChina = rec.country === 'CHINA';
+        const amount = parseFloat(rec.amount) || 0;
+        const qty = parseFloat(rec.quantity) || 0;
+        const bdtRate = parseFloat(rec.dollarRateBdt) || 0;
+        const expense = parseFloat(rec.cfOtherExpense !== undefined ? rec.cfOtherExpense : 9) || 0;
+
+        if (isChina) {
+            const rateKgUsd = qty ? (amount / qty) : 0;
+            const rateKgBdt = rateKgUsd * bdtRate;
+            cost = rateKgBdt + expense;
+        } else {
+            const indTruckFare = parseFloat(rec.indTruckFare) || 0;
+            const truckChangeFare = parseFloat(rec.truckChangeFare) || 0;
+            const slofCf = parseFloat(rec.slofCf) || 0;
+            const totalBill = rec.totalBill !== undefined ? parseFloat(rec.totalBill) : (amount + indTruckFare + truckChangeFare + slofCf);
+            const rebatePct = parseFloat(rec.rebate !== undefined ? rec.rebate : (rec.redate !== undefined ? rec.redate : 2.9)) || 0;
+            const rebateAmount = rec.rebateAmount !== undefined ? parseFloat(rec.rebateAmount) : (rec.redateAmount !== undefined ? parseFloat(rec.redateAmount) : ((totalBill * rebatePct) / 100));
+            const netBill = rec.netBill !== undefined && rec.netBill !== null && rec.netBill !== '' ? parseFloat(rec.netBill) : (totalBill - rebateAmount);
+            const rateKg = qty ? (netBill / qty) : 0;
+            const dollarRate = parseFloat(rec.rsToDollar) || 0;
+            const rateKgUsd = dollarRate ? (rateKg / dollarRate) : 0;
+            const rateKgBdt = rateKgUsd * bdtRate;
+            cost = rateKgBdt + expense;
+        }
     }
+    return Math.round(cost * 100) / 100;
 };
 
 /**
