@@ -6,6 +6,8 @@ import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateInsuranceHistoryReportPDF } from '../../../utils/pdfGenerator';
+import { generateInsuranceHistoryReportExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 const getLcInsuranceStatus = (lc, payments) => {
     const lcNo = lc.lcNo;
     const lcPayments = payments.filter(p => p.lcNo === lcNo);
@@ -101,7 +103,7 @@ const Insurance = ({ onDeleteConfirm }) => {
     const cannotAddEdit = !canAdd && !canEdit;
     const [insuranceRecords, setInsuranceRecords] = useState([]);
     const [showForm, setShowForm] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
+    const [_isLoading, _setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -116,6 +118,7 @@ const Insurance = ({ onDeleteConfirm }) => {
     const [historySearchQuery, setHistorySearchQuery] = useState('');
     const [activeHistoryTab, setActiveHistoryTab] = useState('payments'); // 'payments' or 'lc'
     const [expandedHistoryIdx, setExpandedHistoryIdx] = useState(null);
+    const [showHistoryReportFormatModal, setShowHistoryReportFormatModal] = useState(false);
 
     // History Filter State
     const [historyFilters, setHistoryFilters] = useState({ startDate: '', endDate: '', lcNo: '' });
@@ -144,6 +147,24 @@ const Insurance = ({ onDeleteConfirm }) => {
         status: 'Active'
     });
 
+    const fetchInsurance = async () => {
+        setIsInitialLoading(true);
+        try {
+            const [insRes, lcRes, paymentsRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/insurance`),
+                axios.get(`${API_BASE_URL}/api/lc-management`),
+                axios.get(`${API_BASE_URL}/api/insurance-payments`)
+            ]);
+            setInsuranceRecords(Array.isArray(insRes.data) ? insRes.data : []);
+            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
+            setInsurancePayments(Array.isArray(paymentsRes.data) ? paymentsRes.data : []);
+        } catch (error) {
+            console.error('Error fetching insurance data:', error);
+        } finally {
+            setIsInitialLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchInsurance();
     }, []);
@@ -168,24 +189,6 @@ const Insurance = ({ onDeleteConfirm }) => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-
-    const fetchInsurance = async () => {
-        setIsInitialLoading(true);
-        try {
-            const [insRes, lcRes, paymentsRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/api/insurance`),
-                axios.get(`${API_BASE_URL}/api/lc-management`),
-                axios.get(`${API_BASE_URL}/api/insurance-payments`)
-            ]);
-            setInsuranceRecords(Array.isArray(insRes.data) ? insRes.data : []);
-            setLcRecords(Array.isArray(lcRes.data) ? lcRes.data : []);
-            setInsurancePayments(Array.isArray(paymentsRes.data) ? paymentsRes.data : []);
-        } catch (error) {
-            console.error('Error fetching insurance data:', error);
-        } finally {
-            setIsInitialLoading(false);
-        }
-    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -474,9 +477,9 @@ const Insurance = ({ onDeleteConfirm }) => {
         }
     }, [viewData, historySearchQuery, activeHistoryTab, insuranceTotals, historyFilters, lcRecords]);
 
-    const handlePrintHistoryReport = async () => {
-        if (!viewData) return;
-        await generateInsuranceHistoryReportPDF({
+    const getReportPayload = () => {
+        if (!viewData) return null;
+        return {
             companyName: viewData.companyName,
             policyType: viewData.policyType,
             email: viewData.email,
@@ -497,7 +500,21 @@ const Insurance = ({ onDeleteConfirm }) => {
             getLcRevisedCoverNotes,
             getLcAmendmentDates,
             getLcInsuranceStatus
-        });
+        };
+    };
+
+    const handleExportHistoryPdf = async () => {
+        const payload = getReportPayload();
+        if (payload) {
+            await generateInsuranceHistoryReportPDF(payload);
+        }
+    };
+
+    const handleExportHistoryExcel = () => {
+        const payload = getReportPayload();
+        if (payload) {
+            generateInsuranceHistoryReportExcel(payload);
+        }
     };
 
     return (
@@ -1072,7 +1089,8 @@ const Insurance = ({ onDeleteConfirm }) => {
                                 </button>
 
                                 <button
-                                    onClick={handlePrintHistoryReport}
+                                    type="button"
+                                    onClick={() => setShowHistoryReportFormatModal(true)}
                                     className="w-10 h-10 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 hover:border-blue-200 hover:bg-blue-50/30 text-gray-600 hover:text-blue-600 active:scale-95 shadow-sm"
                                     title="Print / Export Report"
                                 >
@@ -1125,7 +1143,8 @@ const Insurance = ({ onDeleteConfirm }) => {
                                     </button>
 
                                     <button
-                                        onClick={handlePrintHistoryReport}
+                                        type="button"
+                                        onClick={() => setShowHistoryReportFormatModal(true)}
                                         className="w-11 h-11 flex items-center justify-center rounded-xl transition-all border bg-white border-gray-200 hover:border-blue-200 text-gray-600 shrink-0 active:scale-95 shadow-sm"
                                         title="Print / Export Report"
                                     >
@@ -1606,6 +1625,16 @@ const Insurance = ({ onDeleteConfirm }) => {
                 </div>,
                 document.body
             )}
+
+            {/* Insurance History Export Format Modal */}
+            <ReportFormatModal
+                isOpen={showHistoryReportFormatModal}
+                onClose={() => setShowHistoryReportFormatModal(false)}
+                title={`${viewData?.companyName || 'Insurance'} (${activeHistoryTab === 'payments' ? 'Payment History' : 'LC History'})`}
+                subtitle="Select your preferred format to export or preview insurance records"
+                onExportPdf={handleExportHistoryPdf}
+                onExportExcel={handleExportHistoryExcel}
+            />
         </div>
     );
 };

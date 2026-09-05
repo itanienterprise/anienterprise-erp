@@ -4131,6 +4131,287 @@ export const generateCostOfGoodsReportExcel = (records = [], filters = {}, searc
     }
 };
 
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for Insurance History Report (Payment History or LC History).
+ * Matches all data, calculations, and layout of the PDF and UI reports.
+ * 
+ * @param {Object} params - Parameters object
+ */
+export const generateInsuranceHistoryReportExcel = ({
+    companyName = '',
+    policyType = '',
+    email = '',
+    activeTab = 'payments',
+    records = [],
+    aggregates = {},
+    filters = {},
+    lcRecords = [],
+    insurancePayments = [],
+    getLcCoverNote = () => '-',
+    getLcRevisedCoverNotes = () => [],
+    getLcAmendmentDates = () => [],
+    getLcInsuranceStatus = () => 'not paid'
+} = {}) => {
+    try {
+        const rows = [];
+
+        // 1. Company Branding Header
+        rows.push(['ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        const reportTitle = activeTab === 'payments' ? 'INSURANCE PAYMENT HISTORY REPORT' : 'INSURANCE LC HISTORY REPORT';
+        rows.push([reportTitle]);
+        rows.push([]);
+
+        // 2. Metadata & Profile Details
+        const printDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const startStr = filters?.startDate ? formatDate(filters.startDate) : 'Start';
+        const endStr = filters?.endDate ? formatDate(filters.endDate) : 'Present';
+        const dateRangeStr = (filters?.startDate || filters?.endDate) ? `${startStr} to ${endStr}` : 'All Time';
+
+        rows.push([
+            'Insurance Company:',
+            companyName || '-',
+            '',
+            'Policy Type:',
+            policyType || '-',
+            '',
+            'Email:',
+            email || 'N/A'
+        ]);
+
+        rows.push([
+            'Date Range:',
+            dateRangeStr,
+            '',
+            '',
+            'Printed On:',
+            printDateStr
+        ]);
+
+        if (filters?.lcNo) {
+            rows.push(['Filtered LC No:', String(filters.lcNo)]);
+        }
+
+        rows.push(['Total Records:', records.length]);
+        rows.push([]);
+
+        // 3. Summary Cards (Premium & Return)
+        rows.push(['PREMIUM SUMMARY', '', '', '', 'RETURN SUMMARY', '', '']);
+        rows.push([
+            'Total Premium (TK):',
+            aggregates?.totalPremium ? Number(aggregates.totalPremium) : 0,
+            '',
+            '',
+            'Return Amount (TK):',
+            aggregates?.returnAmount ? Number(aggregates.returnAmount) : 0,
+            ''
+        ]);
+        rows.push([
+            'Paid Premium (TK):',
+            aggregates?.paidPremium ? Number(aggregates.paidPremium) : 0,
+            '',
+            '',
+            'Paid Return (TK):',
+            aggregates?.paidReturn ? Number(aggregates.paidReturn) : 0,
+            ''
+        ]);
+        rows.push([
+            'Premium Balance (TK):',
+            aggregates?.premiumBalance ? Number(aggregates.premiumBalance) : 0,
+            '',
+            '',
+            'Return Balance (TK):',
+            aggregates?.returnBalance ? Number(aggregates.returnBalance) : 0,
+            ''
+        ]);
+        rows.push([]);
+
+        let colWidths = [];
+
+        // 4. Tables according to Active Tab
+        if (activeTab === 'payments') {
+            const headers = [
+                'SL',
+                'Date',
+                'LC No',
+                'Method',
+                'Reference',
+                'Gross Premium (TK)',
+                'Return Amount (TK)',
+                'Paid (TK)',
+                'Adjusted (TK)',
+                'Status'
+            ];
+            rows.push(headers);
+
+            let sumGross = 0;
+            let sumReturn = 0;
+            let sumPaid = 0;
+            let sumAdj = 0;
+
+            records.forEach((p, idx) => {
+                const lc = (lcRecords || []).find(l => l.lcNo === p.lcNo);
+                const paidVal = p.type === 'Return Collection' ? 0 : (parseFloat(p.amount) || 0);
+                const adjVal = parseFloat(p.adjustedAmount) || 0;
+                const grossVal = lc ? (parseFloat(lc.grossPremium) || 0) : 0;
+                const returnVal = (p.isAdjustReturn || p.type === 'Return Collection')
+                    ? (lc ? (parseFloat(lc.expectedReturnAmount) || 0) : 0)
+                    : 0;
+
+                sumGross += grossVal;
+                sumReturn += returnVal;
+                sumPaid += paidVal;
+                sumAdj += adjVal;
+
+                rows.push([
+                    idx + 1,
+                    formatDate(p.date),
+                    p.lcNo || '-',
+                    p.method || '-',
+                    (p.reference || '').trim() || '-',
+                    grossVal > 0 ? Number(grossVal.toFixed(2)) : 0,
+                    returnVal > 0 ? Number(returnVal.toFixed(2)) : 0,
+                    paidVal > 0 ? Number(paidVal.toFixed(2)) : 0,
+                    adjVal > 0 ? Number(adjVal.toFixed(2)) : 0,
+                    p.status || 'Adjusted'
+                ]);
+            });
+
+            // Grand Total Row
+            rows.push([
+                'TOTAL',
+                '',
+                '',
+                '',
+                '',
+                Number(sumGross.toFixed(2)),
+                Number(sumReturn.toFixed(2)),
+                Number(sumPaid.toFixed(2)),
+                Number(sumAdj.toFixed(2)),
+                ''
+            ]);
+
+            colWidths = [
+                { wch: 8 },  // SL
+                { wch: 14 }, // Date
+                { wch: 18 }, // LC No
+                { wch: 14 }, // Method
+                { wch: 22 }, // Reference
+                { wch: 20 }, // Gross Premium
+                { wch: 20 }, // Return Amount
+                { wch: 18 }, // Paid
+                { wch: 18 }, // Adjusted
+                { wch: 16 }  // Status
+            ];
+        } else {
+            // LC History Tab
+            const headers = [
+                'SL',
+                'LC Date',
+                'LC Number',
+                'Cover Note No',
+                'Beneficiary',
+                'Gross Premium (TK)',
+                'Net Premium (TK)',
+                'Exp. Return (TK)',
+                'Status'
+            ];
+            rows.push(headers);
+
+            let sumGross = 0;
+            let sumNet = 0;
+            let sumExp = 0;
+
+            records.forEach((lc, idx) => {
+                const grossVal = parseFloat(lc.grossPremium) || 0;
+                const netVal = parseFloat(lc.netPremium) || 0;
+                const expVal = parseFloat(lc.expectedReturnAmount) || 0;
+
+                sumGross += grossVal;
+                sumNet += netVal;
+                sumExp += expVal;
+
+                const openD = formatDate(lc.openingDate);
+                const amndDates = typeof getLcAmendmentDates === 'function' ? getLcAmendmentDates(lc) : [];
+                const dateStr = [openD, ...(amndDates || [])].filter(Boolean).join(', ');
+
+                const cn = typeof getLcCoverNote === 'function' ? getLcCoverNote(lc) : '-';
+                const rcnList = typeof getLcRevisedCoverNotes === 'function' ? getLcRevisedCoverNotes(lc) : [];
+                const cnStr = [cn, ...(rcnList || [])].filter(Boolean).join(', ');
+
+                const status = typeof getLcInsuranceStatus === 'function' ? getLcInsuranceStatus(lc, insurancePayments) : 'NOT PAID';
+
+                rows.push([
+                    idx + 1,
+                    dateStr || '-',
+                    lc.lcNo || '-',
+                    cnStr || '-',
+                    lc.exporterName || '-',
+                    grossVal > 0 ? Number(grossVal.toFixed(2)) : 0,
+                    netVal > 0 ? Number(netVal.toFixed(2)) : 0,
+                    expVal > 0 ? Number(expVal.toFixed(2)) : 0,
+                    String(status).toUpperCase()
+                ]);
+            });
+
+            // Grand Total Row
+            rows.push([
+                'TOTAL',
+                '',
+                '',
+                '',
+                '',
+                Number(sumGross.toFixed(2)),
+                Number(sumNet.toFixed(2)),
+                Number(sumExp.toFixed(2)),
+                ''
+            ]);
+
+            colWidths = [
+                { wch: 8 },  // SL
+                { wch: 18 }, // LC Date
+                { wch: 18 }, // LC Number
+                { wch: 26 }, // Cover Note No
+                { wch: 28 }, // Beneficiary
+                { wch: 20 }, // Gross Premium
+                { wch: 20 }, // Net Premium
+                { wch: 20 }, // Exp. Return
+                { wch: 16 }  // Status
+            ];
+        }
+
+        // 5. Build Worksheet & Workbook
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = colWidths;
+
+        const sheetName = (activeTab === 'payments' ? 'Payment History' : 'LC History').slice(0, 31);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const safeCompany = (companyName || 'Insurance').replace(/[^a-zA-Z0-9]/g, '_');
+        const tabName = activeTab === 'payments' ? 'Payment_History' : 'LC_History';
+        const fileName = `${safeCompany}_${tabName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        console.error('Error exporting Insurance History Excel report:', err);
+        alert(`Failed to generate Insurance History Excel report: ${err.message}`);
+    }
+};
+
+
 
 
 
