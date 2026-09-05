@@ -10,6 +10,7 @@ import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import './PackingList.css';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { PIDetailsModal } from '../PI/PIDetailsModal';
 
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
@@ -110,6 +111,38 @@ function PackingList({
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [toast, setToast] = useState(null);
     const [expandedCardId, setExpandedCardId] = useState(null);
+    const [selectedPiForDetails, setSelectedPiForDetails] = useState(null);
+
+    const handleOpenPiDetails = (piNumber, packingListRec) => {
+        if (!piNumber || piNumber === 'N/A') return;
+        const cleanTarget = String(piNumber).replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+
+        let targetPi = (piRecords || []).find(pi => {
+            const pNum = String(pi.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+            return pNum === cleanTarget;
+        });
+
+        if (!targetPi) {
+            targetPi = {
+                piNumber: String(piNumber).replace(/\s*\(revised\)/gi, '').trim(),
+                date: packingListRec?.date || '',
+                partyName: packingListRec?.partyName || '',
+                exporterName: packingListRec?.exporterName || '',
+                port: packingListRec?.port || '',
+                productsList: packingListRec?.productsList || [],
+                grandTotalQuantity: packingListRec?.productsList?.reduce((s, p) => s + (parseFloat(p.netWeight) || 0), 0) || 0,
+                grandTotal: packingListRec?.grandTotal || 0,
+                isPlaceholder: true
+            };
+        }
+
+        const isRevisedTarget = String(piNumber).toLowerCase().includes('(revised)');
+        setSelectedPiForDetails({
+            ...targetPi,
+            _isRevisedRequested: isRevisedTarget,
+            packingListRecord: packingListRec
+        });
+    };
 
     // Auto-population dropdown state
     const [piSearchQuery, setPiSearchQuery] = useState('');
@@ -2372,7 +2405,34 @@ function PackingList({
                                             >
                                                 <td className="px-6 py-4 font-bold text-gray-800">{rec.packingListNumber}</td>
                                                 <td className="px-6 py-4 text-gray-600">{formatDate(rec.date)}</td>
-                                                <td className="px-6 py-4 text-gray-600">{rec.piNumber || 'N/A'}</td>
+                                                <td className="px-6 py-4 text-sm font-semibold text-gray-700 whitespace-nowrap">
+                                                    {rec.piNumber ? (
+                                                        (() => {
+                                                            const piList = String(rec.piNumber).split(',').map(s => s.trim()).filter(Boolean);
+                                                            if (piList.length === 0) return <span className="text-gray-400 font-medium">N/A</span>;
+                                                            return (
+                                                                <div className="flex flex-col gap-1 items-start">
+                                                                    {piList.map((piNo, idx) => (
+                                                                        <button
+                                                                            key={idx}
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleOpenPiDetails(piNo, rec);
+                                                                            }}
+                                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                            title={`View PI Details (${piNo})`}
+                                                                        >
+                                                                            {piNo}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            );
+                                                        })()
+                                                    ) : (
+                                                        <span className="text-gray-400 font-medium">N/A</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4 font-semibold text-gray-800 truncate max-w-[180px]">{rec.partyName}</td>
                                                 <td className="px-6 py-4 text-gray-600 truncate max-w-[150px]" title={
                                                     Array.isArray(rec.productsList)
@@ -2482,7 +2542,32 @@ function PackingList({
                                                 </div>
                                                 <div>
                                                     <span className="block font-medium text-gray-400">PI Ref</span>
-                                                    <span className="font-semibold text-gray-800 block">{rec.piNumber || 'N/A'}</span>
+                                                    {rec.piNumber ? (
+                                                        (() => {
+                                                            const piList = String(rec.piNumber).split(',').map(s => s.trim()).filter(Boolean);
+                                                            if (piList.length === 0) return <span className="font-semibold text-gray-800 block">N/A</span>;
+                                                            return (
+                                                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                                                    {piList.map((piNo, idx) => (
+                                                                        <button
+                                                                            key={idx}
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleOpenPiDetails(piNo, rec);
+                                                                            }}
+                                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                            title={`View PI Details (${piNo})`}
+                                                                        >
+                                                                            {piNo}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            );
+                                                        })()
+                                                    ) : (
+                                                        <span className="font-semibold text-gray-800 block">N/A</span>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <span className="block font-medium text-gray-400">Total Bags</span>
@@ -2569,6 +2654,21 @@ function PackingList({
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* PI Details Card Modal */}
+            {selectedPiForDetails && (
+                <PIDetailsModal
+                    piRecord={selectedPiForDetails}
+                    piRecords={piRecords}
+                    lcRecords={lcRecords}
+                    ipRecords={ipRecords}
+                    importers={importers}
+                    exporters={exporters}
+                    banks={banks}
+                    employeesMap={employeesMap}
+                    onClose={() => setSelectedPiForDetails(null)}
+                />
             )}
         </div>
     );
