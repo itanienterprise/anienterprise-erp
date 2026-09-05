@@ -359,7 +359,7 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
         // Draw L/C details under HS code
         const lcNo = String(record?.lcNo || '').trim().toUpperCase();
         const lcDate = String(record?.lcDate || '').trim().toUpperCase();
-        const bankBin = String(record?.bankBin || '000321414-0101').trim().toUpperCase();
+        const bankBin = String(record?.bankBin || '').trim().toUpperCase();
         const bankName = String(record?.bankName || '').trim().toUpperCase();
         const branchName = String(record?.branchName || '').trim().toUpperCase();
 
@@ -384,7 +384,7 @@ const drawConsignmentNoteFields = (doc, record, pageX, pageY, pageWidth, pageHei
                 });
             };
 
-            const lcText = `L.C NO- ${lcNo} DATE: ${lcDate} BANK BIN: ${bankBin}`;
+            const lcText = bankBin ? `L.C NO- ${lcNo} DATE: ${lcDate} BANK BIN: ${bankBin}` : `L.C NO- ${lcNo} DATE: ${lcDate}`;
             drawWrappedLine(lcText);
 
             if (bankName) {

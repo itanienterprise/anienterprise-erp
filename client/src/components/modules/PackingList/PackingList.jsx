@@ -199,6 +199,7 @@ function PackingList({
         invoiceStyle: 'Style 2 AAS',
         bankName: '',
         branchName: '',
+        bankBin: '',
         lcAmendment: '',
         descriptionGoods: '',
         termsDeliveryPayment: '',
@@ -614,8 +615,13 @@ function PackingList({
             partySignature: rawPi.partySignature || '',
             exporterSignature: rawPi.exporterSignature || '',
             invoiceStyle: rawPi.invoiceStyle || 'Style 2 AAS',
-            bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : '',
-            branchName: matchedLcByPi ? (matchedLcByPi.bankBranch || '') : '',
+            bankName: matchedLcByPi ? (matchedLcByPi.bankName || '') : (rawPi.bankName || ''),
+            branchName: matchedLcByPi ? (matchedLcByPi.bankBranch || '') : (rawPi.bankBranch || ''),
+            bankBin: (() => {
+                const bName = matchedLcByPi ? (matchedLcByPi.bankName || '') : (rawPi.bankName || '');
+                const mBank = banks.find(b => (b.bankName || '').trim().toLowerCase() === (bName || '').trim().toLowerCase());
+                return matchedLcByPi?.bankBin || rawPi.bankBin || mBank?.binNo || mBank?.bin || '';
+            })(),
             trNumber: isRevised && prevTrNumber ? prevTrNumber : (isRevised ? prev.trNumber : prev.trNumber),
             trName: isRevised && prevTrName ? prevTrName : (isRevised ? prev.trName : prev.trName),
             trDate: isRevised && prevTrDate ? prevTrDate : (isRevised ? prev.trDate : prev.trDate),
@@ -749,6 +755,7 @@ function PackingList({
             invoiceStyle: 'Style 2 AAS',
             bankName: '',
             branchName: '',
+            bankBin: '',
             lcAmendment: '',
             descriptionGoods: '',
             termsDeliveryPayment: '',
@@ -899,6 +906,7 @@ function PackingList({
             invoiceStyle: record.invoiceStyle || 'Style 2 AAS',
             bankName: record.bankName || '',
             branchName: record.branchName || '',
+            bankBin: record.bankBin || '',
             lcAmendment: (record.lcAmendment || '').replace(/ADDN\s*NO[:\-\s]*/gi, 'AMENDMENT NO: ').replace(/ADDN-/gi, 'AMENDMENT-').replace(/ADDN/gi, 'AMENDMENT'),
             descriptionGoods: record.descriptionGoods || '',
             termsDeliveryPayment: record.termsDeliveryPayment || '',
@@ -1594,12 +1602,14 @@ function PackingList({
                                                 key={lc._id}
                                                 type="button"
                                                 onClick={() => {
+                                                    const mBank = banks.find(b => (b.bankName || '').trim().toLowerCase() === (lc.bankName || '').trim().toLowerCase());
                                                     setFormData(prev => ({
                                                         ...prev,
                                                         lcNumber: lc.lcNo || '',
                                                         lcDate: lc.openingDate ? lc.openingDate.split('T')[0] : '',
                                                         bankName: lc.bankName || '',
-                                                        branchName: lc.bankBranch || ''
+                                                        branchName: lc.bankBranch || '',
+                                                        bankBin: lc.bankBin || mBank?.binNo || mBank?.bin || ''
                                                     }));
                                                     setActiveDropdown(null);
                                                 }}
@@ -1647,13 +1657,21 @@ function PackingList({
                                                     setFormData(prev => ({
                                                         ...prev,
                                                         bankName: b.bankName,
-                                                        branchName: b.branches && b.branches.length > 0 ? b.branches[0].branch : ''
+                                                        branchName: b.branches && b.branches.length > 0 ? b.branches[0].branch : '',
+                                                        bankBin: b.binNo || b.bin || b.binNumber || ''
                                                     }));
                                                     setActiveDropdown(null);
                                                 }}
                                                 className={`w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors ${highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
                                             >
-                                                <div className="font-medium">{b.bankName}</div>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-medium truncate">{b.bankName}</span>
+                                                    {b.binNo && (
+                                                        <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/80 font-mono shrink-0">
+                                                            BIN: {b.binNo}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </button>
                                         ))}
                                     </div>

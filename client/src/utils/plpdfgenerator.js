@@ -51,14 +51,13 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
     const lc = lcRecords.find(l => l.lcNo === (record.lcNumber || pi?.lcNumber));
     const isPiRevised = (pi?.revisions && pi.revisions.length > 0) || (record.piNumber || '').includes('(REVISED)');
 
-    const bankName = record.bankName || lc?.bankName || '';
-    let branchName = record.branchName || '';
-    if (!branchName && bankName && Array.isArray(banks) && banks.length > 0) {
-        const matchedBank = banks.find(b => b.bankName.toLowerCase().trim() === bankName.toLowerCase().trim());
-        if (matchedBank && matchedBank.branches && matchedBank.branches.length > 0) {
-            branchName = matchedBank.branches[0].branch;
-        }
+    const bankName = record.bankName || lc?.bankName || pi?.bankName || '';
+    let branchName = record.branchName || lc?.bankBranch || pi?.bankBranch || '';
+    const matchedBank = Array.isArray(banks) ? banks.find(b => (b.bankName || '').toLowerCase().trim() === bankName.toLowerCase().trim()) : null;
+    if (!branchName && matchedBank && matchedBank.branches && matchedBank.branches.length > 0) {
+        branchName = matchedBank.branches[0].branch;
     }
+    const resolvedBankBin = record.bankBin || matchedBank?.binNo || matchedBank?.bin || matchedBank?.binNumber || lc?.bankBin || pi?.bankBin || '';
     const importer = importers.find(imp => imp.name === record.partyName);
 
     const preCarriageBy = record.preCarriageBy && record.preCarriageBy !== 'ROAD' ? record.preCarriageBy : (pi?.preCarriageBy || record.preCarriageBy || 'ROAD');
@@ -395,7 +394,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
             const piDate = pi?.date ? formatDate(pi.date) : '';
             const tin = importer?.tin || '';
             const bin = importer?.bin || '';
-            const bankBin = '000321414-0101'; // Default fallback
+            const bankBin = resolvedBankBin || '';
 
             let piDisplayStr = `PROFORMA INVOICE: ${piNo} Date:${piDate}`;
             if (isPiRevised) {
@@ -426,7 +425,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
                 descParts.push(`IMPORT PERMIT NO. ${ipDisplayStr}`);
             }
             descParts.push(`IMPORTERS TIN NO.${tin}, & BIN-${bin}`);
-            descParts.push(`BANK BIN-${bankBin}\n`);
+            if (bankBin) descParts.push(`BANK BIN-${bankBin}\n`);
             descParts.push(`Export Standard packing`);
             descParts.push(`COUNTRY OF ORIGIN ${countryOrigin.toUpperCase()}`);
         }
@@ -596,7 +595,7 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
 
     const trLcNo = lc?.lcNo || record.lcNumber || '';
     const trLcDate = lc?.lcDate ? formatDate(lc.lcDate) : (record.lcDate ? formatDate(record.lcDate) : '');
-    const trBankBin = '000321414-0101';
+    const trBankBin = resolvedBankBin || '';
     const trIrc = importer?.irc || '';
     const trTin = importer?.tin || '';
     const trBin = importer?.bin || '';

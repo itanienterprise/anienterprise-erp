@@ -151,6 +151,7 @@ function PI({
         bankName: '',
         bankBranch: '',
         bankAccount: '',
+        bankBin: '',
         bankMargin: '',
         lcBillEnabled: true,
         bankLcCommission: '',
@@ -1125,9 +1126,12 @@ function PI({
 
             if (field === 'bankName') {
                 updated.bankName = value;
+                const matchedBank = banks.find(b => (typeof b === 'object' && (b.bankName || '').trim().toUpperCase() === (value || '').trim().toUpperCase() && (b.binNo || b.bin || b.binNumber))) || banks.find(b => typeof b === 'object' && (b.bankName || '').trim().toUpperCase() === (value || '').trim().toUpperCase());
+                updated.bankBin = (matchedBank?.binNo || matchedBank?.bin || matchedBank?.binNumber || '').toString();
                 if (!value) {
                     updated.bankBranch = '';
                     updated.bankAccount = '';
+                    updated.bankBin = '';
                     updated.bankLcCommission = '';
                     updated.bankVatOnCommission = '';
                     updated.bankSwiftCharge = '';
@@ -1637,6 +1641,7 @@ function PI({
             bankName: '',
             bankBranch: '',
             bankAccount: '',
+            bankBin: '',
             bankMargin: '',
             lcBillEnabled: true,
             bankLcCommission: '',
@@ -1729,6 +1734,7 @@ function PI({
             bankName: record.bankName || '',
             bankBranch: record.bankBranch || '',
             bankAccount: record.bankAccount || record.accountNo || '',
+            bankBin: record.bankBin || '',
             bankMargin: record.bankMargin || '',
             lcBillEnabled: record.lcBillEnabled !== undefined ? record.lcBillEnabled : true,
             bankLcCommission: record.bankLcCommission || '',
@@ -1876,6 +1882,22 @@ function PI({
             piNum.toLowerCase().includes(q)
         );
     }, [formData.piNumber, existingPiNumbers]);
+
+    const uniqueBankOptions = useMemo(() => {
+        const map = new Map();
+        (banks || []).forEach(b => {
+            const name = (typeof b === 'string' ? b : (b?.bankName || '')).trim();
+            if (!name) return;
+            const bin = (typeof b === 'object' ? (b?.binNo || b?.bin || b?.binNumber || '') : '').toString().trim();
+            const upperName = name.toUpperCase();
+            if (!map.has(upperName)) {
+                map.set(upperName, { bankName: name, binNo: bin });
+            } else if (bin && !map.get(upperName).binNo) {
+                map.get(upperName).binNo = bin;
+            }
+        });
+        return Array.from(map.values()).sort((a, b) => a.bankName.localeCompare(b.bankName));
+    }, [banks]);
 
     const isDuplicatePiNumber = useMemo(() => {
         if (!formData.piNumber || !formData.piNumber.trim()) return false;
@@ -4045,8 +4067,7 @@ function PI({
                                         onFocus={() => { setActiveDropdown('bankName'); setHighlightedIndex(-1); }}
                                         onKeyDown={(e) => {
                                             const searchVal = (typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '')).trim().toLowerCase();
-                                            const uniqueBanks = [...new Set(banks.map(b => (typeof b === 'string' ? b : (b?.bankName || '')).trim()).filter(Boolean))].sort();
-                                            const options = uniqueBanks.filter(bName => !searchVal || bName.toLowerCase().includes(searchVal));
+                                            const options = uniqueBankOptions.filter(b => !searchVal || b.bankName.toLowerCase().includes(searchVal) || (b.binNo && b.binNo.toLowerCase().includes(searchVal)));
                                             handleDropdownKeyDown(e, 'bankName', options, 'bankName');
                                         }}
                                         placeholder="Select Bank"
@@ -4064,22 +4085,31 @@ function PI({
                                 </div>
                                 {activeDropdown === 'bankName' && (() => {
                                     const searchVal = (typeof formData.bankName === 'string' ? formData.bankName : (formData.bankName?.bankName || '')).trim().toLowerCase();
-                                    const uniqueBanks = [...new Set(banks.map(b => (typeof b === 'string' ? b : (b?.bankName || '')).trim()).filter(Boolean))].sort();
-                                    const filteredBanks = uniqueBanks.filter(bName => !searchVal || bName.toLowerCase().includes(searchVal));
+                                    const filteredBanks = uniqueBankOptions.filter(b => !searchVal || b.bankName.toLowerCase().includes(searchVal) || (b.binNo && b.binNo.toLowerCase().includes(searchVal)));
                                     return (
-                                        <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto py-1">
+                                        <div className="absolute z-[60] w-full min-w-[280px] mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto py-1">
                                             {filteredBanks.length > 0 ? (
-                                                filteredBanks.map((bName, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        type="button"
-                                                        onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankName', bName); }}
-                                                        onMouseEnter={() => setHighlightedIndex(idx)}
-                                                        className={`w-full px-4 py-2 text-left text-sm transition-colors font-medium ${searchVal === bName.toLowerCase() ? 'bg-blue-50 text-blue-700' : highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
-                                                    >
-                                                        {bName}
-                                                    </button>
-                                                ))
+                                                filteredBanks.map((item, idx) => {
+                                                    const isSelected = searchVal === item.bankName.toLowerCase();
+                                                    return (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onMouseDown={(e) => { e.preventDefault(); handleDropdownSelect('bankName', item.bankName); }}
+                                                            onMouseEnter={() => setHighlightedIndex(idx)}
+                                                            className={`w-full px-4 py-2.5 text-left text-sm transition-colors border-b border-gray-50 last:border-0 ${isSelected || highlightedIndex === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50'}`}
+                                                        >
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="font-medium truncate">{item.bankName}</span>
+                                                                {item.binNo && (
+                                                                    <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/80 font-mono shrink-0">
+                                                                        BIN: {item.binNo}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })
                                             ) : (
                                                 <div className="px-4 py-3 text-xs text-gray-400 text-center font-medium">
                                                     No banks found
