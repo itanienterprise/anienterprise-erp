@@ -641,13 +641,29 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
 
             if (!receiptsMap[key]) {
                 const itemSubtotal = (s.entries || []).reduce((iSum, item) => iSum + parseNum(item.inHouseQuantity || item.quantity), 0);
-                const truckNumeric = parseFloat(s.totalLcTruck || s.truckNo || s.truck) || 0;
+                const rawTruckStr = String(s.truckNo !== undefined && s.truckNo !== null && String(s.truckNo).trim() !== '' ? s.truckNo : (s.truck || '')).trim();
+                const totalLcTruckNum = parseFloat(s.totalLcTruck) || 0;
+
+                let truckNumeric = 0;
+                let truckDisplay = '-';
+                if (rawTruckStr && rawTruckStr !== '-' && rawTruckStr !== '0') {
+                    const parsed = parseFloat(rawTruckStr);
+                    truckNumeric = !isNaN(parsed) && parsed > 0 ? parsed : (totalLcTruckNum || 1);
+                    truckDisplay = rawTruckStr;
+                } else if (totalLcTruckNum > 0 && (s.truckNo === undefined || s.truckNo === null)) {
+                    truckNumeric = totalLcTruckNum;
+                    truckDisplay = String(totalLcTruckNum);
+                } else {
+                    truckNumeric = 0;
+                    truckDisplay = '-';
+                }
+
                 receiptsMap[key] = {
                     date: rawDate,
                     importer: s.importer || data.importer,
                     exporter: s.exporter || data.exporter,
                     product: s.productName || data.productName,
-                    truck: s.totalLcTruck || s.truckNo || s.truck || '-',
+                    truck: truckDisplay,
                     truckCount: truckNumeric,
                     quantity: parseNum(s.totalLcQuantity) || itemSubtotal || parseNum(s.inHouseQuantity) || parseNum(s.quantity),
                     source: 'LC Receive',
@@ -687,14 +703,16 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                 return iSum + (brandSubtotal || parseNum(item.quantity));
             }, 0);
             // truckNo for sales — check all possible locations matching the display truck field
-            const truckRaw = s.truckNo || s.truck || (s.items && s.items[0]?.brandEntries && s.items[0].brandEntries[0]?.truck) || 0;
-            const truckNumeric = parseFloat(truckRaw) || 0;
+            const truckRaw = s.truckNo || s.truck || (s.items && s.items[0]?.brandEntries && s.items[0].brandEntries[0]?.truck) || '';
+            const truckStr = String(truckRaw).trim();
+            const parsedTruck = parseFloat(truckStr);
+            const truckNumeric = (!isNaN(parsedTruck) && parsedTruck > 0 && truckStr !== '-') ? parsedTruck : 0;
             return {
                 date: s.date || s.createdAt,
                 importer: s.importer || data.importer,
                 exporter: s.exporter || data.exporter,
                 product: (s.items && s.items[0]?.productName) || s.productName || data.productName,
-                truck: s.truckNo || s.truck || (s.items && s.items[0]?.brandEntries && s.items[0].brandEntries[0]?.truck) || '-',
+                truck: (truckStr && truckStr !== '0') ? truckStr : '-',
                 truckCount: truckNumeric,
                 quantity: parseNum(s.currentTotalQty) || parseNum(s.totalQuantity) || parseNum(s.totalQty) || parseNum(s.qty) || parseNum(s.quantity) || parseNum(s.total) || itemSubtotal,
                 source: 'Border sale'
