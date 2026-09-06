@@ -767,14 +767,25 @@ export const generateCnFHistoryExcel = (mode = 'earnings', reportData = [], agen
             let totalBilling = 0;
             let totalPaid = 0;
             let totalDiscount = 0;
+            let totalQty = 0;
+            let totalTrucks = 0;
 
             reportData.forEach(row => {
                 const billing = parseFloat(row.billingAmount) || 0;
                 const paid = parseFloat(row.amount) || 0;
                 const disc = parseFloat(row.discount) || 0;
+                const qtyVal = parseFloat(row.qty) || 0;
+                const rawTruck = (row.truckCount !== undefined && row.truckCount !== null && row.truckCount !== '' && row.truckCount !== '-' && row.truckCount !== 0 && row.truckCount !== '0')
+                    ? row.truckCount
+                    : (row.truck && row.truck !== '-' ? row.truck : '-');
+                const truckVal = rawTruck !== '-' ? rawTruck : '-';
+
                 totalBilling += billing;
                 totalPaid += paid;
                 totalDiscount += disc;
+                totalQty += qtyVal;
+                const truckNum = parseFloat(truckVal);
+                if (!isNaN(truckNum)) totalTrucks += truckNum;
 
                 rows.push([
                     formatDate(row.date),
@@ -782,8 +793,8 @@ export const generateCnFHistoryExcel = (mode = 'earnings', reportData = [], agen
                     row.importer || '-',
                     row.product || '-',
                     row.port || '-',
-                    row.qty ? `${row.qty} kg` : '-',
-                    row.truckCount || '-',
+                    qtyVal > 0 ? `${qtyVal} kg` : (row.qty && row.qty !== '-' ? row.qty : '-'),
+                    truckVal,
                     billing > 0 ? billing : 0,
                     row.method || '-',
                     row.bankName ? (row.reference ? `${row.reference} / ${row.bankName}` : row.bankName) : (row.reference || '-'),
@@ -794,7 +805,9 @@ export const generateCnFHistoryExcel = (mode = 'earnings', reportData = [], agen
             });
 
             rows.push([
-                'GRAND TOTAL', '', '', '', '', '', '',
+                'GRAND TOTAL', '', '', '', '',
+                totalQty > 0 ? totalQty : '—',
+                totalTrucks > 0 ? totalTrucks : '—',
                 totalBilling > 0 ? totalBilling : '—',
                 '', '',
                 totalPaid > 0 ? totalPaid : '—',

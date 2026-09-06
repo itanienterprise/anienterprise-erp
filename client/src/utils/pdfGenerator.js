@@ -6095,30 +6095,44 @@ export const generateCnFAllReportPDF = (reportData, agentInfo, filters) => {
             doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, rightColX + 23, yPos + 6);
         }
 
-        const tableRows = reportData.map((row) => [
-            formatDate(row.date),
-            row.lcNo ? (row.lcNo.toString().length > 5 ? row.lcNo.toString().slice(-5) : row.lcNo.toString()) : '-',
-            row.importer || '-',
-            row.product || '-',
-            row.port || '-',
-            row.qty ? `${row.qty.toLocaleString('en-US')} kg` : '-',
-            row.truckCount || '-',
-            row.billingAmount > 0 ? row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
-            row.method || '-',
-            row.bankName ? (row.reference ? `${row.reference} / ${row.bankName}` : row.bankName) : (row.reference || '-'),
-            row.amount > 0 ? row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
-            row.discount > 0 ? row.discount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
-            row.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })
-        ]);
+        const tableRows = reportData.map((row) => {
+            const rawTruck = (row.truckCount !== undefined && row.truckCount !== null && row.truckCount !== '' && row.truckCount !== '-' && row.truckCount !== 0 && row.truckCount !== '0')
+                ? row.truckCount
+                : (row.truck && row.truck !== '-' ? row.truck : '-');
+            const qtyNum = parseFloat(row.qty) || 0;
+            const truckDisplay = rawTruck !== '-' ? String(rawTruck) : '-';
+
+            return [
+                formatDate(row.date),
+                row.lcNo ? (row.lcNo.toString().length > 5 ? row.lcNo.toString().slice(-5) : row.lcNo.toString()) : '-',
+                row.importer || '-',
+                row.product || '-',
+                row.port || '-',
+                qtyNum > 0 ? `${qtyNum.toLocaleString('en-US')} kg` : (row.qty && row.qty !== '-' ? `${row.qty}` : '-'),
+                truckDisplay,
+                row.billingAmount > 0 ? row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
+                row.method || '-',
+                row.bankName ? (row.reference ? `${row.reference} / ${row.bankName}` : row.bankName) : (row.reference || '-'),
+                row.amount > 0 ? row.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
+                row.discount > 0 ? row.discount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-',
+                row.runningBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })
+            ];
+        });
 
         const totalBilling = reportData.reduce((sum, row) => sum + (parseFloat(row.billingAmount) || 0), 0);
         const totalAmount = reportData.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
         const totalDiscount = reportData.reduce((sum, row) => sum + (parseFloat(row.discount) || 0), 0);
         const totalQty = reportData.reduce((sum, row) => sum + (parseFloat(row.qty) || 0), 0);
-        const totalTrucks = reportData.reduce((sum, row) => sum + (parseInt(row.truckCount) || 0), 0);
+        const totalTrucks = reportData.reduce((sum, row) => {
+            const raw = (row.truckCount !== undefined && row.truckCount !== null && row.truckCount !== '' && row.truckCount !== '-' && row.truckCount !== 0 && row.truckCount !== '0')
+                ? row.truckCount
+                : row.truck;
+            const val = parseFloat(raw);
+            return sum + (!isNaN(val) ? val : 0);
+        }, 0);
 
         const totalTableWidth = 18 + 24 + 25 + 20 + 20 + 20 + 12 + 20 + 18 + 44 + 20 + 20 + 20; // 281mm (fits landscape A4 page width of 297mm)
-        const tableMargin = (pageWidth - totalTableWidth) / 2;
+        const tableMargin = Math.max(5, (pageWidth - totalTableWidth) / 2);
         const lastBalance = reportData.length > 0 ? reportData[reportData.length - 1].runningBalance : 0;
 
         autoTable(doc, {

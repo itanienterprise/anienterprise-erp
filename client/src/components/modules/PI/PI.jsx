@@ -6,7 +6,7 @@ import {
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
 import { generateBankApplicationPDF } from '../../../utils/islbankApplicationGenerator';
-import { API_BASE_URL, formatDate } from '../../../utils/helpers';
+import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
@@ -2537,6 +2537,102 @@ function PI({
         return true;
     });
 
+    // Date and Column Sorting (default: date descending)
+    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+
+    const requestSort = (key) => {
+        setSortConfig(prev => {
+            if (prev.key === key) {
+                return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+            }
+            return { key, direction: key === 'date' ? 'desc' : 'asc' };
+        });
+    };
+
+    const getRecordEffectiveDate = (record) => {
+        if (!record) return '';
+        if (record.revisions && record.revisions.length > 0) {
+            const lastRev = record.revisions[record.revisions.length - 1];
+            if (lastRev && lastRev.reviseDate) return lastRev.reviseDate;
+        }
+        return record.date || record.piDate || record.createdAt || '';
+    };
+
+    const getRecordDateTime = (record) => {
+        const dVal = getRecordEffectiveDate(record);
+        if (!dVal) return 0;
+        if (dVal instanceof Date) return isNaN(dVal.getTime()) ? 0 : dVal.getTime();
+        const str = String(dVal).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+            const [y, m, d] = str.split('T')[0].split('-').map(Number);
+            return new Date(y, m - 1, d).getTime();
+        }
+        if (/^\d{2}[-/]\d{2}[-/]\d{4}/.test(str)) {
+            const [d, m, y] = str.split(/[-/]/).map(Number);
+            return new Date(y, m - 1, d).getTime();
+        }
+        const t = new Date(str).getTime();
+        return isNaN(t) ? 0 : t;
+    };
+
+    const sortedRecords = useMemo(() => {
+        const list = [...filteredRecords];
+        if (!sortConfig.key) return list;
+
+        return list.sort((a, b) => {
+            let res = 0;
+            if (sortConfig.key === 'date') {
+                const timeA = getRecordDateTime(a);
+                const timeB = getRecordDateTime(b);
+                res = timeA - timeB;
+            } else if (sortConfig.key === 'piNumber') {
+                res = (a.piNumber || '').localeCompare(b.piNumber || '', undefined, { numeric: true, sensitivity: 'base' });
+            } else if (sortConfig.key === 'partyName') {
+                res = (a.partyName || '').localeCompare(b.partyName || '', undefined, { sensitivity: 'base' });
+            } else if (sortConfig.key === 'exporterName') {
+                res = (a.exporterName || '').localeCompare(b.exporterName || '', undefined, { sensitivity: 'base' });
+            } else if (sortConfig.key === 'port') {
+                const portA = a.port || a.portOfLoading || a.portOfDischarge || '';
+                const portB = b.port || b.portOfLoading || b.portOfDischarge || '';
+                res = portA.localeCompare(portB, undefined, { sensitivity: 'base' });
+            } else if (sortConfig.key === 'product') {
+                const prodA = a.productsList?.[0]?.productName || a.productName || '';
+                const prodB = b.productsList?.[0]?.productName || b.productName || '';
+                res = prodA.localeCompare(prodB, undefined, { sensitivity: 'base' });
+            } else if (sortConfig.key === 'quantity') {
+                const qtyA = a.productsList && a.productsList.length > 0
+                    ? a.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                    : (parseFloat(a.grandTotalQuantity || a.quantity) || 0);
+                const qtyB = b.productsList && b.productsList.length > 0
+                    ? b.productsList.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0)
+                    : (parseFloat(b.grandTotalQuantity || b.quantity) || 0);
+                res = qtyA - qtyB;
+            } else if (sortConfig.key === 'grandTotal') {
+                const gtA = parseFloat(a.grandTotal) || 0;
+                const gtB = parseFloat(b.grandTotal) || 0;
+                res = gtA - gtB;
+            } else if (sortConfig.key === 'status') {
+                const isLcDoneA = checkIsLcDone(a);
+                const statusA = isLcDoneA ? 'lc done' : (a.status || '');
+                const isLcDoneB = checkIsLcDone(b);
+                const statusB = isLcDoneB ? 'lc done' : (b.status || '');
+                res = statusA.localeCompare(statusB, undefined, { sensitivity: 'base' });
+            }
+
+            if (res === 0) {
+                const createdA = new Date(a.createdAt || 0).getTime();
+                const createdB = new Date(b.createdAt || 0).getTime();
+                if (createdA !== createdB) {
+                    res = createdA - createdB;
+                } else {
+                    res = String(a.piNumber || '').localeCompare(String(b.piNumber || ''));
+                }
+            }
+
+            return sortConfig.direction === 'asc' ? res : -res;
+        });
+    }, [filteredRecords, sortConfig, checkIsLcDone]);
+
     const getHistoryTimeline = (record) => {
         if (!record) return [];
         const list = [];
@@ -5005,16 +5101,88 @@ function PI({
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50/80">
-                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Date</th>
-                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">PI Number</th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('date')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Date</span>
+                                                <SortIcon config={sortConfig} columnKey="date" />
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('piNumber')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>PI Number</span>
+                                                <SortIcon config={sortConfig} columnKey="piNumber" />
+                                            </div>
+                                        </th>
                                         <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">IP Number</th>
-                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Importer</th>
-                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Exporter</th>
-                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Port</th>
-                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Product</th>
-                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Qty</th>
-                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-blue-600 whitespace-nowrap">Grand T.</th>
-                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap">Status</th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('partyName')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Importer</span>
+                                                <SortIcon config={sortConfig} columnKey="partyName" />
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('exporterName')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Exporter</span>
+                                                <SortIcon config={sortConfig} columnKey="exporterName" />
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('port')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Port</span>
+                                                <SortIcon config={sortConfig} columnKey="port" />
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('product')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Product</span>
+                                                <SortIcon config={sortConfig} columnKey="product" />
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('quantity')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Qty</span>
+                                                <SortIcon config={sortConfig} columnKey="quantity" />
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-blue-600 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('grandTotal')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Grand T.</span>
+                                                <SortIcon config={sortConfig} columnKey="grandTotal" />
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('status')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Status</span>
+                                                <SortIcon config={sortConfig} columnKey="status" />
+                                            </div>
+                                        </th>
                                         {canShowEntryBy && (
                                             <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap text-center">Entry By</th>
                                         )}
@@ -5028,8 +5196,8 @@ function PI({
                                                 <td colSpan={11 + (canShowEntryBy ? 1 : 0)} className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                             </tr>
                                         ))
-                                    ) : filteredRecords.length > 0 ? (
-                                        filteredRecords.map(record => {
+                                    ) : sortedRecords.length > 0 ? (
+                                        sortedRecords.map(record => {
                                             const displayProducts = record.productsList && record.productsList.length > 0
                                                 ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
                                                 : record.productName || 'N/A';
@@ -5254,8 +5422,8 @@ function PI({
                                     <div className="h-4 bg-gray-100 rounded w-2/3"></div>
                                 </div>
                             ))
-                        ) : filteredRecords.length > 0 ? (
-                            filteredRecords.map(record => {
+                        ) : sortedRecords.length > 0 ? (
+                            sortedRecords.map(record => {
                                 const isExpanded = expandedCardId === record._id;
                                 const displayProducts = record.productsList && record.productsList.length > 0
                                     ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')

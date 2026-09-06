@@ -374,14 +374,20 @@ const CnF = ({
 
         // Add Earnings
         historyRecords.forEach(row => {
+            const rawTruck = row.truck !== undefined && row.truck !== null && row.truck !== '' && row.truck !== '-' ? row.truck : (row.truckCount || '-');
             combined.push({
                 type: 'earning',
                 date: row.date,
                 lcNo: row.lcNo,
                 importer: row.importer,
                 product: row.product,
+                port: row.port || '-',
+                qty: parseFloat(row.qty) || 0,
+                truck: rawTruck,
+                truckCount: !isNaN(parseFloat(rawTruck)) ? parseFloat(rawTruck) : 0,
                 billingAmount: parseFloat(row.totalCommission) || 0,
                 amount: 0,
+                discount: 0,
                 method: '-',
                 reference: '-'
             });
@@ -389,14 +395,20 @@ const CnF = ({
 
         // Add Expenses
         expenseRecords.forEach(row => {
+            const rawTruck = row.truck !== undefined && row.truck !== null && row.truck !== '' && row.truck !== '-' ? row.truck : (row.truckCount || '-');
             combined.push({
                 type: 'expense',
                 date: row.date,
                 lcNo: row.lcNo,
                 importer: row.importer,
                 product: row.product,
+                port: row.port || '-',
+                qty: parseFloat(row.qty) || 0,
+                truck: rawTruck,
+                truckCount: !isNaN(parseFloat(rawTruck)) ? parseFloat(rawTruck) : 0,
                 billingAmount: parseFloat(row.amount) || 0,
                 amount: 0,
+                discount: 0,
                 method: '-',
                 reference: '-'
             });
@@ -410,6 +422,10 @@ const CnF = ({
                 lcNo: '-',
                 importer: '-',
                 product: '-',
+                port: '-',
+                qty: 0,
+                truck: '-',
+                truckCount: 0,
                 billingAmount: 0,
                 amount: parseFloat(row.amount) || 0,
                 discount: parseFloat(row.discount) || 0,
@@ -427,10 +443,15 @@ const CnF = ({
                 if (historyFilters.startDate && rowDate < new Date(historyFilters.startDate)) return false;
                 if (historyFilters.endDate && rowDate > new Date(historyFilters.endDate)) return false;
             }
+            if (historyFilters.port && (row.port || '').toLowerCase() !== historyFilters.port.toLowerCase()) return false;
+            if (historyFilters.lcNo && (row.lcNo || '').toLowerCase() !== historyFilters.lcNo.toLowerCase()) return false;
+            if (historyFilters.productName && (row.product || '').toLowerCase() !== historyFilters.productName.toLowerCase()) return false;
             if (!q) return true;
             return (row.lcNo || '').toLowerCase().includes(q) ||
                    (row.importer || '').toLowerCase().includes(q) ||
                    (row.product || '').toLowerCase().includes(q) ||
+                   (row.port || '').toLowerCase().includes(q) ||
+                   String(row.truck || '').toLowerCase().includes(q) ||
                    (row.method || '').toLowerCase().includes(q) ||
                    (row.reference || '').toLowerCase().includes(q);
         }).sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -671,13 +692,14 @@ const CnF = ({
                     totalCommission = parseFloat(totalCommission.toFixed(2));
 
                     console.log('CnF Stock Record:', { id: record._id, lcNo: record.lcNo, billOfEntry: record.billOfEntry });
+                    const matchingLc = lcData.find(l => l.lcNo && record.lcNo && l.lcNo.trim().toLowerCase() === record.lcNo.trim().toLowerCase());
                     rows.push({
                         _id: record._id,
                         date: record.date,
                         lcNo: record.lcNo,
                         importer: record.importer,
                         exporter: record.exporter,
-                        port: record.port,
+                        port: record.port || matchingLc?.port || '-',
                         product: record.productName,
                         brand: record.brand,
                         rate: record.purchasedPrice,
@@ -761,6 +783,7 @@ const CnF = ({
 
                         // Find matching stock record to resolve bill of entry
                         const relatedStock = stockData.find(st => st.lcNo && sale.lcNo && st.lcNo.trim().toLowerCase() === sale.lcNo.trim().toLowerCase());
+                        const relatedLc = lcData.find(l => l.lcNo && sale.lcNo && l.lcNo.trim().toLowerCase() === sale.lcNo.trim().toLowerCase());
                         const boeNo = relatedStock ? (relatedStock.billOfEntry || '-') : '-';
 
                         rows.push({
@@ -769,7 +792,7 @@ const CnF = ({
                             lcNo: sale.lcNo || '-',
                             importer: sale.importer,
                             exporter: sale.exporter,
-                            port: sale.port || '-',
+                            port: sale.port || (relatedStock && relatedStock.port) || (relatedLc && relatedLc.port) || '-',
                             product: item.productName || '-',
                             brand: entry.brand || '-',
                             rate: entry.unitPrice || 0,
@@ -797,14 +820,25 @@ const CnF = ({
                     let importer = '-';
                     let product = '-';
                     let port = '-';
+                    let expQty = '-';
+                    let expTruck = '-';
                     
-                    if (exp.lcNo) {
-                        const relatedLc = lcData.find(l => l.lcNo === exp.lcNo);
-                        if (relatedLc) {
-                            importer = relatedLc.importerName || '-';
-                            product = relatedLc.productName || '-';
-                            port = relatedLc.port || '-';
-                        }
+                    const relatedStock = exp.lcNo ? stockData.find(st => st.lcNo && st.lcNo.trim().toLowerCase() === exp.lcNo.trim().toLowerCase()) : null;
+                    const relatedLc = exp.lcNo ? lcData.find(l => l.lcNo && l.lcNo.trim().toLowerCase() === exp.lcNo.trim().toLowerCase()) : null;
+
+                    if (relatedStock) {
+                        importer = relatedStock.importer || '-';
+                        product = relatedStock.productName || '-';
+                        port = relatedStock.port || '-';
+                        expQty = !isNaN(parseFloat(relatedStock.totalLcQuantity)) ? parseFloat(relatedStock.totalLcQuantity) : (!isNaN(parseFloat(relatedStock.quantity)) ? parseFloat(relatedStock.quantity) : (parseFloat(relatedStock.inHouseQuantity) || '-'));
+                        expTruck = !isNaN(parseFloat(relatedStock.totalLcTruck)) ? relatedStock.totalLcTruck : (relatedStock.truckNo || relatedStock.truck || relatedStock.itemTruck || '-');
+                    }
+                    if (relatedLc) {
+                        if (importer === '-') importer = relatedLc.importerName || '-';
+                        if (product === '-') product = relatedLc.productName || '-';
+                        if (port === '-') port = relatedLc.port || '-';
+                        if (expQty === '-') expQty = relatedLc.quantity || relatedLc.totalQuantity || relatedLc.netWeight || '-';
+                        if (expTruck === '-') expTruck = relatedLc.totalTruck || relatedLc.truckNo || relatedLc.truckCount || '-';
                     }
 
                     expenseRows.push({
@@ -814,6 +848,8 @@ const CnF = ({
                         importer: importer,
                         product: product,
                         port: port,
+                        qty: expQty,
+                        truck: expTruck,
                         amount: parseFloat(exp.amount) || 0
                     });
                 }
@@ -2392,6 +2428,9 @@ const CnF = ({
                                                             <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">LC No</th>
                                                             <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Importer</th>
                                                             <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Product</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Port</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-right font-bold uppercase tracking-widest text-[9px]">QTY</th>
+                                                            <th className="cnf-table-header py-3 px-4 text-center font-bold uppercase tracking-widest text-[9px]">Truck</th>
                                                             <th className="cnf-table-header py-3 px-4 text-right font-bold uppercase tracking-widest text-[9px]">Billing Amount</th>
                                                             <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Payment Method</th>
                                                             <th className="cnf-table-header py-3 px-4 text-left font-bold uppercase tracking-widest text-[9px]">Reference / Bank</th>
@@ -2407,6 +2446,13 @@ const CnF = ({
                                                                 <td className="cnf-table-cell py-3 px-4 text-[11px] font-bold text-blue-600">{row.lcNo}</td>
                                                                 <td className="cnf-table-cell py-3 px-4 text-[11px] font-medium text-gray-700 truncate max-w-[120px]">{row.importer}</td>
                                                                 <td className="cnf-table-cell py-3 px-4 text-[11px] font-medium text-gray-700 truncate max-w-[120px]">{row.product}</td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-[11px] font-medium text-gray-600">{row.port || '-'}</td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-right text-[11px] font-medium text-gray-600 whitespace-nowrap">
+                                                                    {parseFloat(row.qty) > 0 ? `${parseFloat(row.qty).toLocaleString('en-US')} kg` : '-'}
+                                                                </td>
+                                                                <td className="cnf-table-cell py-3 px-4 text-center text-[11px] font-medium text-gray-600 whitespace-nowrap">
+                                                                    {row.truck && row.truck !== '-' ? row.truck : (row.truckCount && row.truckCount !== '-' ? row.truckCount : '-')}
+                                                                </td>
                                                                 <td className="cnf-table-cell py-3 px-4 text-right text-[11px] font-bold text-gray-900">
                                                                     {row.billingAmount > 0 ? row.billingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}
                                                                 </td>
@@ -2425,7 +2471,7 @@ const CnF = ({
                                                         ))}
                                                         {filteredAll.length === 0 && (
                                                             <tr>
-                                                                <td colSpan="10" className="py-20 text-center text-gray-400">
+                                                                <td colSpan="13" className="py-20 text-center text-gray-400">
                                                                     <div className="flex flex-col items-center justify-center gap-3">
                                                                         <BoxIcon className="w-12 h-12 opacity-20" />
                                                                         <p className="text-sm font-medium uppercase tracking-widest opacity-50">No ledger entries found</p>
@@ -2461,6 +2507,20 @@ const CnF = ({
                                                                     <div className="flex justify-between items-center text-xs">
                                                                         <span className="text-gray-500 font-medium">Importer:</span>
                                                                         <span className="font-semibold text-gray-700 truncate max-w-[180px]">{row.importer || '-'}</span>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-3 gap-2 text-[11px] pt-1">
+                                                                        <div>
+                                                                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Port</span>
+                                                                            <span className="font-medium text-gray-700 truncate block">{row.port || '-'}</span>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Qty</span>
+                                                                            <span className="font-medium text-gray-700">{parseFloat(row.qty) > 0 ? `${parseFloat(row.qty).toLocaleString('en-US')} kg` : '-'}</span>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Truck</span>
+                                                                            <span className="font-medium text-gray-700">{row.truck && row.truck !== '-' ? row.truck : '-'}</span>
+                                                                        </div>
                                                                     </div>
                                                                     <div className="flex justify-between items-center pt-2 border-t border-gray-50">
                                                                         <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Billing Amount</span>
