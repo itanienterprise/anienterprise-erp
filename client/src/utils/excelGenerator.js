@@ -3011,30 +3011,42 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
             setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         } else if (isPurchase) {
-            const headers = ['SL', 'Date', 'Purchase / LC No', 'Product', 'Brand', 'Quantity (KG)', 'Rate', 'Total Amount', 'Status'];
+            const headers = ['SL', 'Date', 'Purchase No', 'Product', 'Brand', 'Qty', 'Rate', 'Amount', 'Discount', 'Paid Amount', 'Balance', 'Warehouse'];
             rows.push(headers);
 
             let sumQty = 0;
             let sumTotal = 0;
+            let sumDiscount = 0;
+            let sumPaid = 0;
+            let sumBalance = 0;
 
             sortedHistory.forEach((item, idx) => {
                 const qty = parseFloat(item.quantity || item.qty || 0);
                 const rate = parseFloat(item.rate || 0);
                 const total = parseFloat(item.amount || item.total || 0);
+                const discount = parseFloat(item.discount || 0);
+                const paid = parseFloat(item.paid || item.paidAmount || 0);
+                const balance = Math.max(0, total - discount - paid);
 
                 sumQty += qty;
                 sumTotal += total;
+                sumDiscount += discount;
+                sumPaid += paid;
+                sumBalance += balance;
 
                 rows.push([
                     idx + 1,
                     item.date ? formatDate(item.date) : '-',
-                    item.purchaseNo || item.lcNo || '-',
-                    item.product || '-',
+                    item.purchaseNo || item.invoiceNo || item.lcNo || '-',
+                    item.product || item.productName || '-',
                     item.brand || '-',
                     qty,
                     rate > 0 ? rate : '-',
                     Math.round(total),
-                    item.status || 'Completed'
+                    discount > 0 ? Math.round(discount) : 0,
+                    paid > 0 ? Math.round(paid) : 0,
+                    Math.round(balance),
+                    item.warehouse || '-'
                 ]);
             });
 
@@ -3047,6 +3059,9 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                 sumQty,
                 '',
                 Math.round(sumTotal),
+                Math.round(sumDiscount),
+                Math.round(sumPaid),
+                Math.round(sumBalance),
                 ''
             ]);
 
@@ -3054,13 +3069,16 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
             ws['!cols'] = [
                 { wch: 8 },  // SL
                 { wch: 14 }, // Date
-                { wch: 20 }, // Purchase / LC No
+                { wch: 20 }, // Purchase No
                 { wch: 22 }, // Product
                 { wch: 18 }, // Brand
-                { wch: 16 }, // Quantity
+                { wch: 16 }, // Qty
                 { wch: 12 }, // Rate
-                { wch: 18 }, // Total Amount
-                { wch: 14 }  // Status
+                { wch: 18 }, // Amount
+                { wch: 14 }, // Discount
+                { wch: 16 }, // Paid Amount
+                { wch: 18 }, // Balance
+                { wch: 16 }  // Warehouse
             ];
 
             const wb = XLSX.utils.book_new();

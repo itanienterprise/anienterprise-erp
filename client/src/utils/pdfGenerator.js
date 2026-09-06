@@ -3314,8 +3314,8 @@ export const generateSalesReportPDF = async (reportData, filters, summary, saleT
         const reportTitleText = reportTab === 'lc_wise'
             ? 'LC WISE SALES REPORT'
             : reportTab === 'product_wise'
-            ? 'PRODUCT WISE SALES REPORT'
-            : (saleType || '').toUpperCase() === 'ORDER' ? 'ORDER REPORT' : `${(saleType || '').toUpperCase()} SALES REPORT`;
+                ? 'PRODUCT WISE SALES REPORT'
+                : (saleType || '').toUpperCase() === 'ORDER' ? 'ORDER REPORT' : `${(saleType || '').toUpperCase()} SALES REPORT`;
 
         // Title badge
         y += 2;
@@ -4993,6 +4993,78 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                     6: { halign: 'right', cellWidth: 18 },    // Rate
                     7: { halign: 'right', cellWidth: 25 },    // Amount
                     8: { halign: 'right', cellWidth: 18 }     // Disc -> Total 200mm
+                },
+                margin: { left: margin, right: margin }
+            });
+        } else if (isPurchase) {
+            let totalQty = 0;
+            let totalAmount = 0;
+            let totalDiscount = 0;
+            let totalPaid = 0;
+            let totalBalance = 0;
+
+            sortedHistoryData.forEach((item, idx) => {
+                const qty = parseFloat(item.quantity || item.qty || 0);
+                const rate = parseFloat(item.rate || 0);
+                const amount = parseFloat(item.amount || 0);
+                const discount = parseFloat(item.discount || 0);
+                const paid = parseFloat(item.paid || item.paidAmount || 0);
+                const balance = Math.max(0, amount - discount - paid);
+
+                totalQty += qty;
+                totalAmount += amount;
+                totalDiscount += discount;
+                totalPaid += paid;
+                totalBalance += balance;
+
+                tableRows.push([
+                    idx + 1,
+                    formatDate(item.date),
+                    item.purchaseNo || item.invoiceNo || item.lcNo || '-',
+                    item.product || item.productName || '-',
+                    item.brand || '-',
+                    qty > 0 ? qty.toLocaleString('en-US') : '-',
+                    rate > 0 ? rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+                    amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                    discount > 0 ? discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00',
+                    paid > 0 ? paid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00',
+                    balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                    item.warehouse || '-'
+                ]);
+            });
+
+            // Grand Total row
+            tableRows.push([
+                { content: 'GRAND TOTAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: totalQty > 0 ? totalQty.toLocaleString('en-US') : '0', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } },
+                { content: totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: totalDiscount > 0 ? totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: totalPaid > 0 ? totalPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00', styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: totalBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), styles: { halign: 'right', fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                { content: '', styles: { fillColor: [240, 240, 240] } }
+            ]);
+
+            autoTable(doc, {
+                startY: yPos + 10,
+                head: [['SL', 'Date', 'Purchase No', 'Product', 'Brand', 'Qty', 'Rate', 'Amount', 'Disc.', 'Paid', 'Balance', 'WH']],
+                body: tableRows,
+                theme: 'grid',
+                styles: { fontSize: 8, cellPadding: 1.2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center', valign: 'middle', textColor: [0, 0, 0] },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 8 },
+                    1: { halign: 'center', cellWidth: 18 },
+                    2: { halign: 'center', cellWidth: 20 },
+                    3: { halign: 'left', cellWidth: 22 },
+                    4: { halign: 'left', cellWidth: 17 },
+                    5: { halign: 'right', cellWidth: 16 },
+                    6: { halign: 'right', cellWidth: 15 },
+                    7: { halign: 'right', cellWidth: 22 },
+                    8: { halign: 'right', cellWidth: 14 },
+                    9: { halign: 'right', cellWidth: 16 },
+                    10: { halign: 'right', cellWidth: 20 },
+                    11: { halign: 'center', cellWidth: 15 }
                 },
                 margin: { left: margin, right: margin }
             });
