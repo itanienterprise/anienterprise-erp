@@ -5009,7 +5009,7 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 const amount = parseFloat(item.amount || 0);
                 const discount = parseFloat(item.discount || 0);
                 const paid = parseFloat(item.paid || item.paidAmount || 0);
-                const balance = Math.max(0, amount - discount - paid);
+                const balance = item.balance !== undefined ? parseFloat(item.balance) : Math.max(0, amount - discount - paid);
 
                 totalQty += qty;
                 totalAmount += amount;
@@ -5050,21 +5050,21 @@ export const generateCustomerHistoryPDF = (customer, historyData, summary, filte
                 head: [['SL', 'Date', 'Purchase No', 'Product', 'Brand', 'Qty', 'Rate', 'Amount', 'Disc.', 'Paid', 'Balance', 'WH']],
                 body: tableRows,
                 theme: 'grid',
-                styles: { fontSize: 8, cellPadding: 1.2, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
+                styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, textColor: [0, 0, 0] },
                 headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', halign: 'center', valign: 'middle', textColor: [0, 0, 0] },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 8 },
-                    1: { halign: 'center', cellWidth: 18 },
-                    2: { halign: 'center', cellWidth: 20 },
-                    3: { halign: 'left', cellWidth: 22 },
-                    4: { halign: 'left', cellWidth: 17 },
-                    5: { halign: 'right', cellWidth: 16 },
-                    6: { halign: 'right', cellWidth: 15 },
-                    7: { halign: 'right', cellWidth: 22 },
-                    8: { halign: 'right', cellWidth: 14 },
-                    9: { halign: 'right', cellWidth: 16 },
-                    10: { halign: 'right', cellWidth: 20 },
-                    11: { halign: 'center', cellWidth: 15 }
+                    0: { halign: 'center', cellWidth: 7 },   // SL
+                    1: { halign: 'center', cellWidth: 19 },  // Date
+                    2: { halign: 'center', cellWidth: 18 },  // Purchase No
+                    3: { halign: 'left', cellWidth: 21 },    // Product
+                    4: { halign: 'left', cellWidth: 16 },    // Brand
+                    5: { halign: 'right', cellWidth: 14 },   // Qty
+                    6: { halign: 'right', cellWidth: 12 },   // Rate
+                    7: { halign: 'right', cellWidth: 24 },   // Amount
+                    8: { halign: 'right', cellWidth: 15 },   // Disc.
+                    9: { halign: 'right', cellWidth: 24 },   // Paid
+                    10: { halign: 'right', cellWidth: 15 },  // Balance
+                    11: { halign: 'center', cellWidth: 18 }  // WH -> Total: 200mm
                 },
                 margin: { left: margin, right: margin }
             });

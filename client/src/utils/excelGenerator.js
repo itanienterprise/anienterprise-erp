@@ -3026,7 +3026,7 @@ export const generateCustomerHistoryExcel = (customer, historyData = [], summary
                 const total = parseFloat(item.amount || item.total || 0);
                 const discount = parseFloat(item.discount || 0);
                 const paid = parseFloat(item.paid || item.paidAmount || 0);
-                const balance = Math.max(0, total - discount - paid);
+                const balance = item.balance !== undefined ? parseFloat(item.balance) : Math.max(0, total - discount - paid);
 
                 sumQty += qty;
                 sumTotal += total;

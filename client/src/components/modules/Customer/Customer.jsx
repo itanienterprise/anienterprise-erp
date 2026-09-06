@@ -957,9 +957,91 @@ const Customer = ({
             }];
         });
 
-        const combined = prEntries.length > 0 ? prEntries : matchedPurchases;
+        const sales = (rawSalesWithUpdatedPrices || []).map(s => ({
+            ...s,
+            type: 'sale',
+            sortDate: new Date(s.date)
+        }));
 
-        const filtered = combined.filter(item => {
+        const payments = (viewData?.paymentHistory || [])
+            .filter(p => (p.status || '').toLowerCase() !== 'requested')
+            .map(p => ({
+                ...p,
+                type: 'payment',
+                sortDate: new Date(p.date)
+            }));
+
+        const payouts = (viewData?.payToCustomerHistory || [])
+            .filter(pc => (pc.status || '').toLowerCase() !== 'requested')
+            .map(pc => ({
+                ...pc,
+                type: 'payToCustomer',
+                sortDate: new Date(pc.date)
+            }));
+
+        const purchases = prEntries.length > 0 ? prEntries : (matchedPurchases.length > 0 ? matchedPurchases : directHistory);
+        const purchaseItemsWithRef = purchases.map(p => ({
+            ...p,
+            type: 'purchase',
+            sortDate: new Date(p.date)
+        }));
+
+        const allTransactions = [...sales, ...payments, ...payouts, ...purchaseItemsWithRef].sort(compareTransactions);
+
+        let runningCustomerBalance = parseFloat(viewData?.openingBalance || 0);
+        const unpaidPurchases = [];
+
+        allTransactions.forEach(item => {
+            if (item.type === 'sale') {
+                const amt = parseFloat(item.amount) || 0;
+                const pd = parseFloat(item.paid) || 0;
+                const disc = parseFloat(item.discount) || 0;
+                runningCustomerBalance += (amt - pd - disc);
+            } else if (item.type === 'payment') {
+                const amt = parseFloat(item.amount) || 0;
+                const disc = parseFloat(item.discount) || 0;
+                runningCustomerBalance -= (amt + disc);
+            } else if (item.type === 'purchase') {
+                const amt = parseFloat(item.amount) || 0;
+                const disc = parseFloat(item.discount) || 0;
+                const directPaid = parseFloat(item.paid || item.paidAmount || 0);
+                const netCost = Math.max(0, amt - disc - directPaid);
+
+                let paidFromPrev = 0;
+                if (runningCustomerBalance > 0) {
+                    paidFromPrev = Math.min(runningCustomerBalance, netCost);
+                }
+
+                runningCustomerBalance -= netCost;
+                const remainingDue = Math.max(0, netCost - paidFromPrev);
+                item.paid = directPaid + paidFromPrev;
+                item.paidAmount = item.paid;
+                item.balance = remainingDue;
+
+                if (remainingDue > 0) {
+                    unpaidPurchases.push(item);
+                }
+            } else if (item.type === 'payToCustomer') {
+                const amt = parseFloat(item.amount) || 0;
+                runningCustomerBalance += amt;
+
+                let payoutLeft = amt;
+                for (const pu of unpaidPurchases) {
+                    if (payoutLeft <= 0) break;
+                    if (pu.balance > 0) {
+                        const pay = Math.min(payoutLeft, pu.balance);
+                        pu.paid += pay;
+                        pu.paidAmount = pu.paid;
+                        pu.balance -= pay;
+                        payoutLeft -= pay;
+                    }
+                }
+            }
+        });
+
+        const withAllocatedPaid = purchaseItemsWithRef;
+
+        const filtered = withAllocatedPaid.filter(item => {
             const matchesSearch = !historySearchQuery ||
                 ((item.purchaseNo || item.invoiceNo || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
                 ((item.product || '').toLowerCase().includes(historySearchQuery.toLowerCase())) ||
@@ -984,7 +1066,7 @@ const Customer = ({
             if (key === 'date') {
                 const diff = compareTransactions(a, b);
                 return direction === 'asc' ? diff : -diff;
-            } else if (key === 'amount' || key === 'rate' || key === 'quantity' || key === 'discount') {
+            } else if (key === 'amount' || key === 'rate' || key === 'quantity' || key === 'discount' || key === 'paid' || key === 'balance') {
                 aVal = parseFloat(a[key]) || 0;
                 bVal = parseFloat(b[key]) || 0;
             }
@@ -993,7 +1075,7 @@ const Customer = ({
             if (aVal > bVal) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [viewData, purchasesList, stockList, purchaseReceivesList, historySearchQuery, historyFilters, historySortConfig]);
+    }, [viewData, purchasesList, stockList, purchaseReceivesList, rawSalesWithUpdatedPrices, historySearchQuery, historyFilters, historySortConfig]);
 
     const filteredPaymentHistory = useMemo(() => {
         const filtered = (viewData?.paymentHistory || []).filter(item => {
@@ -1412,7 +1494,7 @@ const Customer = ({
     const totalPayToCustomer = (viewData?.payToCustomerHistory || [])
         .filter(item => (item.status || '').toLowerCase() !== 'requested')
         .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-    const purchaseTotalBalance = Math.max(0, purchaseTotalAmount - purchaseTotalDiscount - purchaseTotalPaid - totalPayToCustomer);
+    const purchaseTotalBalance = Math.max(0, purchaseTotalAmount - purchaseTotalDiscount - purchaseTotalPaid);
 
     // G.P Summaries
     const totalGpQuantity = filteredGatePasses.reduce((sum, item) => sum + (parseFloat(item.gpQuantity) || 0), 0);
@@ -2692,7 +2774,7 @@ const Customer = ({
                                                                     <td className="px-4 py-3 font-bold text-gray-900">৳{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
                                                                     <td className="px-4 py-3 text-gray-600">৳{parseFloat(item.discount || 0).toLocaleString('en-IN')}</td>
                                                                     <td className="px-4 py-3 font-bold text-teal-600">৳{parseFloat(item.paid || 0).toLocaleString('en-IN')}</td>
-                                                                    <td className="px-4 py-3 font-bold text-orange-600">৳{Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0)).toLocaleString('en-IN')}</td>
+                                                                    <td className="px-4 py-3 font-bold text-orange-600">৳{parseFloat(item.balance !== undefined ? item.balance : Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0))).toLocaleString('en-IN')}</td>
                                                                     <td className="px-4 py-3 text-gray-600">{item.warehouse || '-'}</td>
                                                                 </tr>
                                                             ))
@@ -2740,7 +2822,7 @@ const Customer = ({
                                                                     </div>
                                                                     <div>
                                                                         <div className="text-[10px] text-gray-400 uppercase">Balance</div>
-                                                                        <div className="text-xs font-bold text-orange-600">৳{Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0)).toLocaleString('en-IN')}</div>
+                                                                        <div className="text-xs font-bold text-orange-600">৳{parseFloat(item.balance !== undefined ? item.balance : Math.max(0, parseFloat(item.amount || 0) - parseFloat(item.discount || 0) - parseFloat(item.paid || 0))).toLocaleString('en-IN')}</div>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -3974,7 +4056,9 @@ const Customer = ({
                     generateCustomerHistoryPDF(
                         viewData,
                         activeHistoryTab === 'purchase' ? filteredPurchaseHistory : activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
-                        { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
+                        activeHistoryTab === 'purchase'
+                            ? { totalAmount: purchaseTotalAmount, totalPaid: purchaseTotalPaid, totalDiscount: purchaseTotalDiscount, totalBalance: purchaseTotalBalance, openingBalance: 0, isFiltered }
+                            : { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
                         historyFilters,
                         activeHistoryTab
                     );
@@ -3983,7 +4067,9 @@ const Customer = ({
                     generateCustomerHistoryExcel(
                         viewData,
                         activeHistoryTab === 'purchase' ? filteredPurchaseHistory : activeHistoryTab === 'sales' ? filteredSalesHistory : activeHistoryTab === 'payment' ? filteredPaymentHistory : combinedHistory,
-                        { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
+                        activeHistoryTab === 'purchase'
+                            ? { totalAmount: purchaseTotalAmount, totalPaid: purchaseTotalPaid, totalDiscount: purchaseTotalDiscount, totalBalance: purchaseTotalBalance, openingBalance: 0, isFiltered }
+                            : { totalAmount, totalPaid: totalPaidCalculated, totalDiscount, totalBalance: totalDueCalculated, openingBalance, isFiltered },
                         historyFilters,
                         activeHistoryTab
                     );
