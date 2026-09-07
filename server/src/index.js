@@ -2554,7 +2554,14 @@ apiRouter.post('/api/lc-expenses', async (req, res) => {
             discount: 0,
             reference: req.body.lcNo || '',
             remarks: req.body.remarks || 'Paid from LC Expense',
-            lcExpenseId: savedRecord._id.toString()
+            lcExpenseId: savedRecord._id.toString(),
+            status: 'Completed',
+            entryBy: req.body.entryBy || req.session?.user?.username || 'admin',
+            entryByName: req.body.entryByName || req.session?.user?.name || 'Admin',
+            createdBy: req.body.createdBy || req.session?.user?.username || 'admin',
+            createdRole: req.body.createdRole || req.session?.user?.role || 'admin',
+            approvedBy: req.body.approvedBy || req.session?.user?.username || 'admin',
+            approvedByName: req.body.approvedByName || req.session?.user?.name || 'Admin'
           };
           const encPayData = encryptData(paymentBody);
           const newPayRecord = new CnFPayment({ data: encPayData });
@@ -2606,7 +2613,14 @@ apiRouter.put('/api/lc-expenses/:id', async (req, res) => {
             discount: 0,
             reference: req.body.lcNo || '',
             remarks: req.body.remarks || 'Paid from LC Expense',
-            lcExpenseId: req.params.id
+            lcExpenseId: req.params.id,
+            status: existingPay.status || 'Completed',
+            entryBy: existingPay.entryBy || req.body.entryBy || req.session?.user?.username || 'admin',
+            entryByName: existingPay.entryByName || req.body.entryByName || req.session?.user?.name || 'Admin',
+            createdBy: existingPay.createdBy || req.body.createdBy || req.session?.user?.username || 'admin',
+            createdRole: existingPay.createdRole || 'admin',
+            approvedBy: existingPay.approvedBy || req.session?.user?.username || 'admin',
+            approvedByName: existingPay.approvedByName || req.session?.user?.name || 'Admin'
           };
           const encPayData = encryptData(paymentBody);
           await CnFPayment.findByIdAndUpdate(existingPay._id, { data: encPayData });

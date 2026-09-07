@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { SearchIcon, FunnelIcon, DollarSignIcon, EyeIcon, PlusIcon, XIcon, ChevronDownIcon, TrashIcon, EditIcon, UserIcon, BarChartIcon, CalendarIcon, CheckIcon, BoxIcon } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
-import { decryptData, encryptData } from '../../../utils/encryption';
+import { decryptData } from '../../../utils/encryption';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateCnFPaymentsListReportPDF } from '../../../utils/pdfGenerator';
 import { generateCnFPaymentsListReportExcel } from '../../../utils/excelGenerator';
@@ -26,8 +26,19 @@ const toYYYYMMDD = (dateVal) => {
     return `${y}-${m}-${day}`;
 };
 
+const formatFirstName = (nameStr) => {
+    if (!nameStr) return '';
+    const clean = String(nameStr).trim();
+    if (!clean || clean === '-' || clean === '—') return '';
+    if (/^[A-Z\s]+$/.test(clean) && clean.length > 1) {
+        return clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    }
+    return clean;
+};
+
 const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif, refreshPendingIndicators }) => {
     const [payments, setPayments] = useState([]);
+    const [employeesMap, setEmployeesMap] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -231,7 +242,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
     };
     const [filters, setFilters] = useState(initialFilterState);
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(null);
-    const [filterSearchInputs, setFilterSearchInputs] = useState({ cnfName: '', method: '' });
+    const [_filterSearchInputs, setFilterSearchInputs] = useState({ cnfName: '', method: '' });
 
     const filterPanelRef = useRef(null);
     const filterButtonRef = useRef(null);
@@ -294,10 +305,114 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
         billTo: ''
     });
 
-    useEffect(() => {
-        fetchPayments();
-        fetchCnFs();
-    }, []);
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch { /* ignore */ }
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && d.name) {
+                    rawFName = d.name.trim().split(/\s+/)[0];
+                }
+                if (!rawFName && d.employeeName) {
+                    rawFName = d.employeeName.trim().split(/\s+/)[0];
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName);
+                if (!fName) return;
+
+                if (d.employeeId) map[d.employeeId.toLowerCase().trim()] = fName;
+                if (d.username) map[d.username.toLowerCase().trim()] = fName;
+                if (d._id) map[String(d._id).toLowerCase()] = fName;
+                if (d.name) {
+                    const fullNameLower = d.name.toLowerCase().trim();
+                    map[fullNameLower] = fName;
+                    const firstPart = fullNameLower.split(/\s+/)[0];
+                    if (firstPart) map[firstPart] = fName;
+                }
+                if (d.nameEn) {
+                    const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                    map[fullNameEnLower] = fName;
+                    const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                    if (firstPartEn) map[firstPartEn] = fName;
+                }
+            });
+
+            // Map 'admin' and 'administrator' to admin employee's first name
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+            }
+            map['admin'] = 'Administrator';
+            map['administrator'] = 'Administrator';
+            map['a-1001'] = adminFirstName;
+
+            setEmployeesMap(map);
+        } catch (error) {
+            console.error('Error fetching employees in CnFPayment:', error);
+        }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        const firstWord = rawStr.split(/\s+/)[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        return formatFirstName(firstWord || rawStr);
+    };
+
+    const getEntryByFirstName = (p) => {
+        if (!p) return '-';
+        const candidate = p.entryByName || p.entryBy || p.createdBy || p.createdByName;
+        if (!candidate || candidate === '-' || candidate === '—') return '-';
+        return getFirstNameFromIdentifier(candidate) || '-';
+    };
 
     const getAgentEarningsAndPayments = (cnfId, cnfName, cnfType, commissionRateDefault) => {
         if (!cnfId || !cnfName) return { historyRecords: [], paymentRecords: [] };
@@ -717,6 +832,12 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
         }
     };
 
+    useEffect(() => {
+        fetchPayments();
+        fetchCnFs();
+        fetchEmployees();
+    }, []);
+
     // Click outside listener for dropdowns
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -796,6 +917,7 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
         try {
             const selectedCnf = cnfs.find(c => c._id === newPayment.cnfId);
             const initialStatus = isEditMode ? (editingPayment?.status || 'Completed') : (isRequestMode || !canApprove ? 'Requested' : 'Completed');
+            const userFirstName = getFirstNameFromIdentifier(currentUser?.username || currentUser?.employeeId || currentUser?.name) || 'Admin';
             const paymentData = {
                 ...newPayment,
                 cnfName: selectedCnf?.name,
@@ -803,11 +925,13 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                 amount: amountVal,
                 discount: discountVal,
                 status: initialStatus,
-                entryBy: editingPayment?.entryBy || currentUser?.name || currentUser?.username || 'Admin',
+                entryBy: editingPayment?.entryBy || currentUser?.username || currentUser?.name || 'Admin',
+                entryByName: editingPayment?.entryByName || userFirstName,
                 createdBy: editingPayment?.createdBy || currentUser?.username || 'Admin',
                 createdRole: editingPayment?.createdRole || currentUser?.role || 'Admin',
                 ...(initialStatus === 'Completed' && !editingPayment?.approvedBy ? {
-                    approvedBy: currentUser?.name || currentUser?.username || 'Admin',
+                    approvedBy: currentUser?.username || currentUser?.name || 'Admin',
+                    approvedByName: userFirstName,
                     approverRole: currentUser?.role || 'Admin',
                     approvedAt: new Date().toISOString()
                 } : {})
@@ -878,12 +1002,14 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
         setIsSubmitting(true);
         try {
             let updatedData;
+            const approverFirstName = getFirstNameFromIdentifier(currentUser?.username || currentUser?.employeeId || currentUser?.name) || 'Approver';
             if (!isFirstApproved && isFirstApproverOnly) {
                 // Perform 1st approval step
                 updatedData = {
                     ...payment,
                     firstApproved: true,
-                    firstApprovedBy: currentUser?.name || currentUser?.username || 'Approver',
+                    firstApprovedBy: currentUser?.username || currentUser?.name || 'Approver',
+                    firstApprovedByName: approverFirstName,
                     firstApprovedRole: currentUser?.role || 'Approver',
                     firstApprovedAt: new Date().toISOString(),
                     status: 'Requested'
@@ -894,14 +1020,17 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                     ...payment,
                     status: 'Completed',
                     firstApproved: true,
-                    firstApprovedBy: payment.firstApprovedBy || currentUser?.name || currentUser?.username || 'Approver',
+                    firstApprovedBy: payment.firstApprovedBy || currentUser?.username || currentUser?.name || 'Approver',
+                    firstApprovedByName: payment.firstApprovedByName || approverFirstName,
                     firstApprovedRole: payment.firstApprovedRole || currentUser?.role || 'Approver',
                     firstApprovedAt: payment.firstApprovedAt || new Date().toISOString(),
                     secondApproved: true,
-                    secondApprovedBy: currentUser?.name || currentUser?.username || 'Admin',
+                    secondApprovedBy: currentUser?.username || currentUser?.name || 'Admin',
+                    secondApprovedByName: approverFirstName,
                     secondApprovedRole: currentUser?.role || 'Admin',
                     secondApprovedAt: new Date().toISOString(),
-                    approvedBy: currentUser?.name || currentUser?.username || 'Admin',
+                    approvedBy: currentUser?.username || currentUser?.name || 'Admin',
+                    approvedByName: approverFirstName,
                     approverRole: currentUser?.role || 'Admin',
                     approvedAt: new Date().toISOString()
                 };
@@ -1053,7 +1182,8 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
             (p.cnfName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.method || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.reference || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (p.entryBy || '').toLowerCase().includes(searchQuery.toLowerCase());
+            (p.entryBy || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            getEntryByFirstName(p).toLowerCase().includes(searchQuery.toLowerCase());
 
         const matchStartDate = !filters.startDate || p.date >= filters.startDate;
         const matchEndDate = !filters.endDate || p.date <= filters.endDate;
@@ -1607,21 +1737,34 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                                                     </td>
                                                     {canShowEntryBy && (
                                                         <td className="px-4 py-3 whitespace-nowrap text-center">
-                                                            <div className="flex flex-col items-center gap-0.5">
-                                                                <span className="text-xs font-semibold text-gray-700">
-                                                                    {p.entryByName || p.entryBy || p.createdBy || '-'}
-                                                                </span>
-                                                                {(p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy) && (
-                                                                    <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
-                                                                        ✓ {p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy}
-                                                                    </span>
-                                                                )}
-                                                                {(p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy || (p.status === 'Completed' ? (p.entryByName || p.entryBy || p.createdBy) : null)) && (
-                                                                    <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
-                                                                        ✓✓ {p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy || p.entryByName || p.entryBy || p.createdBy}
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                            {(() => {
+                                                                const entryName = getEntryByFirstName(p);
+                                                                const firstAppr = (p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy)
+                                                                    ? getFirstNameFromIdentifier(p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy)
+                                                                    : '';
+                                                                const rawFinal = p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy;
+                                                                const finalAppr = rawFinal ? getFirstNameFromIdentifier(rawFinal) : '';
+                                                                const showFirstAppr = Boolean(firstAppr && firstAppr.toLowerCase() !== entryName.toLowerCase());
+                                                                const showFinalAppr = Boolean(finalAppr && (isReq || finalAppr.toLowerCase() !== entryName.toLowerCase()));
+
+                                                                return (
+                                                                    <div className="flex flex-col items-center gap-0.5">
+                                                                        <span className="text-xs font-semibold text-gray-700">
+                                                                            {entryName}
+                                                                        </span>
+                                                                        {showFirstAppr && (
+                                                                            <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                                                                ✓ {firstAppr}
+                                                                            </span>
+                                                                        )}
+                                                                        {showFinalAppr && (
+                                                                            <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
+                                                                                ✓✓ {finalAppr}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </td>
                                                     )}
                                                     {canManage && (
@@ -1771,19 +1914,32 @@ const CnFPayment = ({ currentUser: propCurrentUser, addNotification, highlightId
                                                             </>
                                                         )}
 
-                                                        {(p.entryBy || p.createdBy) && (
+                                                        {(p.entryBy || p.createdBy || p.entryByName) && (
                                                             <>
                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entry By</span>
                                                                 <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                <div className="flex flex-col gap-0.5">
-                                                                    <span className="font-semibold text-gray-700 text-[11px]">{p.entryByName || p.entryBy || p.createdBy}</span>
-                                                                    {(p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy) && (
-                                                                        <span className="text-[10px] text-blue-600 font-medium">✓ {p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy} (1st Appr)</span>
-                                                                    )}
-                                                                    {(p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy || (p.status === 'Completed' ? (p.entryByName || p.entryBy || p.createdBy) : null)) && (
-                                                                        <span className="text-[10px] text-emerald-600 font-semibold">✓✓ {p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy || p.entryByName || p.entryBy || p.createdBy} (Final Appr)</span>
-                                                                    )}
-                                                                </div>
+                                                                {(() => {
+                                                                    const entryName = getEntryByFirstName(p);
+                                                                    const firstAppr = (p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy)
+                                                                        ? getFirstNameFromIdentifier(p.firstApprovedByName || p.firstApprovedBy || p.smApprovedByName || p.smApprovedBy)
+                                                                        : '';
+                                                                    const rawFinal = p.approvedByName || p.approvedBy || p.secondApprovedByName || p.secondApprovedBy;
+                                                                    const finalAppr = rawFinal ? getFirstNameFromIdentifier(rawFinal) : '';
+                                                                    const showFirstAppr = Boolean(firstAppr && firstAppr.toLowerCase() !== entryName.toLowerCase());
+                                                                    const showFinalAppr = Boolean(finalAppr && (isReq || finalAppr.toLowerCase() !== entryName.toLowerCase()));
+
+                                                                    return (
+                                                                        <div className="flex flex-col gap-0.5">
+                                                                            <span className="font-semibold text-gray-700 text-[11px]">{entryName}</span>
+                                                                            {showFirstAppr && (
+                                                                                <span className="text-[10px] text-blue-600 font-medium">✓ {firstAppr} (1st Appr)</span>
+                                                                            )}
+                                                                            {showFinalAppr && (
+                                                                                <span className="text-[10px] text-emerald-600 font-semibold">✓✓ {finalAppr} (Final Appr)</span>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })()}
                                                             </>
                                                         )}
 
