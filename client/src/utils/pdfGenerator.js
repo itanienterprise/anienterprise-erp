@@ -2730,12 +2730,12 @@ export const generateSaleChallanPDF = async (sale, allCustomers = []) => {
 };
 
 
-export const generateProductHistoryPDF = (productName, category, activeTab, purchaseData, saleData, summary, filters, damageData = [], transferData = []) => {
+export const generateProductHistoryPDF = async (productName, category, activeTab, purchaseData, saleData, summary, filters, damageData = [], transferData = []) => {
     try {
-        const doc = new jsPDF();
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
         const pageWidth = doc.internal.pageSize.width;
         const pageHeight = doc.internal.pageSize.height;
-        const margin = 7; // Reduced margin to gain space
+        const margin = 7;
         const isFruitCategory = (category || '').toLowerCase() === 'fruit';
 
         const parseReportDate = (dateVal) => {
@@ -2776,36 +2776,6 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             return 0;
         };
 
-        // Ensure data is sorted ascending by date for reports
-        const sortedPurchaseData = [...purchaseData].sort(compareReportHistoryItems);
-        const sortedSaleData = [...saleData].sort(compareReportHistoryItems);
-
-        // --- Header ---
-        doc.setFontSize(22);
-        doc.setFont('helvetica', 'bold');
-        doc.text("M/S ANI ENTERPRISE", pageWidth / 2, 14, { align: 'center' });
-
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0);
-        doc.text("766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh", pageWidth / 2, 20, { align: 'center' });
-        doc.text("+8802588813057, anienterprise051@gmail.com, www.anienterprises.com.bd", pageWidth / 2, 25, { align: 'center' });
-
-        // Separator
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, 32, pageWidth - margin, 32);
-
-        // Report Title
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(0);
-        doc.rect(pageWidth / 2 - 50, 29, 100, 8, 'FD');
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0);
-        const title = `${activeTab.toUpperCase()} HISTORY - ${productName.toUpperCase()}`;
-        doc.text(title, pageWidth / 2, 34, { align: 'center' });
-
         // --- Helper for formatting date ---
         const formatDate = (dateStr) => {
             if (!dateStr) return '-';
@@ -2817,52 +2787,228 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
             return `${day}/${month}/${year}`;
         };
 
-        // --- Info Row ---
-        let yPos = 47;
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text("Product:", margin, yPos);
+        // Ensure data is sorted ascending by date for reports
+        const sortedPurchaseData = [...purchaseData].sort(compareReportHistoryItems);
+        const sortedSaleData = [...saleData].sort(compareReportHistoryItems);
+
+        // Load company logo (same as Stock Report / P&L)
+        const logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = () => resolve(null);
+            img.src = '/logo.png';
+        });
+
+        // --- Header (identical to Stock Report) ---
+        if (logoImg) {
+            doc.addImage(logoImg, 'PNG', margin, margin, 18, 18);
+        } else {
+            doc.setFillColor(249, 115, 22);
+            doc.roundedRect(margin, margin, 18, 18, 3, 3, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text("A", margin + 9, margin + 11, { align: 'center' });
+        }
+
+        await preloadFrauncesFont().catch(() => { });
+        const isFrauncesLoaded = ensureFrauncesFont(doc);
+
+        const xPos = margin + 22;
+        const headerYPos = margin + 11;
+
+        doc.setFontSize(26);
+        if (isFrauncesLoaded) {
+            doc.setFont('Fraunces', 'normal');
+        } else {
+            doc.setFont('helvetica', 'bold');
+        }
+
+        // 1. Subtle drop shadow behind text
+        doc.setTextColor(210, 210, 210);
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos + 0.3, headerYPos + 0.3);
+
+        // 2. Main text: Clean orange fill
+        doc.setTextColor(249, 115, 22); // Orange (#f97316)
+        if (typeof doc.setTextRenderingMode === 'function') {
+            doc.setTextRenderingMode(0); // fill only
+        }
+        doc.text("ANI ENTERPRISE", xPos, headerYPos);
+
+        // Address (right aligned)
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.text(productName, margin + 25, yPos);
+        doc.setTextColor(0, 0, 0);
+        doc.text([
+            "766, H.M Tower, Level-06",
+            "Borogola, Bogura, Bangladesh",
+            "Tel: +8802588813057",
+            "Email: anienterprise051@gmail.com"
+        ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
 
-        doc.text(`Printed on: ${formatDate(new Date())}`, pageWidth - margin, yPos, { align: 'right' });
+        // Orange divider line
+        let y = margin + 20;
+        doc.setDrawColor(249, 115, 22);
+        doc.setLineWidth(0.6);
+        doc.line(margin, y, pageWidth - margin, y);
 
-        yPos += 7;
+        // Title badge
+        y += 2;
+        doc.setFillColor(249, 115, 22);
+        const titleText = `${activeTab.toUpperCase()} HISTORY - ${productName.toUpperCase()}`;
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.text("Date Range:", margin, yPos);
+        const titleW = Math.max(90, doc.getTextWidth(titleText) + 20);
+        doc.roundedRect((pageWidth / 2) - (titleW / 2), y, titleW, 7, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text(titleText, pageWidth / 2, y + 5, { align: 'center' });
+
+        y += 9;
+
+        // Filter info pill
+        const dateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const dateRange = `${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} — ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`;
+        const filterParts = [`Date: ${dateRange}`];
+        if (filters.brand) filterParts.push(`Brand: ${filters.brand}`);
+        if (filters.party) filterParts.push(`Party: ${filters.party}`);
+        if (filters.lcNo) filterParts.push(`LC: ${filters.lcNo}`);
+        if (filters.warehouse) filterParts.push(`Wh: ${filters.warehouse}`);
+        const filterText = filterParts.join('   |   ');
+
+        // Center: Date & Filter Pill
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(71, 85, 105);
+        const filterTW = doc.getTextWidth(filterText);
+        const pillW = Math.min(filterTW + 14, pageWidth - margin * 2 - 50);
+        doc.setFillColor(241, 245, 249);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.roundedRect((pageWidth / 2) - (pillW / 2), y, pillW, 6, 1.5, 1.5, 'FD');
+        doc.setTextColor(30, 41, 59);
+        doc.text(filterText, pageWidth / 2, y + 4.2, { align: 'center' });
+
+        // Right Side: Printed on
         doc.setFont('helvetica', 'normal');
-        doc.text(`${formatDate(filters.startDate) === '-' ? 'Start' : formatDate(filters.startDate)} to ${formatDate(filters.endDate) === '-' ? 'Present' : formatDate(filters.endDate)}`, margin + 25, yPos);
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Printed: ${dateStr}`, pageWidth - margin, y + 4.2, { align: 'right' });
 
-        if (filters.brand) {
-            yPos += 7;
-            doc.setFont('helvetica', 'bold');
-            doc.text("Brand:", margin, yPos);
+        let currentY = y + 8;
+
+        // --- Summary Cards (Before Table) ---
+        const cardWidth = 85;
+        const cardHeight = 28;
+        const cardGap = 16;
+        const cardLineHeight = 4.8;
+
+        const startX = (pageWidth - (cardWidth * 2 + cardGap)) / 2;
+        const leftCardX = startX;
+        const rightCardX = startX + cardWidth + cardGap;
+        const cardY = currentY;
+
+        // --- Left Card: FINAL CONCLUSION ---
+        doc.setFillColor(250, 250, 250);
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(leftCardX, cardY, cardWidth, cardHeight, 2, 2, 'FD');
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(130, 130, 130);
+        doc.text("FINAL CONCLUSION", leftCardX + 5, cardY + 5);
+
+        doc.setFontSize(8.5);
+        let lY = cardY + 10;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(70, 70, 70);
+        doc.text("Total Purchase:", leftCardX + 5, lY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text(`${Math.round(summary.totalQty || 0).toLocaleString('en-US')} kg`, leftCardX + cardWidth - 5, lY, { align: 'right' });
+
+        lY += cardLineHeight;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(70, 70, 70);
+        doc.text("Total Short:", leftCardX + 5, lY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(225, 29, 72);
+        doc.text(`${Math.round(summary.totalShortageQty || 0).toLocaleString('en-US')} kg`, leftCardX + cardWidth - 5, lY, { align: 'right' });
+
+        if (activeTab === 'total') {
+            lY += cardLineHeight;
             doc.setFont('helvetica', 'normal');
-            doc.text(filters.brand, margin + 25, yPos);
-        }
-        if (filters.party) {
-            yPos += 7;
+            doc.setTextColor(70, 70, 70);
+            doc.text("Total Sale:", leftCardX + 5, lY);
             doc.setFont('helvetica', 'bold');
-            doc.text("Party:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(filters.party, margin + 25, yPos);
-        }
-        if (filters.lcNo) {
-            yPos += 7;
-            doc.setFont('helvetica', 'bold');
-            doc.text("LC No:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(filters.lcNo, margin + 25, yPos);
-        }
-        if (filters.warehouse) {
-            yPos += 7;
-            doc.setFont('helvetica', 'bold');
-            doc.text("Warehouse:", margin, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(filters.warehouse, margin + 25, yPos);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`${Math.round(summary.totalSaleQty || 0).toLocaleString('en-US')} kg`, leftCardX + cardWidth - 5, lY, { align: 'right' });
         }
 
-        let currentY = yPos + 10;
+        // InHouse Divider & Row
+        doc.setDrawColor(210, 210, 210);
+        doc.line(leftCardX + 5, cardY + cardHeight - 6.5, leftCardX + cardWidth - 5, cardY + cardHeight - 6.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(37, 99, 235);
+        doc.text("INHOUSE:", leftCardX + 5, cardY + cardHeight - 2.5);
+        doc.text(`${Math.round(summary.totalInHouseQty || 0).toLocaleString('en-US')} kg`, leftCardX + cardWidth - 5, cardY + cardHeight - 2.5, { align: 'right' });
+
+        // --- Right Card: FINANCIAL SUMMARY ---
+        doc.setFillColor(245, 248, 255);
+        doc.setDrawColor(200, 200, 200);
+        doc.roundedRect(rightCardX, cardY, cardWidth, cardHeight, 2, 2, 'FD');
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text("FINANCIAL SUMMARY", rightCardX + 5, cardY + 5);
+
+        doc.setFontSize(8.5);
+        let rY = cardY + 11;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(70, 70, 70);
+        doc.text("Total Purchase Value:", rightCardX + 5, rY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Tk ${Math.round(summary.totalPurchaseValue || 0).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, rY, { align: 'right' });
+
+        rY += cardLineHeight + 1.2;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(70, 70, 70);
+        doc.text("Total Sales Value:", rightCardX + 5, rY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text(`Tk ${Math.round(summary.totalAmount || 0).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, rY, { align: 'right' });
+
+        // Profit / Loss Divider & Row
+        doc.setDrawColor(210, 210, 210);
+        doc.line(rightCardX + 5, cardY + cardHeight - 6.5, rightCardX + cardWidth - 5, cardY + cardHeight - 6.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        const isProfit = (summary.netProfitLoss || 0) >= 0;
+        if (isProfit) {
+            doc.setTextColor(5, 150, 105);
+            doc.text("PROFIT:", rightCardX + 5, cardY + cardHeight - 2.5);
+            doc.text(`+Tk ${Math.round(summary.netProfitLoss || 0).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, cardY + cardHeight - 2.5, { align: 'right' });
+        } else {
+            doc.setTextColor(225, 29, 72);
+            doc.text("LOSS:", rightCardX + 5, cardY + cardHeight - 2.5);
+            doc.text(`-Tk ${Math.round(Math.abs(summary.netProfitLoss || 0)).toLocaleString('en-IN')}`, rightCardX + cardWidth - 5, cardY + cardHeight - 2.5, { align: 'right' });
+        }
+
+        currentY = cardY + cardHeight + 6;
 
         if (activeTab === 'total') {
             // --- Unified History Table ---
@@ -2876,12 +3022,18 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                         itemQty: 0,
                         itemInHouseQty: 0,
                         itemShortageQty: 0,
+                        itemTotalValue: 0,
                         brands: {}
                     };
                 }
 
-                acc[key].itemQty += parseFloat(p.itemQty) || 0;
+                const pQty = parseFloat(p.itemQty) || 0;
+                const pPrice = parseFloat(p.itemPurchasedPrice) || 0;
+                const pVal = p.itemTotalValue ? parseFloat(p.itemTotalValue) : (pQty * pPrice);
+
+                acc[key].itemQty += pQty;
                 acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
+                acc[key].itemTotalValue = (acc[key].itemTotalValue || 0) + pVal;
 
                 const bKey = (p.itemBrand || '').trim().toLowerCase();
                 if (!acc[key].brands[bKey]) {
@@ -2902,8 +3054,12 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
 
             const aggregatedSale = Object.values(sortedSaleData.reduce((acc, s) => {
                 const key = `${s.date}_${s.invoiceNo}`;
-                if (!acc[key]) acc[key] = { ...s, type: 'sale', itemQty: 0 };
-                acc[key].itemQty += parseFloat(s.itemQty) || 0;
+                if (!acc[key]) acc[key] = { ...s, type: 'sale', itemQty: 0, itemTotalValue: 0 };
+                const sQty = parseFloat(s.itemQty) || 0;
+                const sPrice = parseFloat(s.itemPrice) || 0;
+                const sVal = s.itemTotal ? parseFloat(s.itemTotal) : (sQty * sPrice);
+                acc[key].itemQty += sQty;
+                acc[key].itemTotalValue = (acc[key].itemTotalValue || 0) + sVal;
                 return acc;
             }, {}));
 
@@ -2960,21 +3116,55 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
 
             const totalInHouseQty = summary.totalInHouseQty || 0;
 
-            const purchaseTotals = sortedPurchaseData.reduce((acc, item) => ({
-                qty: acc.qty + (parseFloat(item.itemQty) || 0),
-                inHouse: totalInHouseQty,
-                shortage: acc.shortage + (parseFloat(item.itemShortageQty) || 0)
-            }), { qty: 0, inHouse: 0, shortage: 0 });
+            const purchaseTotals = sortedPurchaseData.reduce((acc, item) => {
+                const qty = parseFloat(item.itemQty) || 0;
+                const price = parseFloat(item.itemPurchasedPrice) || 0;
+                const val = item.itemTotalValue ? parseFloat(item.itemTotalValue) : (qty * price);
+                return {
+                    qty: acc.qty + qty,
+                    totalValue: acc.totalValue + val,
+                    inHouse: totalInHouseQty,
+                    shortage: acc.shortage + (parseFloat(item.itemShortageQty) || 0)
+                };
+            }, { qty: 0, totalValue: 0, inHouse: 0, shortage: 0 });
 
-            const saleTotals = sortedSaleData.reduce((acc, sale) => ({
-                qty: acc.qty + (parseFloat(sale.itemQty) || 0)
-            }), { qty: 0 });
+            const saleTotals = sortedSaleData.reduce((acc, sale) => {
+                const qty = parseFloat(sale.itemQty) || 0;
+                const price = parseFloat(sale.itemPrice) || 0;
+                const val = sale.itemTotal ? parseFloat(sale.itemTotal) : (qty * price);
+                return {
+                    qty: acc.qty + qty,
+                    totalValue: acc.totalValue + val
+                };
+            }, { qty: 0, totalValue: 0 });
 
             const damageTotals = sortedDamageData.reduce((acc, d) => ({
                 qty: acc.qty + (parseFloat(d.itemQty || d.quantity) || 0)
             }), { qty: 0 });
 
-            const unifiedHead = [['Date', 'LC No', 'Exporter', 'Invoice', 'Party', 'Purchase', 'Sale', 'InHouse', 'Short', 'Damage']];
+            const unifiedHead = [
+                [
+                    { content: 'Date', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                    { content: 'LC No', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                    { content: 'Exporter', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                    { content: 'Invoice', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                    { content: 'Party', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                    { content: 'Purchase', colSpan: 3, styles: { halign: 'center' } },
+                    { content: 'Sale', colSpan: 3, styles: { halign: 'center' } },
+                    { content: 'InHouse', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                    { content: 'Short', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } },
+                    { content: 'Damage', rowSpan: 2, styles: { valign: 'middle', halign: 'center' } }
+                ],
+                [
+                    { content: 'QTY', styles: { halign: 'center' } },
+                    { content: 'Rate', styles: { halign: 'center' } },
+                    { content: 'Value', styles: { halign: 'center' } },
+                    { content: 'QTY', styles: { halign: 'center' } },
+                    { content: 'Rate', styles: { halign: 'center' } },
+                    { content: 'Value', styles: { halign: 'center' } }
+                ]
+            ];
+
             const unifiedBody = unifiedData.map(item => {
                 const fromWhLower = (item.fromWh || '').trim().toLowerCase();
                 const toWhLower = (item.toWh || '').trim().toLowerCase();
@@ -2988,18 +3178,41 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     partyText = item.fromWh && item.toWh ? `Transfer (${item.fromWh} -> ${item.toWh})` : 'Transfer';
                 }
 
+                const formatRate = (rate) => {
+                    if (!rate || isNaN(rate)) return '';
+                    const rounded = Math.round(rate * 100) / 100;
+                    return rounded.toLocaleString('en-IN', {
+                        minimumFractionDigits: rounded % 1 === 0 ? 0 : 2,
+                        maximumFractionDigits: 2
+                    });
+                };
+
+                let purchaseQty = '-';
+                let purchaseRate = '-';
                 let purchaseVal = '-';
                 if (item.type === 'purchase') {
-                    purchaseVal = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                    purchaseQty = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                    const pRate = item.itemQty > 0 ? (item.itemTotalValue / item.itemQty) : (parseFloat(item.itemPurchasedPrice) || 0);
+                    purchaseRate = pRate > 0 ? formatRate(pRate) : '-';
+                    if (item.itemTotalValue) {
+                        purchaseVal = Math.round(item.itemTotalValue).toLocaleString('en-IN');
+                    }
                 } else if (isTransferIn) {
-                    purchaseVal = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                    purchaseQty = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
                 }
 
+                let saleQty = '-';
+                let saleRate = '-';
                 let saleVal = '-';
                 if (item.type === 'sale') {
-                    saleVal = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                    saleQty = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                    const sRate = item.itemQty > 0 ? (item.itemTotalValue / item.itemQty) : (parseFloat(item.itemPrice) || 0);
+                    saleRate = sRate > 0 ? formatRate(sRate) : '-';
+                    if (item.itemTotalValue) {
+                        saleVal = Math.round(item.itemTotalValue).toLocaleString('en-IN');
+                    }
                 } else if (isTransferOut || (!currentWh && item.type === 'transfer')) {
-                    saleVal = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
+                    saleQty = `${Math.round(item.itemQty).toLocaleString('en-US')} kg`;
                 }
 
                 return [
@@ -3008,18 +3221,40 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     item.itemExporter || '-',
                     item.invoiceNo || '-',
                     partyText,
+                    purchaseQty,
+                    purchaseRate,
                     purchaseVal,
+                    saleQty,
+                    saleRate,
                     saleVal,
                     `${Math.round(item.runningInHouse).toLocaleString('en-US')} kg`,
                     item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-',
                     item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'
                 ];
             });
+
+            const formatRate = (rate) => {
+                if (!rate || isNaN(rate)) return '';
+                const rounded = Math.round(rate * 100) / 100;
+                return rounded.toLocaleString('en-IN', {
+                    minimumFractionDigits: rounded % 1 === 0 ? 0 : 2,
+                    maximumFractionDigits: 2
+                });
+            };
+
+            const purchAvgRate = purchaseTotals.qty > 0 ? (purchaseTotals.totalValue / purchaseTotals.qty) : 0;
+            const saleAvgRate = saleTotals.qty > 0 ? (saleTotals.totalValue / saleTotals.qty) : 0;
+            const finalInHouse = Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0);
+
             const unifiedFoot = [[
                 { content: 'TOTAL HISTORY', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: `${Math.round(purchaseTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
-                { content: `${Math.round(unifiedData[unifiedData.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: purchaseTotals.totalValue ? Math.round(purchaseTotals.totalValue).toLocaleString('en-IN') : '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${Math.round(saleTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: saleTotals.totalValue ? Math.round(saleTotals.totalValue).toLocaleString('en-IN') : '-', styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
+                { content: `${finalInHouse.toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: `${Math.round(purchaseTotals.shortage).toLocaleString('en-IN')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } },
                 { content: `${Math.round(damageTotals.qty).toLocaleString('en-US')} kg`, styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
             ]];
@@ -3031,22 +3266,27 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 foot: unifiedFoot,
                 theme: 'grid',
                 showFoot: 'lastPage',
-                styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
-                headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-                footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
+                styles: { fontSize: 9, cellPadding: 1.5, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
+                headStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+                footStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
+                bodyStyles: { fontSize: 9 },
                 columnStyles: {
-                    0: { cellWidth: 18, halign: 'center' }, // Date
-                    1: { cellWidth: 15, halign: 'center' }, // LC No
+                    0: { cellWidth: 20, halign: 'center' }, // Date
+                    1: { cellWidth: 14, halign: 'center' }, // LC No
                     2: { cellWidth: 26, halign: 'left', overflow: 'hidden' },   // Exporter
-                    3: { cellWidth: 16, halign: 'center' }, // Invoice
-                    4: { cellWidth: 30, halign: 'left', overflow: 'hidden' },   // Party
-                    5: { cellWidth: 19, halign: 'right' },  // Purchase
-                    6: { cellWidth: 19, halign: 'right' },  // Sale
-                    7: { cellWidth: 20, halign: 'right' },  // InHouse
-                    8: { cellWidth: 16, halign: 'right' },  // Short
-                    9: { cellWidth: 16, halign: 'right' }   // Damage
+                    3: { cellWidth: 28, halign: 'center' }, // Invoice
+                    4: { cellWidth: 26, halign: 'left', overflow: 'hidden' },   // Party
+                    5: { cellWidth: 20, halign: 'right' },  // Purchase QTY
+                    6: { cellWidth: 14, halign: 'right' },  // Purchase Rate
+                    7: { cellWidth: 23, halign: 'right' },  // Purchase Value
+                    8: { cellWidth: 20, halign: 'right' },  // Sale QTY
+                    9: { cellWidth: 14, halign: 'right' },  // Sale Rate
+                    10: { cellWidth: 23, halign: 'right' }, // Sale Value
+                    11: { cellWidth: 21, halign: 'right' }, // InHouse
+                    12: { cellWidth: 17, halign: 'right' }, // Short
+                    13: { cellWidth: 17, halign: 'right' }  // Damage
                 },
-                margin: { left: margin, right: margin }
+                margin: { left: 7, right: 7 }
             });
 
         } else if (activeTab === 'purchase') {
@@ -3091,19 +3331,20 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 foot: purchaseFoot,
                 theme: 'grid',
                 showFoot: 'lastPage',
-                styles: { fontSize: 8.5, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
-                headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-                footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
+                styles: { fontSize: 9, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
+                headStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+                footStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
+                bodyStyles: { fontSize: 9 },
                 columnStyles: {
-                    0: { cellWidth: 20, halign: 'center' }, // Date
-                    1: { cellWidth: 20, halign: 'center' }, // LC No
-                    2: { cellWidth: 28, halign: 'left' },   // Exporter (Increased)
-                    3: { cellWidth: 40, halign: 'left' },   // Brand
-                    4: { cellWidth: 16, halign: 'right' },  // Price
-                    5: { cellWidth: 14, halign: 'right' },  // Bag
-                    6: { cellWidth: 20, halign: 'right' },  // LC Qty
-                    7: { cellWidth: 20, halign: 'right' },  // InHouse
-                    8: { cellWidth: 18, halign: 'right' }   // Short
+                    0: { cellWidth: 24, halign: 'center' }, // Date
+                    1: { cellWidth: 24, halign: 'center' }, // LC No
+                    2: { cellWidth: 45, halign: 'left' },   // Exporter
+                    3: { cellWidth: 50, halign: 'left' },   // Brand
+                    4: { cellWidth: 24, halign: 'right' },  // Price
+                    5: { cellWidth: 20, halign: 'right' },  // Bag
+                    6: { cellWidth: 30, halign: 'right' },  // LC Qty
+                    7: { cellWidth: 30, halign: 'right' },  // InHouse
+                    8: { cellWidth: 30, halign: 'right' }   // Short
                 },
                 margin: { left: margin, right: margin }
             });
@@ -3138,15 +3379,15 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     { content: Math.round(saleTotals.amount).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
-                    0: { cellWidth: 16, halign: 'center' }, // Date
-                    1: { cellWidth: 16, halign: 'center' }, // LC No
-                    2: { cellWidth: 14, halign: 'center' }, // Invoice
-                    3: { cellWidth: 22, halign: 'left' },   // Company
-                    4: { cellWidth: 22, halign: 'left' },   // Customer
-                    5: { cellWidth: 20, halign: 'left' },   // Phone
-                    6: { cellWidth: 20, halign: 'right' },  // Qty
-                    7: { cellWidth: 12, halign: 'center' }, // Truck
-                    8: { cellWidth: 20, halign: 'right' },  // Price
+                    0: { cellWidth: 22, halign: 'center' }, // Date
+                    1: { cellWidth: 22, halign: 'center' }, // LC No
+                    2: { cellWidth: 22, halign: 'center' }, // Invoice
+                    3: { cellWidth: 38, halign: 'left' },   // Company
+                    4: { cellWidth: 38, halign: 'left' },   // Customer
+                    5: { cellWidth: 28, halign: 'left' },   // Phone
+                    6: { cellWidth: 26, halign: 'right' },  // Qty
+                    7: { cellWidth: 22, halign: 'center' }, // Truck
+                    8: { cellWidth: 25, halign: 'right' },  // Price
                     9: { cellWidth: 34, halign: 'right' }   // Total Price
                 };
             } else {
@@ -3169,15 +3410,15 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                     { content: Math.round(saleTotals.amount).toLocaleString('en-IN'), styles: { halign: 'right', fontStyle: 'bold', textColor: [0, 0, 0] } }
                 ]];
                 saleColumnStyles = {
-                    0: { cellWidth: 18, halign: 'center' }, // Date
-                    1: { cellWidth: 16, halign: 'center' }, // LC No
-                    2: { cellWidth: 14, halign: 'center' }, // Invoice
-                    3: { cellWidth: 30, halign: 'left', overflow: 'hidden' },   // Company
-                    4: { cellWidth: 28, halign: 'left' },   // Brand
-                    5: { cellWidth: 16, halign: 'right' },  // Packet
-                    6: { cellWidth: 22, halign: 'right' },  // Qty
-                    7: { cellWidth: 15, halign: 'right' },  // Price
-                    8: { cellWidth: 34, halign: 'right' }   // Total Price
+                    0: { cellWidth: 24, halign: 'center' }, // Date
+                    1: { cellWidth: 24, halign: 'center' }, // LC No
+                    2: { cellWidth: 24, halign: 'center' }, // Invoice
+                    3: { cellWidth: 45, halign: 'left' },   // Company
+                    4: { cellWidth: 40, halign: 'left' },   // Brand
+                    5: { cellWidth: 24, halign: 'right' },  // Packet
+                    6: { cellWidth: 30, halign: 'right' },  // Qty
+                    7: { cellWidth: 28, halign: 'right' },  // Price
+                    8: { cellWidth: 38, halign: 'right' }   // Total Price
                 };
             }
 
@@ -3188,16 +3429,17 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
                 foot: saleFoot,
                 theme: 'grid',
                 showFoot: 'lastPage',
-                styles: { fontSize: 9, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
-                headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-                footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
+                styles: { fontSize: 9, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1, font: 'helvetica', textColor: [0, 0, 0], minCellHeight: 0 },
+                headStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+                footStyles: { fontSize: 9, fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
+                bodyStyles: { fontSize: 9 },
                 columnStyles: saleColumnStyles,
                 margin: { left: margin, right: margin }
             });
         }
 
         // --- Signatures (Directly under table) ---
-        let sigY = doc.lastAutoTable.finalY + 25;
+        let sigY = doc.lastAutoTable.finalY + 20;
 
         // If signatures won't fit on current page, add a new page
         if (sigY + 20 > pageHeight) {
@@ -3206,18 +3448,18 @@ export const generateProductHistoryPDF = (productName, category, activeTab, purc
         }
 
         doc.setDrawColor(0);
-        doc.setFontSize(8);
+        doc.setFontSize(9);
         doc.setTextColor(0);
         doc.setFont('helvetica', 'bold');
 
-        doc.line(margin, sigY, margin + 40, sigY);
-        doc.text("PREPARED BY", margin + 20, sigY + 5, { align: 'center' });
+        doc.line(margin + 15, sigY, margin + 65, sigY);
+        doc.text("PREPARED BY", margin + 40, sigY + 5, { align: 'center' });
 
-        doc.line(pageWidth / 2 - 20, sigY, pageWidth / 2 + 20, sigY);
+        doc.line(pageWidth / 2 - 25, sigY, pageWidth / 2 + 25, sigY);
         doc.text("VERIFIED BY", pageWidth / 2, sigY + 5, { align: 'center' });
 
-        doc.line(pageWidth - margin - 40, sigY, pageWidth - margin, sigY);
-        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - 20, sigY + 5, { align: 'center' });
+        doc.line(pageWidth - margin - 65, sigY, pageWidth - margin - 15, sigY);
+        doc.text("AUTHORIZED SIGNATURE", pageWidth - margin - 40, sigY + 5, { align: 'center' });
 
         const pdfOutput = doc.output('blob');
         const blobURL = URL.createObjectURL(pdfOutput);

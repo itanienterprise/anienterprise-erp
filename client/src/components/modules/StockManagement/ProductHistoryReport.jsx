@@ -313,12 +313,18 @@ const ProductHistoryReport = ({
                     itemQty: 0, 
                     itemInHouseQty: 0, 
                     itemShortageQty: 0, 
+                    itemTotalValue: 0,
                     brands: {} 
                 };
             }
             
-            acc[key].itemQty += parseFloat(p.itemQty) || 0;
+            const pQty = parseFloat(p.itemQty) || 0;
+            const pPrice = parseFloat(p.itemPurchasedPrice) || 0;
+            const pVal = p.itemTotalValue ? parseFloat(p.itemTotalValue) : (pQty * pPrice);
+
+            acc[key].itemQty += pQty;
             acc[key].itemShortageQty += parseFloat(p.itemShortageQty) || 0;
+            acc[key].itemTotalValue = (acc[key].itemTotalValue || 0) + pVal;
             
             const bKey = (p.itemBrand || '').trim().toLowerCase();
             if (!acc[key].brands[bKey]) {
@@ -344,7 +350,17 @@ const ProductHistoryReport = ({
             return acc;
         }, {}));
 
-        const sales = saleHistory.map(s => ({ ...s, type: 'sale', itemQty: parseFloat(s.itemQty) || 0 }));
+        const sales = saleHistory.map(s => {
+            const sQty = parseFloat(s.itemQty) || 0;
+            const sPrice = parseFloat(s.itemPrice) || 0;
+            const sVal = s.itemTotal ? parseFloat(s.itemTotal) : (sQty * sPrice);
+            return {
+                ...s,
+                type: 'sale',
+                itemQty: sQty,
+                itemTotalValue: sVal
+            };
+        });
         const transfers = transferHistory.map(t => ({ ...t, type: 'transfer', itemQty: parseFloat(t.itemQty || t.whQty) || 0 }));
 
         const combined = [...purchases, ...sales, ...damages, ...transfers].sort(compareHistoryItems);
@@ -383,8 +399,11 @@ const ProductHistoryReport = ({
         });
     })();
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
         const totalPurchaseQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemQty) || 0), 0);
+        const totalPurchVal = purchaseHistory.reduce((sum, i) => sum + (i.itemTotalValue ? parseFloat(i.itemTotalValue) : ((parseFloat(i.itemQty) || 0) * (parseFloat(i.itemPurchasedPrice) || 0))), 0);
+        const avgPurchRate = totalPurchaseQty > 0 ? (totalPurchVal / totalPurchaseQty) : 0;
+
         let totalInHouseQty = 0;
         if (activeTab === 'total') {
             totalInHouseQty = Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0);
@@ -393,9 +412,13 @@ const ProductHistoryReport = ({
         }
         
         const totalShortageQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemShortageQty) || 0), 0);
-        const totalSaleAmount = saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemTotal) || 0), 0);
+        const totalSaleAmount = saleHistory.reduce((sum, s) => sum + (s.itemTotal ? parseFloat(s.itemTotal) : ((parseFloat(s.itemQty) || 0) * (parseFloat(s.itemPrice) || 0))), 0);
+        const totalSaleQty = saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0);
+        const avgSaleRate = totalSaleQty > 0 ? (totalSaleAmount / totalSaleQty) : 0;
+        const inHouseStockVal = Math.max(0, totalInHouseQty) * avgPurchRate;
+        const netProfitLoss = (totalSaleAmount + inHouseStockVal) - totalPurchVal;
 
-        generateProductHistoryPDF(
+        await generateProductHistoryPDF(
             productName,
             category,
             activeTab,
@@ -405,7 +428,13 @@ const ProductHistoryReport = ({
                 totalQty: totalPurchaseQty,
                 totalInHouseQty,
                 totalShortageQty,
-                totalAmount: totalSaleAmount
+                totalAmount: totalSaleAmount,
+                totalSaleQty,
+                totalPurchaseValue: totalPurchVal,
+                avgPurchaseRate: avgPurchRate,
+                avgSaleRate,
+                inHouseStockValue: inHouseStockVal,
+                netProfitLoss
             },
             modalFilters,
             damageHistory,
@@ -414,8 +443,14 @@ const ProductHistoryReport = ({
     };
 
     return createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-0 pt-10 md:p-4 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
-            <div className="bg-white w-full max-w-[95vw] xl:max-w-[1400px] h-full md:max-h-[90vh] overflow-hidden md:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-0 pt-6 md:p-3 print:p-0 print:bg-white print:backdrop-none app-modal-overlay">
+            <style>{`
+                @page {
+                    size: landscape;
+                    margin: 8mm;
+                }
+            `}</style>
+            <div className="bg-white w-full max-w-[98vw] 2xl:max-w-[1700px] h-full md:max-h-[94vh] overflow-hidden md:rounded-3xl shadow-2xl flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full print:h-auto">
                 {/* Modal Header/Toolbar */}
                 <div className="flex flex-col px-4 md:px-8 py-3 md:py-4 border-b border-gray-100 print:hidden gap-4 flex-shrink-0">
                     {/* Row 1: Title and Action Buttons */}
@@ -673,8 +708,8 @@ const ProductHistoryReport = ({
 
 
                 {/* Printable Content */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-12 print:p-4 print:overflow-visible bg-white">
-                    <div className="max-w-[1300px] mx-auto space-y-8">
+                <div className="flex-1 overflow-y-auto p-3 md:p-6 print:p-2 print:overflow-visible bg-white">
+                    <div className="w-full max-w-[1680px] mx-auto space-y-6">
                         {/* Header */}
                         <div className="text-center space-y-1">
                             <h1 className="text-2xl md:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
@@ -710,17 +745,25 @@ const ProductHistoryReport = ({
                                 <div className="hidden md:block overflow-x-auto border border-gray-900">
                                     <table className="w-full border-collapse">
                                         <thead>
-                                            <tr className="bg-gray-50 border-b border-gray-900 text-center">
-                                                <th className="border-r border-gray-900 px-2 py-1 text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[9%] whitespace-nowrap">Date</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">LC No</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[12%] whitespace-nowrap">Exporter</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[8%] whitespace-nowrap">Invoice</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[16%] whitespace-nowrap">Party</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Purchase Qty</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Sale Qty</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">InHouse Qty</th>
-                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Short</th>
-                                                <th className="px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider w-[10%] whitespace-nowrap">Damage Qty</th>
+                                            <tr className="bg-gray-50 border-b border-gray-900 text-center whitespace-nowrap">
+                                                <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Date</th>
+                                                <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">LC No</th>
+                                                <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Exporter</th>
+                                                <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Invoice</th>
+                                                <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Party</th>
+                                                <th colSpan="3" className="border-r border-b border-gray-900 px-3 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Purchase</th>
+                                                <th colSpan="3" className="border-r border-b border-gray-900 px-3 py-1 text-center text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Sale</th>
+                                                <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">InHouse</th>
+                                                <th rowSpan="2" className="border-r border-b border-gray-900 px-3 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Short</th>
+                                                <th rowSpan="2" className="border-b border-gray-900 px-3 py-1.5 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">Damage</th>
+                                            </tr>
+                                            <tr className="bg-gray-50 border-b border-gray-900 text-center whitespace-nowrap">
+                                                <th className="border-r border-gray-900 px-2.5 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">QTY</th>
+                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Rate</th>
+                                                <th className="border-r border-gray-900 px-2.5 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Value</th>
+                                                <th className="border-r border-gray-900 px-2.5 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">QTY</th>
+                                                <th className="border-r border-gray-900 px-2 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Rate</th>
+                                                <th className="border-r border-gray-900 px-2.5 py-1 text-right text-[11px] font-bold text-gray-900 uppercase tracking-wider whitespace-nowrap">Value</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-900">
@@ -749,72 +792,146 @@ const ProductHistoryReport = ({
                                                     }
                                                 }
 
+                                                const formatRate = (rate) => {
+                                                    if (!rate || isNaN(rate)) return '';
+                                                    const rounded = Math.round(rate * 100) / 100;
+                                                    return rounded.toLocaleString('en-IN', {
+                                                        minimumFractionDigits: rounded % 1 === 0 ? 0 : 2,
+                                                        maximumFractionDigits: 2
+                                                    });
+                                                };
+
+                                                const purchaseQty = item.type === 'purchase' || item.type === 'baseline' || isTransferIn ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-';
+                                                const pRate = item.itemQty > 0 ? (item.itemTotalValue / item.itemQty) : (parseFloat(item.itemPurchasedPrice) || 0);
+                                                const purchaseRate = item.type === 'purchase' && pRate > 0 ? formatRate(pRate) : '-';
+                                                const purchaseVal = item.type === 'purchase' && item.itemTotalValue ? Math.round(item.itemTotalValue).toLocaleString('en-IN') : '-';
+
+                                                const saleQty = item.type === 'sale' || isTransferOut ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-';
+                                                const sRate = item.itemQty > 0 ? (item.itemTotalValue / item.itemQty) : (parseFloat(item.itemPrice) || 0);
+                                                const saleRate = item.type === 'sale' && sRate > 0 ? formatRate(sRate) : '-';
+                                                const saleVal = item.type === 'sale' && item.itemTotalValue ? Math.round(item.itemTotalValue).toLocaleString('en-IN') : '-';
+
                                                 return (
                                                     <tr key={idx} className={`border-b border-gray-900 last:border-0 hover:bg-gray-50 transition-colors ${item.type === 'baseline' ? 'bg-amber-50/40 font-bold' : ''}`}>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center whitespace-nowrap">{formatDate(item.date)}</td>
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900 text-center ">{item.lcNo || '-'}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] font-bold text-gray-900 text-center">{item.lcNo || '-'}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 whitespace-nowrap">{item.itemExporter || '-'}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 text-center">{item.invoiceNo || '-'}</td>
                                                         <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-gray-900 font-medium whitespace-nowrap">{partyText}</td>
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold">{item.type === 'purchase' || item.type === 'baseline' || isTransferIn ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold">{item.type === 'sale' || isTransferOut ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-700 font-black">{Math.round(item.runningInHouse).toLocaleString('en-US')} kg</td>
-                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-rose-600 font-bold">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'}</td>
-                                                        <td className="px-2 py-1 text-[12px] text-right text-red-600 font-bold">{item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold whitespace-nowrap">{purchaseQty}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-700 whitespace-nowrap">{purchaseRate}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-gray-900 font-bold whitespace-nowrap">{purchaseVal}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold whitespace-nowrap">{saleQty}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 whitespace-nowrap">{saleRate}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-600 font-bold whitespace-nowrap">{saleVal}</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-blue-700 font-black whitespace-nowrap">{Math.round(item.runningInHouse).toLocaleString('en-US')} kg</td>
+                                                        <td className="border-r border-gray-900 px-2 py-1 text-[12px] text-right text-rose-600 font-bold whitespace-nowrap">{item.type === 'purchase' ? `${Math.round(item.itemShortageQty || 0).toLocaleString('en-US')} kg` : '-'}</td>
+                                                        <td className="px-2 py-1 text-[12px] text-right text-red-600 font-bold whitespace-nowrap">{item.type === 'damage' ? `${Math.round(item.itemQty).toLocaleString('en-US')} kg` : '-'}</td>
                                                     </tr>
                                                 );
                                             })}
                                         </tbody>
                                         <tfoot>
-                                            <tr className="bg-gray-100 border-t-2 border-gray-900 font-black text-center">
-                                                <td colSpan="5" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900">Total History</td>
-                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900">
-                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-US')} kg
-                                                </td>
-                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-600">
-                                                    {Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-US')} kg
-                                                </td>
-                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-700">
-                                                    {Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg
-                                                </td>
-                                                <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-rose-600">
-                                                    {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-US')} kg
-                                                </td>
-                                                <td className="px-2 py-1.5 text-[12px] text-right text-red-600">
-                                                    {Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg
-                                                </td>
-                                            </tr>
+                                            {(() => {
+                                                const formatRate = (rate) => {
+                                                    if (!rate || isNaN(rate)) return '';
+                                                    const rounded = Math.round(rate * 100) / 100;
+                                                    return rounded.toLocaleString('en-IN', {
+                                                        minimumFractionDigits: rounded % 1 === 0 ? 0 : 2,
+                                                        maximumFractionDigits: 2
+                                                    });
+                                                };
+                                                const totalPurchQty = purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0);
+                                                const totalPurchVal = purchaseHistory.reduce((sum, i) => sum + (i.itemTotalValue ? parseFloat(i.itemTotalValue) : ((parseFloat(i.itemQty) || 0) * (parseFloat(i.itemPurchasedPrice) || 0))), 0);
+                                                const avgPurchRate = totalPurchQty > 0 ? (totalPurchVal / totalPurchQty) : 0;
+
+                                                const totalSaleQty = saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0);
+                                                const totalSaleVal = saleHistory.reduce((sum, s) => sum + (s.itemTotal ? parseFloat(s.itemTotal) : ((parseFloat(s.itemQty) || 0) * (parseFloat(s.itemPrice) || 0))), 0);
+                                                const avgSaleRate = totalSaleQty > 0 ? (totalSaleVal / totalSaleQty) : 0;
+
+                                                return (
+                                                    <tr className="bg-gray-100 border-t-2 border-gray-900 font-black text-center whitespace-nowrap">
+                                                        <td colSpan="5" className="px-2 py-1.5 text-[12px] text-right uppercase border-r border-gray-900 whitespace-nowrap">Total History</td>
+                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 font-bold whitespace-nowrap">
+                                                            {Math.round(totalPurchQty).toLocaleString('en-US')} kg
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 font-bold whitespace-nowrap">
+                                                            -
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 font-bold whitespace-nowrap">
+                                                            {Math.round(totalPurchVal).toLocaleString('en-IN')}
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-600 font-bold whitespace-nowrap">
+                                                            {Math.round(totalSaleQty).toLocaleString('en-US')} kg
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-600 font-bold whitespace-nowrap">
+                                                            -
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-600 font-bold whitespace-nowrap">
+                                                            {Math.round(totalSaleVal).toLocaleString('en-IN')}
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-blue-700 font-black whitespace-nowrap">
+                                                            {Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-[12px] text-right border-r border-gray-900 text-rose-600 font-bold whitespace-nowrap">
+                                                            {Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-US')} kg
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-[12px] text-right text-red-600 font-bold whitespace-nowrap">
+                                                            {Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })()}
                                         </tfoot>
                                     </table>
                                 </div>
                                 {/* Mobile Cards */}
                                 <div className="md:hidden space-y-3">
-                                    {unifiedHistory.map((item, idx) => (
-                                        <div key={idx} className={`rounded-xl border p-3 text-xs ${item.type === 'purchase' ? 'border-emerald-200 bg-emerald-50/30' : item.type === 'sale' ? 'border-blue-200 bg-blue-50/30' : 'border-red-200 bg-red-50/30'}`}>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${item.type === 'purchase' ? 'bg-emerald-100 text-emerald-700' : item.type === 'sale' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>{item.type}</span>
-                                                <span className="font-bold text-gray-800">{formatDate(item.date)}</span>
+                                    {unifiedHistory.map((item, idx) => {
+                                        const formatRate = (rate) => {
+                                            if (!rate || isNaN(rate)) return '';
+                                            const rounded = Math.round(rate * 100) / 100;
+                                            return rounded.toLocaleString('en-IN', {
+                                                minimumFractionDigits: rounded % 1 === 0 ? 0 : 2,
+                                                maximumFractionDigits: 2
+                                            });
+                                        };
+                                        const pRate = item.itemQty > 0 ? (item.itemTotalValue / item.itemQty) : (parseFloat(item.itemPurchasedPrice) || 0);
+                                        const sRate = item.itemQty > 0 ? (item.itemTotalValue / item.itemQty) : (parseFloat(item.itemPrice) || 0);
+
+                                        return (
+                                            <div key={idx} className={`rounded-xl border p-3 text-xs ${item.type === 'purchase' ? 'border-emerald-200 bg-emerald-50/30' : item.type === 'sale' ? 'border-blue-200 bg-blue-50/30' : 'border-red-200 bg-red-50/30'}`}>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${item.type === 'purchase' ? 'bg-emerald-100 text-emerald-700' : item.type === 'sale' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>{item.type}</span>
+                                                    <span className="font-bold text-gray-800">{formatDate(item.date)}</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                                    {item.type === 'purchase' && <><div className="text-gray-500">LC No</div><div className="font-bold text-gray-900 text-right">{item.lcNo || '-'}</div>
+                                                        <div className="text-gray-500">Exporter</div><div className="font-medium text-gray-800 text-right truncate">{item.itemExporter || '-'}</div>
+                                                        <div className="text-gray-500">Purchase QTY</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString('en-US')} kg</div>
+                                                        {pRate > 0 && <><div className="text-gray-500">Rate</div><div className="font-bold text-gray-900 text-right">৳{formatRate(pRate)}</div></>}
+                                                        {item.itemTotalValue > 0 && <><div className="text-gray-500">Purchase Value</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemTotalValue).toLocaleString('en-IN')}</div></>}
+                                                        {item.itemShortageQty > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString('en-US')} kg</div></>}</>
+                                                    }
+                                                    {item.type === 'sale' && <><div className="text-gray-500">Invoice</div><div className="font-bold text-gray-900 text-right">{item.invoiceNo || '-'}</div>
+                                                        <div className="text-gray-500">Party</div><div className="font-medium text-gray-800 text-right truncate">{item.companyName || '-'}</div>
+                                                        <div className="text-gray-500">Sale QTY</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemQty).toLocaleString('en-US')} kg</div>
+                                                        {sRate > 0 && <><div className="text-blue-500">Rate</div><div className="font-bold text-blue-600 text-right">৳{formatRate(sRate)}</div></>}
+                                                        {item.itemTotalValue > 0 && <><div className="text-blue-500">Sale Value</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemTotalValue).toLocaleString('en-IN')}</div></>}
+                                                    </>}
+                                                    {item.type === 'damage' && <><div className="text-gray-500">Damage</div><div className="font-bold text-red-600 text-right">{Math.round(item.itemQty).toLocaleString('en-US')} kg</div></>
+                                                    }
+                                                    <div className="text-blue-700 font-bold">InHouse</div><div className="font-black text-blue-700 text-right">{Math.round(item.runningInHouse).toLocaleString('en-US')} kg</div>
+                                                </div>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                                {item.type === 'purchase' && <><div className="text-gray-500">LC No</div><div className="font-bold text-gray-900 text-right">{item.lcNo || '-'}</div>
-                                                    <div className="text-gray-500">Exporter</div><div className="font-medium text-gray-800 text-right truncate">{item.itemExporter || '-'}</div>
-                                                    <div className="text-gray-500">Purchase Qty</div><div className="font-bold text-gray-900 text-right">{Math.round(item.itemQty).toLocaleString('en-US')} kg</div>
-                                                    {item.itemShortageQty > 0 && <><div className="text-rose-500">Shortage</div><div className="font-bold text-rose-600 text-right">{Math.round(item.itemShortageQty).toLocaleString('en-US')} kg</div></>}</>
-                                                }
-                                                {item.type === 'sale' && <><div className="text-gray-500">Invoice</div><div className="font-bold text-gray-900 text-right">{item.invoiceNo || '-'}</div>
-                                                    <div className="text-gray-500">Party</div><div className="font-medium text-gray-800 text-right truncate">{item.companyName || '-'}</div>
-                                                    <div className="text-gray-500">Sale Qty</div><div className="font-bold text-blue-600 text-right">{Math.round(item.itemQty).toLocaleString('en-US')} kg</div></>
-                                                }
-                                                {item.type === 'damage' && <><div className="text-gray-500">Damage</div><div className="font-bold text-red-600 text-right">{Math.round(item.itemQty).toLocaleString('en-US')} kg</div></>
-                                                }
-                                                <div className="text-gray-500">InHouse Balance</div><div className="font-black text-blue-700 text-right">{Math.round(item.runningInHouse).toLocaleString('en-US')} kg</div>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                     <div className="rounded-xl border-2 border-gray-900 bg-gray-100 p-3 text-xs font-black">
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                            <div className="text-gray-700 uppercase">Total Purchase</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
-                                            <div className="text-blue-600 uppercase">Total Sale</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
+                                            <div className="text-gray-700 uppercase">Purchase QTY</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
+                                            <div className="text-gray-700 uppercase">Purchase Value</div><div className="text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (i.itemTotalValue ? parseFloat(i.itemTotalValue) : ((parseFloat(i.itemQty) || 0) * (parseFloat(i.itemPurchasedPrice) || 0))), 0)).toLocaleString('en-IN')}</div>
+                                            <div className="text-blue-600 uppercase">Sale QTY</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0)).toLocaleString('en-US')} kg</div>
+                                            <div className="text-blue-600 uppercase">Sale Value</div><div className="text-blue-600 text-right">{Math.round(saleHistory.reduce((sum, s) => sum + (s.itemTotal ? parseFloat(s.itemTotal) : ((parseFloat(s.itemQty) || 0) * (parseFloat(s.itemPrice) || 0))), 0)).toLocaleString('en-IN')}</div>
                                             <div className="text-blue-700 uppercase">InHouse</div><div className="text-blue-700 text-right">{Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0).toLocaleString('en-US')} kg</div>
                                             <div className="text-rose-600 uppercase">Shortage</div><div className="text-rose-600 text-right">{Math.round(purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemShortageQty) || 0), 0)).toLocaleString('en-US')} kg</div>
                                             <div className="text-red-600 uppercase">Total Damage</div><div className="text-red-600 text-right">{Math.round(damageHistory.reduce((sum, d) => sum + (parseFloat(d.itemQty || d.quantity) || 0), 0)).toLocaleString('en-US')} kg</div>
@@ -1006,20 +1123,72 @@ const ProductHistoryReport = ({
                                 </div>
                             )}
 
-                            {(activeTab === 'total' || activeTab === 'sale') && (
-                                <div className="border border-gray-200 p-4 md:p-5 rounded-2xl bg-blue-50/30 shadow-sm print:border-gray-200 w-full md:min-w-[350px] md:max-w-[450px]">
-                                    <div className="text-[10px] md:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2 text-center md:text-left">Financial Summary</div>
-                                    <div className="space-y-1">
-                                        <div className="flex justify-between text-xs md:text-sm">
-                                            <span className="text-gray-600">Total Sales Value:</span>
-                                            <span className="font-bold text-blue-700">৳{saleHistory.reduce((sum, s) => sum + s.itemTotal, 0).toLocaleString('en-IN')}</span>
+                            {(() => {
+                                const totalPurchQty = purchaseHistory.reduce((sum, i) => sum + (parseFloat(i.itemQty) || 0), 0);
+                                const totalPurchVal = purchaseHistory.reduce((sum, i) => sum + (i.itemTotalValue ? parseFloat(i.itemTotalValue) : ((parseFloat(i.itemQty) || 0) * (parseFloat(i.itemPurchasedPrice) || 0))), 0);
+                                const avgPurchRate = totalPurchQty > 0 ? (totalPurchVal / totalPurchQty) : 0;
+
+                                const totalSaleQty = saleHistory.reduce((sum, s) => sum + (parseFloat(s.itemQty) || 0), 0);
+                                const totalSaleVal = saleHistory.reduce((sum, s) => sum + (s.itemTotal ? parseFloat(s.itemTotal) : ((parseFloat(s.itemQty) || 0) * (parseFloat(s.itemPrice) || 0))), 0);
+                                const avgSaleRate = totalSaleQty > 0 ? (totalSaleVal / totalSaleQty) : 0;
+
+                                const finalInHouse = activeTab === 'total'
+                                    ? Math.round(unifiedHistory[unifiedHistory.length - 1]?.runningInHouse || 0)
+                                    : Math.round(purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemInHouseQty) || 0), 0));
+
+                                const currentStockVal = Math.max(0, finalInHouse) * avgPurchRate;
+                                const netProfitLoss = (totalSaleVal + currentStockVal) - totalPurchVal;
+
+                                const formatRate = (rate) => {
+                                    if (!rate || isNaN(rate)) return '0.00';
+                                    const rounded = Math.round(rate * 100) / 100;
+                                    return rounded.toLocaleString('en-IN', {
+                                        minimumFractionDigits: rounded % 1 === 0 ? 0 : 2,
+                                        maximumFractionDigits: 2
+                                    });
+                                };
+
+                                return (
+                                    <div className="border border-gray-200 p-4 md:p-5 rounded-2xl bg-blue-50/30 shadow-sm print:border-gray-200 w-full md:min-w-[350px] md:max-w-[450px]">
+                                        <div className="text-[10px] md:text-[11px] font-bold text-blue-500 uppercase tracking-wider mb-2 text-center md:text-left">Financial Summary</div>
+                                        <div className="space-y-1">
+                                            {(activeTab === 'total' || activeTab === 'purchase') && (
+                                                <div className="flex justify-between text-xs md:text-sm">
+                                                    <span className="text-gray-600">Total Purchase Value:</span>
+                                                    <span className="font-bold">৳{Math.round(totalPurchVal).toLocaleString('en-IN')}</span>
+                                                </div>
+                                            )}
+                                            {(activeTab === 'total' || activeTab === 'sale') && (
+                                                <div className="flex justify-between text-xs md:text-sm">
+                                                    <span className="text-gray-600">Total Sales Value:</span>
+                                                    <span className="font-bold text-blue-700">৳{Math.round(totalSaleVal).toLocaleString('en-IN')}</span>
+                                                </div>
+                                            )}
+                                            {activeTab === 'total' && currentStockVal > 0 && (
+                                                <div className="flex justify-between text-xs md:text-sm">
+                                                    <span className="text-gray-600">InHouse Stock Value:</span>
+                                                    <span className="font-bold text-gray-700">৳{Math.round(currentStockVal).toLocaleString('en-IN')}</span>
+                                                </div>
+                                            )}
+                                            {activeTab === 'total' && (
+                                                <div className="border-t border-gray-300 pt-1 mt-1 flex justify-between text-sm md:text-base font-black">
+                                                    <span className={netProfitLoss >= 0 ? "text-emerald-600 uppercase" : "text-rose-600 uppercase"}>
+                                                        {netProfitLoss >= 0 ? "Profit:" : "Loss:"}
+                                                    </span>
+                                                    <span className={netProfitLoss >= 0 ? "text-emerald-700" : "text-rose-700"}>
+                                                        {netProfitLoss >= 0
+                                                            ? `+৳${Math.round(netProfitLoss).toLocaleString('en-IN')}`
+                                                            : `-৳${Math.round(Math.abs(netProfitLoss)).toLocaleString('en-IN')}`}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            <p className="text-[9px] md:text-[10px] text-gray-400 mt-4 leading-tight italic text-center md:text-left">
+                                                * Comprehensive overview of product movement.
+                                            </p>
                                         </div>
-                                        <p className="text-[9px] md:text-[10px] text-gray-400 mt-4 leading-tight italic text-center md:text-left">
-                                            * Comprehensive overview of product movement.
-                                        </p>
                                     </div>
-                                </div>
-                            )}
+                                );
+                            })()}
                         </div>
 
                         {/* Signatures */}
