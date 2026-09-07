@@ -63,6 +63,8 @@ const EmployeeManagement = ({
 
     const [formData, setFormData] = useState({
         employeeId: '',
+        firstName: '',
+        lastName: '',
         name: '',
         designation: '',
         department: '',
@@ -142,13 +144,22 @@ const EmployeeManagement = ({
         const { name, value } = e.target;
 
         if (name === 'phone') {
-            let value = e.target.value;
-            if (!value.startsWith('+880')) {
-                value = '+880' + value.replace(/^\+880?/, '');
+            let val = e.target.value;
+            if (!val.startsWith('+880')) {
+                val = '+880' + val.replace(/^\+880?/, '');
             }
-            if (value.length <= 14) {
-                setFormData(prev => ({ ...prev, [name]: value }));
+            if (val.length <= 14) {
+                setFormData(prev => ({ ...prev, [name]: val }));
             }
+            return;
+        }
+
+        if (name === 'firstName' || name === 'lastName') {
+            setFormData(prev => {
+                const updated = { ...prev, [name]: value };
+                const fullName = `${updated.firstName || ''} ${updated.lastName || ''}`.trim();
+                return { ...updated, name: fullName };
+            });
             return;
         }
 
@@ -166,12 +177,17 @@ const EmployeeManagement = ({
         setIsSubmitting(true);
         setSubmitStatus(null);
         try {
+            const fullName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.name;
+            const payload = {
+                ...formData,
+                name: fullName
+            };
             const url = editingId ? `${API_BASE_URL}/api/employees/${editingId}` : `${API_BASE_URL}/api/employees`;
             let response;
             if (editingId) {
-                response = await axios.put(url, formData);
+                response = await axios.put(url, payload);
             } else {
-                response = await axios.post(url, formData);
+                response = await axios.post(url, payload);
             }
 
             if (response.status >= 200 && response.status < 300) {
@@ -200,6 +216,8 @@ const EmployeeManagement = ({
     const resetForm = () => {
         setFormData({
             employeeId: '',
+            firstName: '',
+            lastName: '',
             name: '',
             designation: '',
             department: '',
@@ -216,9 +234,19 @@ const EmployeeManagement = ({
     };
 
     const handleEdit = (employee) => {
+        let firstName = employee.firstName || '';
+        let lastName = employee.lastName || '';
+        if (!firstName && !lastName && employee.name) {
+            const parts = employee.name.trim().split(/\s+/);
+            firstName = parts[0] || '';
+            lastName = parts.slice(1).join(' ') || '';
+        }
+
         setFormData({
             employeeId: employee.employeeId || '',
-            name: employee.name || '',
+            firstName,
+            lastName,
+            name: employee.name || `${firstName} ${lastName}`.trim(),
             designation: employee.designation || '',
             department: employee.department || '',
             phone: (employee.phone && employee.phone.startsWith('+880')) ? employee.phone : '+880',
@@ -299,6 +327,8 @@ const EmployeeManagement = ({
             filtered = employees.filter(e =>
                 e.employeeId?.toLowerCase().includes(query) ||
                 e.name?.toLowerCase().includes(query) ||
+                e.firstName?.toLowerCase().includes(query) ||
+                e.lastName?.toLowerCase().includes(query) ||
                 e.designation?.toLowerCase().includes(query) ||
                 e.department?.toLowerCase().includes(query) ||
                 e.phone?.toLowerCase().includes(query) ||
@@ -409,14 +439,14 @@ const EmployeeManagement = ({
                             <XIcon className="w-6 h-6" />
                         </button>
                     </div>
-                    <form 
-                        onSubmit={handleSubmit} 
+                    <form
+                        onSubmit={handleSubmit}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
                                 e.preventDefault();
                             }
                         }}
-                        autoComplete="off" 
+                        autoComplete="off"
                         className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10 text-left"
                     >
                         <div className="space-y-2">
@@ -430,17 +460,31 @@ const EmployeeManagement = ({
                                 className="w-full px-4 py-2 bg-gray-50/50 border border-gray-200/60 rounded-lg focus:outline-none transition-all backdrop-blur-sm opacity-70 cursor-not-allowed"
                             />
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 font-sans">Full Name</label>
-                            <input
-                                type="text"
-                                name="name"
-                                value={formData.name}
-                                onChange={handleInputChange}
-                                required
-                                placeholder="John Doe"
-                                className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
-                            />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 font-sans">First Name</label>
+                                <input
+                                    type="text"
+                                    name="firstName"
+                                    value={formData.firstName}
+                                    onChange={handleInputChange}
+                                    required
+                                    placeholder="First Name"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 font-sans">Last Name</label>
+                                <input
+                                    type="text"
+                                    name="lastName"
+                                    value={formData.lastName}
+                                    onChange={handleInputChange}
+                                    required
+                                    placeholder="Last Name"
+                                    className="w-full px-4 py-2 bg-white/50 border border-gray-200/60 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all backdrop-blur-sm"
+                                />
+                            </div>
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 font-sans">Designation</label>
@@ -835,7 +879,7 @@ const EmployeeManagement = ({
                                 <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Joining Date</p><p className="text-sm text-gray-700">{formatDate(viewData.joiningDate)}</p></div>
                                 <div><p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Salary</p><p className="text-sm text-gray-700">{viewData.salary ? `${viewData.salary} BDT` : 'N/A'}</p></div>
                             </div>
-                            
+
                             {(isAdmin || canSpecial) && (
                                 <div className="border-t border-gray-100 pt-4 mt-2 flex flex-col gap-2">
                                     <div className="flex items-center justify-between">
@@ -854,14 +898,14 @@ const EmployeeManagement = ({
                                         ) : showConfirmReset ? (
                                             <div className="flex items-center gap-2 animate-in slide-in-from-right-4 duration-200">
                                                 <p className="text-xs text-rose-600 font-bold mr-2">Are you sure?</p>
-                                                <button 
+                                                <button
                                                     onClick={() => setShowConfirmReset(false)}
                                                     disabled={resettingPassword}
                                                     className="px-3 py-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-xs font-bold rounded-lg transition-colors border border-gray-200 disabled:opacity-50"
                                                 >
                                                     Cancel
                                                 </button>
-                                                <button 
+                                                <button
                                                     onClick={() => handleResetPassword(viewData._id)}
                                                     disabled={resettingPassword}
                                                     className="px-4 py-2 bg-rose-600 text-white hover:bg-rose-700 text-xs font-bold rounded-lg shadow-sm shadow-rose-500/30 transition-all disabled:opacity-50 flex items-center gap-2"
@@ -870,7 +914,7 @@ const EmployeeManagement = ({
                                                 </button>
                                             </div>
                                         ) : (
-                                            <button 
+                                            <button
                                                 onClick={() => setShowConfirmReset(true)}
                                                 className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 text-xs font-bold rounded-lg transition-colors border border-red-100 flex items-center gap-2 hover:shadow-sm"
                                             >
