@@ -4442,6 +4442,244 @@ export const generateInsuranceHistoryReportExcel = ({
     }
 };
 
+/**
+ * Generates and downloads an Excel spreadsheet (.xlsx) for the Product History Report.
+ * Includes Company Header, Metadata, Final Conclusion, Financial Summary, and complete table records.
+ */
+export const generateProductHistoryExcel = (
+    productName,
+    category,
+    activeTab = 'total',
+    purchaseData = [],
+    saleData = [],
+    summary = {},
+    filters = {},
+    damageData = [],
+    transferData = [],
+    unifiedHistory = []
+) => {
+    try {
+        const rows = [];
+        const tabUpper = (activeTab || 'total').toUpperCase();
+        const safeProduct = (productName || 'Product').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+        // 1. Company Header
+        rows.push(['M/S ANI ENTERPRISE']);
+        rows.push(['766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh | Tel: +8802588813057 | Email: anienterprise051@gmail.com']);
+        rows.push([`PRODUCT HISTORY REPORT - ${tabUpper} (${(productName || '').toUpperCase()})`]);
+        rows.push([]);
+
+        // 2. Metadata
+        const printDateStr = formatDate(new Date().toISOString().split('T')[0]);
+        const start = filters?.startDate ? formatDate(filters.startDate) : 'Start';
+        const end = filters?.endDate ? formatDate(filters.endDate) : 'Present';
+
+        rows.push([
+            'Product:',
+            productName || '-',
+            '',
+            'Date Range:',
+            `${start} to ${end}`,
+            '',
+            'Printed On:',
+            printDateStr
+        ]);
+
+        const filterBadges = [];
+        if (filters?.brand) filterBadges.push(`Brand: ${filters.brand}`);
+        if (filters?.party) filterBadges.push(`Party: ${filters.party}`);
+        if (filters?.lcNo) filterBadges.push(`LC No: ${filters.lcNo}`);
+        if (filters?.warehouse) filterBadges.push(`Warehouse: ${filters.warehouse}`);
+        if (filterBadges.length > 0) {
+            rows.push(['Filters Applied:', filterBadges.join('  |  ')]);
+        }
+        rows.push([]);
+
+        // 3. Summary Section
+        const totalPurchQty = Math.round(summary?.totalQty || 0);
+        const totalPurchVal = Math.round(summary?.totalPurchaseValue || 0);
+        const totalShortQty = Math.round(summary?.totalShortageQty || 0);
+        const totalSaleQty = Math.round(summary?.totalSaleQty || 0);
+        const totalSaleVal = Math.round(summary?.totalAmount || 0);
+        const finalInHouse = Math.round(summary?.totalInHouseQty || 0);
+        const inHouseStockVal = Math.round(summary?.inHouseStockValue || 0);
+        const netProfitLoss = Math.round(summary?.netProfitLoss || 0);
+        const isProfit = netProfitLoss >= 0;
+
+        rows.push(['--- FINAL CONCLUSION ---', '', '', '--- FINANCIAL SUMMARY ---']);
+        rows.push(['Total Purchase (kg):', totalPurchQty, '', 'Total Purchase Value (Tk):', totalPurchVal]);
+        rows.push(['Total Short (kg):', totalShortQty, '', 'Total Sales Value (Tk):', totalSaleVal]);
+        if (activeTab === 'total') {
+            rows.push(['Total Sale (kg):', totalSaleQty, '', inHouseStockVal > 0 ? 'InHouse Stock Value (Tk):' : '', inHouseStockVal > 0 ? inHouseStockVal : '']);
+            rows.push(['INHOUSE (kg):', finalInHouse, '', isProfit ? 'PROFIT (Tk):' : 'LOSS (Tk):', isProfit ? `+${netProfitLoss}` : `-${Math.abs(netProfitLoss)}`]);
+        } else {
+            rows.push(['INHOUSE (kg):', finalInHouse, '', '', '']);
+        }
+        rows.push([]);
+
+        // 4. Table Structure based on activeTab
+        let colWidths = [];
+
+        if (activeTab === 'total') {
+            rows.push([
+                'Date', 'LC No', 'Exporter', 'Invoice', 'Party',
+                'Purchase Qty (kg)', 'Purchase Rate (Tk)', 'Purchase Value (Tk)',
+                'Sale Qty (kg)', 'Sale Rate (Tk)', 'Sale Value (Tk)',
+                'InHouse (kg)', 'Short (kg)', 'Damage (kg)'
+            ]);
+
+            const list = Array.isArray(unifiedHistory) && unifiedHistory.length > 0 ? unifiedHistory : [];
+            list.forEach(item => {
+                const currentWh = (filters?.warehouse || '').trim().toLowerCase();
+                const fromWhLower = (item.fromWh || '').trim().toLowerCase();
+                const toWhLower = (item.toWh || '').trim().toLowerCase();
+                const fromMatch = !!currentWh && !!fromWhLower && (fromWhLower === currentWh || fromWhLower.includes(currentWh) || currentWh.includes(fromWhLower));
+                const toMatch = !!currentWh && !!toWhLower && (toWhLower === currentWh || toWhLower.includes(currentWh) || currentWh.includes(toWhLower));
+                const isTransferOut = item.type === 'transfer' && fromMatch && !toMatch;
+                const isTransferIn = item.type === 'transfer' && toMatch && !fromMatch;
+
+                let partyText = item.type === 'purchase' ? '-' : (item.companyName || '-');
+                if (item.type === 'baseline') {
+                    partyText = 'Opening Stock Baseline';
+                } else if (item.type === 'transfer') {
+                    if (isTransferOut) partyText = `Transfer Out -> ${item.toWh || '-'}`;
+                    else if (isTransferIn) partyText = `Transfer In <- ${item.fromWh || '-'}`;
+                    else partyText = item.fromWh && item.toWh ? `Transfer (${item.fromWh} -> ${item.toWh})` : 'Transfer';
+                }
+
+                const pQty = (item.type === 'purchase' || item.type === 'baseline' || isTransferIn) ? Math.round(item.itemQty || 0) : '-';
+                const pRate = item.type === 'purchase' && item.itemQty > 0 ? Math.round(((item.itemTotalValue / item.itemQty) || (item.itemPurchasedPrice || 0)) * 100) / 100 : '-';
+                const pVal = item.type === 'purchase' && item.itemTotalValue ? Math.round(item.itemTotalValue) : '-';
+
+                const sQty = (item.type === 'sale' || isTransferOut) ? Math.round(item.itemQty || 0) : '-';
+                const sRate = item.type === 'sale' && item.itemQty > 0 ? Math.round(((item.itemTotalValue / item.itemQty) || (item.itemPrice || 0)) * 100) / 100 : '-';
+                const sVal = item.type === 'sale' && item.itemTotalValue ? Math.round(item.itemTotalValue) : '-';
+
+                const inHouseStr = item.runningInHouse !== undefined ? Math.round(item.runningInHouse) : '-';
+                const shortStr = item.type === 'purchase' && item.itemShortageQty ? Math.round(item.itemShortageQty) : '-';
+                const damageStr = item.type === 'damage' ? Math.round(item.itemQty || 0) : '-';
+
+                rows.push([
+                    formatDate(item.date),
+                    item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 4 ? item.lcNo.slice(-4) : item.lcNo) : '-',
+                    item.itemExporter || '-',
+                    item.invoiceNo || '-',
+                    partyText,
+                    pQty,
+                    pRate,
+                    pVal,
+                    sQty,
+                    sRate,
+                    sVal,
+                    inHouseStr,
+                    shortStr,
+                    damageStr
+                ]);
+            });
+
+            // Summary row
+            rows.push([
+                'TOTAL HISTORY', '', '', '', '',
+                totalPurchQty, '-', totalPurchVal,
+                totalSaleQty, '-', totalSaleVal,
+                finalInHouse, totalShortQty, Math.round(damageData?.reduce((s, d) => s + (parseFloat(d.itemQty || d.quantity) || 0), 0) || 0)
+            ]);
+
+            colWidths = [
+                { wch: 12 }, { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 24 },
+                { wch: 18 }, { wch: 16 }, { wch: 20 },
+                { wch: 16 }, { wch: 16 }, { wch: 18 },
+                { wch: 14 }, { wch: 12 }, { wch: 12 }
+            ];
+        } else if (activeTab === 'purchase') {
+            rows.push([
+                'Date', 'LC No', 'Exporter', 'Brand', 'Price (Tk)', 'Bag', 'LC Qty (kg)', 'InHouse (kg)', 'Short (kg)'
+            ]);
+
+            let totalPkt = 0;
+            (purchaseData || []).forEach(item => {
+                const pkt = parseInt(item.itemPacket) || 0;
+                totalPkt += pkt;
+                rows.push([
+                    formatDate(item.date),
+                    item.lcNo && item.lcNo !== '-' ? (item.lcNo.length > 4 ? item.lcNo.slice(-4) : item.lcNo) : '-',
+                    item.itemExporter || '-',
+                    item.itemBrand || '-',
+                    parseFloat(item.itemPurchasedPrice || 0),
+                    pkt,
+                    Math.round(parseFloat(item.itemQty || 0)),
+                    Math.round(parseFloat(item.itemInHouseQty || 0)),
+                    Math.round(parseFloat(item.itemShortageQty || 0))
+                ]);
+            });
+
+            rows.push([
+                'TOTAL PURCHASE', '', '', '', '-', totalPkt, totalPurchQty, finalInHouse, totalShortQty
+            ]);
+
+            colWidths = [
+                { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 20 }, { wch: 14 },
+                { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }
+            ];
+        } else {
+            // sale tab
+            rows.push([
+                'Date', 'LC No', 'Invoice', 'Company', 'Brand', 'Bag', 'Qty (kg)', 'Price (Tk)', 'Total Price (Tk)'
+            ]);
+
+            let totalPkt = 0;
+            (saleData || []).forEach(sale => {
+                const pkt = parseInt(sale.itemPacket) || 0;
+                totalPkt += pkt;
+                rows.push([
+                    formatDate(sale.date),
+                    sale.lcNo ? (sale.lcNo.length > 4 ? sale.lcNo.slice(-4) : sale.lcNo) : '-',
+                    sale.invoiceNo || '-',
+                    sale.companyName || '-',
+                    sale.itemBrand || '-',
+                    pkt,
+                    Math.round(parseFloat(sale.itemQty || 0)),
+                    parseFloat(sale.itemPrice || 0),
+                    parseFloat(sale.itemTotal || 0)
+                ]);
+            });
+
+            rows.push([
+                'TOTAL SALE', '', '', '', '', totalPkt, totalSaleQty, '-', totalSaleVal
+            ]);
+
+            colWidths = [
+                { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 24 }, { wch: 18 },
+                { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 18 }
+            ];
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = colWidths;
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, `${tabUpper} History`);
+
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const fileName = `${safeProduct}_${tabUpper}_History_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        console.error('Error exporting Product History Excel report:', err);
+        alert(`Failed to generate Excel report: ${err.message}`);
+    }
+};
+
 
 
 

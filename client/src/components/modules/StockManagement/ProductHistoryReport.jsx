@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { XIcon, FileTextIcon, BarChartIcon, PrinterIcon, FunnelIcon, ChevronDownIcon } from '../../Icons';
 import { generateProductHistoryPDF } from '../../../utils/pdfGenerator';
+import { generateProductHistoryExcel } from '../../../utils/excelGenerator';
+import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 
@@ -95,6 +97,7 @@ const ProductHistoryReport = ({
     const canShowRate = hasPermission(currentUser, 'stock', 'showRate');
 
     const [activeTab, setActiveTab] = useState('total');
+    const [showReportFormatModal, setShowReportFormatModal] = useState(false);
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [modalFilters, setModalFilters] = useState({ startDate: '', endDate: '', party: '', brand: '', lcNo: '', warehouse: '' });
     const [dropdownOpen, setDropdownOpen] = useState({ party: false, brand: false, lcNo: false, warehouse: false });
@@ -399,7 +402,7 @@ const ProductHistoryReport = ({
         });
     })();
 
-    const handlePrint = async () => {
+    const getReportSummary = () => {
         const totalPurchaseQty = purchaseHistory.reduce((sum, item) => sum + (parseFloat(item.itemQty) || 0), 0);
         const totalPurchVal = purchaseHistory.reduce((sum, i) => sum + (i.itemTotalValue ? parseFloat(i.itemTotalValue) : ((parseFloat(i.itemQty) || 0) * (parseFloat(i.itemPurchasedPrice) || 0))), 0);
         const avgPurchRate = totalPurchaseQty > 0 ? (totalPurchVal / totalPurchaseQty) : 0;
@@ -418,27 +421,48 @@ const ProductHistoryReport = ({
         const inHouseStockVal = Math.max(0, totalInHouseQty) * avgPurchRate;
         const netProfitLoss = (totalSaleAmount + inHouseStockVal) - totalPurchVal;
 
+        return {
+            totalQty: totalPurchaseQty,
+            totalInHouseQty,
+            totalShortageQty,
+            totalAmount: totalSaleAmount,
+            totalSaleQty,
+            totalPurchaseValue: totalPurchVal,
+            avgPurchaseRate: avgPurchRate,
+            avgSaleRate,
+            inHouseStockValue: inHouseStockVal,
+            netProfitLoss
+        };
+    };
+
+    const handlePrint = async () => {
+        const summary = getReportSummary();
         await generateProductHistoryPDF(
             productName,
             category,
             activeTab,
             purchaseHistory,
             saleHistory,
-            {
-                totalQty: totalPurchaseQty,
-                totalInHouseQty,
-                totalShortageQty,
-                totalAmount: totalSaleAmount,
-                totalSaleQty,
-                totalPurchaseValue: totalPurchVal,
-                avgPurchaseRate: avgPurchRate,
-                avgSaleRate,
-                inHouseStockValue: inHouseStockVal,
-                netProfitLoss
-            },
+            summary,
             modalFilters,
             damageHistory,
             transferHistory
+        );
+    };
+
+    const handleExportExcel = () => {
+        const summary = getReportSummary();
+        generateProductHistoryExcel(
+            productName,
+            category,
+            activeTab,
+            purchaseHistory,
+            saleHistory,
+            summary,
+            modalFilters,
+            damageHistory,
+            transferHistory,
+            unifiedHistory
         );
     };
 
@@ -659,12 +683,12 @@ const ProductHistoryReport = ({
                             </div>
 
                             <button
-                                onClick={handlePrint}
-                                className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-10 sm:px-4 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm"
-                                title="Print Report"
+                                onClick={() => setShowReportFormatModal(true)}
+                                className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-10 sm:px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/30 transition-all no-print"
+                                title="Export Report (PDF / Excel)"
                             >
-                                <PrinterIcon className="w-4 h-4" />
-                                <span className="hidden sm:block text-sm font-medium ml-2">Print</span>
+                                <PrinterIcon className="w-4 h-4 text-white" />
+                                <span className="hidden sm:block text-sm font-medium ml-2">Export</span>
                             </button>
                             <button onClick={onClose} className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors">
                                 <XIcon className="w-6 h-6 text-gray-400" />
@@ -710,17 +734,33 @@ const ProductHistoryReport = ({
                 {/* Printable Content */}
                 <div className="flex-1 overflow-y-auto p-3 md:p-6 print:p-2 print:overflow-visible bg-white">
                     <div className="w-full max-w-[1680px] mx-auto space-y-6">
-                        {/* Header */}
-                        <div className="text-center space-y-1">
-                            <h1 className="text-2xl md:text-4xl font-bold text-gray-900 tracking-tight">M/S ANI ENTERPRISE</h1>
-                            <p className="text-[10px] md:text-[14px] text-gray-600 px-4">766, H.M Tower, Level-06, Borogola, Bogura-5800, Bangladesh</p>
-                            <p className="text-[10px] md:text-[14px] text-gray-600 px-4 truncate">+8802588813057, anienterprise051@gmail.com</p>
+                        {/* Header matching Stock Report / PDF layout */}
+                        <div className="flex justify-between items-center pb-1">
+                            {/* Left: Logo & Company Name */}
+                            <div className="flex items-center gap-3">
+                                <img src="/logo.png" alt="ANI Enterprise Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain flex-shrink-0" />
+                                <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: "'Fraunces', serif", color: '#f97316', textShadow: '1px 2px 4px rgba(0, 0, 0, 0.15)' }}>
+                                    ANI ENTERPRISE
+                                </h1>
+                            </div>
+
+                            {/* Right: Address Info */}
+                            <div className="text-right text-[11px] sm:text-[12px] text-gray-700 leading-tight">
+                                <p className="font-semibold text-gray-800">766, H.M Tower, Level-06</p>
+                                <p>Borogola, Bogura, Bangladesh</p>
+                                <p>Tel: +8802588813057</p>
+                                <p>Email: anienterprise051@gmail.com</p>
+                            </div>
                         </div>
-                        <div className="border-t-2 border-gray-900 w-full mt-4"></div>
-                        <div className="flex justify-center -mt-6">
-                            <div className="bg-white border-2 border-gray-900 px-6 md:px-12 py-1.5 inline-block mx-4">
-                                <h2 className="text-sm md:text-xl font-bold text-gray-900 tracking-wide uppercase text-center">
-                                    {activeTab === 'purchase' ? 'Purchase Report' : activeTab === 'sale' ? 'Sale Report' : 'History Report'}
+
+                        {/* Orange Divider Line */}
+                        <div className="border-t-2 border-[#f97316] w-full mt-3"></div>
+
+                        {/* Centered Title Badge */}
+                        <div className="flex justify-center -mt-5">
+                            <div className="bg-[#f97316] text-white px-8 py-1 rounded shadow-sm">
+                                <h2 className="text-xs sm:text-sm font-bold tracking-wider uppercase">
+                                    {activeTab === 'purchase' ? 'PURCHASE REPORT' : activeTab === 'sale' ? 'SALE REPORT' : 'HISTORY REPORT'}
                                 </h2>
                             </div>
                         </div>
@@ -728,14 +768,14 @@ const ProductHistoryReport = ({
                         {/* Metadata */}
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-end text-xs md:text-[14px] text-gray-800 pt-6 px-2 gap-4">
                             <div className="flex flex-col gap-1.5">
-                                <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Product:</span> <span>{productName}</span></div>
-                                <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28 shrink-0">Date Range:</span> <span className="truncate">{formatDate(modalFilters.startDate) || 'Start'} to {formatDate(modalFilters.endDate) || 'Present'}</span></div>
+                                <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28 shrink-0">Date Range:</span> <span className="text-gray-900">{formatDate(modalFilters.startDate) === '-' ? 'Start' : (formatDate(modalFilters.startDate) || 'Start')} to {formatDate(modalFilters.endDate) === '-' ? 'Present' : (formatDate(modalFilters.endDate) || 'Present')}</span></div>
+                                <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Product:</span> <span className="text-gray-900 font-semibold">{productName}</span></div>
                                 {modalFilters.party && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Party:</span> <span className="truncate">{modalFilters.party}</span></div>}
                                 {modalFilters.brand && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Brand:</span> <span className="truncate">{modalFilters.brand}</span></div>}
                                 {modalFilters.lcNo && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">LC No:</span> <span className="truncate">{modalFilters.lcNo}</span></div>}
-                                {modalFilters.warehouse && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Warehouse:</span> <span className="truncate">{modalFilters.warehouse}</span></div>}
+                                {modalFilters.warehouse && <div className="flex"><span className="font-bold text-gray-900 w-24 md:w-28">Warehouse:</span> <span className="truncate text-blue-700 font-bold">{modalFilters.warehouse}</span></div>}
                             </div>
-                            <div className="font-bold text-[10px] md:text-sm whitespace-nowrap"><span className="text-gray-900">Printed:</span> <span className="text-gray-900">{formatDate(new Date())}</span></div>
+                            <div className="font-bold text-[10px] md:text-sm whitespace-nowrap"><span className="text-gray-900">Printed on:</span> <span className="text-gray-900">{formatDate(new Date().toISOString().split('T')[0])}</span></div>
                         </div>
 
                         {/* Unified History Section (for Total Tab) */}
@@ -1199,8 +1239,22 @@ const ProductHistoryReport = ({
                         </div>
                     </div>
                 </div>
-            </div >
-        </div >,
+            </div>
+
+            {/* Export Format Selection Modal (PDF / Excel / Both) */}
+            <ReportFormatModal
+                isOpen={showReportFormatModal}
+                onClose={() => setShowReportFormatModal(false)}
+                title={`Product History Report (${productName})`}
+                subtitle="Select your preferred format to export or download records"
+                onExportPdf={async () => {
+                    await handlePrint();
+                }}
+                onExportExcel={() => {
+                    handleExportExcel();
+                }}
+            />
+        </div>,
         document.body
     );
 };
