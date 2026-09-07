@@ -87,6 +87,7 @@ const CnFPayment = require('./models/CnFPayment');
 const InsurancePayment = require('./models/InsurancePayment');
 const StockBaseline = require('./models/StockBaseline');
 const { encryptData, decryptData } = require('./utils/encryption');
+const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
 const CryptoJS = require('crypto-js');
 
 // Auto-seed admin user if no users exist
@@ -1185,11 +1186,57 @@ apiRouter.delete('/api/products/:id', async (req, res) => {
 
 apiRouter.put('/api/products/:id', async (req, res) => {
   try {
-    const encryptedData = encryptData(req.body);
+    const existingProductDoc = await Product.findById(req.params.id);
+    if (!existingProductDoc) return res.status(404).json({ message: 'Product not found' });
+
+    let existingData = {};
+    if (existingProductDoc.data) {
+      existingData = decryptData(existingProductDoc.data) || {};
+    }
+
+    const { brandRenames = [], ...cleanBody } = req.body;
+
+    // Detect brand renames if not explicitly provided or to supplement
+    const renamesToProcess = Array.isArray(brandRenames) ? [...brandRenames] : [];
+    const prodName = (cleanBody.name || existingData.name || '').trim();
+
+    if (renamesToProcess.length === 0 && existingData.brands && cleanBody.brands) {
+      existingData.brands.forEach((oldB, idx) => {
+        const oldName = (oldB.brand || '').trim();
+        const newB = cleanBody.brands[idx];
+        const newName = (newB?.brand || '').trim();
+        if (oldName && newName && oldName.toLowerCase() !== newName.toLowerCase()) {
+          renamesToProcess.push({
+            oldBrand: oldName,
+            newBrand: newName,
+            productName: prodName
+          });
+        }
+      });
+    }
+
+    const encryptedData = encryptData(cleanBody);
     const updatedProduct = await Product.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
     if (!updatedProduct) return res.status(404).json({ message: 'Product not found' });
-    res.json({ ...req.body, _id: updatedProduct._id, createdAt: updatedProduct.createdAt });
+
+    // Execute cascading updates across all collections for each brand rename
+    const cascadeResults = [];
+    for (const rename of renamesToProcess) {
+      if (rename.oldBrand && rename.newBrand && rename.oldBrand.trim().toLowerCase() !== rename.newBrand.trim().toLowerCase()) {
+        const targetProduct = rename.productName || prodName;
+        const result = await updateBrandAcrossAllCollections(targetProduct, rename.oldBrand, rename.newBrand);
+        cascadeResults.push(result);
+      }
+    }
+
+    res.json({
+      ...cleanBody,
+      _id: updatedProduct._id,
+      createdAt: updatedProduct.createdAt,
+      cascadeResults
+    });
   } catch (err) {
+    console.error('Error updating product with brand cascade:', err);
     res.status(400).json({ message: err.message });
   }
 });

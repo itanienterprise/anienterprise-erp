@@ -47,6 +47,7 @@ function PI({
     const [deleteRevisionStatus, setDeleteRevisionStatus] = useState(null);
 
     const rowRefs = useRef({});
+    const [autoFilledPair, setAutoFilledPair] = useState({ exp: '', imp: '' });
     useEffect(() => {
         if (!highlightId) return;
         const scrollToRow = () => {
@@ -922,6 +923,31 @@ function PI({
         }, 0);
     }, [formData.productsList]);
 
+    const normalizeName = (name) => (name || '').toLowerCase().replace(/[.,\s]+/g, ' ').trim();
+
+    const getLastUsedPi = (exporter, importer) => {
+        const exp = normalizeName(exporter);
+        const imp = normalizeName(importer);
+        if (!exp || !imp || !records || records.length === 0) return '';
+
+        const sorted = [...records].sort((a, b) => {
+            const dateA = new Date(a.date || 0);
+            const dateB = new Date(b.date || 0);
+            if (dateB.getTime() !== dateA.getTime()) {
+                return dateB - dateA;
+            }
+            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        });
+
+        const match = sorted.find(r =>
+            normalizeName(r.exporterName) === exp &&
+            normalizeName(r.partyName) === imp &&
+            r.piNumber && r.piNumber.trim()
+        );
+
+        return match ? match.piNumber.replace(/\s*\(REVISED\)/i, '').trim() : '';
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => {
@@ -964,6 +990,13 @@ function PI({
                 const matchedPort = ports.find(p => (p.name || '').toLowerCase().trim() === value.toLowerCase().trim());
                 if (matchedPort) {
                     updated.placeOfReceipt = matchedPort.placeOfReceipt || '';
+                }
+            }
+
+            if (!editingId && (name === 'exporterName' || name === 'partyName')) {
+                const lastPi = getLastUsedPi(updated.exporterName, updated.partyName);
+                if (lastPi) {
+                    updated.piNumber = lastPi;
                 }
             }
 
@@ -1433,6 +1466,13 @@ function PI({
                 }
             }
 
+            if (!editingId && (field === 'exporterName' || field === 'partyName' || field === 'ipNumber')) {
+                const lastPi = getLastUsedPi(updated.exporterName, updated.partyName);
+                if (lastPi) {
+                    updated.piNumber = lastPi;
+                }
+            }
+
             return updated;
         });
         if (field !== 'certification' && field !== 'packingType') {
@@ -1733,6 +1773,7 @@ function PI({
             lastEditedAt: ''
         });
         setEditingId(null);
+        setAutoFilledPair({ exp: '', imp: '' });
         setSubmitStatus(null);
         setCertSearch('');
         setIpSearch('');
@@ -1827,6 +1868,10 @@ function PI({
             lastEditedAt: record.lastEditedAt || ''
         });
         setEditingId(record._id);
+        setAutoFilledPair({
+            exp: normalizeName(record.exporterName),
+            imp: normalizeName(record.partyName)
+        });
         setShowForm(true);
         setCertSearch('');
         setIpSearch('');
@@ -1888,30 +1933,33 @@ function PI({
     }
 
     const existingPiNumbers = useMemo(() => {
-        const exp = (formData.exporterName || '').trim().toLowerCase();
-        const imp = (formData.partyName || '').trim().toLowerCase();
+        const exp = normalizeName(formData.exporterName);
+        const imp = normalizeName(formData.partyName);
 
         // Sort records by date/createdAt descending to get the most recent (last used) first
         const sorted = [...(records || [])].sort((a, b) => {
-            const dateA = new Date(a.date || a.createdAt || 0);
-            const dateB = new Date(b.date || b.createdAt || 0);
-            return dateB - dateA;
+            const dateA = new Date(a.date || 0);
+            const dateB = new Date(b.date || 0);
+            if (dateB.getTime() !== dateA.getTime()) {
+                return dateB - dateA;
+            }
+            return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
         });
 
         // Filter by selected Exporter and Importer
         let matching = sorted;
         if (exp && imp) {
             matching = sorted.filter(r =>
-                (r.exporterName || '').trim().toLowerCase() === exp &&
-                (r.partyName || '').trim().toLowerCase() === imp
+                normalizeName(r.exporterName) === exp &&
+                normalizeName(r.partyName) === imp
             );
         } else if (exp) {
             matching = sorted.filter(r =>
-                (r.exporterName || '').trim().toLowerCase() === exp
+                normalizeName(r.exporterName) === exp
             );
         } else if (imp) {
             matching = sorted.filter(r =>
-                (r.partyName || '').trim().toLowerCase() === imp
+                normalizeName(r.partyName) === imp
             );
         }
 
@@ -1922,6 +1970,17 @@ function PI({
 
         return Array.from(new Set(list));
     }, [records, formData.exporterName, formData.partyName]);
+
+    // Auto-fill last used PI number when both exporter and importer are selected (React state-during-render pattern)
+    const currentSelectedExp = normalizeName(formData.exporterName);
+    const currentSelectedImp = normalizeName(formData.partyName);
+    if (!editingId && currentSelectedExp && currentSelectedImp && (autoFilledPair.exp !== currentSelectedExp || autoFilledPair.imp !== currentSelectedImp)) {
+        setAutoFilledPair({ exp: currentSelectedExp, imp: currentSelectedImp });
+        const lastPi = getLastUsedPi(formData.exporterName, formData.partyName);
+        if (lastPi && formData.piNumber !== lastPi) {
+            setFormData(prev => ({ ...prev, piNumber: lastPi }));
+        }
+    }
 
     const filteredPiSuggestions = useMemo(() => {
         const q = (formData.piNumber || '').trim().toLowerCase();
@@ -3072,7 +3131,10 @@ function PI({
                                     <span>PI Revise</span>
                                 </button>
                                 <button
-                                    onClick={() => setShowForm(true)}
+                                    onClick={() => {
+                                        resetForm();
+                                        setShowForm(true);
+                                    }}
                                     className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap h-[40px]"
                                 >
                                     <span className="mr-1.5 font-bold text-lg leading-none">+</span> Add New

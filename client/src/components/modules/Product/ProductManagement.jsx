@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { PlusIcon, XIcon, EditIcon, TrashIcon, BoxIcon, ChevronDownIcon, EyeIcon, SearchIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
@@ -28,6 +28,15 @@ const ProductManagement = ({
     const cannotDelete = !canDelete;
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null);
+    const [originalBrands, setOriginalBrands] = useState([]);
+    const [toast, setToast] = useState(null);
+    const toastTimerRef = useRef(null);
+
+    const showToast = (message, type = 'success') => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast({ message, type });
+        toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+    };
 
     const filteredProducts = useMemo(() => {
         if (!products || !Array.isArray(products)) return [];
@@ -94,6 +103,7 @@ const ProductManagement = ({
             brands: [{ brand: '', quality: '', packetSize: '', purchasedPrice: '' }],
             description: ''
         });
+        setOriginalBrands([]);
         setEditingId(null);
     };
 
@@ -127,6 +137,21 @@ const ProductManagement = ({
         e.preventDefault();
         setIsSubmitting(true);
 
+        const brandRenames = [];
+        if (editingId && originalBrands.length > 0) {
+            (productFormData.brands || []).forEach((b, i) => {
+                const oldBrand = (originalBrands[i] || '').trim();
+                const newBrand = (b.brand || '').trim();
+                if (oldBrand && newBrand && oldBrand.toLowerCase() !== newBrand.toLowerCase()) {
+                    brandRenames.push({
+                        oldBrand,
+                        newBrand,
+                        productName: (productFormData.name || '').trim()
+                    });
+                }
+            });
+        }
+
         const submissionData = {
             ...productFormData,
             name: (productFormData.name || '').trim(),
@@ -135,7 +160,8 @@ const ProductManagement = ({
                 ...b,
                 brand: (b.brand || '').trim(),
                 quality: (b.quality || '').trim()
-            }))
+            })),
+            brandRenames
         };
 
         try {
@@ -144,15 +170,30 @@ const ProductManagement = ({
                 : `${API_BASE_URL}/api/products`;
 
             if (editingId) {
-                await axios.put(url, submissionData);
+                const res = await axios.put(url, submissionData);
+                const cascadeResults = res?.data?.cascadeResults || [];
+                let totalUpdated = 0;
+                cascadeResults.forEach(cr => {
+                    if (cr.counts) {
+                        totalUpdated += Object.values(cr.counts).reduce((a, b) => a + b, 0);
+                    }
+                });
+                if (brandRenames.length > 0) {
+                    const renameTexts = brandRenames.map(r => `"${r.oldBrand}" ➔ "${r.newBrand}"`).join(', ');
+                    showToast(`Product updated! Brand ${renameTexts} auto-updated across ${totalUpdated} record(s).`, 'success');
+                } else {
+                    showToast('Product updated successfully!', 'success');
+                }
             } else {
                 await axios.post(url, submissionData);
+                showToast('Product created successfully!', 'success');
             }
             await fetchProducts();
             setShowProductForm(false);
             resetProductForm();
         } catch (error) {
             console.error('Error saving product:', error);
+            showToast('Failed to save product.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -160,6 +201,20 @@ const ProductManagement = ({
 
     const handleProductEdit = (product) => {
         const fullProduct = (products || []).find(p => p._id === product._id) || product;
+        const brandsList = fullProduct.brands && fullProduct.brands.length > 0
+            ? fullProduct.brands.map(b => ({
+                brand: b.brand || '',
+                quality: b.quality || '',
+                packetSize: b.packetSize || '',
+                purchasedPrice: b.purchasedPrice || ''
+            }))
+            : [{
+                brand: fullProduct.brand || '',
+                quality: fullProduct.quality || '',
+                packetSize: fullProduct.packetSize || '',
+                purchasedPrice: fullProduct.purchasedPrice || ''
+            }];
+
         setProductFormData({
             hsCode: fullProduct.hsCode || '',
             hsCodeInd: fullProduct.hsCodeInd || '',
@@ -168,21 +223,10 @@ const ProductManagement = ({
             category: fullProduct.category || '',
             cnfOther: fullProduct.cnfOther || (fullProduct.cnf && fullProduct.other ? `${fullProduct.cnf} / ${fullProduct.other}` : fullProduct.cnf || fullProduct.other || ''),
             uom: fullProduct.uom || fullProduct.unit || 'kg',
-            brands: fullProduct.brands && fullProduct.brands.length > 0
-                ? fullProduct.brands.map(b => ({
-                    brand: b.brand || '',
-                    quality: b.quality || '',
-                    packetSize: b.packetSize || '',
-                    purchasedPrice: b.purchasedPrice || ''
-                }))
-                : [{
-                    brand: fullProduct.brand || '',
-                    quality: fullProduct.quality || '',
-                    packetSize: fullProduct.packetSize || '',
-                    purchasedPrice: fullProduct.purchasedPrice || ''
-                }],
+            brands: brandsList,
             description: fullProduct.description || ''
         });
+        setOriginalBrands(brandsList.map(b => (b.brand || '').trim()));
         setEditingId(fullProduct._id);
         setShowProductForm(true);
     };
@@ -680,6 +724,23 @@ const ProductManagement = ({
                     setShowProductHistoryReport={setShowProductHistoryReport}
                     setProductHistoryReportData={setProductHistoryReportData}
                 />
+            )}
+
+            {toast && createPortal(
+                <div className="fixed bottom-6 right-6 z-[9999] animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className={`flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border text-sm font-medium ${
+                        toast.type === 'error'
+                            ? 'bg-red-50 text-red-800 border-red-200 shadow-red-500/10'
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-emerald-500/10'
+                    }`}>
+                        <span>{toast.type === 'error' ? '⚠️' : '✅'}</span>
+                        <span>{toast.message}</span>
+                        <button onClick={() => setToast(null)} className="ml-2 text-gray-400 hover:text-gray-600">
+                            ✕
+                        </button>
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     );
