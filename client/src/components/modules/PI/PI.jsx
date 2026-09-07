@@ -141,6 +141,7 @@ function PI({
         setSelectedIpForDetails(enrichedIp);
     };
     const [selectedRevisePiId, setSelectedRevisePiId] = useState('');
+    const [editingRevisionOriginalNo, setEditingRevisionOriginalNo] = useState(null);
     const [reviseSearchQuery, setReviseSearchQuery] = useState('');
     const [isReviseSaving, setIsReviseSaving] = useState(false);
     const [reviseIpSearch, setReviseIpSearch] = useState('');
@@ -1999,6 +2000,7 @@ function PI({
     const resetReviseForm = () => {
         setShowReviseForm(false);
         setSelectedRevisePiId('');
+        setEditingRevisionOriginalNo(null);
         setReviseSearchQuery('');
         setReviseIpSearch('');
         setReviseFormData({
@@ -2062,6 +2064,7 @@ function PI({
 
     const handleRevisePiSelect = (pi) => {
         setSelectedRevisePiId(pi._id);
+        setEditingRevisionOriginalNo(null);
         const nextNo = (pi.revisions || []).filter(r => r.reviseNo !== 'Original PI').length + 1;
         const ipNumbers = pi.ipNumbers?.length
             ? pi.ipNumbers
@@ -2210,8 +2213,16 @@ function PI({
             // Find original quantity in the selected PI for revision
             let oldQty = 0;
             if (selectedPiForRevise) {
-                const origList = getPiProductsList(selectedPiForRevise);
-                const origItem = origList.find(p =>
+                let sourceList = getPiProductsList(selectedPiForRevise);
+                if (editingRevisionOriginalNo && Array.isArray(selectedPiForRevise.revisions)) {
+                    const revBeingEdited = selectedPiForRevise.revisions.find(
+                        r => r.reviseNo && r.reviseNo.trim().toLowerCase() === editingRevisionOriginalNo.trim().toLowerCase()
+                    );
+                    if (revBeingEdited && revBeingEdited.productsList) {
+                        sourceList = revBeingEdited.productsList;
+                    }
+                }
+                const origItem = sourceList.find(p =>
                     (p.productName || '').toLowerCase().trim() === (item.productName || '').toLowerCase().trim()
                 );
                 oldQty = parseFloat(origItem?.quantity) || 0;
@@ -2266,25 +2277,6 @@ function PI({
                 }
             });
 
-            const newRevision = {
-                reviseNo: reviseFormData.reviseNo,
-                reviseDate: reviseFormData.reviseDate,
-                validityDate: reviseFormData.validityDate,
-                placeOfReceipt: reviseFormData.placeOfReceipt,
-                portOfLoading: reviseFormData.portOfLoading,
-                portOfDischarge: reviseFormData.portOfDischarge,
-                certification: reviseFormData.certification,
-                packingType: reviseFormData.packingType || '',
-                productsList: reviseFormData.productsList,
-                grandTotal: reviseFormData.grandTotal,
-                grandTotalQuantity: reviseFormData.grandTotalQuantity,
-                remarks: reviseFormData.remarks,
-                ipNumbers: updatedIpNumbers,
-                revisedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
-                revisedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
-                createdAt: new Date().toISOString()
-            };
-
             const currentRevisions = [...(pi.revisions || [])];
             if (currentRevisions.length === 0) {
                 const originalRevision = {
@@ -2308,12 +2300,35 @@ function PI({
                 currentRevisions.push(originalRevision);
             }
 
-            const updatedPiData = {
-                ...pi,
-                ipNumbers: updatedIpNumbers,
-                ipNumber: updatedIpNumberStr,
-                ipQuantity: updatedIpQuantity,
-                ipDate: latestDate,
+            // Check if we are updating an existing revision or adding a new one
+            let targetRevIndex = -1;
+            if (editingRevisionOriginalNo) {
+                targetRevIndex = currentRevisions.findIndex(
+                    r => r.reviseNo && r.reviseNo.trim().toLowerCase() === editingRevisionOriginalNo.trim().toLowerCase()
+                );
+            }
+
+            const existingRevIndex = currentRevisions.findIndex(
+                r => r.reviseNo && r.reviseNo.trim().toLowerCase() === reviseFormData.reviseNo.trim().toLowerCase()
+            );
+
+            if (editingRevisionOriginalNo) {
+                if (existingRevIndex !== -1 && existingRevIndex !== targetRevIndex) {
+                    showToast(`Revision number "${reviseFormData.reviseNo}" already exists for this PI.`, 'error');
+                    setIsReviseSaving(false);
+                    return;
+                }
+            } else {
+                if (existingRevIndex !== -1) {
+                    showToast(`Revision number "${reviseFormData.reviseNo}" already exists for this PI. Please use a new revision number.`, 'error');
+                    setIsReviseSaving(false);
+                    return;
+                }
+            }
+
+            const newRevision = {
+                reviseNo: reviseFormData.reviseNo,
+                reviseDate: reviseFormData.reviseDate,
                 validityDate: reviseFormData.validityDate,
                 placeOfReceipt: reviseFormData.placeOfReceipt,
                 portOfLoading: reviseFormData.portOfLoading,
@@ -2323,23 +2338,77 @@ function PI({
                 productsList: reviseFormData.productsList,
                 grandTotal: reviseFormData.grandTotal,
                 grandTotalQuantity: reviseFormData.grandTotalQuantity,
-                piRevision: `${reviseFormData.reviseNo} DATE: ${formatDate(reviseFormData.reviseDate)}`,
+                remarks: reviseFormData.remarks,
+                ipNumbers: updatedIpNumbers,
                 revisedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
                 revisedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
-                lastRevisedAt: new Date().toISOString(),
-                revisions: [...currentRevisions, newRevision]
+                createdAt: (targetRevIndex !== -1 && currentRevisions[targetRevIndex]?.createdAt) ? currentRevisions[targetRevIndex].createdAt : new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+
+            let updatedRevisions = [];
+            if (targetRevIndex !== -1) {
+                // Update in place and deduplicate any duplicate entries with this revision number
+                currentRevisions.forEach((r, idx) => {
+                    if (idx === targetRevIndex) {
+                        updatedRevisions.push(newRevision);
+                    } else {
+                        const rNo = (r.reviseNo || '').trim().toLowerCase();
+                        if (rNo === editingRevisionOriginalNo.trim().toLowerCase() || rNo === newRevision.reviseNo.trim().toLowerCase()) {
+                            return; // skip legacy duplicates
+                        }
+                        updatedRevisions.push(r);
+                    }
+                });
+            } else {
+                // Brand new revision: append to list, filtering out any existing duplicates defensively
+                updatedRevisions = [
+                    ...currentRevisions.filter(r => (r.reviseNo || '').trim().toLowerCase() !== newRevision.reviseNo.trim().toLowerCase()),
+                    newRevision
+                ];
+            }
+
+            // Find the latest actual revision to set top-level PI properties
+            const actualRevisions = updatedRevisions.filter(r => r.reviseNo !== 'Original PI');
+            const latestRev = actualRevisions.length > 0 ? actualRevisions[actualRevisions.length - 1] : newRevision;
+            const isLatest = (targetRevIndex === -1) || (targetRevIndex === currentRevisions.length - 1) || (latestRev.reviseNo === newRevision.reviseNo);
+
+            const updatedPiData = {
+                ...pi,
+                revisions: updatedRevisions,
+                ...(isLatest ? {
+                    ipNumbers: updatedIpNumbers,
+                    ipNumber: updatedIpNumberStr,
+                    ipQuantity: updatedIpQuantity,
+                    ipDate: latestDate,
+                    validityDate: reviseFormData.validityDate,
+                    placeOfReceipt: reviseFormData.placeOfReceipt,
+                    portOfLoading: reviseFormData.portOfLoading,
+                    portOfDischarge: reviseFormData.portOfDischarge,
+                    certification: reviseFormData.certification,
+                    packingType: reviseFormData.packingType || '',
+                    productsList: reviseFormData.productsList,
+                    grandTotal: reviseFormData.grandTotal,
+                    grandTotalQuantity: reviseFormData.grandTotalQuantity,
+                    remarks: reviseFormData.remarks,
+                    piRevision: `${newRevision.reviseNo} DATE: ${formatDate(newRevision.reviseDate)}`,
+                    revisedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
+                    revisedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
+                    lastRevisedAt: new Date().toISOString()
+                } : {})
             };
 
             await axios.put(`${API_BASE_URL}/api/pi/${selectedRevisePiId}`, updatedPiData);
 
             if (addNotification) {
+                const actionText = editingRevisionOriginalNo ? 'updated' : 'revised';
                 addNotification(
-                    'PI Revised',
-                    `PI No: ${pi.piNumber} has been revised (${reviseFormData.reviseNo}) by ${currentUser?.name || currentUser?.username}.`,
+                    editingRevisionOriginalNo ? 'PI Revision Updated' : 'PI Revised',
+                    `PI No: ${pi.piNumber} revision (${reviseFormData.reviseNo}) has been ${actionText} by ${currentUser?.name || currentUser?.username}.`,
                     ['Admin', 'Incharge', 'Border Manager', 'LC Manager', 'Data Entry']
                 );
             }
-            showToast('PI revision saved successfully!', 'success');
+            showToast(editingRevisionOriginalNo ? 'PI revision updated successfully!' : 'PI revision saved successfully!', 'success');
             resetReviseForm();
             fetchRecords();
         } catch (error) {
@@ -2680,12 +2749,24 @@ function PI({
                 });
             }
 
+            // Deduplicate revisions defensively by reviseNo, keeping the latest occurrence
+            const seenNos = new Map();
             revisions.forEach(rev => {
-                list.push({
-                    ...rev,
-                    ipNumbers: rev.ipNumbers || (rev.ipNumber ? rev.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []))),
-                    isOriginal: rev.reviseNo === 'Original PI'
-                });
+                const key = (rev.reviseNo || '').trim().toLowerCase();
+                if (key) seenNos.set(key, rev);
+            });
+            const processedKeys = new Set();
+            revisions.forEach(rev => {
+                const key = (rev.reviseNo || '').trim().toLowerCase();
+                if (key && !processedKeys.has(key)) {
+                    processedKeys.add(key);
+                    const latestRev = seenNos.get(key);
+                    list.push({
+                        ...latestRev,
+                        ipNumbers: latestRev.ipNumbers || (latestRev.ipNumber ? latestRev.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : (record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []))),
+                        isOriginal: latestRev.reviseNo === 'Original PI'
+                    });
+                }
             });
         }
         return list;
@@ -4471,25 +4552,30 @@ function PI({
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8 relative z-30 border-b border-gray-200/40 pb-4">
                         <div className="flex items-center gap-2 shrink-0">
                             <FileTextIcon className="w-5 h-5 text-blue-500" />
-                            <span className="text-base font-bold text-gray-800">PI Revise Registration</span>
+                            <span className="text-base font-bold text-gray-800">
+                                {editingRevisionOriginalNo ? `Edit PI Revision (${editingRevisionOriginalNo})` : 'PI Revise Registration'}
+                            </span>
                         </div>
 
                         <div className="flex-1 max-w-md w-full relative dropdown-container" ref={revisePiRef}>
                             <div className="relative w-full">
                                 <input
                                     type="text"
-                                    placeholder="Search or select PI number..."
+                                    placeholder={editingRevisionOriginalNo ? "PI locked while editing revision" : "Search or select PI number..."}
                                     value={reviseSearchQuery}
+                                    disabled={Boolean(editingRevisionOriginalNo)}
                                     onChange={(e) => {
                                         setReviseSearchQuery(e.target.value);
                                         setActiveDropdown('revisePi');
                                         setHighlightedIndex(-1);
                                     }}
                                     onFocus={() => {
-                                        setActiveDropdown('revisePi');
-                                        setHighlightedIndex(-1);
+                                        if (!editingRevisionOriginalNo) {
+                                            setActiveDropdown('revisePi');
+                                            setHighlightedIndex(-1);
+                                        }
                                     }}
-                                    className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-center text-sm shadow-sm h-[38px]"
+                                    className={`w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium text-center text-sm shadow-sm h-[38px] ${editingRevisionOriginalNo ? 'opacity-70 cursor-not-allowed bg-gray-100 font-bold text-blue-700' : ''}`}
                                 />
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                                     <ChevronDownIcon className="w-4 h-4" />
@@ -5042,9 +5128,9 @@ function PI({
                                         <button
                                             type="submit"
                                             disabled={isReviseSaving}
-                                            className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-sm rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50"
                                         >
-                                            {isReviseSaving ? 'Saving...' : 'Save PI Revise'}
+                                            {isReviseSaving ? 'Saving...' : editingRevisionOriginalNo ? 'Update Revision' : 'Save PI Revise'}
                                         </button>
                                     </div>
                                 </div>
@@ -6058,10 +6144,28 @@ function PI({
                                                                     handleEdit(viewHistoryRecord);
                                                                 } else {
                                                                     setSelectedRevisePiId(viewHistoryRecord._id);
+                                                                    setEditingRevisionOriginalNo(activeRevision.reviseNo);
                                                                     setReviseSearchQuery(viewHistoryRecord.piNumber || '');
                                                                     setReviseIpSearch('');
                                                                     setActiveDropdown(null);
                                                                     setHighlightedIndex(-1);
+
+                                                                    const initialProducts = (activeRevision.productsList && activeRevision.productsList.length > 0)
+                                                                        ? activeRevision.productsList
+                                                                        : getPiProductsList(viewHistoryRecord);
+                                                                    const ipNumbers = activeRevision.ipNumbers || [];
+                                                                    const mappedProducts = initialProducts.map(prod => {
+                                                                        if (prod._fromIp) return prod;
+                                                                        const matchingIp = ipNumbers.find(ipNum => {
+                                                                            const ipRec = ipRecords.find(r => r.ipNumber === ipNum);
+                                                                            return ipRec && ipRec.productName === prod.productName;
+                                                                        });
+                                                                        if (matchingIp) {
+                                                                            return { ...prod, _fromIp: matchingIp };
+                                                                        }
+                                                                        return prod;
+                                                                    });
+                                                                    const { list, grandTotal, grandTotalQuantity } = recalcReviseProducts(mappedProducts);
 
                                                                     // Pre-fill reviseFormData with the specific activeRevision values
                                                                     setReviseFormData({
@@ -6073,9 +6177,9 @@ function PI({
                                                                         portOfDischarge: activeRevision.portOfDischarge && activeRevision.portOfDischarge !== 'N/A (Historical)' ? activeRevision.portOfDischarge : '',
                                                                         certification: activeRevision.certification && activeRevision.certification !== 'N/A (Historical)' ? activeRevision.certification : '',
                                                                         packingType: activeRevision.packingType && activeRevision.packingType !== 'N/A (Historical)' ? activeRevision.packingType : '',
-                                                                        productsList: activeRevision.productsList || [],
-                                                                        grandTotal: activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0,
-                                                                        grandTotalQuantity: activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0,
+                                                                        productsList: list,
+                                                                        grandTotal: grandTotal || (activeRevision.grandTotal !== 'N/A' ? activeRevision.grandTotal : 0),
+                                                                        grandTotalQuantity: grandTotalQuantity || (activeRevision.grandTotalQuantity !== 'N/A' ? activeRevision.grandTotalQuantity : 0),
                                                                         remarks: activeRevision.remarks && activeRevision.remarks !== 'Historical original values were not captured prior to first revision.' ? activeRevision.remarks : '',
                                                                         ipNumbers: activeRevision.ipNumbers || []
                                                                     });

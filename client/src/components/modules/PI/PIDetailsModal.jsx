@@ -112,12 +112,24 @@ export const PIDetailsModal = ({
                 });
             }
 
+            // Deduplicate revisions defensively by reviseNo, keeping the latest occurrence
+            const seenNos = new Map();
             revisions.forEach(rev => {
-                list.push({
-                    ...rev,
-                    ipNumbers: rev.ipNumbers || (rev.ipNumber ? String(rev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (resolvedPi.ipNumbers || (resolvedPi.ipNumber ? String(resolvedPi.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : []))),
-                    isOriginal: rev.reviseNo === 'Original PI'
-                });
+                const key = (rev.reviseNo || '').trim().toLowerCase();
+                if (key) seenNos.set(key, rev);
+            });
+            const processedKeys = new Set();
+            revisions.forEach(rev => {
+                const key = (rev.reviseNo || '').trim().toLowerCase();
+                if (key && !processedKeys.has(key)) {
+                    processedKeys.add(key);
+                    const latestRev = seenNos.get(key);
+                    list.push({
+                        ...latestRev,
+                        ipNumbers: latestRev.ipNumbers || (latestRev.ipNumber ? String(latestRev.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : (resolvedPi.ipNumbers || (resolvedPi.ipNumber ? String(resolvedPi.ipNumber).split(',').map(s => s.trim()).filter(Boolean) : []))),
+                        isOriginal: latestRev.reviseNo === 'Original PI'
+                    });
+                }
             });
         }
         return list;
