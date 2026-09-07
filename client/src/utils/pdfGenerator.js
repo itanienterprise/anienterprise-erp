@@ -1271,27 +1271,37 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                 if (reportType === 'detailed') {
                     const styles = {
                         0: { cellWidth: 7, halign: 'center', lineWidth: 0 },
-                        1: { cellWidth: 38, lineWidth: 0 },
-                        2: { cellWidth: 41, lineWidth: 0 }
+                        1: { cellWidth: 28, lineWidth: 0 },
+                        2: { cellWidth: 35, lineWidth: 0 }
                     };
                     let colIdx = 3;
-                    if (showBag) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
-                    if (showQty) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
-                    if (showBag) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
-                    if (showQty) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
-                    if (showBag) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
-                    if (showQty) styles[colIdx++] = { cellWidth: 19, halign: 'right' };
+                    if (showBag && showQty) {
+                        styles[colIdx++] = { cellWidth: 23, halign: 'right' };
+                        styles[colIdx++] = { cellWidth: 17.5, halign: 'right' };
+                        styles[colIdx++] = { cellWidth: 22, halign: 'right' };
+                        styles[colIdx++] = { cellWidth: 17.5, halign: 'right' };
+                        styles[colIdx++] = { cellWidth: 23, halign: 'right' };
+                        styles[colIdx++] = { cellWidth: 17.5, halign: 'right' };
+                    } else if (showBag) {
+                        styles[colIdx++] = { cellWidth: 35, halign: 'right' };
+                        styles[colIdx++] = { cellWidth: 35, halign: 'right' };
+                        styles[colIdx++] = { cellWidth: 35, halign: 'right' };
+                    } else {
+                        styles[colIdx++] = { cellWidth: 35, halign: 'right' };
+                        styles[colIdx++] = { cellWidth: 35, halign: 'right' };
+                        styles[colIdx++] = { cellWidth: 35, halign: 'right' };
+                    }
                     return styles;
                 } else if (reportType === 'price') {
                     const styles = {
                         0: { cellWidth: 7, halign: 'center', lineWidth: 0 },
-                        1: { cellWidth: 42, lineWidth: 0 },
-                        2: { cellWidth: 48, lineWidth: 0 },
+                        1: { cellWidth: 36, lineWidth: 0 },
+                        2: { cellWidth: 44, lineWidth: 0 },
                         3: { cellWidth: 26 },
                         4: { cellWidth: 21, halign: 'right' }
                     };
                     let colIdx = 5;
-                    if (showBag) styles[colIdx++] = { cellWidth: 28, halign: 'right' };
+                    if (showBag) styles[colIdx++] = { cellWidth: 33, halign: 'right' };
                     if (showQty) styles[colIdx++] = { cellWidth: 28, halign: 'right' };
                     return styles;
                 } else {
@@ -1300,23 +1310,23 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     if (hasBothUnits) {
                         return {
                             0: { cellWidth: 7, halign: 'center', lineWidth: 0 },
-                            1: { cellWidth: 41, lineWidth: 0 },
-                            2: { cellWidth: 40, lineWidth: 0 },
-                            3: { cellWidth: 18, halign: 'right' },
-                            4: { cellWidth: 19, halign: 'right' },
-                            5: { cellWidth: 18, halign: 'right' },
-                            6: { cellWidth: 19, halign: 'right' },
-                            7: { cellWidth: 19, halign: 'right' },
-                            8: { cellWidth: 19, halign: 'right' }
+                            1: { cellWidth: 28, lineWidth: 0 },
+                            2: { cellWidth: 36.5, lineWidth: 0 },
+                            3: { cellWidth: 24.5, halign: 'right' },
+                            4: { cellWidth: 18, halign: 'right' },
+                            5: { cellWidth: 24, halign: 'right' },
+                            6: { cellWidth: 18, halign: 'right' },
+                            7: { cellWidth: 24.5, halign: 'right' },
+                            8: { cellWidth: 18.5, halign: 'right' }
                         };
                     } else {
                         return {
                             0: { cellWidth: 7, halign: 'center', lineWidth: 0 },
-                            1: { cellWidth: 50, lineWidth: 0 },
-                            2: { cellWidth: 55, lineWidth: 0 },
-                            3: { cellWidth: 29, halign: 'right' },
-                            4: { cellWidth: 29, halign: 'right' },
-                            5: { cellWidth: 30, halign: 'right' }
+                            1: { cellWidth: 42, lineWidth: 0 },
+                            2: { cellWidth: 46, lineWidth: 0 },
+                            3: { cellWidth: 35, halign: 'right' },
+                            4: { cellWidth: 35, halign: 'right' },
+                            5: { cellWidth: 35, halign: 'right' }
                         };
                     }
                 }

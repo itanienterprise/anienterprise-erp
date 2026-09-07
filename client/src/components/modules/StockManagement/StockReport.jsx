@@ -367,7 +367,7 @@ const StockReport = ({
                         <thead>
                             <tr className="bg-gray-50 border-b border-gray-900">
                                 <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[4%] text-center" rowSpan={2}>SL</th>
-                                <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[22%]" rowSpan={2}>Product & Quality</th>
+                                <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[16%]" rowSpan={2}>Product & Quality</th>
                                 <th className="border-r border-gray-900 px-2 py-1 text-left text-[13px] font-bold text-gray-900 uppercase tracking-wider w-[15%]" rowSpan={2}>Brand</th>
                                 {reportType === 'price' && (
                                     <>
@@ -394,25 +394,25 @@ const StockReport = ({
                             <tr className="bg-gray-50 border-b border-gray-900">
                                 {reportType === 'detailed' && (
                                     <>
-                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">BAG</th>}
-                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">QTY (KG)</th>}
-                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">BAG</th>}
-                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[9.5%]">BAG</th>}
+                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[6.5%]">QTY (KG)</th>}
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[9%]">BAG</th>}
+                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[6.5%]">QTY (KG)</th>}
                                     </>
                                 )}
                                 {reportType === 'short' ? (
                                     <>
-                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">BAG</th>}
-                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
-                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-purple-900 uppercase tracking-wider w-[7%]">BAG</th>}
-                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-purple-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
-                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-teal-900 uppercase tracking-wider w-[7%]">BAG</th>}
-                                        {showQty && <th className="px-2 py-1 text-right text-[12px] font-bold text-teal-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[9.5%]">BAG</th>}
+                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[6.5%]">QTY (KG)</th>}
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-purple-900 uppercase tracking-wider w-[9.5%]">BAG</th>}
+                                        {showQty && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-purple-900 uppercase tracking-wider w-[6.5%]">QTY (KG)</th>}
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-teal-900 uppercase tracking-wider w-[9.5%]">BAG</th>}
+                                        {showQty && <th className="px-2 py-1 text-right text-[12px] font-bold text-teal-900 uppercase tracking-wider w-[6.5%]">QTY (KG)</th>}
                                     </>
                                 ) : (
                                     <>
-                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">BAG</th>}
-                                        {showQty && <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[8%]">QTY (KG)</th>}
+                                        {showBag && <th className="border-r border-gray-900 px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[10%]">BAG</th>}
+                                        {showQty && <th className="px-2 py-1 text-right text-[12px] font-bold text-gray-900 uppercase tracking-wider w-[7%]">QTY (KG)</th>}
                                     </>
                                 )}
                             </tr>

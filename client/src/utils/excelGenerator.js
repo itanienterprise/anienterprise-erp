@@ -2278,14 +2278,14 @@ export const generateStockReportExcel = (
             ];
             colWidths = [
                 { wch: 6 },
-                { wch: 28 },
+                { wch: 22 },
                 { wch: 20 },
-                { wch: 18 },
-                { wch: 18 },
-                { wch: 18 },
-                { wch: 18 },
-                { wch: 18 },
-                { wch: 18 }
+                { wch: 22 },
+                { wch: 17 },
+                { wch: 22 },
+                { wch: 17 },
+                { wch: 22 },
+                { wch: 17 }
             ];
         } else if (normalizedReportType === 'detailed') {
             tableHeaders = [
