@@ -15,6 +15,7 @@ import ReportFormatModal from '../../shared/ReportFormatModal';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { getCogNetBillBdt, isProductMatch } from '../../../utils/lcValueUtils';
+import { formatFirstName } from '../IPManagement/IPManagement';
 
 const gridColsClassMap = {
     1: 'md:grid-cols-1',
@@ -66,7 +67,7 @@ const getShipmentDateColorClass = (shipmentDateStr) => {
     }
 };
 
-export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onDeleteAmendment, onUpdateDollarRate, canManage, canDelete, canDeleteAmendment, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [], showDetailsFirst = false, initialShowDetails = false }) => {
+export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSalesRecords = [], gpRecords = [], lcExpenses = [], piRecordsRaw = [], ipRecordsRaw = [], lcRecords = [], onEdit, onEditAmendment, onDeleteAmendment, onUpdateDollarRate, canManage, canDelete, canDeleteAmendment, canAddBill, canEditBill, onRefresh, currentUser, marginReturns = [], showDetailsFirst = false, initialShowDetails = false, getLcEntryDetails, employeesFullNameMap }) => {
     const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
     const [showConsumption, setShowConsumption] = useState(!(showDetailsFirst || initialShowDetails));
 
@@ -1728,8 +1729,28 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                         </div>
                         <div className="min-w-0">
                             <h3 className="text-lg font-bold text-gray-900 truncate">{showConsumption ? 'LC Consumption History' : 'LC Record Details'}</h3>
-                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-0.5">
-                                LC NO: <span className="text-sm font-black text-blue-600">{data.lcNo}</span>
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-0.5 flex items-center gap-2 flex-wrap">
+                                <span>LC NO: <span className="text-sm font-black text-blue-600">{data.lcNo}</span></span>
+                                {(() => {
+                                    let resolvedFullCreator = '';
+                                    if (typeof getLcEntryDetails === 'function') {
+                                        const details = getLcEntryDetails(data);
+                                        const rawName = data.entryByName || data.createdByName || data.entryBy || data.createdBy;
+                                        if (rawName && employeesFullNameMap) {
+                                            const key = String(rawName).trim().toLowerCase();
+                                            resolvedFullCreator = employeesFullNameMap[key] || employeesFullNameMap[String(rawName).trim()];
+                                        }
+                                        if (!resolvedFullCreator && details && details.creator && details.creator !== '—') {
+                                            const cKey = String(details.creator).trim().toLowerCase();
+                                            resolvedFullCreator = employeesFullNameMap?.[cKey] || details.creator;
+                                        }
+                                    }
+                                    return resolvedFullCreator ? (
+                                        <span className="text-xs text-gray-500 font-semibold normal-case">
+                                            | Entry By: <span className="font-bold text-gray-800">{resolvedFullCreator}</span>
+                                        </span>
+                                    ) : null;
+                                })()}
                             </p>
                             {(() => {
                                 const prods = data.productsList && data.productsList.length > 0
@@ -1824,8 +1845,28 @@ export const ViewDetailsModal = ({ data, onClose, allStockRecords = [], allSales
                                 <h3 className="text-sm font-black text-gray-900 truncate leading-none">
                                     {showConsumption ? 'LC Consumption History' : 'LC Record Details'}
                                 </h3>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1">
-                                    LC NO: <span className="text-xs font-black text-blue-600">{data.lcNo}</span>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1 flex items-center gap-1.5 flex-wrap">
+                                    <span>LC NO: <span className="text-xs font-black text-blue-600">{data.lcNo}</span></span>
+                                    {(() => {
+                                        let resolvedFullCreator = '';
+                                        if (typeof getLcEntryDetails === 'function') {
+                                            const details = getLcEntryDetails(data);
+                                            const rawName = data.entryByName || data.createdByName || data.entryBy || data.createdBy;
+                                            if (rawName && employeesFullNameMap) {
+                                                const key = String(rawName).trim().toLowerCase();
+                                                resolvedFullCreator = employeesFullNameMap[key] || employeesFullNameMap[String(rawName).trim()];
+                                            }
+                                            if (!resolvedFullCreator && details && details.creator && details.creator !== '—') {
+                                                const cKey = String(details.creator).trim().toLowerCase();
+                                                resolvedFullCreator = employeesFullNameMap?.[cKey] || details.creator;
+                                            }
+                                        }
+                                        return resolvedFullCreator ? (
+                                            <span className="text-[10px] text-gray-500 font-semibold normal-case">
+                                                | By: <span className="font-bold text-gray-800">{resolvedFullCreator}</span>
+                                            </span>
+                                        ) : null;
+                                    })()}
                                 </p>
                                 {(() => {
                                     const prods = data.productsList && data.productsList.length > 0
@@ -5201,6 +5242,9 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const [piList, setPiList] = useState([]);
     const [piRecordsRaw, setPiRecordsRaw] = useState([]);
     const [productItems, setProductItems] = useState([]);
+    const [employeesMap, setEmployeesMap] = useState({});
+    const [employeesFullNameMap, setEmployeesFullNameMap] = useState({});
+    const [notificationsMap, setNotificationsMap] = useState({});
 
     const rowRefs = useRef({});
 
@@ -5371,6 +5415,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
     const canEditLcReceive = hasPermission(currentUser, 'lcManagement', 'editLcReceive');
     const canEditDollarRate = hasPermission(currentUser, 'lcManagement', 'editDollarRate');
     const canDeleteAmendment = hasPermission(currentUser, 'lcManagement', 'deleteAmendment');
+    const canShowEntryBy = hasPermission(currentUser, 'lcManagement', 'showEntryBy');
     const canSpecialAccess = canEditLcReceive || canEditDollarRate;
     const canManage = canAdd || canEdit || canDelete;
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
@@ -6036,7 +6081,7 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             setIsLoading(false);
 
             // 2. Fetch secondary metadata in background without blocking UI
-            const [bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes, marginReturnRes, cogRes] = await Promise.all([
+            const [bankRes, impRes, expRes, insRes, ipRes, piRes, prodRes, stockRes, saleRes, gpRes, expenseRes, portRes, insPayRes, marginReturnRes, cogRes, empRes, notifRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/api/banks`),
                 axios.get(`${API_BASE_URL}/api/importers`),
                 axios.get(`${API_BASE_URL}/api/exporters`),
@@ -6051,7 +6096,9 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 axios.get(`${API_BASE_URL}/api/ports`),
                 axios.get(`${API_BASE_URL}/api/insurance-payments`),
                 axios.get(`${API_BASE_URL}/api/margin-returns`).catch(() => ({ data: [] })),
-                axios.get(`${API_BASE_URL}/api/cost-of-goods`).catch(() => ({ data: [] }))
+                axios.get(`${API_BASE_URL}/api/cost-of-goods`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/employees`).catch(() => ({ data: [] })),
+                axios.get(`${API_BASE_URL}/api/notifications`).catch(() => ({ data: [] }))
             ]);
 
             setGpRecords(Array.isArray(gpRes.data) ? gpRes.data : []);
@@ -6112,10 +6159,303 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 const updated = freshLcRecords.find(item => item._id === prev._id);
                 return updated || prev;
             });
+
+            // Build employee maps (first name and full name)
+            const rawEmps = Array.isArray(empRes?.data) ? empRes.data : [];
+            const empMap = {};
+            const empFullMap = {};
+            rawEmps.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+
+                const empFullName = (d.name || d.nameEn || d.employeeName || d.fullName || d.username || '').trim();
+                if (empFullName) {
+                    if (d.employeeId) {
+                        empFullMap[d.employeeId.toLowerCase().trim()] = empFullName;
+                        empFullMap[d.employeeId] = empFullName;
+                    }
+                    if (d.username) {
+                        empFullMap[d.username.toLowerCase().trim()] = empFullName;
+                        empFullMap[d.username] = empFullName;
+                    }
+                    if (d._id) {
+                        empFullMap[String(d._id).toLowerCase()] = empFullName;
+                        empFullMap[String(d._id)] = empFullName;
+                    }
+                    if (d.id) {
+                        empFullMap[String(d.id).toLowerCase()] = empFullName;
+                        empFullMap[String(d.id)] = empFullName;
+                    }
+                    if (d.name) {
+                        empFullMap[d.name.toLowerCase().trim()] = empFullName;
+                        empFullMap[d.name.trim()] = empFullName;
+                    }
+                }
+
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && d.name) {
+                    const parts = d.name.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.employeeName) {
+                    const parts = d.employeeName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.fullName) {
+                    const parts = d.fullName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName);
+                if (!fName) return;
+
+                if (d.employeeId) {
+                    empMap[d.employeeId.toLowerCase().trim()] = fName;
+                    empMap[d.employeeId] = fName;
+                }
+                if (d.username) {
+                    empMap[d.username.toLowerCase().trim()] = fName;
+                    empMap[d.username] = fName;
+                }
+                if (d._id) {
+                    empMap[String(d._id).toLowerCase()] = fName;
+                    empMap[String(d._id)] = fName;
+                }
+                if (d.id) {
+                    empMap[String(d.id).toLowerCase()] = fName;
+                    empMap[String(d.id)] = fName;
+                }
+                if (d.name) {
+                    const fullNameLower = d.name.toLowerCase().trim();
+                    empMap[fullNameLower] = fName;
+                    empMap[d.name.trim()] = fName;
+                    const firstPart = fullNameLower.split(/\s+/)[0];
+                    if (firstPart) empMap[firstPart] = fName;
+                }
+                if (d.nameEn) {
+                    const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                    empMap[fullNameEnLower] = fName;
+                    empMap[d.nameEn.trim()] = fName;
+                    const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                    if (firstPartEn) empMap[firstPartEn] = fName;
+                }
+            });
+
+            const adminEmp = rawEmps.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            let adminFullName = 'Anil Kumar Poddar';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+                if (d.name || d.nameEn) adminFullName = (d.name || d.nameEn).trim();
+            }
+            empMap['admin'] = 'Administrator';
+            empMap['administrator'] = 'Administrator';
+            empMap['a-1001'] = adminFirstName;
+
+            empFullMap['admin'] = 'Administrator';
+            empFullMap['administrator'] = 'Administrator';
+            empFullMap['a-1001'] = adminFullName;
+
+            setEmployeesMap(empMap);
+            setEmployeesFullNameMap(empFullMap);
+
+            // Process notifications for LC Creator / Editor / Amended
+            const rawNotifs = Array.isArray(notifRes?.data) ? notifRes.data : [];
+            const notifsMap = {};
+            rawNotifs.forEach(n => {
+                let d = n;
+                if (n && n.data) {
+                    if (typeof n.data === 'string') {
+                        try { d = { ...decryptData(n.data), _id: n._id }; } catch (e) { }
+                    } else if (typeof n.data === 'object') {
+                        d = { ...n.data, _id: n._id };
+                    }
+                }
+                const msg = d.message || '';
+                const lcMatch = msg.match(/(?:LC\s*(?:No\.?|Number)?:\s*|LC\s*\(\s*(?:No\.?|Number)?:\s*)([A-Za-z0-9\/\-_]+)/i);
+                if (lcMatch && lcMatch[1]) {
+                    const lcNum = lcMatch[1].trim();
+                    let byName = '';
+                    const byIdx = msg.lastIndexOf(' by ');
+                    if (byIdx !== -1) {
+                        byName = msg.substring(byIdx + 4).trim().replace(/\.+$/, '');
+                    } else {
+                        const byMatch = msg.match(/by\s+([^,\n]+)/i);
+                        if (byMatch) byName = byMatch[1].trim().replace(/\.+$/, '');
+                    }
+                    if (byName) {
+                        const cleanLc = lcNum.toLowerCase();
+                        if (!notifsMap[cleanLc]) notifsMap[cleanLc] = {};
+                        const title = (d.title || '').toLowerCase();
+                        const msgLower = msg.toLowerCase();
+                        if (title.includes('opened') || msgLower.includes('opened') || title.includes('new lc') || msgLower.includes('new lc')) {
+                            if (!notifsMap[cleanLc].createdByName) notifsMap[cleanLc].createdByName = byName;
+                        } else if (title.includes('amendment') || msgLower.includes('amendment')) {
+                            notifsMap[cleanLc].amendedByName = byName;
+                        } else if (title.includes('updated') || msgLower.includes('updated') || title.includes('edited') || msgLower.includes('edited')) {
+                            notifsMap[cleanLc].editedByName = byName;
+                        }
+                    }
+                }
+            });
+            setNotificationsMap(notifsMap);
         } catch (error) {
             console.error("Failed to fetch initial LC data:", error);
             setIsLoading(false);
         }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        if (employeesMap[rawStr]) {
+            return employeesMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesMap[prefixKey]) return employeesMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByName = (entryByCode, entryByName) => {
+        if (entryByCode && entryByCode !== '-' && entryByCode !== '—') {
+            const res = getFirstNameFromIdentifier(entryByCode);
+            if (res && res.toLowerCase() !== String(entryByCode).toLowerCase().trim()) {
+                return res;
+            }
+        }
+        if (entryByName && entryByName !== '-' && entryByName !== '—') {
+            const res = getFirstNameFromIdentifier(entryByName);
+            if (res) return res;
+        }
+        if (entryByCode && entryByCode !== '-' && entryByCode !== '—') {
+            return getFirstNameFromIdentifier(entryByCode) || entryByCode;
+        }
+        return entryByName || entryByCode || '—';
+    };
+
+    const getLcEntryDetails = (record) => {
+        if (!record) return { creator: '—', editor: null, amended: null };
+        let created = record.entryByName || record.createdByName || record.entryBy || record.createdBy || record.userId || record.username;
+        let edited = record.editedByName || record.editedBy || record.lastEditedByName || record.lastEditedBy || record.updatedByName || record.updatedBy;
+        let amended = record.amendedByName || record.amendedBy;
+
+        const rawLc = String(record.lcNo || '').trim();
+        const cleanLc = rawLc.replace(/\D/g, '');
+        const rawLcLower = rawLc.toLowerCase();
+
+        // 1. Check notificationsMap fallback
+        if (notificationsMap) {
+            const notifInfo = notificationsMap[rawLcLower] ||
+                notificationsMap[cleanLc] ||
+                (cleanLc ? Object.entries(notificationsMap).find(([k]) => k.replace(/\D/g, '') === cleanLc)?.[1] : null);
+            if (notifInfo) {
+                if (!created && notifInfo.createdByName) created = notifInfo.createdByName;
+                if (!edited && notifInfo.editedByName) edited = notifInfo.editedByName;
+                if (!amended && notifInfo.amendedByName) amended = notifInfo.amendedByName;
+            }
+        }
+
+        // 2. Check linked PI fallback
+        if ((!created || !edited) && record.piNo && piRecordsRaw && piRecordsRaw.length > 0) {
+            const cleanPi = String(record.piNo).trim().toLowerCase();
+            const matchedPi = piRecordsRaw.find(p => {
+                const pNum = String(p.piNumber || p.piNo || '').trim().toLowerCase();
+                return pNum && (pNum === cleanPi || pNum.includes(cleanPi) || cleanPi.includes(pNum));
+            });
+            if (matchedPi) {
+                if (!created) created = matchedPi.entryByName || matchedPi.entryBy || matchedPi.createdBy || matchedPi.createdByName;
+                if (!edited) edited = matchedPi.editedByName || matchedPi.editedBy;
+            }
+        }
+
+        // 3. Check linked IP fallback
+        if (!created && ipRecordsRaw && ipRecordsRaw.length > 0) {
+            const rawIps = record.ipNumbers || (record.ipNo ? String(record.ipNo).split(',') : []);
+            const recordIps = (Array.isArray(rawIps) ? rawIps : [rawIps]).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+            const matchedIp = ipRecordsRaw.find(ip => {
+                const ipNum = String(ip.ipNo || ip.ipNumber || '').trim().toLowerCase();
+                return ipNum && recordIps.includes(ipNum);
+            });
+            if (matchedIp) {
+                created = matchedIp.entryByName || matchedIp.entryBy || matchedIp.createdBy || matchedIp.createdByName;
+            }
+        }
+
+        const resolvedCreator = getEntryByName(created, created);
+        const resolvedEditor = (edited && edited !== created) ? getEntryByName(edited, edited) : null;
+        const resolvedAmended = amended ? getEntryByName(amended, amended) : null;
+
+        return {
+            creator: (resolvedCreator && resolvedCreator !== '—') ? resolvedCreator : (created ? formatFirstName(created) : '—'),
+            editor: (resolvedEditor && resolvedEditor !== '—') ? resolvedEditor : (edited && edited !== created ? formatFirstName(edited) : null),
+            amended: (resolvedAmended && resolvedAmended !== '—') ? resolvedAmended : (amended ? formatFirstName(amended) : null)
+        };
     };
 
     const handleLcProductChange = (idx, field, value) => {
@@ -6280,6 +6620,16 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                     }
                 }
 
+                const existingCreator = editingRecord?.entryBy || editingRecord?.createdBy;
+                const existingCreatorName = editingRecord?.entryByName || editingRecord?.createdByName;
+                const currentIdentifier = currentUser?.employeeId || currentUser?.username || 'admin';
+                const currentName = currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.username || 'admin';
+
+                dataToSave.entryBy = existingCreator || currentIdentifier;
+                dataToSave.entryByName = existingCreatorName || currentName;
+                dataToSave.editedBy = currentIdentifier;
+                dataToSave.editedByName = currentName;
+
                 await axios.put(`${API_BASE_URL}/api/lc-management/${editingId}`, dataToSave);
 
                 // Add persistent notification for LC Update
@@ -6297,11 +6647,15 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
 
                 addNotification?.('LC record updated successfully', 'success');
             } else {
+                const currentIdentifier = currentUser?.employeeId || currentUser?.username || 'admin';
+                const currentName = currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.username || 'admin';
                 const dataToSave = {
                     ...formData,
                     openingDollarRate: formData.dollarRate,
                     openingTotalAmount: formData.totalAmount,
                     openingMarginPaid: formData.marginPaid,
+                    entryBy: currentIdentifier,
+                    entryByName: currentName
                 };
                 await axios.post(`${API_BASE_URL}/api/lc-management`, dataToSave);
 
@@ -7051,6 +7405,9 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                     })(),
                 amendments: currentAmendments
             };
+
+            updatedLcData.amendedBy = currentUser?.employeeId || currentUser?.username || 'admin';
+            updatedLcData.amendedByName = currentUser?.name || currentUser?.username || 'admin';
 
             // Save via PUT
             await axios.put(`${API_BASE_URL}/api/lc-management/${selectedAmendmentLcId}`, updatedLcData);
@@ -7820,12 +8177,16 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
             if (st.includes('requested')) return false;
         }
         const query = searchQuery.toLowerCase();
+        const entryInfo = getLcEntryDetails(record);
         const matchesProduct = (record.productName || '').toLowerCase().includes(query) ||
             (record.productsList && record.productsList.some(p => (p.productName || '').toLowerCase().includes(query)));
         const matchesSearch = (record.ipNo || '').toLowerCase().includes(query) ||
             (record.lcNo || '').toLowerCase().includes(query) ||
             (record.importerName || '').toLowerCase().includes(query) ||
             (record.bankName || '').toLowerCase().includes(query) ||
+            (entryInfo.creator || '').toLowerCase().includes(query) ||
+            (entryInfo.editor || '').toLowerCase().includes(query) ||
+            (entryInfo.amended || '').toLowerCase().includes(query) ||
             matchesProduct;
 
         if (!matchesSearch) return false;
@@ -7898,6 +8259,8 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                 return getAdjustedLcValues(record).billValueUsd || 0;
             case 'totalExpense':
                 return getLcTotalPaidExpense(record) || 0;
+            case 'entryBy':
+                return getLcEntryDetails(record).creator || '';
             default:
                 return '';
         }
@@ -10731,13 +11094,14 @@ const LCManagement = ({ addNotification, currentUser, highlightId, isRequestedNo
                                     {renderSortHeader('Total Value (৳)', 'adjustedTotalAmount', 'text-right')}
                                     {renderSortHeader('Expense', 'totalExpense', 'text-right')}
                                     {renderSortHeader('Status', 'status', 'text-center')}
+                                    {canShowEntryBy && renderSortHeader('Entry By', 'entryBy', 'text-center')}
                                     <th className="px-2 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan="17" className="px-6 py-12 text-center text-sm text-gray-500">
+                                        <td colSpan={17 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-sm text-gray-500">
                                             <div className="flex flex-col items-center gap-2">
                                                 <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                                                 <span className="font-medium text-gray-400">Loading records...</span>
@@ -10951,6 +11315,30 @@ style={
                                                             {record.lcStatus === 'Completed' ? 'Completed' : 'Active'}
                                                         </span>
                                                     </td>
+                                                    {canShowEntryBy && (
+                                                        <td className="px-2 py-3 text-center whitespace-nowrap">
+                                                            {(() => {
+                                                                const entryInfo = getLcEntryDetails(record);
+                                                                return (
+                                                                    <div className="flex flex-col items-center gap-0.5">
+                                                                        <span className="text-xs font-semibold text-gray-800">
+                                                                            {entryInfo.creator}
+                                                                        </span>
+                                                                        {entryInfo.amended && (
+                                                                            <span className="text-[10px] text-purple-600 font-semibold" title="Amended By">
+                                                                                ⟳ {entryInfo.amended}
+                                                                            </span>
+                                                                        )}
+                                                                        {entryInfo.editor && entryInfo.editor !== entryInfo.creator && (
+                                                                            <span className="text-[10px] text-amber-600 font-semibold" title="Edited By">
+                                                                                ✎ {entryInfo.editor}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </td>
+                                                    )}
                                                     <td className="px-2 py-3 text-center">
                                                         <div className="flex items-center justify-center gap-4">
                                                             <button
@@ -10997,7 +11385,7 @@ style={
                                                 {/* Expandable Sub-row containing Charges Breakdown */}
                                                 {expandedLcKey === record._id && (
                                                     <tr className="bg-gray-50/40">
-                                                        <td colSpan="17" className="px-6 py-4 border-b border-gray-100">
+                                                        <td colSpan={17 + (canShowEntryBy ? 1 : 0)} className="px-6 py-4 border-b border-gray-100">
                                                             <div className="flex flex-col gap-6 bg-white p-5 rounded-2xl border border-gray-100 shadow-inner animate-in fade-in duration-300">
                                                                 {/* Radio Button for Enable Value and Quantity */}
                                                                 <div className="flex items-center justify-between w-full gap-4 flex-wrap">
@@ -11470,7 +11858,7 @@ style={
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan="17" className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
+                                        <td colSpan={17 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-gray-400 font-medium whitespace-nowrap italic">
                                             No LC records found
                                         </td>
                                     </tr>
@@ -11786,6 +12174,25 @@ style={
                                                             {record.lcStatus === 'Completed' ? 'Completed' : 'Active'}
                                                         </span>
                                                     </div>
+
+                                                    {canShowEntryBy && (() => {
+                                                        const entryInfo = getLcEntryDetails(record);
+                                                        return (
+                                                            <>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entry By</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <div>
+                                                                    <span className="font-semibold text-gray-700 text-[11px] block">{entryInfo.creator}</span>
+                                                                    {entryInfo.amended && (
+                                                                        <span className="text-[10px] text-purple-600 font-semibold block">⟳ {entryInfo.amended}</span>
+                                                                    )}
+                                                                    {entryInfo.editor && entryInfo.editor !== entryInfo.creator && (
+                                                                        <span className="text-[10px] text-amber-600 font-semibold block">✎ {entryInfo.editor}</span>
+                                                                    )}
+                                                                </div>
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </div>
 
                                                 {/* Expanded details (LC Bill and Amendment Bill Charges) */}
@@ -12196,6 +12603,8 @@ style={
                     onRefresh={fetchInitialData}
                     currentUser={currentUser}
                     marginReturns={marginReturns}
+                    getLcEntryDetails={getLcEntryDetails}
+                    employeesFullNameMap={employeesFullNameMap}
                 />
             )}
 

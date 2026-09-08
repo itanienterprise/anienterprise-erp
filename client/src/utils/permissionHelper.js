@@ -83,7 +83,14 @@ export const MODULES_LIST = [
     },
     { key: 'product', label: 'Product Management' },
     { key: 'customer', label: 'Customer Management' },
-    { key: 'lcReceive', label: 'LC Receive', specialLabel: 'Approve LC' },
+    {
+        key: 'lcReceive',
+        label: 'LC Receive',
+        specialLabels: [
+            { key: 'special', label: 'Approve LC' },
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     { key: 'warehouse', label: 'Warehouse & Damage' },
     {
         key: 'transfer',
@@ -175,7 +182,8 @@ export const MODULES_LIST = [
             { key: 'specialEdit', label: 'Edit Bill' },
             { key: 'editLcReceive', label: 'Edit LC Receive' },
             { key: 'editDollarRate', label: 'Edit Dollar Rate' },
-            { key: 'deleteAmendment', label: 'Delete Amendment' }
+            { key: 'deleteAmendment', label: 'Delete Amendment' },
+            { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
     { key: 'lcGp', label: 'LC GatePass' },

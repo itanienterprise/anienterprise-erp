@@ -915,7 +915,12 @@ function App() {
       const brandList = item.brand ? [item.brand] : (item.brandEntries || []).map(e => e.brand);
       const matchesBrand = brandList.some(b => (b || '').trim().toLowerCase().includes(searchLower));
 
-      return matchesLcNo || matchesPort || matchesWarehouse || matchesImporter || matchesExporter || matchesBillOfEntry || matchesTruck || matchesProduct || matchesBrand;
+      const matchesEntryBy = (item.entryByName || '').toLowerCase().includes(searchLower) ||
+        (item.entryBy || '').toLowerCase().includes(searchLower) ||
+        (item.requestedBy || '').toLowerCase().includes(searchLower) ||
+        (item.requestedByUsername || '').toLowerCase().includes(searchLower);
+
+      return matchesLcNo || matchesPort || matchesWarehouse || matchesImporter || matchesExporter || matchesBillOfEntry || matchesTruck || matchesProduct || matchesBrand || matchesEntryBy;
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
     // Map each record to resolve its product name

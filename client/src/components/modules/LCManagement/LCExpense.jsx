@@ -6,6 +6,8 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { generateLCExpenseReportPDF } from '../../../utils/pdfGenerator';
 import { generateLCExpenseReportExcel } from '../../../utils/excelGenerator';
+import { decryptData } from '../../../utils/encryption';
+import { formatFirstName } from '../IPManagement/IPManagement';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 
 const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, highlightId, isRequestedNotif }) => {
@@ -18,6 +20,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
     const cannotDelete = !canDelete;
     const cannotAddEdit = !canAdd && !canEdit;
     const [expenses, setExpenses] = useState([]);
+    const [employeesMap, setEmployeesMap] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
@@ -303,6 +306,7 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
         fetchCnfs();
         fetchStocks();
         fetchInsurancePayments();
+        fetchEmployees();
         setExpandedExpenseIdx(null);
     }, [refreshKey]);
 
@@ -456,6 +460,121 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
         }
     };
 
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && d.name) {
+                    const parts = d.name.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.employeeName) {
+                    const parts = d.employeeName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.fullName) {
+                    const parts = d.fullName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName);
+                if (!fName) return;
+
+                if (d.employeeId) {
+                    map[d.employeeId.toLowerCase().trim()] = fName;
+                    map[d.employeeId] = fName;
+                }
+                if (d.username) {
+                    map[d.username.toLowerCase().trim()] = fName;
+                    map[d.username] = fName;
+                }
+                if (d._id) {
+                    map[String(d._id).toLowerCase()] = fName;
+                    map[String(d._id)] = fName;
+                }
+                if (d.id) {
+                    map[String(d.id).toLowerCase()] = fName;
+                    map[String(d.id)] = fName;
+                }
+                if (d.name) {
+                    const fullNameLower = d.name.toLowerCase().trim();
+                    map[fullNameLower] = fName;
+                    map[d.name.trim()] = fName;
+                    const firstPart = fullNameLower.split(/\s+/)[0];
+                    if (firstPart) map[firstPart] = fName;
+                }
+                if (d.nameEn) {
+                    const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                    map[fullNameEnLower] = fName;
+                    map[d.nameEn.trim()] = fName;
+                    const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                    if (firstPartEn) map[firstPartEn] = fName;
+                }
+            });
+
+            // Map 'admin' and 'administrator' to admin employee's first name / Administrator
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+            }
+            map['admin'] = 'Administrator';
+            map['administrator'] = 'Administrator';
+            map['a-1001'] = adminFirstName;
+
+            setEmployeesMap(map);
+        } catch (error) {
+            console.error('Error fetching employees in LCExpense:', error);
+        }
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -473,10 +592,10 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
                 ...formData,
                 amount: parseFloat(formData.amount) || 0,
                 ...(isEditMode ? {
-                    updatedBy: currentUser?.username || currentUser?.id || '',
+                    updatedBy: currentUser?.employeeId || currentUser?.username || currentUser?.id || '',
                     updatedByName: currentUser?.name || currentUser?.nameEn || currentUser?.username || ''
                 } : {
-                    entryBy: currentUser?.username || currentUser?.id || '',
+                    entryBy: currentUser?.employeeId || currentUser?.username || currentUser?.id || '',
                     entryByName: currentUser?.name || currentUser?.nameEn || currentUser?.username || ''
                 })
             };
@@ -573,8 +692,71 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
         return '-';
     };
 
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        if (employeesMap[rawStr]) {
+            return employeesMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesMap[prefixKey]) return employeesMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
     const getExpenseEntryBy = (exp) => {
-        return exp.entryByName || exp.createdByName || exp.entryBy || exp.createdBy || exp.userName || exp.user || '—';
+        if (!exp) return '—';
+        if (exp.entryBy && exp.entryBy !== '-' && exp.entryBy !== '—') {
+            const res = getFirstNameFromIdentifier(exp.entryBy);
+            if (res && res.toLowerCase() !== String(exp.entryBy).toLowerCase().trim()) {
+                return res;
+            }
+        }
+        if (exp.entryByName && exp.entryByName !== '-' && exp.entryByName !== '—') {
+            const res = getFirstNameFromIdentifier(exp.entryByName);
+            if (res) return res;
+        }
+        if (exp.createdBy && exp.createdBy !== '-' && exp.createdBy !== '—') {
+            const res = getFirstNameFromIdentifier(exp.createdBy);
+            if (res && res.toLowerCase() !== String(exp.createdBy).toLowerCase().trim()) {
+                return res;
+            }
+        }
+        if (exp.createdByName && exp.createdByName !== '-' && exp.createdByName !== '—') {
+            const res = getFirstNameFromIdentifier(exp.createdByName);
+            if (res) return res;
+        }
+        if (exp.entryBy && exp.entryBy !== '-' && exp.entryBy !== '—') {
+            return getFirstNameFromIdentifier(exp.entryBy) || exp.entryBy;
+        }
+        const fallback = exp.userName || exp.user;
+        if (fallback) {
+            return getFirstNameFromIdentifier(fallback) || fallback;
+        }
+        return '—';
     };
 
     const handleGenerateReport = () => {
@@ -588,9 +770,13 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             const displayName = getExpenseDisplayName(exp).toLowerCase();
+            const entryByName = getExpenseEntryBy(exp).toLowerCase();
             const matchesSearch = (exp.lcNo || '').toLowerCase().includes(query) ||
                 (exp.expenseHead || '').toLowerCase().includes(query) ||
-                displayName.includes(query);
+                displayName.includes(query) ||
+                (exp.entryBy || '').toLowerCase().includes(query) ||
+                (exp.entryByName || '').toLowerCase().includes(query) ||
+                entryByName.includes(query);
             if (!matchesSearch) return false;
         }
 
@@ -1283,14 +1469,16 @@ const LCExpense = ({ currentUser, addNotification, onDeleteConfirm, refreshKey, 
                 onExportPdf={() => {
                     const enrichedExpenses = filteredExpenses.map(exp => ({
                         ...exp,
-                        displayName: getExpenseDisplayName(exp)
+                        displayName: getExpenseDisplayName(exp),
+                        entryByName: getExpenseEntryBy(exp)
                     }));
                     generateLCExpenseReportPDF(enrichedExpenses, expenseFilters, searchQuery);
                 }}
                 onExportExcel={() => {
                     const enrichedExpenses = filteredExpenses.map(exp => ({
                         ...exp,
-                        displayName: getExpenseDisplayName(exp)
+                        displayName: getExpenseDisplayName(exp),
+                        entryByName: getExpenseEntryBy(exp)
                     }));
                     generateLCExpenseReportExcel(enrichedExpenses, expenseFilters, searchQuery);
                 }}

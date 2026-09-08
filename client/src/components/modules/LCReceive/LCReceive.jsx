@@ -7,6 +7,7 @@ import {
 import { formatDate, API_BASE_URL } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
+import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { generateLCReceiveReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
@@ -690,18 +691,161 @@ function LCReceive({
                 if (Array.isArray(res.data)) {
                     const map = {};
                     res.data.forEach(emp => {
-                        const id = emp.employeeId || emp.username;
-                        if (id && emp.name) {
-                            map[id] = emp.name;
-                            if (emp.username) map[emp.username] = emp.name;
+                        let d = emp;
+                        if (emp && emp.data) {
+                            if (typeof emp.data === 'string') {
+                                try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
+                            } else if (typeof emp.data === 'object') {
+                                d = { ...emp.data, _id: emp._id };
+                            }
+                        }
+                        let rawFName = (d.firstName || '').trim();
+                        if (!rawFName && d.name) {
+                            const parts = d.name.trim().split(/\s+/);
+                            if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                                rawFName = `${parts[0]} ${parts[1]}`;
+                            } else {
+                                rawFName = parts[0];
+                            }
+                        }
+                        if (!rawFName && d.employeeName) {
+                            const parts = d.employeeName.trim().split(/\s+/);
+                            if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                                rawFName = `${parts[0]} ${parts[1]}`;
+                            } else {
+                                rawFName = parts[0];
+                            }
+                        }
+                        if (!rawFName && d.fullName) {
+                            const parts = d.fullName.trim().split(/\s+/);
+                            if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                                rawFName = `${parts[0]} ${parts[1]}`;
+                            } else {
+                                rawFName = parts[0];
+                            }
+                        }
+                        if (!rawFName && d.username) {
+                            rawFName = d.username.trim();
+                        }
+
+                        const fName = formatFirstName(rawFName);
+                        if (!fName) return;
+
+                        if (d.employeeId) {
+                            map[d.employeeId.toLowerCase().trim()] = fName;
+                            map[d.employeeId] = fName;
+                        }
+                        if (d.username) {
+                            map[d.username.toLowerCase().trim()] = fName;
+                            map[d.username] = fName;
+                        }
+                        if (d._id) {
+                            map[String(d._id).toLowerCase()] = fName;
+                            map[String(d._id)] = fName;
+                        }
+                        if (d.id) {
+                            map[String(d.id).toLowerCase()] = fName;
+                            map[String(d.id)] = fName;
+                        }
+                        if (d.name) {
+                            const fullNameLower = d.name.toLowerCase().trim();
+                            map[fullNameLower] = fName;
+                            map[d.name.trim()] = fName;
+                            const firstPart = fullNameLower.split(/\s+/)[0];
+                            if (firstPart) map[firstPart] = fName;
+                        }
+                        if (d.nameEn) {
+                            const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                            map[fullNameEnLower] = fName;
+                            map[d.nameEn.trim()] = fName;
+                            const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                            if (firstPartEn) map[firstPartEn] = fName;
                         }
                     });
+
+                    // Map 'admin' and 'administrator' to admin employee's first name / Administrator
+                    const adminEmp = res.data.find(e => {
+                        let d = e;
+                        if (e && e.data) {
+                            if (typeof e.data === 'string') {
+                                try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                            } else if (typeof e.data === 'object') {
+                                d = { ...e.data, _id: e._id };
+                            }
+                        }
+                        const r = (d.role || '').toLowerCase();
+                        const eid = (d.employeeId || '').toLowerCase();
+                        return r === 'admin' || eid === 'a-1001';
+                    });
+                    let adminFirstName = 'Anil';
+                    if (adminEmp) {
+                        let d = adminEmp;
+                        if (adminEmp && adminEmp.data) {
+                            if (typeof adminEmp.data === 'string') {
+                                try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                            } else if (typeof adminEmp.data === 'object') {
+                                d = { ...adminEmp.data, _id: adminEmp._id };
+                            }
+                        }
+                        const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                        if (resolvedAdmin) adminFirstName = resolvedAdmin;
+                    }
+                    map['admin'] = 'Administrator';
+                    map['administrator'] = 'Administrator';
+                    map['a-1001'] = adminFirstName;
+
                     setEmployeesMap(map);
                 }
-            } catch (err) { }
+            } catch (err) {
+                console.error('Error fetching employees in LCReceive:', err);
+            }
         };
         fetchEmployeesMap();
     }, []);
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        if (employeesMap[rawStr]) {
+            return employeesMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesMap[prefixKey]) return employeesMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByFirstName = (entry) => {
+        if (!entry) return '—';
+        const candidate = entry.entryByName || entry.entryBy || entry.requestedBy || entry.requestedByUsername || entry.createdBy || entry.createdByName ||
+            entry.entries?.[0]?.entryByName || entry.entries?.[0]?.entryBy || entry.entries?.[0]?.requestedBy || entry.entries?.[0]?.requestedByUsername ||
+            entry.entries?.[0]?.createdBy || entry.entries?.[0]?.createdByName;
+        if (!candidate || candidate === '-' || candidate === '—') return '—';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
 
     const handleSort = (key) => {
         let direction = 'desc';
@@ -729,6 +873,7 @@ function LCReceive({
     const canAdd = useMemo(() => hasPermission(currentUser, 'lcReceive', 'add'), [currentUser]);
     const canEdit = useMemo(() => hasPermission(currentUser, 'lcReceive', 'edit'), [currentUser]);
     const canDelete = useMemo(() => hasPermission(currentUser, 'lcReceive', 'delete'), [currentUser]);
+    const canShowEntryBy = useMemo(() => hasPermission(currentUser, 'lcReceive', 'showEntryBy'), [currentUser]);
 
     const canEditRequestedStock = (entry) => {
         if (!currentUser) return false;
@@ -1676,6 +1821,8 @@ function LCReceive({
                             totalLcQuantity: stockFormData.totalLcQuantity,
                             status: stockFormData.status,
                             warehouse: stockFormData.warehouse,
+                            entryBy: stockFormData.entryBy || (currentUser ? (currentUser.employeeId || currentUser.username || currentUser.id || '') : ''),
+                            entryByName: stockFormData.entryByName || (currentUser ? (currentUser.name || currentUser.nameEn || currentUser.username || '') : ''),
                             requestedBy: stockFormData.requestedBy || (currentUser ? (currentUser.name || currentUser.username || '') : ''),
                             requestedByUsername: stockFormData.requestedByUsername || (currentUser ? currentUser.username : ''),
                             productName: product.productName,
@@ -1731,6 +1878,8 @@ function LCReceive({
                             totalLcQuantity: stockFormData.totalLcQuantity,
                             status: stockFormData.status,
                             warehouse: stockFormData.warehouse,
+                            entryBy: stockFormData.entryBy || (currentUser ? (currentUser.employeeId || currentUser.username || currentUser.id || '') : ''),
+                            entryByName: stockFormData.entryByName || (currentUser ? (currentUser.name || currentUser.nameEn || currentUser.username || '') : ''),
                             requestedBy: stockFormData.requestedBy || (currentUser ? (currentUser.name || currentUser.username || '') : ''),
                             requestedByUsername: stockFormData.requestedByUsername || (currentUser ? currentUser.username : ''),
                             productName: product.productName,
@@ -2639,7 +2788,10 @@ function LCReceive({
             let valB = b[key] || '';
 
             // Handle specific keys if needed (e.g. numeric or date)
-            if (key === 'date') {
+            if (key === 'entryBy') {
+                valA = getEntryByFirstName(a);
+                valB = getEntryByFirstName(b);
+            } else if (key === 'date') {
                 valA = new Date(valA);
                 valB = new Date(valB);
             } else if (['purchasedPrice', 'packet', 'packetSize', 'quantity', 'sweepedPacket', 'sweepedQuantity', 'inHousePacket', 'inHouseQuantity', 'indCnFCost', 'bdCnFCost', 'totalLcTruck', 'totalLcQuantity'].includes(key)) {
@@ -4414,9 +4566,20 @@ function LCReceive({
                                             <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Quantity</th>
                                             <th className="px-6 py-4 text-left text-xs font-bold text-red-500 uppercase tracking-wider">Short</th>
                                             <th className="px-6 py-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Inhouse Qty</th>
-                                            {isRequestedOnly && (
+                                            {canShowEntryBy && (
                                                 <th
-                                                    className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors"
+                                                    className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors whitespace-nowrap"
+                                                    onClick={() => handleSort('entryBy')}
+                                                >
+                                                    <div className="flex items-center">
+                                                        Entry By
+                                                        {renderSortIcon('entryBy')}
+                                                    </div>
+                                                </th>
+                                            )}
+                                            {!canShowEntryBy && isRequestedOnly && (
+                                                <th
+                                                    className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer group hover:bg-gray-100/50 transition-colors whitespace-nowrap"
                                                     onClick={() => handleSort('requestedBy')}
                                                 >
                                                     <div className="flex items-center">
@@ -4431,7 +4594,7 @@ function LCReceive({
                                     <tbody className="divide-y divide-gray-100">
                                         {filteredRecords.length === 0 ? (
                                             <tr>
-                                                <td colSpan={(isSelectionMode || selectedItems.size > 0) ? (isRequestedOnly ? 18 : 17) : (isRequestedOnly ? 17 : 16)} className="px-6 py-12 text-center text-gray-400 bg-white/50">
+                                                <td colSpan={(isSelectionMode || selectedItems.size > 0 ? 17 : 16) + (canShowEntryBy || isRequestedOnly ? 1 : 0)} className="px-6 py-12 text-center text-gray-400 bg-white/50">
                                                     <BoxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                                     <p>No LC receive records found</p>
                                                 </td>
@@ -4580,7 +4743,12 @@ function LCReceive({
                                                             );
                                                         })}
                                                     </td>
-                                                    {isRequestedOnly && (
+                                                    {canShowEntryBy && (
+                                                        <td className="px-6 py-4 text-sm font-semibold text-gray-700 align-middle whitespace-nowrap">
+                                                            {getEntryByFirstName(entry)}
+                                                        </td>
+                                                    )}
+                                                    {!canShowEntryBy && isRequestedOnly && (
                                                         <td className="px-6 py-4 text-sm text-gray-600 align-middle whitespace-nowrap">
                                                             <span className="font-semibold text-gray-800">{formatRequestedBy(entry.requestedBy || entry.entries[0]?.requestedBy, entry.requestedByUsername || entry.entries[0]?.requestedByUsername)}</span>
                                                         </td>
@@ -4887,6 +5055,14 @@ function LCReceive({
                                                         <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">In Qty</span>
                                                         <span className="text-blue-300 font-bold">:</span>
                                                         <span className="font-black text-blue-600">{Math.round(entry.totalInQty).toLocaleString('en-US')} kg</span>
+
+                                                        {canShowEntryBy && (
+                                                             <>
+                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entry By</span>
+                                                                 <span className="text-gray-400 font-bold">:</span>
+                                                                 <span className="font-semibold text-gray-700 text-[11px] truncate">{getEntryByFirstName(entry)}</span>
+                                                             </>
+                                                        )}
                                                     </div>
 
                                                     <div className="space-y-1.5">
