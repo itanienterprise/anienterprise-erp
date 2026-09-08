@@ -220,7 +220,7 @@ export const MODULES_LIST = [
     },
     { key: 'returnProduct', label: 'Return Product' },
     { key: 'backupRestore', label: 'Backup & Restore' }
-];
+].sort((a, b) => (a.label || '').localeCompare(b.label || ''));
 
 /**
  * Gets default permissions based on a role.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ShieldIcon, CheckIcon, XIcon, PlusIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
@@ -19,6 +19,10 @@ const RoleCreation = ({ setCurrentUser }) => {
     const [selectedStaticRole, setSelectedStaticRole] = useState(null);
     const [permissions, setPermissions] = useState({});
     const [isSaving, setIsSaving] = useState(false);
+
+    const sortedModulesList = useMemo(() => {
+        return [...MODULES_LIST].sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+    }, []);
 
     useEffect(() => {
         fetchCustomRoles();
@@ -385,7 +389,7 @@ const RoleCreation = ({ setCurrentUser }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {MODULES_LIST.map(mod => {
+                                        {sortedModulesList.map(mod => {
                                             const mPerms = permissions[mod.key] || { view: false, add: false, edit: false, delete: false, special: false };
                                             return (
                                                 <tr key={mod.key} className="hover:bg-slate-50/50 transition-colors">
