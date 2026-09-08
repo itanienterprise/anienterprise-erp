@@ -157,11 +157,11 @@ const StockReport = ({
                     );
                     if (filteredBrands.length > 0) {
                         const inHouseQuantity = reportType === 'price'
-                            ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0)
-                            : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                            ? filteredBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0)
+                            : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
                         const totalInHouseQuantity = reportType === 'price'
-                            ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0)
-                            : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
+                            ? filteredBrands.reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0)
+                            : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0);
                         const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
                         const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
                         return {
@@ -196,11 +196,11 @@ const StockReport = ({
             if (filteredBrands.length > 0) {
                 // IMPORTANT: Recalculate item-level totals for the filtered brands
                 const inHouseQuantity = reportType === 'price'
-                    ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0)
-                    : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                    ? filteredBrands.reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0)
+                    : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.inHouseQuantity || 0), 0);
                 const totalInHouseQuantity = reportType === 'price'
-                    ? filteredBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0)
-                    : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
+                    ? filteredBrands.reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0)
+                    : getGroupedBrandList(filteredBrands).reduce((sum, b) => sum + (b.totalInHouseQuantity || 0), 0);
                 const saleQuantity = filteredBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
                 const salePacket = filteredBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
 
@@ -228,9 +228,9 @@ const StockReport = ({
         let totalDamageQty = 0;
 
         filteredRecords.forEach(item => {
-            totalTotalInHouseQty += Math.max(0, item.totalInHouseQuantity || 0);
+            totalTotalInHouseQty += (item.totalInHouseQuantity || 0);
             totalSaleQty += (item.saleQuantity || 0);
-            totalInHouseQty += Math.max(0, item.inHouseQuantity || 0);
+            totalInHouseQty += (item.inHouseQuantity || 0);
             totalSalePkt += (item.salePacket || 0);
             totalShortage += (item.sweepedQuantity || 0);
             totalDamageQty += (item.damageQuantity || 0);
@@ -648,8 +648,8 @@ const StockReport = ({
                                                 {showBag && (
                                                     <td className="border-r border-gray-900 px-2 py-1.5 text-[13px] text-right font-bold text-gray-900 align-top whitespace-nowrap">
                                                         {(() => {
-                                                            let totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0);
-                                                            let totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0);
+                                                            let totalWhole = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity || 0, ent.packetSize).whole, 0);
+                                                            let totalRem = getGroupedBrandList(brands).reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity || 0, ent.packetSize).remainder, 0);
                                                             const pktSize = item.packetSize || brands?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
                                                             if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
                                                                 const extra = Math.floor(Math.abs(totalRem) / pktSize);
@@ -756,8 +756,8 @@ const StockReport = ({
                                     {showBag && (
                                         <td className="px-2 py-1.5 text-[14px] text-right font-black text-gray-900 border-r border-gray-900">
                                             {(() => {
-                                                let totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0), 0);
-                                                let totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0), 0);
+                                                let totalWhole = records.reduce((accWhole, item) => accWhole + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity || 0, ent.packetSize).whole, 0), 0);
+                                                let totalRem = records.reduce((accRem, item) => accRem + getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity || 0, ent.packetSize).remainder, 0), 0);
                                                 const pktSize = records[0]?.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
                                                 if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
                                                     const extra = Math.floor(Math.abs(totalRem) / pktSize);

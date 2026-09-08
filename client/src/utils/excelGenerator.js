@@ -2168,12 +2168,12 @@ export const generateStockReportExcel = (
             return (rawRecords || []).map(item => {
                 const validBrands = (item.brandList || []).filter(b => {
                     if (normalizedReportType === 'short') {
-                        return (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
+                        return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                     }
                     if (normalizedReportType === 'price') {
-                        return (b.inHouseQuantity || 0) > 0.001;
+                        return Math.abs(b.inHouseQuantity || 0) > 0.001;
                     }
-                    return (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
+                    return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
                 });
                 if (validBrands.length === 0) return null;
                 return {

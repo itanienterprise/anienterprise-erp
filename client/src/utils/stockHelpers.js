@@ -311,10 +311,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     : getGroupedBrandList(prod.brandList);
 
                 if (isPriceReport) {
-                    groupedBrands = groupedBrands.filter(b => (b.inHouseQuantity || 0) > 0.001);
+                    groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001);
                 } else if (stockFilters?.reportType === 'short') {
                     groupedBrands = groupedBrands.filter(b =>
-                        (b.inHouseQuantity || 0) > 0.001 ||
+                        Math.abs(b.inHouseQuantity || 0) > 0.001 ||
                         (b.orderQuantity || 0) > 0.001
                     );
                 }
@@ -1460,7 +1460,7 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
             const sale = Math.abs(b.saleQuantity || 0);
 
             if (isPriceReport && !stockFilters?._isSubCall) {
-                return (b.inHouseQuantity || 0) > 0.001;
+                return Math.abs(b.inHouseQuantity || 0) > 0.001;
             }
 
             // If closing, order, saleable, opening, and sale are 0, do not show

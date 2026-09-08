@@ -944,12 +944,12 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             const sortedDisplayRecords = [...currentStockData.displayRecords].map(item => {
                 const validBrands = (item.brandList || []).filter(b => {
                     if (reportType === 'short') {
-                        return (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
+                        return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
                     }
                     if (reportType === 'price') {
-                        return (b.inHouseQuantity || 0) > 0.001;
+                        return Math.abs(b.inHouseQuantity || 0) > 0.001;
                     }
-                    return (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
+                    return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.openingQuantity || 0) > 0.001 || (b.saleQuantity || 0) > 0.001;
                 });
                 if (validBrands.length === 0) return null;
                 return { ...item, brandList: validBrands };
@@ -1157,8 +1157,8 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
                     if (showQty) subRow.push({ content: Math.round(item.saleQuantity).toLocaleString('en-US'), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
                 }
 
-                let rW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).whole, 0);
-                let rR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(Math.max(0, parseFloat(ent.inHouseQuantity) || 0), ent.packetSize).remainder, 0));
+                let rW2 = getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(parseFloat(ent.inHouseQuantity) || 0, ent.packetSize).whole, 0);
+                let rR2 = Math.round(getGroupedBrandList(item.brandList).reduce((sum, ent) => sum + calculatePktRemainderLocal(parseFloat(ent.inHouseQuantity) || 0, ent.packetSize).remainder, 0));
                 const pktSizeR = item.packetSize || item.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
                 if (pktSizeR > 0 && Math.abs(rR2) >= pktSizeR) { const ex = Math.floor(Math.abs(rR2) / pktSizeR); rW2 += rR2 >= 0 ? ex : -ex; rR2 = rR2 % pktSizeR; }
                 if (showBag) subRow.push({ content: `${rW2}${rR2 !== 0 ? ` - ${Math.abs(rR2)} kg` : ''}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 248, 248] } });
