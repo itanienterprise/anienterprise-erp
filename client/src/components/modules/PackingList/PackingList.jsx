@@ -11,6 +11,8 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import './PackingList.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { PIDetailsModal } from '../PI/PIDetailsModal';
+import { decryptData } from '../../../utils/encryption';
+import { formatFirstName } from '../IPManagement/IPManagement';
 
 const numberToWordsUSD = (amount) => {
     const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
@@ -100,6 +102,7 @@ function PackingList({
     const [ipRecords, setIpRecords] = useState([]);
     const [trSetups, setTrSetups] = useState([]);
     const [employeesMap, setEmployeesMap] = useState({});
+    const [employeesFullNameMap, setEmployeesFullNameMap] = useState({});
     const [notificationsMap, setNotificationsMap] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -356,32 +359,201 @@ function PackingList({
             const response = await axios.get(`${API_BASE_URL}/api/employees`);
             const rawData = Array.isArray(response.data) ? response.data : [];
             const map = {};
+            const fullMap = {};
             rawData.forEach(emp => {
                 let d = emp;
                 if (emp && emp.data) {
-                    if (typeof emp.data === 'object') d = { ...emp.data, _id: emp._id };
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
                 }
-                const empName = (d.name || d.nameEn || d.employeeName || d.fullName || d.username || '').trim();
-                if (d.employeeId) map[d.employeeId] = empName;
-                if (d.username) map[d.username] = empName;
-                if (d._id) map[d._id] = empName;
-                if (d.id) map[d.id] = empName;
+
+                // Full name mapping
+                const empFullName = (d.name || d.nameEn || d.employeeName || d.fullName || d.username || '').trim();
+                if (empFullName) {
+                    if (d.employeeId) {
+                        fullMap[d.employeeId.toLowerCase().trim()] = empFullName;
+                        fullMap[d.employeeId] = empFullName;
+                    }
+                    if (d.username) {
+                        fullMap[d.username.toLowerCase().trim()] = empFullName;
+                        fullMap[d.username] = empFullName;
+                    }
+                    if (d._id) {
+                        fullMap[String(d._id).toLowerCase()] = empFullName;
+                        fullMap[String(d._id)] = empFullName;
+                    }
+                    if (d.id) {
+                        fullMap[String(d.id).toLowerCase()] = empFullName;
+                        fullMap[String(d.id)] = empFullName;
+                    }
+                    if (d.name) {
+                        fullMap[d.name.toLowerCase().trim()] = empFullName;
+                        fullMap[d.name.trim()] = empFullName;
+                    }
+                }
+
+                // First name resolution for table
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && d.name) {
+                    const parts = d.name.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.employeeName) {
+                    const parts = d.employeeName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.fullName) {
+                    const parts = d.fullName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName);
+                if (!fName) return;
+
+                if (d.employeeId) {
+                    map[d.employeeId.toLowerCase().trim()] = fName;
+                    map[d.employeeId] = fName;
+                }
+                if (d.username) {
+                    map[d.username.toLowerCase().trim()] = fName;
+                    map[d.username] = fName;
+                }
+                if (d._id) {
+                    map[String(d._id).toLowerCase()] = fName;
+                    map[String(d._id)] = fName;
+                }
+                if (d.id) {
+                    map[String(d.id).toLowerCase()] = fName;
+                    map[String(d.id)] = fName;
+                }
+                if (d.name) {
+                    const fullNameLower = d.name.toLowerCase().trim();
+                    map[fullNameLower] = fName;
+                    map[d.name.trim()] = fName;
+                    const firstPart = fullNameLower.split(/\s+/)[0];
+                    if (firstPart) map[firstPart] = fName;
+                }
+                if (d.nameEn) {
+                    const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                    map[fullNameEnLower] = fName;
+                    map[d.nameEn.trim()] = fName;
+                    const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                    if (firstPartEn) map[firstPartEn] = fName;
+                }
             });
+
+            // Map 'admin' and 'administrator' to admin employee's first name / Administrator
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            let adminFullName = 'Anil Kumar Poddar';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+                if (d.name || d.nameEn) adminFullName = (d.name || d.nameEn).trim();
+            }
+            map['admin'] = 'Administrator';
+            map['administrator'] = 'Administrator';
+            map['a-1001'] = adminFirstName;
+
+            fullMap['admin'] = 'Administrator';
+            fullMap['administrator'] = 'Administrator';
+            fullMap['a-1001'] = adminFullName;
+
             setEmployeesMap(map);
+            setEmployeesFullNameMap(fullMap);
         } catch (error) {
             console.error('Error fetching employees map in PackingList:', error);
         }
     };
 
-    const getEntryByName = (entryByCode, entryByName) => {
-        if (!entryByCode && !entryByName) return '—';
-        if (entryByName && !entryByName.startsWith('E-') && !entryByName.startsWith('A-') && entryByName !== entryByCode) {
-            return entryByName;
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
         }
-        if (entryByCode && employeesMap[entryByCode]) return employeesMap[entryByCode];
-        if (entryByName && employeesMap[entryByName]) return employeesMap[entryByName];
-        if (entryByName && entryByName !== '—') return entryByName;
-        return entryByCode || '—';
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        if (employeesMap[rawStr]) {
+            return employeesMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesMap[prefixKey]) return employeesMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByName = (entryByCode, entryByName) => {
+        if (entryByCode && entryByCode !== '-' && entryByCode !== '—') {
+            const res = getFirstNameFromIdentifier(entryByCode);
+            if (res && res.toLowerCase() !== String(entryByCode).toLowerCase().trim()) {
+                return res;
+            }
+        }
+        if (entryByName && entryByName !== '-' && entryByName !== '—') {
+            const res = getFirstNameFromIdentifier(entryByName);
+            if (res) return res;
+        }
+        if (entryByCode && entryByCode !== '-' && entryByCode !== '—') {
+            return getFirstNameFromIdentifier(entryByCode) || entryByCode;
+        }
+        return entryByName || entryByCode || '—';
     };
 
     const getPlEntryDetails = (record) => {
@@ -2667,6 +2839,7 @@ function PackingList({
                     exporters={exporters}
                     banks={banks}
                     employeesMap={employeesMap}
+                    employeesFullNameMap={employeesFullNameMap}
                     onClose={() => setSelectedPiForDetails(null)}
                 />
             )}

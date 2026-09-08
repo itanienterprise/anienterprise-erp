@@ -89,6 +89,7 @@ export const IPDetailsModal = ({
     allSalesRecords = [],
     piRecords = [],
     employeesMap = {},
+    employeesFullNameMap = {},
     currentPi = null,
     onClose
 }) => {
@@ -106,11 +107,36 @@ export const IPDetailsModal = ({
         if (!code && !name) return '';
         const cleanName = String(name || '').trim();
         const cleanCode = String(code || '').trim();
+
+        // 1. If cleanName is a valid name string (not an employee/admin code like E-1003 or A-1001), it represents the full name
         if (cleanName && !cleanName.startsWith('E-') && !cleanName.startsWith('A-') && cleanName !== cleanCode && cleanName !== '—') {
             return cleanName;
         }
-        if (cleanCode && employeesMap[cleanCode]) return employeesMap[cleanCode];
-        if (cleanName && employeesMap[cleanName]) return employeesMap[cleanName];
+
+        // 2. Check employeesFullNameMap or employeesMap for full name resolution
+        const activeFullMap = (employeesFullNameMap && Object.keys(employeesFullNameMap).length > 0)
+            ? employeesFullNameMap
+            : employeesMap;
+
+        const lookup = (val) => {
+            if (!val || val === '-' || val === '—') return '';
+            const key = String(val).trim();
+            const lower = key.toLowerCase();
+            if (lower === 'admin' || lower === 'administrator') return 'Administrator';
+            if (activeFullMap[key]) return activeFullMap[key];
+            if (activeFullMap[lower]) return activeFullMap[lower];
+            return '';
+        };
+
+        if (cleanCode) {
+            const match = lookup(cleanCode);
+            if (match) return match;
+        }
+        if (cleanName) {
+            const match = lookup(cleanName);
+            if (match) return match;
+        }
+
         if (cleanName && cleanName !== '—') return cleanName;
         if (cleanCode && cleanCode !== '—') return cleanCode;
         return '';

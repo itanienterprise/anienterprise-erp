@@ -20,6 +20,7 @@ export const PIDetailsModal = ({
     exporters = [],
     banks = [],
     employeesMap = {},
+    employeesFullNameMap = {},
     initialRevisionIndex = null,
     onClose
 }) => {
@@ -562,6 +563,7 @@ export const PIDetailsModal = ({
                     allSalesRecords={allSalesRecords}
                     piRecords={piRecords}
                     employeesMap={employeesMap}
+                    employeesFullNameMap={employeesFullNameMap}
                     currentPi={resolvedPi}
                     onClose={() => setSelectedIpForModal(null)}
                 />
