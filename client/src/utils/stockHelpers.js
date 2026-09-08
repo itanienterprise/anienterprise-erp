@@ -1552,18 +1552,18 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         }
 
         if (isPriceReport && !stockFilters?._isSubCall) {
-            // In Price Report mode, keep all LC entries with positive remaining stock
-            filteredBrands = filteredBrands.filter(b => (b.inHouseQuantity || 0) > 0.001);
+            // In Price Report mode, keep all LC entries with non-zero remaining stock
+            filteredBrands = filteredBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001);
         } else if (stockFilters?.reportType === 'short') {
-            // In Short Report mode, only keep items with positive closing stock or active pending orders
+            // In Short Report mode, keep items with non-zero closing stock or active pending orders
             filteredBrands = filteredBrands.filter(b =>
-                (b.inHouseQuantity || 0) > 0.001 ||
+                Math.abs(b.inHouseQuantity || 0) > 0.001 ||
                 (b.orderQuantity || 0) > 0.001
             );
         } else {
-            // Standard / Detailed view: keep items with positive in-house stock, opening, sale, or active pending orders
+            // Standard / Detailed view: keep items with non-zero in-house stock, opening, sale, or active pending orders
             filteredBrands = filteredBrands.filter(b =>
-                (b.inHouseQuantity || 0) > 0.001 ||
+                Math.abs(b.inHouseQuantity || 0) > 0.001 ||
                 (b.orderQuantity || 0) > 0.001 ||
                 (b.openingQuantity || 0) > 0.001 ||
                 (b.saleQuantity || 0) > 0.001

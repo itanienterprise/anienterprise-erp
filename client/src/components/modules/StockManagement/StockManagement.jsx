@@ -3538,11 +3538,11 @@ const StockManagement = ({
                         ) : (
                             stockData.displayRecords
                                 .filter(group => !expandedProducts || group.productName === expandedProducts)
-                                .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001)))
+                                .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)))
                                 .map((group, gIdx) => {
                                     const isExpanded = expandedProducts === group.productName;
                                     const effectiveBrandList = effectiveShowRate
-                                        ? group.brandList.filter(b => (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001)
+                                        ? group.brandList.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)
                                         : group.brandList;
 
                                     // Calculate brand spans for this group's brandList
@@ -3715,10 +3715,10 @@ const StockManagement = ({
                                 ) : (
                                     stockData.displayRecords
                                         .filter(group => !expandedProducts || group.productName === expandedProducts)
-                                        .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001)))
+                                        .filter(group => !effectiveShowRate || (group.brandList && group.brandList.some(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)))
                                         .map((group, gIdx) => {
                                             const effectiveBrandList = effectiveShowRate
-                                                ? group.brandList.filter(b => (b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || (b.closingQuantity || 0) > 0.001)
+                                                ? group.brandList.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.closingQuantity || 0) > 0.001)
                                                 : group.brandList;
 
                                             // Calculate brand spans for this group's brandList
