@@ -25,6 +25,7 @@ import { encryptData, decryptData } from '../../../utils/encryption';
 import { calculateStockData, calculatePktRemainder, getGroupedBrandList, safeParse } from '../../../utils/stockHelpers';
 import { generateStockReportPDF, generateProductHistoryPDF } from '../../../utils/pdfGenerator';
 import axios from '../../../utils/api';
+import { API_BASE_URL } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
 
 const SortIcon = ({ config, columnKey }) => {
@@ -53,6 +54,18 @@ const isLcMatch = (targetLc, filterLc) => {
         if (normTarget.includes(normFilter) || normFilter.includes(normTarget)) return true;
     }
     return false;
+};
+
+const getLocalDatetimeInputValue = (date = new Date()) => {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 const parseDate = (dateVal) => {
@@ -150,7 +163,7 @@ const StockManagement = ({
     const [showBaselineModal, setShowBaselineModal] = useState(false);
     const [baselineTab, setBaselineTab] = useState('preview'); // 'preview' | 'history'
     const [baselineNote, setBaselineNote] = useState('Initial Stock Baseline');
-    const [baselineCutoffDate, setBaselineCutoffDate] = useState(new Date().toISOString());
+    const [baselineCutoffDate, setBaselineCutoffDate] = useState(() => getLocalDatetimeInputValue());
     const [baselineConfirmText, setBaselineConfirmText] = useState('');
     const [baselineLoading, setBaselineLoading] = useState(false);
     const [baselineHistory, setBaselineHistory] = useState([]);
@@ -2433,10 +2446,14 @@ const StockManagement = ({
             return;
         }
 
+        const baselineIso = (baselineCutoffDate && !isNaN(new Date(baselineCutoffDate).getTime()))
+            ? new Date(baselineCutoffDate).toISOString()
+            : new Date().toISOString();
+
         setBaselineLoading(true);
         try {
             await axios.post(`${API_BASE_URL}/api/stock-baseline`, {
-                baselineDate: baselineCutoffDate || new Date().toISOString(),
+                baselineDate: baselineIso,
                 note: baselineNote.trim() || 'Initial Stock Baseline',
                 setBy: currentUser.name || currentUser.username || 'Admin',
                 summary,
@@ -2451,7 +2468,7 @@ const StockManagement = ({
             alert('Initial Stock Baseline established successfully! An automated safety backup was created on the server.');
         } catch (err) {
             console.error('Error setting initial baseline:', err);
-            alert(err.response?.data?.message || 'Failed to set initial stock baseline.');
+            alert(err.response?.data?.message || err.message || 'Failed to set initial stock baseline.');
         } finally {
             setBaselineLoading(false);
         }
@@ -2471,7 +2488,7 @@ const StockManagement = ({
             alert('Stock baseline reverted successfully!');
         } catch (err) {
             console.error('Error reverting baseline:', err);
-            alert(err.response?.data?.message || 'Failed to revert stock baseline.');
+            alert(err.response?.data?.message || err.message || 'Failed to revert stock baseline.');
         } finally {
             setBaselineLoading(false);
         }
@@ -2491,7 +2508,7 @@ const StockManagement = ({
             alert('Stock baseline activated successfully!');
         } catch (err) {
             console.error('Error activating baseline:', err);
-            alert(err.response?.data?.message || 'Failed to activate stock baseline.');
+            alert(err.response?.data?.message || err.message || 'Failed to activate stock baseline.');
         } finally {
             setBaselineLoading(false);
         }
@@ -2872,6 +2889,7 @@ const StockManagement = ({
                                         setShowBaselineModal(true);
                                         setBaselineTab('preview');
                                         setBaselineConfirmText('');
+                                        setBaselineCutoffDate(getLocalDatetimeInputValue());
                                         fetchBaselineHistory();
                                     }}
                                     className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm active:scale-95 border ${
@@ -3792,7 +3810,7 @@ const StockManagement = ({
 
                                                                             {/* Closing Stock */}
                                                                             {showBag && (
-                                                                                <div className="text-sm text-green-800 bg-green-50/50 px-2 py-1 rounded-lg text-center font-bold border border-green-100/50">
+                                                                                <div className={`text-sm px-2 py-1 rounded-lg text-center font-bold border ${brand.inHouseQuantity < 0 ? 'text-blue-800 bg-blue-50/50 border-blue-100/50' : 'text-green-800 bg-green-50/50 border-green-100/50'}`}>
                                                                                     {(() => {
                                                                                         const { whole, remainder } = calculatePktRemainder(brand.inHouseQuantity, brand.packetSize);
                                                                                         return `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`;
@@ -3800,7 +3818,7 @@ const StockManagement = ({
                                                                                 </div>
                                                                             )}
                                                                             {showQty && (
-                                                                                <div className="text-sm text-green-900 bg-green-50/50 px-2 py-1 rounded-lg text-center font-black border border-green-100/50">
+                                                                                <div className={`text-sm px-2 py-1 rounded-lg text-center font-black border ${brand.inHouseQuantity < 0 ? 'text-blue-900 bg-blue-50/50 border-blue-100/50' : 'text-green-900 bg-green-50/50 border-green-100/50'}`}>
                                                                                     {Math.round(brand.inHouseQuantity).toLocaleString('en-US')}
                                                                                 </div>
                                                                             )}
@@ -3931,8 +3949,8 @@ const StockManagement = ({
                                                                     <div className="text-sm text-blue-900 font-extrabold text-center bg-blue-100/50 px-2 py-0.5 rounded-md">
                                                                         {(() => {
                                                                             const grouped = getGroupedBrandList(group.brandList || []);
-                                                                            let totalWhole = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).whole, 0);
-                                                                            let totalRem = grouped.reduce((sum, ent) => sum + calculatePktRemainder(Math.max(0, ent.inHouseQuantity || 0), ent.packetSize).remainder, 0);
+                                                                            let totalWhole = grouped.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity || 0, ent.packetSize).whole, 0);
+                                                                            let totalRem = grouped.reduce((sum, ent) => sum + calculatePktRemainder(ent.inHouseQuantity || 0, ent.packetSize).remainder, 0);
                                                                             const pktSize = group.packetSize || group.brandList?.find(b => (b.packetSize || 0) > 0)?.packetSize || 30;
                                                                             if (pktSize > 0 && Math.abs(totalRem) >= pktSize) {
                                                                                 const extra = Math.floor(Math.abs(totalRem) / pktSize);
@@ -5049,11 +5067,20 @@ const StockManagement = ({
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-xs font-bold text-gray-700 mb-1">Baseline Cutoff Timestamp</label>
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <label className="block text-xs font-bold text-gray-700">Baseline Cutoff Timestamp</label>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setBaselineCutoffDate(getLocalDatetimeInputValue())}
+                                                                className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                                            >
+                                                                Set to Now
+                                                            </button>
+                                                        </div>
                                                         <input
                                                             type="datetime-local"
-                                                            value={baselineCutoffDate ? baselineCutoffDate.slice(0, 16) : ''}
-                                                            onChange={(e) => setBaselineCutoffDate(new Date(e.target.value).toISOString())}
+                                                            value={baselineCutoffDate || ''}
+                                                            onChange={(e) => setBaselineCutoffDate(e.target.value)}
                                                             className="w-full text-xs md:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium text-gray-800"
                                                         />
                                                     </div>

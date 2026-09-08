@@ -915,7 +915,7 @@ apiRouter.get('/api/stock', async (req, res) => {
   }
 });
 
-// Helper for automated snapshot backup
+// Helper for automated snapshot backup (backups directory is ignored by nodemon)
 const createStockBackupSnapshot = async (prefix = 'stock_baseline') => {
   try {
     const BACKUP_DIR = path.resolve(__dirname, '../backups');
