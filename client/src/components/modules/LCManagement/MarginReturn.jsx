@@ -26,6 +26,8 @@ import { generateMarginReturnReportPDF } from '../../../utils/pdfGenerator';
 import { generateMarginReturnReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import { isProductMatch } from '../../../utils/lcValueUtils';
+import { decryptData } from '../../../utils/encryption';
+import { formatFirstName } from '../IPManagement/IPManagement';
 
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -156,9 +158,164 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
     const canAdd = hasPermission(currentUser, 'marginReturn', 'add');
     const canEdit = hasPermission(currentUser, 'marginReturn', 'edit');
     const canDelete = hasPermission(currentUser, 'marginReturn', 'delete');
+    const canShowEntryBy = useMemo(() => {
+        const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin' || (currentUser?.role || '').toLowerCase() === 'superadmin';
+        const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+        const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
+        return isAdmin || isIncharge || isBorderManager || hasPermission(currentUser, 'marginReturn', 'showEntryBy');
+    }, [currentUser]);
+
+    const [employeesFirstNameMap, setEmployeesFirstNameMap] = useState({});
+
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const firstMap = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                const empName = (d.name || d.nameEn || d.employeeName || d.username || '').trim();
+
+                const rawFullName = empName;
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && rawFullName) {
+                    const parts = rawFullName.split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName || rawFullName);
+                if (fName) {
+                    if (d.employeeId) {
+                        firstMap[d.employeeId.toLowerCase().trim()] = fName;
+                        firstMap[d.employeeId] = fName;
+                    }
+                    if (d.username) {
+                        firstMap[d.username.toLowerCase().trim()] = fName;
+                        firstMap[d.username] = fName;
+                    }
+                    if (d._id) {
+                        firstMap[String(d._id).toLowerCase()] = fName;
+                        firstMap[String(d._id)] = fName;
+                    }
+                    if (d.name) {
+                        const fullNameLower = d.name.toLowerCase().trim();
+                        firstMap[fullNameLower] = fName;
+                        firstMap[d.name.trim()] = fName;
+                        const firstPart = fullNameLower.split(/\s+/)[0];
+                        if (firstPart) firstMap[firstPart] = fName;
+                    }
+                    if (d.nameEn) {
+                        const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                        firstMap[fullNameEnLower] = fName;
+                        firstMap[d.nameEn.trim()] = fName;
+                        const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                        if (firstPartEn) firstMap[firstPartEn] = fName;
+                    }
+                }
+            });
+
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+            }
+            firstMap['admin'] = 'Administrator';
+            firstMap['administrator'] = 'Administrator';
+            firstMap['a-1001'] = adminFirstName;
+
+            setEmployeesFirstNameMap(firstMap);
+        } catch (error) {
+            console.error('Error fetching employees map in MarginReturn:', error);
+        }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesFirstNameMap[key]) {
+            return employeesFirstNameMap[key];
+        }
+        if (employeesFirstNameMap[rawStr]) {
+            return employeesFirstNameMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesFirstNameMap[prefixKey]) return employeesFirstNameMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesFirstNameMap[firstWord.toLowerCase()]) {
+            return employeesFirstNameMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByFirstName = (item) => {
+        if (!item) return '—';
+        const candidate = item.entryByName || item.entryBy || item.requestedBy || item.requestedByUsername || item.createdBy || item.createdByName || item.createdByUsername || item.userName || item.user;
+        if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
+
+    const getEditedByFirstName = (item) => {
+        if (!item) return '';
+        const candidate = item.editedByName || item.editedBy || item.editRequestedBy;
+        if (!candidate || candidate === '-' || candidate === '—') return '';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
 
     useEffect(() => {
         fetchData();
+        fetchEmployees();
     }, [refreshKey]);
 
     // Close LC dropdown when clicking outside
@@ -650,12 +807,16 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
             // Search Query Filter
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
+                const entryRaw = (item.entryByName || item.entryBy || item.requestedBy || item.createdBy || item.createdByName || '').toLowerCase();
+                const entryFirst = getEntryByFirstName(item).toLowerCase();
                 const matchesSearch =
                     (item.lcNo || '').toLowerCase().includes(q) ||
                     itemImporter.toLowerCase().includes(q) ||
                     itemBank.toLowerCase().includes(q) ||
                     itemProduct.toLowerCase().includes(q) ||
-                    (item.remarks || '').toLowerCase().includes(q);
+                    (item.remarks || '').toLowerCase().includes(q) ||
+                    entryRaw.includes(q) ||
+                    entryFirst.includes(q);
                 if (!matchesSearch) return false;
             }
 
@@ -731,9 +892,22 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
         }
 
         setIsSaving(true);
+        const userIdentifier = currentUser?.name || currentUser?.username || 'Administrator';
+        const payload = {
+            ...formData,
+            ...(isEditMode ? {
+                editedBy: userIdentifier,
+                editedByName: userIdentifier
+            } : {
+                entryBy: userIdentifier,
+                entryByName: userIdentifier,
+                createdBy: userIdentifier,
+                createdByName: userIdentifier
+            })
+        };
         try {
             if (isEditMode) {
-                const res = await axios.put(`${API_BASE_URL}/api/margin-returns/${editingId}`, formData);
+                const res = await axios.put(`${API_BASE_URL}/api/margin-returns/${editingId}`, payload);
                 setMarginReturns(prev => prev.map(r => r._id === editingId ? res.data : r));
                 if (addNotification) {
                     addNotification(
@@ -747,7 +921,7 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                 }
                 addNotification?.('Margin Return record updated successfully', 'success');
             } else {
-                const res = await axios.post(`${API_BASE_URL}/api/margin-returns`, formData);
+                const res = await axios.post(`${API_BASE_URL}/api/margin-returns`, payload);
                 setMarginReturns(prev => [res.data, ...prev]);
 
                 if (addNotification) {
@@ -1095,14 +1269,15 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                             <th className="px-4 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">AC No</th>
                             <th className="px-4 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Return Amount</th>
                             <th className="px-4 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-nowrap">Remarks</th>
+                            {canShowEntryBy && <th className="px-4 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Entry By</th>}
                             <th className="px-4 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                         {isLoading ? (
-                            <tr><td colSpan="10" className="px-6 py-12 text-center text-gray-400">Loading margin return records...</td></tr>
+                            <tr><td colSpan={10 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-gray-400">Loading margin return records...</td></tr>
                         ) : filteredRecords.length === 0 ? (
-                            <tr><td colSpan="10" className="px-6 py-12 text-center text-gray-400">No Margin Return records found.</td></tr>
+                            <tr><td colSpan={10 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-gray-400">No Margin Return records found.</td></tr>
                         ) : (
                             filteredRecords.map((record) => {
                                 const lcDetails = lcMarginMap[record.lcId] || {};
@@ -1149,6 +1324,20 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                                         <td className="px-4 py-3.5 text-sm text-gray-500 max-w-[180px] truncate" title={record.remarks}>
                                             {record.remarks || '-'}
                                         </td>
+                                        {canShowEntryBy && (
+                                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                                                <div className="flex flex-col items-center justify-center gap-0.5">
+                                                    <span className="text-xs font-semibold text-gray-700">
+                                                        {getEntryByFirstName(record)}
+                                                    </span>
+                                                    {(record.editedBy || record.editedByName) && (
+                                                        <span className="text-[10px] text-amber-600 font-medium">
+                                                            ✎ {getEditedByFirstName(record)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        )}
                                         <td className="px-4 py-3.5 text-center whitespace-nowrap">
                                             <div className="flex items-center justify-center gap-2">
                                                 {canEdit && (
@@ -1248,6 +1437,21 @@ const MarginReturn = ({ currentUser, addNotification, onDeleteConfirm, refreshKe
                                             <span className="font-bold text-gray-400 uppercase text-[10px]">Remarks</span>
                                             <span className="text-gray-400">:</span>
                                             <span className="text-gray-600">{record.remarks || '-'}</span>
+
+                                            {canShowEntryBy && (
+                                                <>
+                                                    <span className="font-bold text-gray-400 uppercase text-[10px]">Entry By</span>
+                                                    <span className="text-gray-400">:</span>
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="font-semibold text-gray-800">{getEntryByFirstName(record)}</span>
+                                                        {(record.editedBy || record.editedByName) && (
+                                                            <span className="text-[10px] text-amber-600 font-medium">
+                                                                (✎ {getEditedByFirstName(record)})
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
 
                                         <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">

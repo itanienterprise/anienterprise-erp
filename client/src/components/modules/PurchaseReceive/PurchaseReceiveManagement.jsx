@@ -6,6 +6,8 @@ import {
 } from '../../Icons';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { decryptData } from '../../../utils/encryption';
+import { formatFirstName } from '../IPManagement/IPManagement';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 
 const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRecords, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
@@ -14,6 +16,8 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
     const [warehousesList, setWarehousesList] = useState(['HILI', 'DINAJPUR', 'CHATTOGRAM', 'DHAKA']);
     const [customersList, setCustomersList] = useState([]);
     const [productsList, setProductsList] = useState([]);
+    const [employeesMap, setEmployeesMap] = useState({});
+    const [employeesFullNameMap, setEmployeesFullNameMap] = useState({});
 
     const rowRefs = useRef({});
     useEffect(() => {
@@ -97,10 +101,200 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         remarks: ''
     });
 
-    const canAdd = hasPermission(currentUser, 'purchaseReceive', 'add') || hasPermission(currentUser, 'purchase', 'add') || currentUser?.role === 'admin';
-    const canEdit = hasPermission(currentUser, 'purchaseReceive', 'edit') || hasPermission(currentUser, 'purchase', 'edit') || currentUser?.role === 'admin';
-    const canDelete = hasPermission(currentUser, 'purchaseReceive', 'delete') || hasPermission(currentUser, 'purchase', 'delete') || currentUser?.role === 'admin';
-    const canApprove = hasPermission(currentUser, 'purchaseReceive', 'special') || hasPermission(currentUser, 'purchase', 'special') || currentUser?.role === 'admin';
+    const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin' || (currentUser?.role || '').toLowerCase() === 'superadmin';
+    const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+    const canAdd = hasPermission(currentUser, 'purchaseReceive', 'add') || hasPermission(currentUser, 'purchase', 'add') || isAdmin;
+    const canEdit = hasPermission(currentUser, 'purchaseReceive', 'edit') || hasPermission(currentUser, 'purchase', 'edit') || isAdmin;
+    const canDelete = hasPermission(currentUser, 'purchaseReceive', 'delete') || hasPermission(currentUser, 'purchase', 'delete') || isAdmin;
+    const canApprove = hasPermission(currentUser, 'purchaseReceive', 'special') || hasPermission(currentUser, 'purchase', 'special') || isAdmin;
+    const canShowEntryBy = isAdmin || isIncharge || hasPermission(currentUser, 'purchaseReceive', 'showEntryBy');
+
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            const fullMap = {};
+
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                const rawFullName = (d.name || d.nameEn || d.fullName || '').trim();
+
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && d.name) {
+                    const parts = d.name.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.nameEn) {
+                    const parts = d.nameEn.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.fullName) {
+                    const parts = d.fullName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName || rawFullName);
+                if (!fName) return;
+
+                if (d.employeeId) {
+                    map[d.employeeId.toLowerCase().trim()] = fName;
+                    map[d.employeeId] = fName;
+                    fullMap[d.employeeId.toLowerCase().trim()] = rawFullName || fName;
+                    fullMap[d.employeeId] = rawFullName || fName;
+                }
+                if (d.username) {
+                    map[d.username.toLowerCase().trim()] = fName;
+                    map[d.username] = fName;
+                    fullMap[d.username.toLowerCase().trim()] = rawFullName || fName;
+                    fullMap[d.username] = rawFullName || fName;
+                }
+                if (d._id) {
+                    map[String(d._id).toLowerCase()] = fName;
+                    map[String(d._id)] = fName;
+                    fullMap[String(d._id).toLowerCase()] = rawFullName || fName;
+                    fullMap[String(d._id)] = rawFullName || fName;
+                }
+                if (d.id) {
+                    map[String(d.id).toLowerCase()] = fName;
+                    map[String(d.id)] = fName;
+                    fullMap[String(d.id).toLowerCase()] = rawFullName || fName;
+                    fullMap[String(d.id)] = rawFullName || fName;
+                }
+                if (d.name) {
+                    const fullNameLower = d.name.toLowerCase().trim();
+                    map[fullNameLower] = fName;
+                    map[d.name.trim()] = fName;
+                    fullMap[fullNameLower] = rawFullName || fName;
+                    fullMap[d.name.trim()] = rawFullName || fName;
+                    const firstPart = fullNameLower.split(/\s+/)[0];
+                    if (firstPart) map[firstPart] = fName;
+                }
+                if (d.nameEn) {
+                    const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                    map[fullNameEnLower] = fName;
+                    map[d.nameEn.trim()] = fName;
+                    fullMap[fullNameEnLower] = rawFullName || fName;
+                    fullMap[d.nameEn.trim()] = rawFullName || fName;
+                    const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                    if (firstPartEn) map[firstPartEn] = fName;
+                }
+            });
+
+            // Map 'admin' and 'administrator' to admin employee's first name / Administrator
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            let adminFullName = 'Administrator';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+                if (d.name) adminFullName = d.name;
+            }
+            map['admin'] = 'Administrator';
+            map['administrator'] = 'Administrator';
+            map['a-1001'] = adminFirstName;
+
+            fullMap['admin'] = 'Administrator';
+            fullMap['administrator'] = 'Administrator';
+            fullMap['a-1001'] = adminFullName;
+
+            setEmployeesMap(map);
+            setEmployeesFullNameMap(fullMap);
+        } catch (error) {
+            console.error('Error fetching employees in PurchaseReceiveManagement:', error);
+        }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        if (employeesMap[rawStr]) {
+            return employeesMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesMap[prefixKey]) return employeesMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByFirstName = (item) => {
+        if (!item) return '—';
+        const candidate = item.entryByName || item.entryBy || item.requestedBy || item.createdBy || item.createdByName || item.userName || item.user;
+        if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
+
+    const getEditedByFirstName = (item) => {
+        if (!item) return '';
+        const candidate = item.editedByName || item.editedBy;
+        if (!candidate || candidate === '-' || candidate === '—') return '';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
 
     const syncPurchaseReceiveStock = async (purchasesList) => {
         await syncAllPurchaseReceiveStock(purchasesList);
@@ -161,6 +355,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         fetchCustomers();
         fetchProducts();
         fetchPurchases();
+        fetchEmployees();
     }, []);
 
     const requestedCount = useMemo(() => {
@@ -179,11 +374,12 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                 const comp = (p.companyName || p.supplierName || '').toLowerCase();
                 const lc = (p.lcNo || '').toLowerCase();
                 const ch = (p.challanNo || '').toLowerCase();
-                return pNo.includes(q) || comp.includes(q) || lc.includes(q) || ch.includes(q);
+                const entry = (getEntryByFirstName(p) || '').toLowerCase();
+                return pNo.includes(q) || comp.includes(q) || lc.includes(q) || ch.includes(q) || entry.includes(q);
             }
             return true;
         });
-    }, [purchaseReceives, isRequestedOnly, searchQuery]);
+    }, [purchaseReceives, isRequestedOnly, searchQuery, employeesMap]);
 
     const getPurchaseBrandEntries = (purchase) => {
         const results = [];
@@ -961,15 +1157,27 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
-            const initialStatus = (canApprove || isAdmin) ? 'Accepted' : 'Requested';
+            const isAdminUser = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+            const initialStatus = (canApprove || isAdminUser) ? 'Accepted' : 'Requested';
             const generatedNo = formData.purchaseReceiveNo || formData.purchaseNo || `PR-REC-${String(purchaseReceives.length + 1).padStart(4, '0')}`;
+            const employeeId = currentUser?.employeeId || currentUser?.username || 'admin';
+            const employeeDisplayName = currentUser?.name || currentUser?.nameEn || currentUser?.username || 'Admin';
+            const employeeRole = currentUser?.role || 'admin';
             const payload = {
                 ...formData,
                 purchaseReceiveNo: generatedNo,
                 purchaseNo: generatedNo,
                 status: editingId ? (formData.status || 'Requested') : initialStatus,
-                createdBy: currentUser?.username || 'User'
+                createdBy: editingId ? (formData.createdBy || employeeId) : employeeId,
+                createdByName: editingId ? (formData.createdByName || employeeDisplayName) : employeeDisplayName,
+                entryBy: editingId ? (formData.entryBy || employeeId) : employeeId,
+                entryByName: editingId ? (formData.entryByName || employeeDisplayName) : employeeDisplayName,
+                entryByRole: editingId ? (formData.entryByRole || employeeRole) : employeeRole,
+                ...(editingId ? {
+                    editedBy: employeeId,
+                    editedByName: employeeDisplayName,
+                    editedByRole: employeeRole
+                } : {})
             };
 
             const now = new Date();
@@ -1029,7 +1237,14 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
 
     const handleStatusUpdate = async (purchase, newStatus) => {
         try {
-            const updated = { ...purchase, status: newStatus };
+            const employeeId = currentUser?.employeeId || currentUser?.username || 'admin';
+            const employeeDisplayName = currentUser?.name || currentUser?.nameEn || currentUser?.username || 'Admin';
+            const updated = {
+                ...purchase,
+                status: newStatus,
+                approvedBy: employeeId,
+                approvedByName: employeeDisplayName
+            };
             const res = await axios.put(`${API_BASE_URL}/api/purchase-receives/${purchase._id}`, updated);
             const savedPR = res.data || updated;
             const statusLower = (newStatus || '').toLowerCase();
@@ -1161,13 +1376,14 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                 <th className="sale-mgmt-th text-center">Paid</th>
                                 <th className="sale-mgmt-th text-center">Balance</th>
                                 <th className="sale-mgmt-th text-center">Status</th>
+                                {canShowEntryBy && <th className="sale-mgmt-th text-center">Entry By</th>}
                                 <th className="sale-mgmt-th text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={15} className="px-6 py-12 text-center text-gray-500 font-medium">
+                                    <td colSpan={15 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-gray-500 font-medium">
                                         Loading purchase receive records...
                                     </td>
                                 </tr>
@@ -1241,6 +1457,32 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                                 {p.status || 'Accepted'}
                                             </span>
                                         </td>
+                                        {canShowEntryBy && (
+                                            <td className="px-3 py-4 whitespace-nowrap text-center align-top">
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <span className="text-xs font-semibold text-gray-700">
+                                                        {getEntryByFirstName(p)}
+                                                    </span>
+                                                    {(p.editedBy || p.editedByName) &&
+                                                     (p.editedBy || '').toLowerCase() !== 'admin' &&
+                                                     (p.editedByName || '').toLowerCase() !== 'admin' && (
+                                                        <span className="text-[10px] text-amber-600 font-medium">
+                                                            ✎ {getEditedByFirstName(p)}
+                                                        </span>
+                                                    )}
+                                                    {p.smApprovedByName && (
+                                                        <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                                            ✓ {getFirstNameFromIdentifier(p.smApprovedByName || p.smApprovedBy)}
+                                                        </span>
+                                                    )}
+                                                    {p.approvedByName && (
+                                                        <span className="text-[10px] text-emerald-600 font-semibold" title="Approval">
+                                                            ✓✓ {getFirstNameFromIdentifier(p.approvedByName || p.approvedBy)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        )}
                                         <td className="px-3 py-4 text-center whitespace-nowrap text-sm align-top">
                                             <div className="flex items-center justify-center gap-1.5">
                                                 {canApprove && ((p.status || '').toLowerCase() === 'requested') && (
@@ -1285,7 +1527,7 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={15} className="px-6 py-12 text-center text-gray-400">
+                                    <td colSpan={15 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-gray-400">
                                         No purchase receive records found.
                                     </td>
                                 </tr>
@@ -1324,9 +1566,17 @@ const PurchaseReceiveManagement = ({ currentUser, addNotification, fetchStockRec
                                     <div>Due: <span className="font-bold text-orange-600">৳{getPRTotals(p).dueAmount.toLocaleString('en-IN')}</span></div>
                                 </div>
                                  <div className="flex items-center justify-between pt-1">
-                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                                        (p.status || 'Accepted').toLowerCase() === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                                    }`}>{p.status || 'Requested'}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                            (p.status || 'Accepted').toLowerCase() === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                        }`}>{p.status || 'Requested'}</span>
+                                        {canShowEntryBy && (
+                                            <span className="text-[11px] font-semibold text-gray-600">
+                                                By: {getEntryByFirstName(p)}
+                                                {p.approvedByName && <span className="text-emerald-600 ml-1">✓✓ {getFirstNameFromIdentifier(p.approvedByName || p.approvedBy)}</span>}
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="flex items-center gap-1.5">
                                         {canApprove && ((p.status || '').toLowerCase() === 'requested') && (
                                             <>

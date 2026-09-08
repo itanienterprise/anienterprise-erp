@@ -8,6 +8,7 @@ import { decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
+import { formatFirstName } from '../IPManagement/IPManagement';
 import './SaleManagement.css';
 
 const getSafeString = (val) => {
@@ -58,6 +59,7 @@ const SaleManagement = ({
     const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [employeesMap, setEmployeesMap] = useState({});
+    const [employeesFirstNameMap, setEmployeesFirstNameMap] = useState({});
     const [activePdfDropdown, setActivePdfDropdown] = useState(null);
 
     const fetchEmployees = async () => {
@@ -65,6 +67,7 @@ const SaleManagement = ({
             const response = await axios.get(`${API_BASE_URL}/api/employees`);
             const rawData = Array.isArray(response.data) ? response.data : [];
             const map = {};
+            const firstMap = {};
             rawData.forEach(emp => {
                 let d = emp;
                 if (emp && emp.data) {
@@ -78,8 +81,86 @@ const SaleManagement = ({
                 if (d.employeeId) map[d.employeeId] = empName;
                 if (d.username) map[d.username] = empName;
                 if (d._id) map[d._id] = empName;
+
+                // First name resolution
+                const rawFullName = empName;
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && rawFullName) {
+                    const parts = rawFullName.split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName || rawFullName);
+                if (fName) {
+                    if (d.employeeId) {
+                        firstMap[d.employeeId.toLowerCase().trim()] = fName;
+                        firstMap[d.employeeId] = fName;
+                    }
+                    if (d.username) {
+                        firstMap[d.username.toLowerCase().trim()] = fName;
+                        firstMap[d.username] = fName;
+                    }
+                    if (d._id) {
+                        firstMap[String(d._id).toLowerCase()] = fName;
+                        firstMap[String(d._id)] = fName;
+                    }
+                    if (d.name) {
+                        const fullNameLower = d.name.toLowerCase().trim();
+                        firstMap[fullNameLower] = fName;
+                        firstMap[d.name.trim()] = fName;
+                        const firstPart = fullNameLower.split(/\s+/)[0];
+                        if (firstPart) firstMap[firstPart] = fName;
+                    }
+                    if (d.nameEn) {
+                        const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                        firstMap[fullNameEnLower] = fName;
+                        firstMap[d.nameEn.trim()] = fName;
+                        const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                        if (firstPartEn) firstMap[firstPartEn] = fName;
+                    }
+                }
             });
+
+            // Map 'admin' and 'administrator' to admin employee's first name / Administrator
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+            }
+            firstMap['admin'] = 'Administrator';
+            firstMap['administrator'] = 'Administrator';
+            firstMap['a-1001'] = adminFirstName;
+
             setEmployeesMap(map);
+            setEmployeesFirstNameMap(firstMap);
         } catch (error) {
             console.error('Error fetching employees map:', error);
         }
@@ -96,6 +177,55 @@ const SaleManagement = ({
             return employeesMap[name];
         }
         return name || code || '';
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesFirstNameMap[key]) {
+            return employeesFirstNameMap[key];
+        }
+        if (employeesFirstNameMap[rawStr]) {
+            return employeesFirstNameMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesFirstNameMap[prefixKey]) return employeesFirstNameMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesFirstNameMap[firstWord.toLowerCase()]) {
+            return employeesFirstNameMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByFirstName = (item) => {
+        if (!item) return '—';
+        const candidate = item.entryByName || item.entryBy || item.requestedBy || item.requestedByUsername || item.createdBy || item.createdByName || item.createdByUsername || item.userName || item.user;
+        if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
+
+    const getEditedByFirstName = (item) => {
+        if (!item) return '';
+        const candidate = item.editedByName || item.editedBy || item.editRequestedBy;
+        if (!candidate || candidate === '-' || candidate === '—') return '';
+        return getFirstNameFromIdentifier(candidate) || candidate;
     };
 
     const rowRefs = useRef({});
@@ -603,6 +733,12 @@ const SaleManagement = ({
     const canApprove = hasPermission(currentUser, moduleKey, 'special');
     const canViewSaleRequest = hasPermission(currentUser, moduleKey, 'saleRequest');
     const canViewEditRequest = hasPermission(currentUser, moduleKey, 'editRequest');
+    const canShowEntryBy = useMemo(() => {
+        const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin' || (currentUser?.role || '').toLowerCase() === 'superadmin';
+        const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+        const isBorderManagerRole = (currentUser?.role || '').toLowerCase() === 'border manager';
+        return isAdmin || isIncharge || isBorderManagerRole || hasPermission(currentUser, moduleKey, 'showEntryBy') || hasPermission(currentUser, 'sales', 'showEntryBy') || hasPermission(currentUser, 'borderSale', 'showEntryBy');
+    }, [currentUser, moduleKey]);
 
     // Fine-grained permission flags from System Access
     const canAdd = hasPermission(currentUser, moduleKey, 'add');
@@ -2127,7 +2263,16 @@ const SaleManagement = ({
                     s.productName?.toLowerCase().includes(query) ||
                     resolveProductName(s.productName)?.toLowerCase().includes(query) ||
                     s.brand?.toLowerCase().includes(query) ||
-                    (s.remarks || '').toLowerCase().includes(query);
+                    (s.remarks || '').toLowerCase().includes(query) ||
+                    (s.requestedBy || '').toLowerCase().includes(query) ||
+                    (s.createdByName || '').toLowerCase().includes(query) ||
+                    (s.createdBy || '').toLowerCase().includes(query) ||
+                    (s.entryBy || '').toLowerCase().includes(query) ||
+                    (s.entryByName || '').toLowerCase().includes(query) ||
+                    getEntryByFirstName(s).toLowerCase().includes(query) ||
+                    (s.acceptedBy || '').toLowerCase().includes(query) ||
+                    (s.approvedByName || '').toLowerCase().includes(query) ||
+                    getFirstNameFromIdentifier(s.acceptedBy || s.approvedByName || s.approvedBy).toLowerCase().includes(query);
 
                 if (matchesBasic) return true;
 
@@ -5847,6 +5992,7 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('totalAmount')}>
                                             <div className="flex items-center justify-center">total price {renderSortIcon('totalAmount')}</div>
                                         </th>
+                                        {canShowEntryBy && <th className="sale-mgmt-th text-center whitespace-nowrap font-bold">Entry By</th>}
                                         <th className="sale-mgmt-th text-center">Actions</th>
                                     </tr>
                                 ) : (
@@ -5917,7 +6063,7 @@ const SaleManagement = ({
                                         <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')} style={{ display: 'none' }}>
                                             <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
                                         </th>
-                                        <th className="sale-mgmt-th text-center whitespace-nowrap font-bold">Entry By</th>
+                                        {canShowEntryBy && <th className="sale-mgmt-th text-center whitespace-nowrap font-bold">Entry By</th>}
                                         <th className="sale-mgmt-th text-center">Actions</th>
                                     </tr>
                                 )}
@@ -6047,6 +6193,51 @@ const SaleManagement = ({
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-4 whitespace-nowrap text-center font-black text-gray-900">৳ {parseFloat(sale.totalAmount).toLocaleString('en-IN')}</td>
+                                                {canShowEntryBy && (
+                                                    <td className="px-3 py-4 text-center whitespace-nowrap">
+                                                        {(() => {
+                                                            const entryUser = getEntryByFirstName(sale);
+
+                                                            const isReq = (sale.status || '').toLowerCase() === 'requested';
+                                                            const isEditReq = sale.isEdited === true || (sale.status || '').toLowerCase() === 'edit_requested';
+
+                                                            const rawApproved = sale.acceptedBy || sale.approvedByName || sale.approvedBy;
+                                                            const approvedUser = !isReq && rawApproved ? getFirstNameFromIdentifier(sale.acceptedByUsername || sale.approvedByUsername || rawApproved) : null;
+
+                                                            const rawEdited = sale.editedByName || sale.editedBy || sale.editRequestedBy;
+                                                            const editedUser = rawEdited && rawEdited.toLowerCase() !== 'admin' ? getEditedByFirstName(sale) : (rawEdited && rawEdited.toLowerCase() === 'admin' ? 'Admin' : null);
+
+                                                            const rawEditApproved = sale.editApprovedByName || sale.editApprovedBy;
+                                                            const editApprovedUser = !isEditReq && rawEditApproved ? getFirstNameFromIdentifier(sale.editApprovedByUsername || rawEditApproved) : null;
+
+                                                            return (
+                                                                <div className="flex flex-col items-center justify-center gap-0.5">
+                                                                    <span className="text-xs font-bold text-gray-800" title="Entry By">
+                                                                        {entryUser}
+                                                                    </span>
+
+                                                                    {approvedUser && (
+                                                                        <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5" title={`Approved by: ${approvedUser}`}>
+                                                                            <span>✓</span> {approvedUser}
+                                                                        </span>
+                                                                    )}
+
+                                                                    {editedUser && (
+                                                                        <span className="text-[10px] text-amber-600 font-medium flex items-center gap-0.5" title={`Edited by: ${editedUser}`}>
+                                                                            <span>✎</span> {editedUser}
+                                                                        </span>
+                                                                    )}
+
+                                                                    {editApprovedUser && (
+                                                                        <span className="text-[10px] text-purple-600 font-medium flex items-center gap-0.5" title={`Edit Approved by: ${editApprovedUser}`}>
+                                                                            <span>✓✎</span> {editApprovedUser}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                )}
                                                 <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-center gap-1.5">
                                                         {(sale.status === 'Requested' || sale.status === 'Edit_Requested' || sale.isEdited === true) ? (
@@ -6397,50 +6588,51 @@ const SaleManagement = ({
                                                     );
                                                 })()}
                                             </td>
-                                            <td className="px-3 py-4 text-center whitespace-nowrap">
-                                                {(() => {
-                                                    const rawEntryUser = sale.requestedBy || sale.requestedByUsername || sale.createdByName || sale.createdByUsername || sale.createdBy || sale.entryBy || sale.entryByName || '-';
-                                                    const entryUser = getDisplayName(sale.requestedByUsername || sale.createdByUsername || sale.entryBy, rawEntryUser);
+                                            {canShowEntryBy && (
+                                                <td className="px-3 py-4 text-center whitespace-nowrap">
+                                                    {(() => {
+                                                        const entryUser = getEntryByFirstName(sale);
 
-                                                    const isReq = (sale.status || '').toLowerCase() === 'requested';
-                                                    const isEditReq = sale.isEdited === true || (sale.status || '').toLowerCase() === 'edit_requested';
+                                                        const isReq = (sale.status || '').toLowerCase() === 'requested';
+                                                        const isEditReq = sale.isEdited === true || (sale.status || '').toLowerCase() === 'edit_requested';
 
-                                                    const rawApproved = sale.acceptedBy || sale.approvedByName || sale.approvedBy;
-                                                    const approvedUser = !isReq && rawApproved ? getDisplayName(sale.acceptedByUsername || sale.approvedByUsername || sale.approvedBy, rawApproved) : null;
+                                                        const rawApproved = sale.acceptedBy || sale.approvedByName || sale.approvedBy;
+                                                        const approvedUser = !isReq && rawApproved ? getFirstNameFromIdentifier(sale.acceptedByUsername || sale.approvedByUsername || rawApproved) : null;
 
-                                                    const rawEdited = sale.editedByName || sale.editedBy || sale.editRequestedBy;
-                                                    const editedUser = rawEdited && rawEdited.toLowerCase() !== 'admin' ? getDisplayName(sale.editedByUsername || sale.editRequestedByUsername || sale.editedBy, rawEdited) : (rawEdited && rawEdited.toLowerCase() === 'admin' ? 'Admin' : null);
+                                                        const rawEdited = sale.editedByName || sale.editedBy || sale.editRequestedBy;
+                                                        const editedUser = rawEdited && rawEdited.toLowerCase() !== 'admin' ? getEditedByFirstName(sale) : (rawEdited && rawEdited.toLowerCase() === 'admin' ? 'Admin' : null);
 
-                                                    const rawEditApproved = sale.editApprovedByName || sale.editApprovedBy;
-                                                    const editApprovedUser = !isEditReq && rawEditApproved ? getDisplayName(sale.editApprovedByUsername || sale.editApprovedBy, rawEditApproved) : null;
+                                                        const rawEditApproved = sale.editApprovedByName || sale.editApprovedBy;
+                                                        const editApprovedUser = !isEditReq && rawEditApproved ? getFirstNameFromIdentifier(sale.editApprovedByUsername || rawEditApproved) : null;
 
-                                                    return (
-                                                        <div className="flex flex-col items-center justify-center gap-0.5">
-                                                            <span className="text-xs font-bold text-gray-800" title="Entry By">
-                                                                {entryUser}
-                                                            </span>
-
-                                                            {approvedUser && (
-                                                                <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5" title={`Approved by: ${approvedUser}`}>
-                                                                    <span>✓</span> {approvedUser}
+                                                        return (
+                                                            <div className="flex flex-col items-center justify-center gap-0.5">
+                                                                <span className="text-xs font-bold text-gray-800" title="Entry By">
+                                                                    {entryUser}
                                                                 </span>
-                                                            )}
 
-                                                            {editedUser && (
-                                                                <span className="text-[10px] text-amber-600 font-medium flex items-center gap-0.5" title={`Edited by: ${editedUser}`}>
-                                                                    <span>✎</span> {editedUser}
-                                                                </span>
-                                                            )}
+                                                                {approvedUser && (
+                                                                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5" title={`Approved by: ${approvedUser}`}>
+                                                                        <span>✓</span> {approvedUser}
+                                                                    </span>
+                                                                )}
 
-                                                            {editApprovedUser && (
-                                                                <span className="text-[10px] text-purple-600 font-medium flex items-center gap-0.5" title={`Edit Approved by: ${editApprovedUser}`}>
-                                                                    <span>✓✎</span> {editApprovedUser}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </td>
+                                                                {editedUser && (
+                                                                    <span className="text-[10px] text-amber-600 font-medium flex items-center gap-0.5" title={`Edited by: ${editedUser}`}>
+                                                                        <span>✎</span> {editedUser}
+                                                                    </span>
+                                                                )}
+
+                                                                {editApprovedUser && (
+                                                                    <span className="text-[10px] text-purple-600 font-medium flex items-center gap-0.5" title={`Edit Approved by: ${editApprovedUser}`}>
+                                                                        <span>✓✎</span> {editApprovedUser}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </td>
+                                            )}
                                             <td className="px-3 py-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center justify-center gap-1.5">
                                                     {(sale.status === 'Requested' || sale.status === 'Edit_Requested' || sale.isEdited === true) ? (
@@ -6740,13 +6932,13 @@ const SaleManagement = ({
 
                                                 <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Entry By</span>
                                                 <span className="text-indigo-400 font-bold">:</span>
-                                                <span className="font-bold text-indigo-700">{getDisplayName(sale.requestedByUsername || sale.createdByUsername || sale.entryBy, sale.requestedBy || sale.requestedByUsername || sale.createdByName || sale.createdBy || '-')}</span>
+                                                <span className="font-bold text-indigo-700">{getEntryByFirstName(sale)}</span>
 
                                                 {(sale.acceptedBy || sale.approvedByName || sale.approvedBy) && (sale.status || '').toLowerCase() !== 'requested' && (
                                                     <>
                                                         <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Approved By</span>
                                                         <span className="text-emerald-400 font-bold">:</span>
-                                                        <span className="font-bold text-emerald-700">✓ {getDisplayName(sale.acceptedByUsername || sale.approvedByUsername, sale.acceptedBy || sale.approvedByName || sale.approvedBy)}</span>
+                                                        <span className="font-bold text-emerald-700">✓ {getFirstNameFromIdentifier(sale.acceptedByUsername || sale.approvedByUsername || sale.acceptedBy || sale.approvedByName || sale.approvedBy)}</span>
                                                     </>
                                                 )}
 
@@ -6754,7 +6946,7 @@ const SaleManagement = ({
                                                     <>
                                                         <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Edited By</span>
                                                         <span className="text-amber-400 font-bold">:</span>
-                                                        <span className="font-bold text-amber-700">✎ {getDisplayName(sale.editedByUsername || sale.editRequestedByUsername, sale.editedByName || sale.editedBy || sale.editRequestedBy)}</span>
+                                                        <span className="font-bold text-amber-700">✎ {getEditedByFirstName(sale)}</span>
                                                     </>
                                                 )}
 
@@ -6762,7 +6954,7 @@ const SaleManagement = ({
                                                     <>
                                                         <span className="text-[10px] font-bold text-purple-500 uppercase tracking-wider">Edit Approved</span>
                                                         <span className="text-purple-400 font-bold">:</span>
-                                                        <span className="font-bold text-purple-700">✓✎ {getDisplayName(sale.editApprovedByUsername, sale.editApprovedByName || sale.editApprovedBy)}</span>
+                                                        <span className="font-bold text-purple-700">✓✎ {getFirstNameFromIdentifier(sale.editApprovedByUsername || sale.editApprovedByName || sale.editApprovedBy)}</span>
                                                     </>
                                                 )}
                                             </div>

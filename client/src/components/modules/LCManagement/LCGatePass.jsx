@@ -9,6 +9,8 @@ import {
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { decryptData } from '../../../utils/encryption';
+import { formatFirstName } from '../IPManagement/IPManagement';
 
 const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNotif }) => {
     const [localHighlightId, setLocalHighlightId] = useState(null);
@@ -112,6 +114,160 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
     const isBorderManager = (currentUser?.role || '').toLowerCase() === 'border manager';
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
     const cannotDelete = !canDelete;
+    const canShowEntryBy = useMemo(() => {
+        const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin' || (currentUser?.role || '').toLowerCase() === 'superadmin';
+        const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+        const isBorderManagerRole = (currentUser?.role || '').toLowerCase() === 'border manager';
+        return isAdmin || isIncharge || isBorderManagerRole || hasPermission(currentUser, 'lcGp', 'showEntryBy');
+    }, [currentUser]);
+
+    const [employeesFirstNameMap, setEmployeesFirstNameMap] = useState({});
+
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const firstMap = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch(e){}
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                const empName = (d.name || d.nameEn || d.employeeName || d.username || '').trim();
+
+                const rawFullName = empName;
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && rawFullName) {
+                    const parts = rawFullName.split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName || rawFullName);
+                if (fName) {
+                    if (d.employeeId) {
+                        firstMap[d.employeeId.toLowerCase().trim()] = fName;
+                        firstMap[d.employeeId] = fName;
+                    }
+                    if (d.username) {
+                        firstMap[d.username.toLowerCase().trim()] = fName;
+                        firstMap[d.username] = fName;
+                    }
+                    if (d._id) {
+                        firstMap[String(d._id).toLowerCase()] = fName;
+                        firstMap[String(d._id)] = fName;
+                    }
+                    if (d.name) {
+                        const fullNameLower = d.name.toLowerCase().trim();
+                        firstMap[fullNameLower] = fName;
+                        firstMap[d.name.trim()] = fName;
+                        const firstPart = fullNameLower.split(/\s+/)[0];
+                        if (firstPart) firstMap[firstPart] = fName;
+                    }
+                    if (d.nameEn) {
+                        const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                        firstMap[fullNameEnLower] = fName;
+                        firstMap[d.nameEn.trim()] = fName;
+                        const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                        if (firstPartEn) firstMap[firstPartEn] = fName;
+                    }
+                }
+            });
+
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+            }
+            firstMap['admin'] = 'Administrator';
+            firstMap['administrator'] = 'Administrator';
+            firstMap['a-1001'] = adminFirstName;
+
+            setEmployeesFirstNameMap(firstMap);
+        } catch (error) {
+            console.error('Error fetching employees map in LCGatePass:', error);
+        }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesFirstNameMap[key]) {
+            return employeesFirstNameMap[key];
+        }
+        if (employeesFirstNameMap[rawStr]) {
+            return employeesFirstNameMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesFirstNameMap[prefixKey]) return employeesFirstNameMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesFirstNameMap[firstWord.toLowerCase()]) {
+            return employeesFirstNameMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByFirstName = (item) => {
+        if (!item) return '—';
+        const candidate = item.entryByName || item.entryBy || item.requestedBy || item.requestedByUsername || item.createdBy || item.createdByName || item.createdByUsername || item.userName || item.user;
+        if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
+
+    const getEditedByFirstName = (item) => {
+        if (!item) return '';
+        const candidate = item.editedByName || item.editedBy || item.editRequestedBy;
+        if (!candidate || candidate === '-' || candidate === '—') return '';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
 
     const fetchRecords = async () => {
         setIsLoading(true);
@@ -136,6 +292,7 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
 
     useEffect(() => {
         fetchRecords();
+        fetchEmployees();
     }, []);
 
     // Outside click handler for dropdown
@@ -165,11 +322,15 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
 
     const filteredRecords = useMemo(() => {
         return records.filter(record => {
+            const entry = (record.entryByName || record.entryBy || record.createdBy || record.createdByName || '').toLowerCase();
+            const entryFirst = getEntryByFirstName(record).toLowerCase();
             const matchesSearch = 
                 (record.partyName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (record.party || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (record.lcNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (record.productName || '').toLowerCase().includes(searchQuery.toLowerCase());
+                (record.productName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                entry.includes(searchQuery.toLowerCase()) ||
+                entryFirst.includes(searchQuery.toLowerCase());
             
             const matchesDate = 
                 (!filters.startDate || record.gpDate >= filters.startDate) &&
@@ -180,7 +341,7 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
 
             return matchesSearch && matchesDate && matchesProduct && matchesStatus;
         });
-    }, [records, searchQuery, filters]);
+    }, [records, searchQuery, filters, employeesFirstNameMap]);
 
     const stats = useMemo(() => {
         return {
@@ -195,8 +356,20 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
         e.preventDefault();
         setIsSubmitting(true);
         try {
+            const payload = {
+                ...formData,
+                ...(editingId ? {
+                    editedBy: currentUser?.name || currentUser?.username || 'Administrator',
+                    editedByName: currentUser?.name || currentUser?.username || 'Administrator'
+                } : {
+                    entryBy: currentUser?.name || currentUser?.username || 'Administrator',
+                    entryByName: currentUser?.name || currentUser?.username || 'Administrator',
+                    createdBy: currentUser?.name || currentUser?.username || 'Administrator',
+                    createdByName: currentUser?.name || currentUser?.username || 'Administrator'
+                })
+            };
             if (editingId) {
-                await axios.put(`${API_BASE_URL}/api/lc-gp/${editingId}`, formData);
+                await axios.put(`${API_BASE_URL}/api/lc-gp/${editingId}`, payload);
                 if (addNotification) {
                     addNotification(
                         'LC Gate Pass Updated',
@@ -209,7 +382,7 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                 }
                 addNotification?.('Gate Pass updated successfully', 'success');
             } else {
-                await axios.post(`${API_BASE_URL}/api/lc-gp`, formData);
+                await axios.post(`${API_BASE_URL}/api/lc-gp`, payload);
                 if (addNotification) {
                     addNotification(
                         'New LC Gate Pass Created',
@@ -369,6 +542,7 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Border Sale</th>
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">Rem. G.P</th>
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right text-nowrap">G.P Value</th>
+                                    {canShowEntryBy && <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Entry By</th>}
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center text-nowrap">Actions</th>
                                 </tr>
                             </thead>
@@ -376,14 +550,14 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                                 {isLoading ? (
                                     Array(5).fill(0).map((_, i) => (
                                         <tr key={i} className="animate-pulse">
-                                            {Array(11).fill(0).map((_, j) => (
+                                            {Array(11 + (canShowEntryBy ? 1 : 0)).fill(0).map((_, j) => (
                                                 <td key={j} className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-full" /></td>
                                             ))}
                                         </tr>
                                     ))
                                 ) : filteredRecords.length === 0 ? (
                                     <tr>
-                                        <td colSpan="11" className="px-6 py-32 text-center">
+                                        <td colSpan={11 + (canShowEntryBy ? 1 : 0)} className="px-6 py-32 text-center">
                                             <div className="flex flex-col items-center gap-4">
                                                 <div className="p-6 bg-gray-50 rounded-full">
                                                     <FileTextIcon className="w-12 h-12 text-gray-300" />
@@ -489,6 +663,20 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                                             <td className="px-6 py-4 text-right whitespace-nowrap">
                                                 <p className="text-sm font-black text-gray-900">৳{parseFloat(record.gpValue || 0).toLocaleString('en-IN')}</p>
                                             </td>
+                                            {canShowEntryBy && (
+                                                <td className="px-6 py-4 text-center whitespace-nowrap">
+                                                    <div className="flex flex-col items-center justify-center gap-0.5">
+                                                        <span className="text-xs font-semibold text-gray-700">
+                                                            {getEntryByFirstName(record)}
+                                                        </span>
+                                                        {(record.editedBy || record.editedByName) && (
+                                                            <span className="text-[10px] text-amber-600 font-medium">
+                                                                ✎ {getEditedByFirstName(record)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center justify-center gap-4">
                                                     {canManage && (
@@ -667,6 +855,21 @@ const LCGatePass = ({ currentUser, addNotification, highlightId, isRequestedNoti
                                                     <span className="font-black text-gray-900 text-[11px]">
                                                         ৳{parseFloat(record.gpValue || 0).toLocaleString('en-IN')}
                                                     </span>
+
+                                                    {canShowEntryBy && (
+                                                        <>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entry By</span>
+                                                            <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                            <span className="font-semibold text-gray-800 text-[11px]">
+                                                                {getEntryByFirstName(record)}
+                                                                {(record.editedBy || record.editedByName) && (
+                                                                    <span className="text-amber-600 font-medium ml-1.5 text-[10px]">
+                                                                        ✎ {getEditedByFirstName(record)}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        </>
+                                                    )}
 
                                                     {canManage && (
                                                         <div className="col-span-3 flex gap-2 pt-3 mt-1 border-t border-gray-100 w-full">

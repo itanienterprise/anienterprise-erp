@@ -54,7 +54,8 @@ export const MODULES_LIST = [
             { key: 'special', label: 'Approve Order' },
             { key: 'orderRequest', label: 'Order Request' },
             { key: 'editRequest', label: 'Edit Request' },
-            { key: 'approveEditRequest', label: 'Approve Edit Request' }
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
+            { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
     {
@@ -66,7 +67,8 @@ export const MODULES_LIST = [
             { key: 'special', label: 'Approve Purchase' },
             { key: 'purchaseRequest', label: 'Purchase Request' },
             { key: 'editRequest', label: 'Edit Request' },
-            { key: 'approveEditRequest', label: 'Approve Edit Request' }
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
+            { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
     {
@@ -78,7 +80,8 @@ export const MODULES_LIST = [
             { key: 'special', label: 'Approve Purchase Receive' },
             { key: 'purchaseReceiveRequest', label: 'Purchase Receive Request' },
             { key: 'editRequest', label: 'Edit Request' },
-            { key: 'approveEditRequest', label: 'Approve Edit Request' }
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
+            { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
     { key: 'product', label: 'Product Management' },
@@ -135,7 +138,8 @@ export const MODULES_LIST = [
             { key: 'special', label: 'Approve Sale' },
             { key: 'saleRequest', label: 'Sale Request' },
             { key: 'editRequest', label: 'Edit Request' },
-            { key: 'approveEditRequest', label: 'Approve Edit Request' }
+            { key: 'approveEditRequest', label: 'Approve Edit Request' },
+            { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
     { key: 'profitLoss', label: 'Profit & Loss' },
@@ -193,7 +197,13 @@ export const MODULES_LIST = [
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
-    { key: 'lcGp', label: 'LC GatePass' },
+    {
+        key: 'lcGp',
+        label: 'LC GatePass',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     {
         key: 'lcExpense',
         label: 'LC Expense',
@@ -201,7 +211,13 @@ export const MODULES_LIST = [
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
-    { key: 'marginReturn', label: 'Margin Return' },
+    {
+        key: 'marginReturn',
+        label: 'Margin Return',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     { key: 'returnProduct', label: 'Return Product' },
     { key: 'backupRestore', label: 'Backup & Restore' }
 ];

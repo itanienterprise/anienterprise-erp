@@ -8,8 +8,8 @@ import {
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
-import { calculatePktRemainder, calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { formatFirstName } from '../IPManagement/IPManagement';
 
 const getSafeString = (val) => {
     if (!val) return '';
@@ -49,6 +49,8 @@ const OrderManagement = ({
     const [allSalesRecords, setAllSalesRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [employeesMap, setEmployeesMap] = useState({});
+    const [employeesFullNameMap, setEmployeesFullNameMap] = useState({});
 
     const rowRefs = useRef({});
     useEffect(() => {
@@ -110,6 +112,11 @@ const OrderManagement = ({
     const canViewOrderRequest = useMemo(() => hasPermission(currentUser, 'order', 'orderRequest') || hasPermission(currentUser, 'sales', 'saleRequest'), [currentUser]);
     const canViewEditRequest = useMemo(() => hasPermission(currentUser, 'order', 'editRequest') || hasPermission(currentUser, 'sales', 'editRequest'), [currentUser]);
     const canApproveEditRequest = useMemo(() => hasPermission(currentUser, 'order', 'approveEditRequest') || hasPermission(currentUser, 'sales', 'approveEditRequest') || canApprove, [currentUser]);
+    const canShowEntryBy = useMemo(() => {
+        const isAdmin = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin' || (currentUser?.role || '').toLowerCase() === 'superadmin';
+        const isIncharge = (currentUser?.role || '').toLowerCase() === 'incharge';
+        return isAdmin || isIncharge || hasPermission(currentUser, 'order', 'showEntryBy') || hasPermission(currentUser, 'sales', 'showEntryBy');
+    }, [currentUser]);
 
     const canUserEditOrder = (order) => {
         if (!order) return false;
@@ -309,6 +316,7 @@ const OrderManagement = ({
         fetchProducts();
         fetchStockRecords();
         fetchDamagesRecords();
+        fetchEmployees();
     }, []);
 
     const fetchCustomers = async () => {
@@ -381,6 +389,176 @@ const OrderManagement = ({
         } catch (err) {
             console.error('Error fetching products:', err);
         }
+    };
+
+    const fetchEmployees = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(res.data) ? res.data : [];
+            const map = {};
+            const fullMap = {};
+
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch { /* ignore */ }
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                const rawFullName = (d.name || d.nameEn || d.fullName || '').trim();
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && rawFullName) {
+                    const parts = rawFullName.split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName || rawFullName);
+                if (!fName) return;
+
+                if (d.employeeId) {
+                    map[d.employeeId.toLowerCase().trim()] = fName;
+                    map[d.employeeId] = fName;
+                    fullMap[d.employeeId.toLowerCase().trim()] = rawFullName || fName;
+                    fullMap[d.employeeId] = rawFullName || fName;
+                }
+                if (d.username) {
+                    map[d.username.toLowerCase().trim()] = fName;
+                    map[d.username] = fName;
+                    fullMap[d.username.toLowerCase().trim()] = rawFullName || fName;
+                    fullMap[d.username] = rawFullName || fName;
+                }
+                if (d._id) {
+                    map[String(d._id).toLowerCase()] = fName;
+                    map[String(d._id)] = fName;
+                    fullMap[String(d._id).toLowerCase()] = rawFullName || fName;
+                    fullMap[String(d._id)] = rawFullName || fName;
+                }
+                if (d.id) {
+                    map[String(d.id).toLowerCase()] = fName;
+                    map[String(d.id)] = fName;
+                    fullMap[String(d.id).toLowerCase()] = rawFullName || fName;
+                    fullMap[String(d.id)] = rawFullName || fName;
+                }
+                if (d.name) {
+                    const fullNameLower = d.name.toLowerCase().trim();
+                    map[fullNameLower] = fName;
+                    map[d.name.trim()] = fName;
+                    fullMap[fullNameLower] = rawFullName || fName;
+                    fullMap[d.name.trim()] = rawFullName || fName;
+                    const firstPart = fullNameLower.split(/\s+/)[0];
+                    if (firstPart) map[firstPart] = fName;
+                }
+                if (d.nameEn) {
+                    const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                    map[fullNameEnLower] = fName;
+                    map[d.nameEn.trim()] = fName;
+                    fullMap[fullNameEnLower] = rawFullName || fName;
+                    fullMap[d.nameEn.trim()] = rawFullName || fName;
+                    const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                    if (firstPartEn) map[firstPartEn] = fName;
+                }
+            });
+
+            // Map 'admin' and 'administrator' to admin employee's first name / Administrator
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            let adminFullName = 'Administrator';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+                if (d.name) adminFullName = d.name;
+            }
+            map['admin'] = 'Administrator';
+            map['administrator'] = 'Administrator';
+            map['a-1001'] = adminFirstName;
+
+            fullMap['admin'] = 'Administrator';
+            fullMap['administrator'] = 'Administrator';
+            fullMap['a-1001'] = adminFullName;
+
+            setEmployeesMap(map);
+            setEmployeesFullNameMap(fullMap);
+        } catch (error) {
+            console.error('Error fetching employees in OrderManagement:', error);
+        }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        if (employeesMap[rawStr]) {
+            return employeesMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesMap[prefixKey]) return employeesMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByFirstName = (item) => {
+        if (!item) return '—';
+        const candidate = item.entryByName || item.entryBy || item.requestedBy || item.createdBy || item.createdByName || item.requestedByUsername || item.createdByUsername || item.userName || item.user;
+        if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
+
+    const getEditedByFirstName = (item) => {
+        if (!item) return '';
+        const candidate = item.editedByName || item.editedBy;
+        if (!candidate || candidate === '-' || candidate === '—') return '';
+        return getFirstNameFromIdentifier(candidate) || candidate;
     };
 
     const fetchOrders = async () => {
@@ -781,7 +959,14 @@ const OrderManagement = ({
                 requestedByUsername: editingId ? (originalData?.requestedByUsername || currentUser?.username || '') : (currentUser?.username || ''),
                 createdByName: editingId ? (originalData?.createdByName || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || ''),
                 createdByUsername: editingId ? (originalData?.createdByUsername || currentUser?.username || '') : (currentUser?.username || ''),
-                createdBy: editingId ? (originalData?.createdBy || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || '')
+                createdBy: editingId ? (originalData?.createdBy || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || ''),
+                entryBy: editingId ? (originalData?.entryBy || originalData?.createdBy || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || ''),
+                entryByName: editingId ? (originalData?.entryByName || originalData?.createdByName || currentUser?.name || currentUser?.username || '') : (currentUser?.name || currentUser?.username || ''),
+                ...(editingId ? {
+                    editedBy: currentUser?.name || currentUser?.username || '',
+                    editedByName: currentUser?.name || currentUser?.username || '',
+                    editedByUsername: currentUser?.username || ''
+                } : {})
             };
 
             if (editingId) {
@@ -1322,7 +1507,13 @@ const OrderManagement = ({
                     return pName.includes(q) || itemBrand.includes(q) || brandEntriesMatch;
                 });
 
-                return inv.includes(q) || cust.includes(q) || remarks.includes(q) || matchesItems;
+                const entry = (order.entryByName || order.entryBy || order.requestedBy || order.createdBy || order.createdByName || order.userName || order.user || '').toLowerCase();
+                const entryFirst = getEntryByFirstName(order).toLowerCase();
+                const approved = (order.approvedByName || order.approvedBy || order.acceptedByName || order.acceptedBy || '').toLowerCase();
+                const smApproved = (order.smApprovedByName || order.smApprovedBy || '').toLowerCase();
+                const edited = (order.editedByName || order.editedBy || '').toLowerCase();
+
+                return inv.includes(q) || cust.includes(q) || remarks.includes(q) || matchesItems || entry.includes(q) || entryFirst.includes(q) || approved.includes(q) || smApproved.includes(q) || edited.includes(q);
             }
 
             return true;
@@ -2329,15 +2520,16 @@ const OrderManagement = ({
                                     <th className="sale-mgmt-th text-center cursor-pointer group" onClick={() => handleSort('status')}>
                                         <div className="flex items-center justify-center">Status {renderSortIcon('status')}</div>
                                     </th>
+                                    {canShowEntryBy && <th className="sale-mgmt-th text-center">Entry By</th>}
                                     <th className="sale-mgmt-th text-center">Actions</th>
                                 </tr>
                             </thead>
 
                                 <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">Loading orders...</td></tr>
+                                    <tr><td colSpan={15 + (canShowEntryBy ? 1 : 0)} className="px-3 py-20 text-center text-gray-400 font-medium">Loading orders...</td></tr>
                                 ) : getFilteredData.length === 0 ? (
-                                    <tr><td colSpan="15" className="px-3 py-20 text-center text-gray-400 font-medium">No order records found</td></tr>
+                                    <tr><td colSpan={15 + (canShowEntryBy ? 1 : 0)} className="px-3 py-20 text-center text-gray-400 font-medium">No order records found</td></tr>
                                 ) : getFilteredData.map((order, index) => {
                                     const { deliveryMap, totalOrderedQty, totalDeliveredQty, statusText, statusBadgeClass } = computeOrderFulfillment(order, allSalesRecords);
                                     const totalAmt = calculateOrderTotal(order.items);
@@ -2564,6 +2756,33 @@ const OrderManagement = ({
                                                     {statusText}
                                                 </span>
                                             </td>
+
+                                            {canShowEntryBy && (
+                                                <td className="px-3 py-4 whitespace-nowrap text-center align-middle">
+                                                    <div className="flex flex-col items-center gap-0.5">
+                                                        <span className="text-xs font-semibold text-gray-700">
+                                                            {getEntryByFirstName(order)}
+                                                        </span>
+                                                        {(order.editedBy || order.editedByName || order.editRequestedBy) &&
+                                                         (order.editedBy || '').toLowerCase() !== 'admin' &&
+                                                         (order.editedByName || '').toLowerCase() !== 'admin' && (
+                                                            <span className="text-[10px] text-amber-600 font-medium">
+                                                                ✎ {getEditedByFirstName(order)}
+                                                            </span>
+                                                        )}
+                                                        {order.smApprovedByName && (
+                                                            <span className="text-[10px] text-blue-600 font-medium" title="1st Approval">
+                                                                ✓ {getFirstNameFromIdentifier(order.smApprovedByName || order.smApprovedBy)}
+                                                            </span>
+                                                        )}
+                                                        {(order.approvedByName || order.approvedBy || order.acceptedByName || order.acceptedBy) && (
+                                                            <span className="text-[10px] text-emerald-600 font-semibold" title="Approval">
+                                                                ✓✓ {getFirstNameFromIdentifier(order.approvedByName || order.approvedBy || order.acceptedByName || order.acceptedBy)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            )}
 
                                             <td className="px-3 py-4 text-center whitespace-nowrap">
                                                 <div className="flex items-center justify-center gap-1.5">
