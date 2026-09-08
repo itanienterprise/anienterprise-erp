@@ -4,10 +4,14 @@ import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
+import { decryptData } from '../../../utils/encryption';
+import { formatFirstName } from '../IPManagement/IPManagement';
 
 const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, stockRecords, damages, fetchDamages, fetchStockRecords, addNotification }) => {
     const canDelete = hasPermission(currentUser, 'warehouse', 'delete');
+    const canShowEntryBy = hasPermission(currentUser, 'warehouse', 'showEntryBy');
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
+    const [employeesMap, setEmployeesMap] = useState({});
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -30,6 +34,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
     useEffect(() => {
         if (fetchDamages) fetchDamages();
         if (fetchStockRecords) fetchStockRecords();
+        fetchEmployees();
     }, []);
 
     const [activeDropdown, setActiveDropdown] = useState(null); // 'product', 'brand', 'lcNo', 'warehouse', 'reason'
@@ -292,10 +297,19 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
 
         try {
             const url = editingId ? `${API_BASE_URL}/api/damages/${editingId}` : `${API_BASE_URL}/api/damages`;
+            const payload = {
+                ...formData,
+                entryBy: formData.entryBy || (!editingId ? (currentUser?.employeeId || currentUser?.username || currentUser?.id || '') : ''),
+                entryByName: formData.entryByName || (!editingId ? (currentUser?.name || currentUser?.nameEn || currentUser?.username || '') : ''),
+                ...(editingId ? {
+                    updatedBy: currentUser?.employeeId || currentUser?.username || currentUser?.id || '',
+                    updatedByName: currentUser?.name || currentUser?.nameEn || currentUser?.username || ''
+                } : {})
+            };
             if (editingId) {
-                await axios.put(url, formData);
+                await axios.put(url, payload);
             } else {
-                await axios.post(url, formData);
+                await axios.post(url, payload);
             }
             setSubmitStatus('success');
             if (addNotification) addNotification('success', `Damage record ${editingId ? 'updated' : 'added'} successfully`);
@@ -325,7 +339,9 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             price: '',
             quantity: '',
             reason: 'Broken',
-            remarks: ''
+            remarks: '',
+            entryBy: '',
+            entryByName: ''
         });
         setEditingId(null);
         setSubmitStatus(null);
@@ -341,7 +357,9 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             price: damage.price || '',
             quantity: damage.quantity || '',
             reason: damage.reason || 'Broken',
-            remarks: damage.remarks || ''
+            remarks: damage.remarks || '',
+            entryBy: damage.entryBy || '',
+            entryByName: damage.entryByName || ''
         });
         setEditingId(damage._id);
         setShowForm(true);
@@ -369,15 +387,176 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         return [...new Set(warehouseData.map(w => w.whName || w.warehouse || w.name).filter(Boolean))];
     }, [warehouseData]);
 
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try { d = { ...decryptData(emp.data), _id: emp._id }; } catch (e) { }
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && d.name) {
+                    const parts = d.name.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.employeeName) {
+                    const parts = d.employeeName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.fullName) {
+                    const parts = d.fullName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName);
+                if (!fName) return;
+
+                if (d.employeeId) {
+                    map[d.employeeId.toLowerCase().trim()] = fName;
+                    map[d.employeeId] = fName;
+                }
+                if (d.username) {
+                    map[d.username.toLowerCase().trim()] = fName;
+                    map[d.username] = fName;
+                }
+                if (d._id) {
+                    map[String(d._id).toLowerCase()] = fName;
+                    map[String(d._id)] = fName;
+                }
+                if (d.id) {
+                    map[String(d.id).toLowerCase()] = fName;
+                    map[String(d.id)] = fName;
+                }
+                if (d.name) {
+                    const fullNameLower = d.name.toLowerCase().trim();
+                    map[fullNameLower] = fName;
+                    map[d.name.trim()] = fName;
+                    const firstPart = fullNameLower.split(/\s+/)[0];
+                    if (firstPart) map[firstPart] = fName;
+                }
+                if (d.nameEn) {
+                    const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                    map[fullNameEnLower] = fName;
+                    map[d.nameEn.trim()] = fName;
+                    const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                    if (firstPartEn) map[firstPartEn] = fName;
+                }
+            });
+
+            // Map 'admin' and 'administrator' to admin employee's first name / Administrator
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+            }
+            map['admin'] = 'Administrator';
+            map['administrator'] = 'Administrator';
+            map['a-1001'] = adminFirstName;
+
+            setEmployeesMap(map);
+        } catch (error) {
+            console.error('Error fetching employees in DamageManagement:', error);
+        }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        if (employeesMap[rawStr]) {
+            return employeesMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesMap[prefixKey]) return employeesMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByFirstName = (item) => {
+        if (!item) return '—';
+        const candidate = item.entryByName || item.entryBy || item.createdBy || item.createdByName || item.userName || item.user;
+        if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
+
     const displayDamages = useMemo(() => {
         let filtered = damages.filter(d =>
             (d.productName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (d.warehouse || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (d.reason || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (d.lcNo || '').toLowerCase().includes(searchQuery.toLowerCase())
+            (d.lcNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (d.brand || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (d.entryByName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (d.entryBy || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            getEntryByFirstName(d).toLowerCase().includes(searchQuery.toLowerCase())
         );
         return filtered;
-    }, [damages, searchQuery]);
+    }, [damages, searchQuery, employeesMap]);
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
@@ -864,12 +1043,15 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-right">Rate</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-right">Total Amount</th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-right">Reason</th>
+                                    {canShowEntryBy && (
+                                        <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-center whitespace-nowrap">Entry By</th>
+                                    )}
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
-                                    Array(3).fill(0).map((_, i) => <tr key={i}><td colSpan="10" className="px-6 py-4 animate-pulse bg-gray-50"></td></tr>)
+                                    Array(3).fill(0).map((_, i) => <tr key={i}><td colSpan={10 + (canShowEntryBy ? 1 : 0)} className="px-6 py-4 animate-pulse bg-gray-50"></td></tr>)
                                 ) : displayDamages.length > 0 ? (
                                     displayDamages.map((item) => (
                                         <tr key={item._id} className="hover:bg-blue-50/30 transition-colors">
@@ -886,6 +1068,11 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                             <td className="px-6 py-4 text-right">
                                                 <span className="inline-block px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-[10px] font-bold uppercase tracking-wider">{item.reason}</span>
                                             </td>
+                                            {canShowEntryBy && (
+                                                <td className="px-6 py-4 text-[13px] font-semibold text-gray-700 text-center whitespace-nowrap">
+                                                    {getEntryByFirstName(item)}
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-center gap-2">
                                                     <button onClick={() => handleEdit(item)} className="p-1.5 hover:bg-blue-100 text-gray-400 hover:text-blue-600 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
@@ -898,7 +1085,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="10" className="px-6 py-12 text-center text-gray-400 font-medium text-sm">No damage records found.</td>
+                                        <td colSpan={10 + (canShowEntryBy ? 1 : 0)} className="px-6 py-12 text-center text-gray-400 font-medium text-sm">No damage records found.</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -973,6 +1160,14 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                                     <span className="font-black text-gray-900">
                                                         {item.price && item.quantity ? `৳ ${(item.price * item.quantity).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                                     </span>
+
+                                                    {canShowEntryBy && (
+                                                        <>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entry By</span>
+                                                            <span className="text-gray-400 font-bold">:</span>
+                                                            <span className="font-semibold text-gray-700">{getEntryByFirstName(item)}</span>
+                                                        </>
+                                                    )}
                                                 </div>
 
                                                 {/* Action Buttons */}

@@ -91,7 +91,13 @@ export const MODULES_LIST = [
             { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
-    { key: 'warehouse', label: 'Warehouse & Damage' },
+    {
+        key: 'warehouse',
+        label: 'Warehouse & Damage',
+        specialLabels: [
+            { key: 'showEntryBy', label: 'Entry By' }
+        ]
+    },
     {
         key: 'transfer',
         label: 'Stock Transfer',
