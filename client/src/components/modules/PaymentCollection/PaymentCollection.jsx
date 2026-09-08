@@ -9,6 +9,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios, { api } from '../../../utils/api';
 import PaymentCollectionReport from './PaymentCollectionReport';
 import './PaymentCollection.css';
+import { formatFirstName } from '../IPManagement/IPManagement';
 
 const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
     const [payments, setPayments] = useState([]);
@@ -337,6 +338,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
             const response = await axios.get(`${API_BASE_URL}/api/employees`);
             const rawData = Array.isArray(response.data) ? response.data : [];
             const map = {};
+
             rawData.forEach(emp => {
                 let d = emp;
                 if (emp && emp.data) {
@@ -346,47 +348,154 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         d = { ...emp.data, _id: emp._id };
                     }
                 }
-                const empName = (d.name || d.nameEn || d.employeeName || d.username || '').trim();
-                if (d.employeeId) map[d.employeeId] = empName;
-                if (d.username) map[d.username] = empName;
-                if (d._id) map[d._id] = empName;
+                const rawFullName = (d.name || d.nameEn || d.fullName || '').trim();
+
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && d.name) {
+                    const parts = d.name.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.nameEn) {
+                    const parts = d.nameEn.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.fullName) {
+                    const parts = d.fullName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName || rawFullName);
+                if (!fName) return;
+
+                if (d.employeeId) {
+                    map[d.employeeId.toLowerCase().trim()] = fName;
+                    map[d.employeeId] = fName;
+                }
+                if (d.username) {
+                    map[d.username.toLowerCase().trim()] = fName;
+                    map[d.username] = fName;
+                }
+                if (d._id) {
+                    map[String(d._id).toLowerCase()] = fName;
+                    map[String(d._id)] = fName;
+                }
+                if (d.id) {
+                    map[String(d.id).toLowerCase()] = fName;
+                    map[String(d.id)] = fName;
+                }
+                if (d.name) {
+                    const fullNameLower = d.name.toLowerCase().trim();
+                    map[fullNameLower] = fName;
+                    map[d.name.trim()] = fName;
+                    const firstPart = fullNameLower.split(/\s+/)[0];
+                    if (firstPart) map[firstPart] = fName;
+                }
+                if (d.nameEn) {
+                    const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                    map[fullNameEnLower] = fName;
+                    map[d.nameEn.trim()] = fName;
+                    const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                    if (firstPartEn) map[firstPartEn] = fName;
+                }
             });
+
+            // Map 'admin' and 'administrator' to admin employee's first name / Administrator
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+            }
+            map['admin'] = 'Administrator';
+            map['administrator'] = 'Administrator';
+            map['a-1001'] = adminFirstName;
+
             setEmployeesMap(map);
         } catch (error) {
-            console.error('Error fetching employees map:', error);
+            console.error('Error fetching employees map in PaymentCollection:', error);
         }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        if (employeesMap[rawStr]) {
+            return employeesMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesMap[prefixKey]) return employeesMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
     };
 
     const getEntryByName = (entryByCode, entryByName) => {
-        if (entryByName && !entryByName.startsWith('E-') && !entryByName.startsWith('A-') && entryByName !== entryByCode) {
-            return entryByName;
-        }
-        if (entryByCode && employeesMap[entryByCode]) {
-            return employeesMap[entryByCode];
-        }
-        if (entryByName && employeesMap[entryByName]) {
-            return employeesMap[entryByName];
-        }
-        if (entryByName && entryByName !== entryByCode) {
-            return entryByName;
-        }
-        return entryByCode || '—';
+        const candidate = entryByName || entryByCode;
+        if (!candidate || candidate === '-' || candidate === '—') return '—';
+        return getFirstNameFromIdentifier(candidate) || candidate;
     };
 
     const getEditedByName = (editedByCode, editedByName) => {
-        if (editedByName && !editedByName.startsWith('E-') && !editedByName.startsWith('A-') && editedByName !== editedByCode) {
-            return editedByName;
-        }
-        if (editedByCode && employeesMap[editedByCode]) {
-            return employeesMap[editedByCode];
-        }
-        if (editedByName && employeesMap[editedByName]) {
-            return employeesMap[editedByName];
-        }
-        if (editedByName && editedByName !== editedByCode) {
-            return editedByName;
-        }
-        return editedByCode || '';
+        const candidate = editedByName || editedByCode;
+        if (!candidate || candidate === '-' || candidate === '—') return '';
+        return getFirstNameFromIdentifier(candidate) || candidate;
     };
 
     const fetchBanks = async () => {
@@ -2521,12 +2630,12 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                 )}
                                                                 {group.items?.[0]?.smApprovedByName && (
                                                                     <span className="text-[10px] text-blue-600 font-medium" title="1st Approval (SM)">
-                                                                        ✓ {group.items[0].smApprovedByName}
+                                                                        ✓ {getFirstNameFromIdentifier(group.items[0].smApprovedByName || group.items[0].smApprovedBy)}
                                                                     </span>
                                                                 )}
                                                                 {group.items?.[0]?.approvedByName && (
                                                                     <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
-                                                                        ✓✓ {group.items[0].approvedByName}
+                                                                        ✓✓ {getFirstNameFromIdentifier(group.items[0].approvedByName || group.items[0].approvedBy)}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -2749,6 +2858,16 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                                              (group.isEdited || !group.items?.[0]?.originalData) && (
                                                                                 <span className="text-[10px] text-amber-600 font-medium">
                                                                                     ✎ {getEditedByName(group.editedBy, group.editedByName)}
+                                                                                </span>
+                                                                            )}
+                                                                            {group.items?.[0]?.smApprovedByName && (
+                                                                                <span className="text-[10px] text-blue-600 font-medium" title="1st Approval (SM)">
+                                                                                    ✓ {getFirstNameFromIdentifier(group.items[0].smApprovedByName || group.items[0].smApprovedBy)}
+                                                                                </span>
+                                                                            )}
+                                                                            {group.items?.[0]?.approvedByName && (
+                                                                                <span className="text-[10px] text-emerald-600 font-semibold" title="Final Approval">
+                                                                                    ✓✓ {getFirstNameFromIdentifier(group.items[0].approvedByName || group.items[0].approvedBy)}
                                                                                 </span>
                                                                             )}
                                                                         </div>

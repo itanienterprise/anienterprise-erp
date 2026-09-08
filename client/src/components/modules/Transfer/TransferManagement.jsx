@@ -7,13 +7,17 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { encryptData, decryptData } from '../../../utils/encryption';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
+import { formatFirstName } from '../IPManagement/IPManagement';
 
 const TransferManagement = ({ currentUser, addNotification, highlightId, isRequestedNotif }) => {
     const canDelete = hasPermission(currentUser, 'warehouse', 'delete') || hasPermission(currentUser, 'transfer', 'delete');
     const canTransfer = hasPermission(currentUser, 'stock', 'special') || hasPermission(currentUser, 'transfer', 'add') || hasPermission(currentUser, 'warehouse', 'edit');
     const canApprove = hasPermission(currentUser, 'transfer', 'approve') || hasPermission(currentUser, 'warehouse', 'approve') || currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
+    const canShowEntryBy = hasPermission(currentUser, 'transfer', 'showEntryBy');
 
     // States
+    const [employeesMap, setEmployeesMap] = useState({});
+    const [employeesFullNameMap, setEmployeesFullNameMap] = useState({});
     const [warehouseData, setWarehouseData] = useState([]);
     const [stockRecords, setStockRecords] = useState([]);
     const [salesRecords, setSalesRecords] = useState([]);
@@ -93,7 +97,9 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         lcNo: '',
         transferPkt: '',
         transferQty: '',
-        packetSize: '30'
+        packetSize: '30',
+        entryBy: '',
+        entryByName: ''
     });
 
     // Auto-complete Dropdowns State
@@ -221,8 +227,210 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
         }
     };
 
+    const fetchEmployees = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/employees`);
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const map = {};
+            const fullMap = {};
+
+            rawData.forEach(emp => {
+                let d = emp;
+                if (emp && emp.data) {
+                    if (typeof emp.data === 'string') {
+                        try {
+                            d = { ...decryptData(emp.data), _id: emp._id };
+                        } catch {
+                            d = emp;
+                        }
+                    } else if (typeof emp.data === 'object') {
+                        d = { ...emp.data, _id: emp._id };
+                    }
+                }
+
+                const rawFullName = (d.name || d.nameEn || d.fullName || '').trim();
+
+                let rawFName = (d.firstName || '').trim();
+                if (!rawFName && d.name) {
+                    const parts = d.name.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.nameEn) {
+                    const parts = d.nameEn.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.fullName) {
+                    const parts = d.fullName.trim().split(/\s+/);
+                    if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+                        rawFName = `${parts[0]} ${parts[1]}`;
+                    } else {
+                        rawFName = parts[0];
+                    }
+                }
+                if (!rawFName && d.username) {
+                    rawFName = d.username.trim();
+                }
+
+                const fName = formatFirstName(rawFName || rawFullName);
+                const fullName = rawFullName || fName;
+                if (!fName) return;
+
+                if (d.employeeId) {
+                    map[d.employeeId.toLowerCase().trim()] = fName;
+                    map[d.employeeId] = fName;
+                    fullMap[d.employeeId.toLowerCase().trim()] = fullName;
+                    fullMap[d.employeeId] = fullName;
+                }
+                if (d.username) {
+                    map[d.username.toLowerCase().trim()] = fName;
+                    map[d.username] = fName;
+                    fullMap[d.username.toLowerCase().trim()] = fullName;
+                    fullMap[d.username] = fullName;
+                }
+                if (d._id) {
+                    map[String(d._id).toLowerCase()] = fName;
+                    map[String(d._id)] = fName;
+                    fullMap[String(d._id).toLowerCase()] = fullName;
+                    fullMap[String(d._id)] = fullName;
+                }
+                if (d.id) {
+                    map[String(d.id).toLowerCase()] = fName;
+                    map[String(d.id)] = fName;
+                    fullMap[String(d.id).toLowerCase()] = fullName;
+                    fullMap[String(d.id)] = fullName;
+                }
+                if (d.name) {
+                    const fullNameLower = d.name.toLowerCase().trim();
+                    map[fullNameLower] = fName;
+                    map[d.name.trim()] = fName;
+                    fullMap[fullNameLower] = fullName;
+                    fullMap[d.name.trim()] = fullName;
+                    const firstPart = fullNameLower.split(/\s+/)[0];
+                    if (firstPart) map[firstPart] = fName;
+                }
+                if (d.nameEn) {
+                    const fullNameEnLower = d.nameEn.toLowerCase().trim();
+                    map[fullNameEnLower] = fName;
+                    map[d.nameEn.trim()] = fName;
+                    fullMap[fullNameEnLower] = fullName;
+                    fullMap[d.nameEn.trim()] = fullName;
+                    const firstPartEn = fullNameEnLower.split(/\s+/)[0];
+                    if (firstPartEn) map[firstPartEn] = fName;
+                }
+            });
+
+            // Map 'admin' and 'administrator' to admin employee's first name / Administrator
+            const adminEmp = rawData.find(e => {
+                let d = e;
+                if (e && e.data) {
+                    if (typeof e.data === 'string') {
+                        try { d = { ...decryptData(e.data), _id: e._id }; } catch { /* ignore */ }
+                    } else if (typeof e.data === 'object') {
+                        d = { ...e.data, _id: e._id };
+                    }
+                }
+                const r = (d.role || '').toLowerCase();
+                const eid = (d.employeeId || '').toLowerCase();
+                return r === 'admin' || eid === 'a-1001';
+            });
+            let adminFirstName = 'Anil';
+            let adminFullName = 'Administrator';
+            if (adminEmp) {
+                let d = adminEmp;
+                if (adminEmp && adminEmp.data) {
+                    if (typeof adminEmp.data === 'string') {
+                        try { d = { ...decryptData(adminEmp.data), _id: adminEmp._id }; } catch { /* ignore */ }
+                    } else if (typeof adminEmp.data === 'object') {
+                        d = { ...adminEmp.data, _id: adminEmp._id };
+                    }
+                }
+                const resolvedAdmin = formatFirstName((d.firstName || '').trim() || (d.name || '').trim().split(/\s+/)[0]);
+                if (resolvedAdmin) adminFirstName = resolvedAdmin;
+                if (d.name) adminFullName = d.name;
+            }
+            map['admin'] = 'Administrator';
+            map['administrator'] = 'Administrator';
+            map['a-1001'] = adminFirstName;
+
+            fullMap['admin'] = 'Administrator';
+            fullMap['administrator'] = 'Administrator';
+            fullMap['a-1001'] = adminFullName;
+
+            setEmployeesMap(map);
+            setEmployeesFullNameMap(fullMap);
+        } catch (error) {
+            console.error('Error fetching employees in TransferManagement:', error);
+        }
+    };
+
+    const getFirstNameFromIdentifier = (identifier) => {
+        if (!identifier || identifier === '-' || identifier === '—') return '';
+        const rawStr = String(identifier).trim();
+        const key = rawStr.toLowerCase();
+        if (key === 'admin' || key === 'administrator') {
+            return 'Administrator';
+        }
+        if (employeesMap[key]) {
+            return employeesMap[key];
+        }
+        if (employeesMap[rawStr]) {
+            return employeesMap[rawStr];
+        }
+        const parts = rawStr.split(/\s+/);
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(parts[0].toLowerCase()) && parts.length > 1) {
+            const prefixKey = `${parts[0]} ${parts[1]}`.toLowerCase();
+            if (employeesMap[prefixKey]) return employeesMap[prefixKey];
+        }
+        const firstWord = parts[0];
+        if (employeesMap[firstWord.toLowerCase()]) {
+            return employeesMap[firstWord.toLowerCase()];
+        }
+        if (key === 'a-1001') {
+            return 'Anil';
+        }
+        if (/^[EA]-\d+$/i.test(rawStr)) {
+            return rawStr;
+        }
+        let candidate = firstWord;
+        if (['md', 'md.', 'mohammad', 'mst', 'mst.'].includes(firstWord.toLowerCase()) && parts.length > 1) {
+            candidate = `${parts[0]} ${parts[1]}`;
+        }
+        return formatFirstName(candidate || rawStr);
+    };
+
+    const getEntryByFirstName = (item) => {
+        if (!item) return '—';
+        const candidate = item.entryByName || item.entryBy || item.requestedBy || item.createdBy || item.createdByName || item.userName || item.user;
+        if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
+        return getFirstNameFromIdentifier(candidate) || candidate;
+    };
+
+    const getEntryByFullName = (item) => {
+        if (!item) return '—';
+        const nameCandidate = item.entryByName || item.createdByName;
+        const codeCandidate = item.entryBy || item.requestedBy || item.createdBy || item.userName || item.user;
+        if (nameCandidate && !nameCandidate.startsWith('E-') && !nameCandidate.startsWith('A-') && nameCandidate !== '-' && nameCandidate !== '—') {
+            return nameCandidate;
+        }
+        const candidate = codeCandidate || nameCandidate;
+        if (!candidate || candidate === '-' || candidate === '—') return 'Administrator';
+        const key = String(candidate).trim().toLowerCase();
+        if (employeesFullNameMap[key]) return employeesFullNameMap[key];
+        if (employeesFullNameMap[candidate]) return employeesFullNameMap[candidate];
+        return nameCandidate || getFirstNameFromIdentifier(candidate) || candidate;
+    };
+
     useEffect(() => {
         fetchData();
+        fetchEmployees();
     }, []);
 
     // Extract unique warehouses
@@ -417,7 +625,9 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             lcNo: '',
             transferPkt: '',
             transferQty: '',
-            packetSize: '30'
+            packetSize: '30',
+            entryBy: '',
+            entryByName: ''
         });
         setEditingTransferId(null);
         setSubmitStatus(null);
@@ -548,7 +758,9 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             lcNo: item.lcNo || '',
             transferPkt: (item.transferPkt ?? item.whPkt ?? 0).toString(),
             transferQty: (item.transferQty ?? item.whQty ?? 0).toString(),
-            packetSize: (item.packetSize || 30).toString()
+            packetSize: (item.packetSize || 30).toString(),
+            entryBy: item.entryBy || item.requestedBy || '',
+            entryByName: item.entryByName || ''
         });
         setEditingTransferId(item._id);
         setShowForm(true);
@@ -603,6 +815,12 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                 recordType: 'warehouse',
                 status: 'Requested',
                 requestedBy: currentUser?.username || 'user',
+                entryBy: formData.entryBy || (!editingTransferId ? (currentUser?.employeeId || currentUser?.username || currentUser?.id || '') : ''),
+                entryByName: formData.entryByName || (!editingTransferId ? (currentUser?.name || currentUser?.nameEn || currentUser?.username || '') : ''),
+                ...(editingTransferId ? {
+                    updatedBy: currentUser?.employeeId || currentUser?.username || currentUser?.id || '',
+                    updatedByName: currentUser?.name || currentUser?.nameEn || currentUser?.username || ''
+                } : {}),
                 createdAt: new Date().toISOString()
             };
 
@@ -795,11 +1013,13 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
             const brand = (t.brand || '').toLowerCase();
             const lc = (t.lcNo || '').toLowerCase();
             const truck = (t.truckNo || '').toLowerCase();
+            const entryBy = (t.entryByName || t.entryBy || '').toLowerCase();
+            const entryByFn = getEntryByFirstName(t).toLowerCase();
             const q = searchQuery.toLowerCase().trim();
 
-            return !q || fromWh.includes(q) || toWh.includes(q) || prod.includes(q) || brand.includes(q) || lc.includes(q) || truck.includes(q);
+            return !q || fromWh.includes(q) || toWh.includes(q) || prod.includes(q) || brand.includes(q) || lc.includes(q) || truck.includes(q) || entryBy.includes(q) || entryByFn.includes(q);
         });
-    }, [transferLogs, searchQuery, isRequestedOnly]);
+    }, [transferLogs, searchQuery, isRequestedOnly, employeesMap]);
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -1186,20 +1406,21 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                                     <th className="py-3.5 px-4 text-right">Bags</th>
                                     <th className="py-3.5 px-4 text-right">Weight (KG)</th>
                                     <th className="py-3.5 px-4 text-center">Status</th>
+                                    {canShowEntryBy && <th className="py-3.5 px-4 text-center">Entry By</th>}
                                     <th className="py-3.5 px-4 text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-sm">
                                 {isLoading ? (
                                     <tr>
-                                        <td colSpan="11" className="py-12 text-center text-gray-400">
+                                        <td colSpan={11 + (canShowEntryBy ? 1 : 0)} className="py-12 text-center text-gray-400">
                                             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent mb-2" />
                                             <p className="font-medium text-xs">Loading transfer records...</p>
                                         </td>
                                     </tr>
                                 ) : displayLogs.length === 0 ? (
                                     <tr>
-                                        <td colSpan="11" className="py-12 text-center text-gray-400">
+                                        <td colSpan={11 + (canShowEntryBy ? 1 : 0)} className="py-12 text-center text-gray-400">
                                             <p className="font-bold text-gray-700 text-base">No Transfer Records Found</p>
                                             <p className="text-xs text-gray-500 mt-1">Start by recording a stock transfer or adjust your search query.</p>
                                         </td>
@@ -1272,6 +1493,13 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                                                         {item.status || 'Approved'}
                                                     </span>
                                                 </td>
+                                                {canShowEntryBy && (
+                                                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                                                        <span className="font-semibold text-gray-700 text-xs">
+                                                            {getEntryByFirstName(item)}
+                                                        </span>
+                                                    </td>
+                                                )}
                                                 <td className="py-3 px-4 text-center">
                                                     <div className="flex items-center justify-center gap-1.5">
                                                         {canApprove && item.status === 'Requested' && (
@@ -1367,6 +1595,12 @@ const TransferManagement = ({ currentUser, addNotification, highlightId, isReque
                                     <p className="text-gray-500 uppercase font-bold">To Destination Warehouse</p>
                                     <p className="font-bold text-blue-700 text-sm">{viewingTransfer.toWh || viewingTransfer.whName || viewingTransfer.warehouse || '-'}</p>
                                 </div>
+                                {canShowEntryBy && (
+                                    <div className="col-span-2 pt-2 border-t border-gray-100">
+                                        <p className="text-gray-500 uppercase font-bold">Entry By</p>
+                                        <p className="font-bold text-gray-900 text-sm">{getEntryByFullName(viewingTransfer)}</p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-2">

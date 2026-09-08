@@ -102,7 +102,8 @@ export const MODULES_LIST = [
         key: 'transfer',
         label: 'Stock Transfer',
         specialLabels: [
-            { key: 'approve', label: 'Approve Transfer' }
+            { key: 'approve', label: 'Approve Transfer' },
+            { key: 'showEntryBy', label: 'Entry By' }
         ]
     },
     {
