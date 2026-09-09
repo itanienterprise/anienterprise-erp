@@ -1508,13 +1508,14 @@ const OrderManagement = ({
                     return pName.includes(q) || itemBrand.includes(q) || brandEntriesMatch;
                 });
 
-                const entry = (order.entryByName || order.entryBy || order.requestedBy || order.createdBy || order.createdByName || order.userName || order.user || '').toLowerCase();
-                const entryFirst = getEntryByFirstName(order).toLowerCase();
-                const approved = (order.approvedByName || order.approvedBy || order.acceptedByName || order.acceptedBy || '').toLowerCase();
-                const smApproved = (order.smApprovedByName || order.smApprovedBy || '').toLowerCase();
-                const edited = (order.editedByName || order.editedBy || '').toLowerCase();
+                const entry = (sale.entryByName || sale.entryBy || sale.requestedBy || sale.createdBy || sale.createdByName || sale.userName || sale.user || '').toLowerCase();
+                const entryFirst = (getEntryByFirstName(sale) || '').toLowerCase();
+                const approved = (sale.approvedByName || sale.approvedBy || sale.acceptedByName || sale.acceptedBy || '').toLowerCase();
+                const smApproved = (sale.smApprovedByName || sale.smApprovedBy || '').toLowerCase();
+                const edited = (sale.editedByName || sale.editedBy || '').toLowerCase();
+                const editedFirst = (getEditedByFirstName(sale) || '').toLowerCase();
 
-                return inv.includes(q) || cust.includes(q) || remarks.includes(q) || matchesItems || entry.includes(q) || entryFirst.includes(q) || approved.includes(q) || smApproved.includes(q) || edited.includes(q);
+                return inv.includes(q) || cust.includes(q) || remarks.includes(q) || matchesItems || entry.includes(q) || entryFirst.includes(q) || approved.includes(q) || smApproved.includes(q) || edited.includes(q) || editedFirst.includes(q);
             }
 
             return true;
