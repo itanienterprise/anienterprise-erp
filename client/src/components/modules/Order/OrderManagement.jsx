@@ -10,6 +10,7 @@ import { encryptData, decryptData } from '../../../utils/encryption';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 
 const getSafeString = (val) => {
     if (!val) return '';
