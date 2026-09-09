@@ -4275,7 +4275,7 @@ export const generateCustomerReportPDF = async (
         ], pageWidth - margin, margin + 2, { align: 'right', lineHeightFactor: 1.15 });
 
         // Orange divider line
-        let y = margin + 20;
+        let y = margin + 19;
         doc.setDrawColor(249, 115, 22);
         doc.setLineWidth(0.6);
         doc.line(margin, y, pageWidth - margin, y);
@@ -4290,7 +4290,7 @@ export const generateCustomerReportPDF = async (
         doc.text("CUSTOMER REPORT", pageWidth / 2, y + 5, { align: 'center' });
 
         // --- Info Row ---
-        let yPos = y + 13;
+        let yPos = y + 11;
         doc.setFontSize(9);
 
         if (typeFilter && typeFilter !== 'All Customer') {
@@ -4317,7 +4317,7 @@ export const generateCustomerReportPDF = async (
         doc.setFont('helvetica', 'normal');
         doc.text(displayCustomers.length.toString(), margin + 26, yPos);
 
-        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, y + 13, { align: 'right' });
+        doc.text(`Printed on: ${dateStr}`, pageWidth - margin, y + 11, { align: 'right' });
 
         const getLastTransDay = (customer) => {
             const targetCutoff = asOfDate ? getIsoDateString(asOfDate) : null;
@@ -4385,13 +4385,13 @@ export const generateCustomerReportPDF = async (
         ]);
 
         autoTable(doc, {
-            startY: yPos + 10,
+            startY: yPos + 5,
             head: [['SL', 'ID', 'Company', 'Last Trans', 'Total Balance', 'Remark']],
             body: tableRows,
             theme: 'grid',
             styles: {
-                fontSize: 9,
-                cellPadding: { top: 0.8, bottom: 0.8, left: 1.5, right: 1.5 },
+                fontSize: 8.5,
+                cellPadding: { top: 0.65, bottom: 0.65, left: 1.5, right: 1.5 },
                 lineColor: [0, 0, 0],
                 lineWidth: 0.1,
                 textColor: [0, 0, 0]
@@ -4400,7 +4400,7 @@ export const generateCustomerReportPDF = async (
                 fillColor: [245, 245, 245],
                 fontStyle: 'bold',
                 halign: 'center',
-                cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 }
+                cellPadding: { top: 1.2, bottom: 1.2, left: 1.5, right: 1.5 }
             },
             columnStyles: {
                 0: { cellWidth: 10, halign: 'center', overflow: 'hidden' }, // SL
@@ -4414,17 +4414,22 @@ export const generateCustomerReportPDF = async (
         });
 
         // --- Signatures ---
-        let finalY = doc.lastAutoTable.finalY + 30;
-        if (finalY + 20 > pageHeight) {
+        let finalY = doc.lastAutoTable.finalY + 12;
+        if (finalY + 15 > pageHeight - margin) {
             doc.addPage();
-            finalY = 30;
+            finalY = margin + 18;
         }
 
         const sigWidth = 45;
         const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
 
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.3);
+        doc.setLineDashPattern([], 0);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+
         doc.line(margin, finalY, margin + sigWidth, finalY);
         doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
 
@@ -4584,17 +4589,22 @@ export const generatePaymentCollectionReportPDF = (payments, filters, dateStr) =
         });
 
         // --- Signatures ---
-        let finalY = doc.lastAutoTable.finalY + 30;
-        if (finalY + 20 > pageHeight) {
+        let finalY = doc.lastAutoTable.finalY + 12;
+        if (finalY + 15 > pageHeight - margin) {
             doc.addPage();
-            finalY = 30;
+            finalY = margin + 18;
         }
 
         const sigWidth = 45;
         const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
 
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.3);
+        doc.setLineDashPattern([], 0);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+
         doc.line(margin, finalY, margin + sigWidth, finalY);
         doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
 
@@ -7797,17 +7807,22 @@ export const generatePayToCustomerReportPDF = (payments, filters, dateStr) => {
             margin: { left: margin, right: margin }
         });
 
-        let finalY = doc.lastAutoTable.finalY + 30;
-        if (finalY + 20 > pageHeight) {
+        let finalY = doc.lastAutoTable.finalY + 12;
+        if (finalY + 15 > pageHeight - margin) {
             doc.addPage();
-            finalY = 30;
+            finalY = margin + 18;
         }
 
         const sigWidth = 45;
         const sigGap = (pageWidth - (margin * 2) - (sigWidth * 3)) / 2;
 
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.3);
+        doc.setLineDashPattern([], 0);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+
         doc.line(margin, finalY, margin + sigWidth, finalY);
         doc.text("PREPARED BY", margin + sigWidth / 2, finalY + 5, { align: 'center' });
 
