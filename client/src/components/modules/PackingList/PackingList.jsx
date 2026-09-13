@@ -119,10 +119,18 @@ function PackingList({
     const handleOpenPiDetails = (piNumber, packingListRec) => {
         if (!piNumber || piNumber === 'N/A') return;
         const cleanTarget = String(piNumber).replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+        const targetParts = cleanTarget.split(',').map(s => s.trim()).filter(Boolean);
 
         let targetPi = (piRecords || []).find(pi => {
-            const pNum = String(pi.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
-            return pNum === cleanTarget;
+            const rawP = String(pi.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+            const piParts = (pi.piNumbers && Array.isArray(pi.piNumbers) && pi.piNumbers.length > 0)
+                ? pi.piNumbers.map(s => String(s).replace(/\s*\(revised\)/gi, '').trim().toLowerCase())
+                : rawP.split(',').map(s => s.trim()).filter(Boolean);
+
+            if (rawP === cleanTarget) return true;
+            if (targetParts.some(tp => piParts.includes(tp) || rawP.includes(tp))) return true;
+            if (piParts.some(pp => targetParts.includes(pp) || cleanTarget.includes(pp))) return true;
+            return false;
         });
 
         if (!targetPi) {
@@ -2583,22 +2591,21 @@ function PackingList({
                                                             const piList = String(rec.piNumber).split(',').map(s => s.trim()).filter(Boolean);
                                                             if (piList.length === 0) return <span className="text-gray-400 font-medium">N/A</span>;
                                                             return (
-                                                                <div className="flex flex-col gap-1 items-start">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleOpenPiDetails(rec.piNumber, rec);
+                                                                    }}
+                                                                    className="inline-flex flex-col items-start px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none text-left"
+                                                                    title={`View PI Details (${rec.piNumber})`}
+                                                                >
                                                                     {piList.map((piNo, idx) => (
-                                                                        <button
-                                                                            key={idx}
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleOpenPiDetails(piNo, rec);
-                                                                            }}
-                                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
-                                                                            title={`View PI Details (${piNo})`}
-                                                                        >
+                                                                        <span key={idx} className="whitespace-nowrap leading-tight">
                                                                             {piNo}
-                                                                        </button>
+                                                                        </span>
                                                                     ))}
-                                                                </div>
+                                                                </button>
                                                             );
                                                         })()
                                                     ) : (
@@ -2719,22 +2726,21 @@ function PackingList({
                                                             const piList = String(rec.piNumber).split(',').map(s => s.trim()).filter(Boolean);
                                                             if (piList.length === 0) return <span className="font-semibold text-gray-800 block">N/A</span>;
                                                             return (
-                                                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleOpenPiDetails(rec.piNumber, rec);
+                                                                    }}
+                                                                    className="inline-flex flex-col items-start px-2 py-0.5 mt-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none text-left"
+                                                                    title={`View PI Details (${rec.piNumber})`}
+                                                                >
                                                                     {piList.map((piNo, idx) => (
-                                                                        <button
-                                                                            key={idx}
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleOpenPiDetails(piNo, rec);
-                                                                            }}
-                                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
-                                                                            title={`View PI Details (${piNo})`}
-                                                                        >
+                                                                        <span key={idx} className="whitespace-nowrap leading-tight">
                                                                             {piNo}
-                                                                        </button>
+                                                                        </span>
                                                                     ))}
-                                                                </div>
+                                                                </button>
                                                             );
                                                         })()
                                                     ) : (

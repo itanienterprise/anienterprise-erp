@@ -30,9 +30,18 @@ export const PIDetailsModal = ({
     const resolvedPi = useMemo(() => {
         if (!piRecord) return null;
         const cleanTarget = String(piRecord.piNumber || piRecord || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
+        const targetParts = cleanTarget.split(',').map(s => s.trim()).filter(Boolean);
+
         const found = (piRecords || []).find(p => {
             const pNum = String(p.piNumber || '').replace(/\s*\(revised\)/gi, '').trim().toLowerCase();
-            return pNum === cleanTarget;
+            const pParts = (p.piNumbers && Array.isArray(p.piNumbers) && p.piNumbers.length > 0)
+                ? p.piNumbers.map(s => String(s).replace(/\s*\(revised\)/gi, '').trim().toLowerCase())
+                : pNum.split(',').map(s => s.trim()).filter(Boolean);
+
+            if (pNum === cleanTarget) return true;
+            if (targetParts.some(tp => pParts.includes(tp) || pNum.includes(tp))) return true;
+            if (pParts.some(pp => targetParts.includes(pp) || cleanTarget.includes(pp))) return true;
+            return false;
         });
 
         if (found) {
