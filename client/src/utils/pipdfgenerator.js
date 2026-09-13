@@ -163,22 +163,38 @@ export const generatePIPDF = (record) => {
     // PI Info Content
     const rawPiNumber = record.piNumber || '';
     const isRevised = rawPiNumber.includes('(REVISED)');
-    const basePiNumber = rawPiNumber.replace('(REVISED)', '').trim();
+    const cleanPiNumber = rawPiNumber.replace('(REVISED)', '').trim();
+    const piList = (record.piNumbers && Array.isArray(record.piNumbers) && record.piNumbers.length > 0)
+        ? record.piNumbers.map(s => String(s).replace('(REVISED)', '').trim()).filter(Boolean)
+        : cleanPiNumber.split(',').map(s => s.trim()).filter(Boolean);
+    const displayPis = piList.length > 0 ? piList : (cleanPiNumber ? [cleanPiNumber] : ['']);
+
+    const hasMultiPi = displayPis.length > 1;
+    const piStartY = hasMultiPi ? (displayPis.length > 2 ? (y + 4) : (y + 4.5)) : (y + 5);
+    const piLineSpacing = displayPis.length > 2 ? 3.3 : 3.8;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    doc.text("Proforma Invoice No:", midX + 2, y + 5);
+    doc.text("Proforma Invoice No:", midX + 2, piStartY);
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text(basePiNumber, midX + 28, y + 5);
+    displayPis.forEach((piStr, idx) => {
+        const currentY = piStartY + (idx * piLineSpacing);
+        doc.text(piStr, midX + 28, currentY);
+    });
+
+    let afterPiY = piStartY + ((displayPis.length - 1) * piLineSpacing);
 
     if (isRevised) {
-        const piWidth = doc.getTextWidth(basePiNumber);
+        afterPiY += (hasMultiPi ? 3.2 : 4);
+        const lastPi = displayPis[displayPis.length - 1];
+        const piWidth = doc.getTextWidth(lastPi);
         const centerX = midX + 28 + (piWidth / 2);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
         doc.setTextColor(220, 38, 38);
-        doc.text("(REVISED)", centerX, y + 9, { align: 'center' });
+        doc.text("(REVISED)", centerX, afterPiY, { align: 'center' });
         doc.setTextColor(0, 0, 0);
     }
 
@@ -198,14 +214,16 @@ export const generatePIPDF = (record) => {
     // Draw label
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    doc.text(dateLabel, midX + rightColWidth - dateValWidth - dateLabelWidth - 2, y + 5);
+    doc.text(dateLabel, midX + rightColWidth - dateValWidth - dateLabelWidth - 2, piStartY);
 
     // Draw value
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text(dateVal, midX + rightColWidth - 2, y + 5, { align: 'right' });
+    doc.text(dateVal, midX + rightColWidth - 2, piStartY, { align: 'right' });
 
-    const validityY = isRevised ? (y + 13) : (y + 9);
+    const validityY = hasMultiPi
+        ? Math.max(afterPiY + 3.8, isRevised ? y + 14.5 : y + 13)
+        : (isRevised ? (y + 13) : (y + 9));
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);

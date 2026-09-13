@@ -174,6 +174,7 @@ function PI({
     const [formData, setFormData] = useState({
         date: '',
         validityDate: '',
+        piNumbers: [],
         piNumber: '',
         partyName: '',
         partyAddress: '',
@@ -1154,10 +1155,15 @@ function PI({
                 }
             }
 
+            if (name === 'piNumber') {
+                updated.piNumbers = value.split(',').map(s => s.trim()).filter(Boolean);
+            }
+
             if (!editingId && (name === 'exporterName' || name === 'partyName')) {
                 const lastPi = getLastUsedPi(updated.exporterName, updated.partyName);
-                if (lastPi) {
+                if (lastPi && !updated.piNumber) {
                     updated.piNumber = lastPi;
+                    updated.piNumbers = [lastPi];
                 }
             }
 
@@ -1485,6 +1491,21 @@ function PI({
                 }
             }
 
+            if (field === 'piNumber') {
+                const current = (prev.piNumber || '').split(',').map(s => s.trim()).filter(Boolean);
+                const valLower = value.toLowerCase();
+                const matchedIndex = current.findIndex(p => p.toLowerCase() === valLower);
+                let updatedList;
+                if (matchedIndex > -1) {
+                    current.splice(matchedIndex, 1);
+                    updatedList = current;
+                } else {
+                    updatedList = [...current, value];
+                }
+                updated.piNumbers = updatedList;
+                updated.piNumber = updatedList.join(', ');
+            }
+
             if (field === 'ipNumber') {
                 const ip = ipRecords.find(i => i.ipNumber === value);
                 if (ip) {
@@ -1698,11 +1719,22 @@ function PI({
         e.preventDefault();
 
         // Check for duplicate PI Number
-        const isDuplicate = records.some(r =>
-            r.piNumber &&
-            r.piNumber.trim().toLowerCase() === (formData.piNumber || '').trim().toLowerCase() &&
-            r._id !== editingId
-        );
+        const finalPiNumbers = (formData.piNumber || '').split(',').map(s => s.trim()).filter(Boolean);
+
+        if (finalPiNumbers.length === 0) {
+            showToast("Please enter at least one PI Number.", "error");
+            setIsSubmitting(false);
+            return;
+        }
+
+        const isDuplicate = records.some(r => {
+            if (r._id === editingId) return false;
+            const otherList = (r.piNumbers && r.piNumbers.length > 0)
+                ? r.piNumbers
+                : (r.piNumber ? r.piNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
+            const otherLower = otherList.map(s => s.toLowerCase());
+            return finalPiNumbers.some(p => otherLower.includes(p.toLowerCase()));
+        });
 
         if (isDuplicate) {
             showToast("Duplicate PI Number detected! Each PI must have a unique number.", "error");
@@ -1763,6 +1795,8 @@ function PI({
 
         const submissionData = {
             ...formData,
+            piNumbers: finalPiNumbers,
+            piNumber: finalPiNumbers.join(', '),
             showIndHsCode: formData.showIndHsCode !== undefined ? formData.showIndHsCode === true : (formData.productsList?.[0]?.showIndHsCode === true),
             grandTotal: calculatedGrandTotal > 0 ? calculatedGrandTotal.toFixed(2) : '',
             grandTotalQuantity: calculatedGrandTotalQuantity > 0 ? calculatedGrandTotalQuantity.toFixed(2) : '',
@@ -1886,6 +1920,7 @@ function PI({
         setFormData({
             date: '',
             validityDate: '',
+            piNumbers: [],
             piNumber: '',
             partyName: '',
             partyAddress: '',
@@ -1977,11 +2012,15 @@ function PI({
             }];
 
         const parsedIpNumbers = record.ipNumbers || (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
+        const parsedPiNumbers = (record.piNumbers && Array.isArray(record.piNumbers) && record.piNumbers.length > 0)
+            ? record.piNumbers
+            : (record.piNumber ? record.piNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
 
         setFormData({
             date: record.date || '',
             validityDate: record.validityDate || '',
-            piNumber: record.piNumber || '',
+            piNumbers: parsedPiNumbers,
+            piNumber: record.piNumber || parsedPiNumbers.join(', '),
             partyName: record.partyName || '',
             partyAddress: record.partyAddress || '',
             partyContact: record.partyContact || '',
@@ -2160,16 +2199,16 @@ function PI({
     if (!editingId && currentSelectedExp && currentSelectedImp && (autoFilledPair.exp !== currentSelectedExp || autoFilledPair.imp !== currentSelectedImp)) {
         setAutoFilledPair({ exp: currentSelectedExp, imp: currentSelectedImp });
         const lastPi = getLastUsedPi(formData.exporterName, formData.partyName);
-        if (lastPi && formData.piNumber !== lastPi) {
-            setFormData(prev => ({ ...prev, piNumber: lastPi }));
+        if (lastPi && (!formData.piNumbers || formData.piNumbers.length === 0) && !formData.piNumber) {
+            setFormData(prev => ({ ...prev, piNumbers: [lastPi], piNumber: lastPi }));
         }
     }
 
     const filteredPiSuggestions = useMemo(() => {
-        const q = (formData.piNumber || '').trim().toLowerCase();
-        if (!q) return existingPiNumbers;
+        const lastPart = (formData.piNumber || '').split(',').pop().trim().toLowerCase();
+        if (!lastPart) return existingPiNumbers;
         return existingPiNumbers.filter(piNum =>
-            piNum.toLowerCase().includes(q)
+            piNum.toLowerCase().includes(lastPart)
         );
     }, [formData.piNumber, existingPiNumbers]);
 
@@ -2190,13 +2229,19 @@ function PI({
     }, [banks]);
 
     const isDuplicatePiNumber = useMemo(() => {
-        if (!formData.piNumber || !formData.piNumber.trim()) return false;
-        const cleanNum = formData.piNumber.trim().toLowerCase();
-        return (records || []).some(r =>
-            r.piNumber &&
-            r.piNumber.trim().toLowerCase() === cleanNum &&
-            r._id !== editingId
-        );
+        const currentList = (formData.piNumber || '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+        if (currentList.length === 0) return false;
+        return (records || []).some(r => {
+            if (r._id === editingId) return false;
+            const otherList = (r.piNumbers && r.piNumbers.length > 0)
+                ? r.piNumbers
+                : (r.piNumber ? r.piNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
+            const otherLower = otherList.map(s => s.toLowerCase());
+            return currentList.some(p => otherLower.includes(p.toLowerCase()));
+        });
     }, [formData.piNumber, records, editingId]);
 
     const filteredPiRecordsForRevise = useMemo(() => {
@@ -2761,6 +2806,7 @@ function PI({
             const isLcDone = checkIsLcDone(record);
             const computedStatus = isLcDone ? 'lc done' : ((!record.ipNumber && (!record.ipNumbers || record.ipNumbers.length === 0)) ? 'ip missing' : (record.status || '').toLowerCase());
             const matchesSearch = (record.piNumber || '').toLowerCase().includes(query) ||
+                (record.piNumbers && record.piNumbers.some(p => String(p).toLowerCase().includes(query))) ||
                 (record.ipNumber || '').toLowerCase().includes(query) ||
                 (record.ipNumbers && record.ipNumbers.some(ip => String(ip).toLowerCase().includes(query))) ||
                 (record.partyName || '').toLowerCase().includes(query) ||
@@ -2856,8 +2902,42 @@ function PI({
             if (prev.key === key) {
                 return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
             }
-            return { key, direction: key === 'date' ? 'desc' : 'asc' };
+            return { key, direction: (key === 'date' || key === 'createdAt') ? 'desc' : 'asc' };
         });
+    };
+
+    const getRecordEffectiveCreateDate = (record) => {
+        if (!record) return '';
+        const revisions = record.revisions || [];
+        const actualRevisions = revisions.filter(r => r.reviseNo !== 'Original PI');
+        if (actualRevisions.length > 0) {
+            const lastRev = actualRevisions[actualRevisions.length - 1];
+            return lastRev.createdAt || record.lastRevisedAt || lastRev.reviseDate || record.createdAt || '';
+        }
+        if (revisions.length > 0) {
+            const lastRev = revisions[revisions.length - 1];
+            if (lastRev.reviseNo !== 'Original PI') {
+                return lastRev.createdAt || record.lastRevisedAt || lastRev.reviseDate || record.createdAt || '';
+            }
+        }
+        return record.createdAt || record.date || '';
+    };
+
+    const getRecordCreateDateTime = (record) => {
+        const dVal = getRecordEffectiveCreateDate(record);
+        if (!dVal) return 0;
+        if (dVal instanceof Date) return isNaN(dVal.getTime()) ? 0 : dVal.getTime();
+        const str = String(dVal).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+            const [y, m, d] = str.split('T')[0].split('-').map(Number);
+            return new Date(y, m - 1, d).getTime();
+        }
+        if (/^\d{2}[-/]\d{2}[-/]\d{4}/.test(str)) {
+            const [d, m, y] = str.split(/[-/]/).map(Number);
+            return new Date(y, m - 1, d).getTime();
+        }
+        const t = new Date(str).getTime();
+        return isNaN(t) ? 0 : t;
     };
 
     const getRecordEffectiveDate = (record) => {
@@ -2892,7 +2972,11 @@ function PI({
 
         return list.sort((a, b) => {
             let res = 0;
-            if (sortConfig.key === 'date') {
+            if (sortConfig.key === 'createdAt') {
+                const timeA = getRecordCreateDateTime(a);
+                const timeB = getRecordCreateDateTime(b);
+                res = timeA - timeB;
+            } else if (sortConfig.key === 'date') {
                 const timeA = getRecordDateTime(a);
                 const timeB = getRecordDateTime(b);
                 res = timeA - timeB;
@@ -3484,7 +3568,7 @@ function PI({
                             compact={true}
                         />
 
-                        {/* --- PI Number Section with Auto-Suggest --- */}
+                        {/* --- PI Number Section with Multi-Select Auto-Suggest --- */}
                         <div className="space-y-2 relative dropdown-container" ref={piNumberRef}>
                             <div className="flex items-center justify-between">
                                 <label className="text-sm font-medium text-gray-700">PI Number</label>
@@ -3498,33 +3582,45 @@ function PI({
                                 <input
                                     type="text"
                                     name="piNumber"
-                                    value={formData.piNumber}
-                                    onChange={(e) => { handleInputChange(e); setActiveDropdown('piNumber'); setHighlightedIndex(-1); }}
+                                    value={formData.piNumber || ''}
+                                    onChange={(e) => {
+                                        handleInputChange(e);
+                                        setActiveDropdown('piNumber');
+                                        setHighlightedIndex(-1);
+                                    }}
                                     onFocus={() => { setActiveDropdown('piNumber'); setHighlightedIndex(-1); }}
                                     onKeyDown={(e) => handleDropdownKeyDown(e, 'piNumber', filteredPiSuggestions, 'piNumber')}
-                                    required
                                     autoComplete="off"
-                                    placeholder="Enter PI Number"
+                                    placeholder="Enter or select PI Number(s)..."
                                     className={`w-full px-4 py-2 bg-white/50 border rounded-lg focus:ring-2 outline-none transition-all ${isDuplicatePiNumber ? 'border-red-500 bg-red-50/30 text-red-900 focus:ring-red-500 focus:border-red-500' : 'border-gray-200/60 focus:ring-blue-500'}`}
                                 />
                                 {activeDropdown === 'piNumber' && filteredPiSuggestions.length > 0 && (
                                     <div className="absolute z-[60] w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar p-1">
-                                        {filteredPiSuggestions.map((piNum, idx) => (
-                                            <button
-                                                key={piNum || idx}
-                                                type="button"
-                                                onMouseDown={() => handleDropdownSelect('piNumber', piNum)}
-                                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                                className={`w-full px-3.5 py-2.5 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${highlightedIndex === idx || formData.piNumber === piNum ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
-                                            >
-                                                <span className="font-mono text-sm">{piNum}</span>
-                                                {idx === 0 && (
-                                                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
-                                                        Last Used
-                                                    </span>
-                                                )}
-                                            </button>
-                                        ))}
+                                        {filteredPiSuggestions.map((piNum, idx) => {
+                                            const currentParts = (formData.piNumber || '').split(',').map(p => p.trim()).filter(Boolean);
+                                            const isSelected = currentParts.some(p => p.toLowerCase() === piNum.toLowerCase());
+                                            return (
+                                                <button
+                                                    key={piNum || idx}
+                                                    type="button"
+                                                    onMouseDown={() => handleDropdownSelect('piNumber', piNum)}
+                                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                                    className={`w-full px-3.5 py-2.5 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${highlightedIndex === idx || isSelected ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                                                >
+                                                    <span className="font-mono text-sm">{piNum}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        {idx === 0 && (
+                                                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                                                                Last Used
+                                                            </span>
+                                                        )}
+                                                        {isSelected && (
+                                                            <span className="text-blue-600 font-bold text-sm">✓</span>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -5455,6 +5551,15 @@ function PI({
                                     <tr className="bg-gray-50/80">
                                         <th
                                             className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
+                                            onClick={() => requestSort('createdAt')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Create Date</span>
+                                                <SortIcon config={sortConfig} columnKey="createdAt" />
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
                                             onClick={() => requestSort('date')}
                                         >
                                             <div className="flex items-center gap-1">
@@ -5545,7 +5650,7 @@ function PI({
                                     {isLoading ? (
                                         Array(3).fill(0).map((_, i) => (
                                             <tr key={i} className="animate-pulse">
-                                                <td colSpan={11 + (canShowEntryBy ? 1 : 0)} className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                                <td colSpan={12 + (canShowEntryBy ? 1 : 0)} className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                             </tr>
                                         ))
                                     ) : sortedRecords.length > 0 ? (
@@ -5568,14 +5673,42 @@ function PI({
                                                     : (record.ipNumbers && record.ipNumbers.length > 0 ? record.ipNumbers : (record.ipNumber ? record.ipNumber.split(',').map(s => s.trim()).filter(Boolean) : []));
                                                 return (rawIps || []).map(s => String(s).trim()).filter(Boolean);
                                             })();
+                                            const piList = (() => {
+                                                if (record.piNumbers && Array.isArray(record.piNumbers) && record.piNumbers.length > 0) {
+                                                    return record.piNumbers.map(s => String(s).trim()).filter(Boolean);
+                                                }
+                                                if (record.piNumber && typeof record.piNumber === 'string') {
+                                                    return record.piNumber.split(',').map(s => s.trim()).filter(Boolean);
+                                                }
+                                                return [];
+                                            })();
 
                                             return (
-                                                <tr key={record._id} className={`hover:bg-gray-50/50 transition-colors ${highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => { if (record.piNumber) rowRefs.current[record.piNumber] = el; }}
+                                                <tr key={record._id} className={`hover:bg-gray-50/50 transition-colors ${highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`} ref={el => {
+                                                    if (record.piNumber) rowRefs.current[record.piNumber] = el;
+                                                    piList.forEach(p => { rowRefs.current[p] = el; });
+                                                }}
                                                     style={highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}>
+                                                    <td className="px-2 py-3.5 text-sm text-gray-600 font-medium whitespace-nowrap">{formatDate(getRecordEffectiveCreateDate(record))}</td>
                                                     <td className="px-2 py-3.5 text-sm text-gray-600 font-medium whitespace-nowrap">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
                                                     <td className="px-2 py-3.5 text-sm font-bold text-blue-600 whitespace-nowrap">
-                                                        {record.piNumber}
-                                                        {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
+                                                        {piList.length > 1 ? (
+                                                            <div className="flex flex-col gap-0.5 font-mono">
+                                                                {piList.map((pNum, idx) => (
+                                                                    <div key={idx} className="whitespace-nowrap">
+                                                                        {pNum}
+                                                                    </div>
+                                                                ))}
+                                                                {record.revisions && record.revisions.length > 0 && (
+                                                                    <span className="text-[10px] text-amber-600 font-bold tracking-wider">(REVISED)</span>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="font-mono">
+                                                                {record.piNumber || '—'}
+                                                                {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
+                                                            </span>
+                                                        )}
                                                     </td>
                                                     <td className="px-2 py-3.5 text-sm font-semibold text-gray-700 whitespace-nowrap">
                                                         {ipList.length > 0 ? (
@@ -5756,7 +5889,7 @@ function PI({
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={11 + (canShowEntryBy ? 1 : 0)} className="px-2 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
+                                            <td colSpan={12 + (canShowEntryBy ? 1 : 0)} className="px-2 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -5796,6 +5929,16 @@ function PI({
                                     return (rawIps || []).map(s => String(s).trim()).filter(Boolean);
                                 })();
 
+                                const piList = (() => {
+                                    if (record.piNumbers && Array.isArray(record.piNumbers) && record.piNumbers.length > 0) {
+                                        return record.piNumbers.map(s => String(s).trim()).filter(Boolean);
+                                    }
+                                    if (record.piNumber && typeof record.piNumber === 'string') {
+                                        return record.piNumber.split(',').map(s => s.trim()).filter(Boolean);
+                                    }
+                                    return [];
+                                })();
+
                                 return (
                                     <div
                                         key={record._id}
@@ -5805,13 +5948,26 @@ function PI({
                                         <div className="p-5 space-y-4">
                                             {/* Single Line Header: PI Number & Status Tag */}
                                             <div className="flex items-center justify-between gap-3">
-                                                <div className="flex items-center min-w-0 flex-1">
-                                                    <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap">PI No.</span>
-                                                    <span className="text-blue-500 font-bold mx-2">-</span>
-                                                    <span className="text-sm font-black text-gray-900 tracking-tight truncate">
-                                                        {record.piNumber}
-                                                        {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
-                                                    </span>
+                                                <div className="flex items-start min-w-0 flex-1">
+                                                    <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap mt-0.5">PI No.</span>
+                                                    <span className="text-blue-500 font-bold mx-2 mt-0.5">-</span>
+                                                    {piList.length > 1 ? (
+                                                        <div className="flex flex-col gap-0.5 min-w-0">
+                                                            {piList.map((pNum, idx) => (
+                                                                <span key={idx} className="text-sm font-black text-gray-900 tracking-tight truncate">
+                                                                    {pNum}
+                                                                </span>
+                                                            ))}
+                                                            {record.revisions && record.revisions.length > 0 && (
+                                                                <span className="text-[10px] font-bold text-amber-600">(REVISED)</span>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-sm font-black text-gray-900 tracking-tight truncate">
+                                                            {record.piNumber || 'N/A'}
+                                                            {record.revisions && record.revisions.length > 0 ? ' (REVISED)' : ''}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="flex flex-col items-end gap-1 shrink-0">
                                                     {isLcDone && (
@@ -5865,6 +6021,11 @@ function PI({
                                                                 </span>
                                                             )}
                                                         </div>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Create Date</span>
+                                                        <span className="text-gray-400 font-bold mx-2">-</span>
+                                                        <span className="text-sm font-bold text-gray-700">{formatDate(getRecordEffectiveCreateDate(record))}</span>
                                                     </div>
                                                     <div className="flex items-center">
                                                         <span className="w-[100px] text-[11px] font-black text-gray-400 uppercase tracking-widest shrink-0">Date</span>

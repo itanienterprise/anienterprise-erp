@@ -2814,10 +2814,11 @@ apiRouter.delete('/api/margin-returns/:id', async (req, res) => {
 // PI APIs
 apiRouter.post('/api/pi', async (req, res) => {
   try {
-    const { piNumber } = req.body;
+    const { piNumber, piNumbers } = req.body;
+    const finalPiNum = (piNumber && piNumber.trim()) || (Array.isArray(piNumbers) && piNumbers.length > 0 ? piNumbers.join(', ') : undefined);
     const encryptedData = encryptData(req.body);
     const newRecord = new PI({
-      piNumber: piNumber ? piNumber.trim() : undefined,
+      piNumber: finalPiNum,
       data: encryptedData
     });
     const savedRecord = await newRecord.save();
@@ -2834,7 +2835,7 @@ apiRouter.delete('/api/pi/:id', async (req, res) => {
   try {
     const deletedRecord = await PI.findByIdAndDelete(req.params.id);
     if (!deletedRecord) return res.status(404).json({ message: 'PI record not found' });
-    res.json({ message: 'PI record deleted' });
+    res.json({ message: 'PI record deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -2842,10 +2843,18 @@ apiRouter.delete('/api/pi/:id', async (req, res) => {
 
 apiRouter.put('/api/pi/:id', async (req, res) => {
   try {
-    const { piNumber } = req.body;
+    const { piNumber, piNumbers, revisions } = req.body;
+    const finalPiNum = (piNumber && piNumber.trim()) || (Array.isArray(piNumbers) && piNumbers.length > 0 ? piNumbers.join(', ') : undefined);
     const encryptedData = encryptData(req.body);
     const updateData = { data: encryptedData };
-    if (piNumber) updateData.piNumber = piNumber.trim();
+    if (finalPiNum) updateData.piNumber = finalPiNum;
+
+    const actualRevs = (revisions || []).filter(r => r.reviseNo !== 'Original PI');
+    if (actualRevs.length > 0) {
+      const lastRev = actualRevs[actualRevs.length - 1];
+      const revDate = lastRev.createdAt || req.body.lastRevisedAt || new Date();
+      updateData.createdAt = new Date(revDate);
+    }
 
     const updatedRecord = await PI.findByIdAndUpdate(req.params.id, updateData, { returnDocument: 'after' });
     if (!updatedRecord) return res.status(404).json({ message: 'PI record not found' });
@@ -2863,7 +2872,20 @@ apiRouter.get('/api/pi', async (req, res) => {
     const records = await PI.find().sort({ createdAt: -1 });
     const decrypted = records.map(r => {
       const d = decryptData(r.data);
-      return { ...d, _id: r._id, createdAt: r.createdAt };
+      const actualRevs = (d?.revisions || []).filter(rev => rev.reviseNo !== 'Original PI');
+      let effectiveCreatedAt = r.createdAt;
+      if (actualRevs.length > 0) {
+        const lastRev = actualRevs[actualRevs.length - 1];
+        effectiveCreatedAt = lastRev.createdAt || d.lastRevisedAt || lastRev.reviseDate || r.createdAt;
+      }
+      return {
+        ...d,
+        _id: r._id,
+        createdAt: effectiveCreatedAt,
+        originalCreatedAt: r.createdAt,
+        piNumber: d?.piNumber || r.piNumber,
+        piNumbers: d?.piNumbers || (d?.piNumber ? d.piNumber.split(',').map(s => s.trim()).filter(Boolean) : (r.piNumber ? r.piNumber.split(',').map(s => s.trim()).filter(Boolean) : []))
+      };
     });
     res.json(decrypted);
   } catch (err) {

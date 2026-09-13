@@ -13,14 +13,24 @@ export const formatDate = (dateString) => {
     if (!dateString) return '-';
 
     // If it's a simple YYYY-MM-DD string, handle it directly
-    if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-        const [year, month, day] = dateString.split('-');
-        return `${day}/${month}/${year}`;
+    if (typeof dateString === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            const [year, month, day] = dateString.split('-');
+            return `${day}/${month}/${year}`;
+        }
+        if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(dateString)) {
+            return dateString;
+        }
     }
 
     // Otherwise, try to create a Date object and format it
     const date = dateString instanceof Date ? dateString : new Date(dateString);
-    if (isNaN(date.getTime())) return '-';
+    if (isNaN(date.getTime())) {
+        if (typeof dateString === 'string' && dateString.trim() !== '') {
+            return dateString;
+        }
+        return '-';
+    }
 
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');

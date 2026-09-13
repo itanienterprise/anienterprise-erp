@@ -224,8 +224,14 @@ export const generatePLPDF = async (record, piRecords = [], lcRecords = [], impo
         doc.setFont("helvetica", "bold");
         doc.text("Proforma Invoice No:", midX + 3, rightY);
         doc.setFont("helvetica", "normal");
-        doc.text(record.piNumber || '', midX + 35, rightY);
-        rightY += 5;
+        const piList = (record.piNumbers && Array.isArray(record.piNumbers) && record.piNumbers.length > 0)
+            ? record.piNumbers.map(s => String(s).trim()).filter(Boolean)
+            : (record.piNumber ? record.piNumber.split(',').map(s => s.trim()).filter(Boolean) : []);
+        const displayPis = piList.length > 0 ? piList : [record.piNumber || ''];
+        displayPis.forEach((pStr, pIdx) => {
+            doc.text(pStr, midX + 35, rightY + (pIdx * 4));
+        });
+        rightY += (displayPis.length > 1 ? (displayPis.length * 4) + 1 : 5);
 
         doc.setFont("helvetica", "bold");
         doc.text("PI Date:", midX + 3, rightY);

@@ -570,7 +570,16 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     // Row 1: Exporter vs PI Info
     let y = margin + 8;
-    const row1Height = isPiRevised ? 37.5 : 33.5;
+    const rawPlPiNumber = record.piNumber || pi?.piNumber || '';
+    const cleanPlPiNumber = rawPlPiNumber.replace('(REVISED)', '').trim();
+    const plPiList = (record.piNumbers && Array.isArray(record.piNumbers) && record.piNumbers.length > 0)
+        ? record.piNumbers.map(s => String(s).replace('(REVISED)', '').trim()).filter(Boolean)
+        : cleanPlPiNumber.split(',').map(s => s.trim()).filter(Boolean);
+    const displayPlPis = plPiList.length > 0 ? plPiList : (cleanPlPiNumber ? [cleanPlPiNumber] : ['']);
+
+    const extraPiLines = displayPlPis.length > 1 ? (displayPlPis.length - 1) : 0;
+    const extraHeight = extraPiLines * 4;
+    const row1Height = (isPiRevised ? 37.5 : 33.5) + extraHeight;
     doc.rect(margin, y, leftColWidth, row1Height);
     doc.rect(midX, y, rightColWidth, row1Height);
 
@@ -583,7 +592,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
 
     doc.setFontSize(14);
     const nameLines = doc.splitTextToSize(record.exporterName || '', leftColWidth - 10);
-    const exporterNameY = isPiRevised ? y + 13 : y + 12;
+    const exporterNameY = (isPiRevised || displayPlPis.length > 1) ? y + 13 : y + 12;
     doc.text(nameLines, margin + leftColWidth / 2, exporterNameY, { align: 'center' });
 
     doc.setFontSize(9);
@@ -599,7 +608,7 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     if (exporterEmail) {
         exporterInfo = exporterInfo.trim() + `\nEmail: ${exporterEmail}`;
     }
-    const exporterAddressY = isPiRevised ? y + 17 : y + 15.5;
+    const exporterAddressY = (isPiRevised || displayPlPis.length > 1) ? y + 17 : y + 15.5;
     doc.text(doc.splitTextToSize(exporterInfo.trim(), leftColWidth - 10), margin + leftColWidth / 2, exporterAddressY, { align: 'center' });
 
     // Right: Invoice Info
@@ -622,45 +631,52 @@ export const generatePL2PDF = async (record, piRecords = [], lcRecords = [], imp
     if (isPiRevised) {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8.5);
-        doc.text(cleanPiNumber, midX + 2, y + 22.5);
+        displayPlPis.forEach((pNum, idx) => {
+            doc.text(pNum, midX + 2, y + 22.5 + (idx * 4));
+        });
 
         const origPiDateVal = formatDate(pi?.date || '') || '';
         doc.setFontSize(8.5);
         doc.text("DATE-" + origPiDateVal, midX + rightColWidth - 2, y + 22.5, { align: 'right' });
 
+        const revLineY = y + 22.5 + (displayPlPis.length * 4);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8.5);
-        doc.text(record.piNumber || '', midX + 2, y + 26.5);
+        doc.text(record.piNumber || '', midX + 2, revLineY);
 
         const revisedPiDateVal = formatDate(record.piDate) || '';
         doc.setFontSize(8.5);
-        doc.text("DATE-" + revisedPiDateVal, midX + rightColWidth - 2, y + 26.5, { align: 'right' });
+        doc.text("DATE-" + revisedPiDateVal, midX + rightColWidth - 2, revLineY, { align: 'right' });
 
-        doc.line(midX, y + 29.5, pageWidth - margin, y + 29.5);
+        const divLineY = revLineY + 3;
+        doc.line(midX, divLineY, pageWidth - margin, divLineY);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.text("Seller (if other than consigner)", midX + 2, y + 33);
+        doc.text("Seller (if other than consigner)", midX + 2, divLineY + 3.5);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
-        doc.text(buyerLines, midX + 2, y + 35.5);
+        doc.text(buyerLines, midX + 2, divLineY + 6);
     } else {
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
-        doc.text(record.piNumber || '', midX + 2, y + 22.5);
+        doc.setFontSize(displayPlPis.length > 1 ? 8.5 : 9);
+        displayPlPis.forEach((pNum, idx) => {
+            doc.text(pNum, midX + 2, y + 22.5 + (idx * 4));
+        });
 
         const piDateVal = formatDate(record.piDate || pi?.date) || '';
         doc.setFontSize(8.5);
         doc.text("DATE-" + piDateVal, midX + rightColWidth - 2, y + 22.5, { align: 'right' });
 
-        doc.line(midX, y + 25.5, pageWidth - margin, y + 25.5);
+        const divLineY = y + 25.5 + extraHeight;
+        doc.line(midX, divLineY, pageWidth - margin, divLineY);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.text("Seller (if other than consigner)", midX + 2, y + 29);
+        doc.text("Seller (if other than consigner)", midX + 2, divLineY + 3.5);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         const buyerLines = doc.splitTextToSize(buyerName || '', rightColWidth - 5);
-        doc.text(buyerLines, midX + 2, y + 32);
+        doc.text(buyerLines, midX + 2, divLineY + 6.5);
     }
 
     // Row 2: Importer vs Country/Terms/LC Box
