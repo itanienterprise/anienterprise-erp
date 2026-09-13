@@ -2404,6 +2404,22 @@ apiRouter.post('/api/metadata', async (req, res) => {
   try {
     const { category, ...rest } = req.body;
     if (!category) return res.status(400).json({ message: 'Category is required' });
+
+    // Check if category + value already exists to prevent duplicates
+    const newVal = (rest.value || '').toString().trim().toLowerCase();
+    if (newVal) {
+      const existing = await MetaData.find({ category });
+      for (const rec of existing) {
+        try {
+          const dec = decryptData(rec.data);
+          const exVal = (dec?.value || dec || '').toString().trim().toLowerCase();
+          if (exVal === newVal) {
+            return res.status(200).json({ ...dec, _id: rec._id, category: rec.category, createdAt: rec.createdAt });
+          }
+        } catch (e) {}
+      }
+    }
+
     const encryptedData = encryptData(rest);
     const newRecord = new MetaData({ category, data: encryptedData });
     const savedRecord = await newRecord.save();
@@ -2428,10 +2444,65 @@ apiRouter.get('/api/metadata', async (req, res) => {
   }
 });
 
+apiRouter.delete('/api/metadata', async (req, res) => {
+  try {
+    const { category, value } = req.query;
+    if (!category || !value) return res.status(400).json({ message: 'Category and value required' });
+    const targetVal = value.toString().trim().toLowerCase();
+    if (category === 'certification' && targetVal === 'safta') {
+      return res.status(400).json({ message: 'SAFTA is a permanent certification and cannot be deleted' });
+    }
+    const records = await MetaData.find({ category });
+    let deletedCount = 0;
+    for (const rec of records) {
+      try {
+        const dec = decryptData(rec.data);
+        const val = (dec?.value || dec || '').toString().trim().toLowerCase();
+        if (val === targetVal) {
+          await MetaData.findByIdAndDelete(rec._id);
+          deletedCount++;
+        }
+      } catch (e) {}
+    }
+    res.json({ message: `Deleted ${deletedCount} record(s)` });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 apiRouter.delete('/api/metadata/:id', async (req, res) => {
   try {
-    const deletedRecord = await MetaData.findByIdAndDelete(req.params.id);
-    if (!deletedRecord) return res.status(404).json({ message: 'Record not found' });
+    const target = await MetaData.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'Record not found' });
+
+    let targetVal = '';
+    const category = target.category;
+    try {
+      const dec = decryptData(target.data);
+      targetVal = (dec?.value || dec || '').toString().trim().toLowerCase();
+    } catch (e) {}
+
+    if (category === 'certification' && targetVal === 'safta') {
+      return res.status(400).json({ message: 'SAFTA is a permanent certification and cannot be deleted' });
+    }
+
+    // Delete targeted record
+    await MetaData.findByIdAndDelete(req.params.id);
+
+    // Also purge all duplicates with identical category and value
+    if (category && targetVal) {
+      const duplicates = await MetaData.find({ category });
+      for (const item of duplicates) {
+        try {
+          const dec = decryptData(item.data);
+          const val = (dec?.value || dec || '').toString().trim().toLowerCase();
+          if (val === targetVal) {
+            await MetaData.findByIdAndDelete(item._id);
+          }
+        } catch (e) {}
+      }
+    }
+
     res.json({ message: 'Record deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

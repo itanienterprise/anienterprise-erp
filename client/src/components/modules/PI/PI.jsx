@@ -1308,23 +1308,38 @@ function PI({
     };
 
     const handleAddQuickMetaData = async (category, value) => {
-        if (!value) return;
+        const cleanVal = (value || '').trim();
+        if (!cleanVal) return;
         try {
-            await axios.post(`${API_BASE_URL}/api/metadata`, { category, value });
+            await axios.post(`${API_BASE_URL}/api/metadata`, { category, value: cleanVal });
             if (category === 'preCarriage') fetchMetaData(category, setPreCarriages);
             else if (category === 'receiptPlace') fetchMetaData(category, setReceiptPlaces);
             else if (category === 'vessel') fetchMetaData(category, setVessels);
             else if (category === 'country') fetchMetaData(category, setCountries);
             else if (category === 'certification') fetchMetaData(category, setCertifications);
             else if (category === 'packingType') fetchMetaData(category, setPackingTypes);
+            showToast('Option added successfully', 'success');
         } catch (error) {
             console.error(`Error adding quick ${category}:`, error);
+            showToast('Failed to add option', 'error');
         }
     };
 
-    const handleDeleteQuickMetaData = async (category, id) => {
+    const handleDeleteQuickMetaData = async (category, id, value) => {
+        if (category === 'certification' && (value || '').trim().toUpperCase() === 'SAFTA') {
+            showToast('SAFTA is a permanent certification and cannot be deleted', 'error');
+            return;
+        }
         if (!window.confirm("Are you sure you want to delete this option?")) return;
         try {
+            const matches = (v) => v._id === id || (value && (v.value || '').trim().toLowerCase() === value.trim().toLowerCase());
+            if (category === 'preCarriage') setPreCarriages(prev => prev.filter(v => !matches(v)));
+            else if (category === 'receiptPlace') setReceiptPlaces(prev => prev.filter(v => !matches(v)));
+            else if (category === 'vessel') setVessels(prev => prev.filter(v => !matches(v)));
+            else if (category === 'country') setCountries(prev => prev.filter(v => !matches(v)));
+            else if (category === 'certification') setCertifications(prev => prev.filter(v => !matches(v)));
+            else if (category === 'packingType') setPackingTypes(prev => prev.filter(v => !matches(v)));
+
             await axios.delete(`${API_BASE_URL}/api/metadata/${id}`);
             if (category === 'preCarriage') fetchMetaData(category, setPreCarriages);
             else if (category === 'receiptPlace') fetchMetaData(category, setReceiptPlaces);
@@ -1332,9 +1347,16 @@ function PI({
             else if (category === 'country') fetchMetaData(category, setCountries);
             else if (category === 'certification') fetchMetaData(category, setCertifications);
             else if (category === 'packingType') fetchMetaData(category, setPackingTypes);
+            showToast('Option deleted successfully', 'success');
         } catch (error) {
             console.error(`Error deleting quick ${category}:`, error);
             showToast('Failed to delete option', 'error');
+            if (category === 'preCarriage') fetchMetaData(category, setPreCarriages);
+            else if (category === 'receiptPlace') fetchMetaData(category, setReceiptPlaces);
+            else if (category === 'vessel') fetchMetaData(category, setVessels);
+            else if (category === 'country') fetchMetaData(category, setCountries);
+            else if (category === 'certification') fetchMetaData(category, setCertifications);
+            else if (category === 'packingType') fetchMetaData(category, setPackingTypes);
         }
     };
 
@@ -3674,8 +3696,9 @@ function PI({
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('preCarriage', v._id); }}
-                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('preCarriage', v._id, v.value); }}
+                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"
                                                     title="Delete this option"
                                                 >
                                                     <TrashIcon className="w-3.5 h-3.5" />
@@ -3724,8 +3747,9 @@ function PI({
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('receiptPlace', v._id); }}
-                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('receiptPlace', v._id, v.value); }}
+                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"
                                                     title="Delete this option"
                                                 >
                                                     <TrashIcon className="w-3.5 h-3.5" />
@@ -3774,8 +3798,9 @@ function PI({
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('vessel', v._id); }}
-                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('vessel', v._id, v.value); }}
+                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"
                                                     title="Delete this option"
                                                 >
                                                     <TrashIcon className="w-3.5 h-3.5" />
@@ -3921,8 +3946,9 @@ function PI({
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('country', v._id); }}
-                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('country', v._id, v.value); }}
+                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"
                                                     title="Delete this country"
                                                 >
                                                     <TrashIcon className="w-3.5 h-3.5" />
@@ -3970,8 +3996,9 @@ function PI({
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('country', v._id); }}
-                                                    className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('country', v._id, v.value); }}
+                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"
                                                     title="Delete this country"
                                                 >
                                                     <TrashIcon className="w-3.5 h-3.5" />
@@ -4327,7 +4354,13 @@ function PI({
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => handleAddQuickMetaData('certification', formData.certification)}
+                                    onClick={() => {
+                                        const toAdd = (certSearch || '').trim() || (formData.certification || '').split(',').map(s => s.trim()).filter(Boolean).pop();
+                                        if (toAdd) {
+                                            handleAddQuickMetaData('certification', toAdd);
+                                            setCertSearch('');
+                                        }
+                                    }}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
                                     title="Add new certification"
                                 >
@@ -4337,7 +4370,8 @@ function PI({
                                     const defaultCerts = [
                                         { _id: 'default-packing', value: 'Packing', isDefault: true },
                                         { _id: 'default-valqty', value: 'Value & Quantity', isDefault: true },
-                                        { _id: 'default-coo', value: 'Country of Origin', isDefault: true }
+                                        { _id: 'default-coo', value: 'Country of Origin', isDefault: true },
+                                        { _id: 'default-safta', value: 'SAFTA', isDefault: true }
                                     ];
                                     const merged = [...defaultCerts];
                                     certifications.forEach(cert => {
@@ -4366,8 +4400,9 @@ function PI({
                                                         {!v.isDefault && (
                                                             <button
                                                                 type="button"
-                                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('certification', v._id); }}
-                                                                className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('certification', v._id, v.value); }}
+                                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"
                                                                 title="Delete this certification"
                                                             >
                                                                 <TrashIcon className="w-3.5 h-3.5" />
@@ -4410,7 +4445,13 @@ function PI({
                                         />
                                         <button
                                             type="button"
-                                            onClick={() => handleAddQuickMetaData('packingType', formData.packingType)}
+                                            onClick={() => {
+                                                const toAdd = (packSearch || '').trim() || (formData.packingType || '').split(',').map(s => s.trim()).filter(Boolean).pop();
+                                                if (toAdd) {
+                                                    handleAddQuickMetaData('packingType', toAdd);
+                                                    setPackSearch('');
+                                                }
+                                            }}
                                             className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700 p-1"
                                             title="Add new packing type"
                                         >
@@ -4449,8 +4490,9 @@ function PI({
                                                                 {!v.isDefault && (
                                                                     <button
                                                                         type="button"
-                                                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('packingType', v._id); }}
-                                                                        className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteQuickMetaData('packingType', v._id, v.value); }}
+                                                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"
                                                                         title="Delete this packing type"
                                                                     >
                                                                         <TrashIcon className="w-3.5 h-3.5" />
@@ -5105,7 +5147,8 @@ function PI({
                                                     const defaultCerts = [
                                                         { _id: 'default-packing', value: 'Packing', isDefault: true },
                                                         { _id: 'default-valqty', value: 'Value & Quantity', isDefault: true },
-                                                        { _id: 'default-coo', value: 'Country of Origin', isDefault: true }
+                                                        { _id: 'default-coo', value: 'Country of Origin', isDefault: true },
+                                                        { _id: 'default-safta', value: 'SAFTA', isDefault: true }
                                                     ];
                                                     const merged = [...defaultCerts];
                                                     certifications.forEach(cert => {
