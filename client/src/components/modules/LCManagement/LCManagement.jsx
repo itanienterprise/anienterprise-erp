@@ -11500,17 +11500,54 @@ style={
 
                                                                 {/* Product Details Section */}
                                                                 {(() => {
-                                                                    const productsToBreakdown = record.productsList && record.productsList.length > 0
-                                                                        ? record.productsList
-                                                                        : [{
-                                                                            productName: record.productName || '-',
-                                                                            quantity: record.quantity || 0,
-                                                                            rate: record.rate || 0,
-                                                                            freight: record.freight || 0,
-                                                                            totalDollar: record.totalDollar || 0
-                                                                        }];
+                                                                    const timeline = getLCHistoryTimeline(record);
+                                                                    const latestMilestone = timeline[timeline.length - 1] || {};
+                                                                    const totalDollarRecord = parseFloat(latestMilestone.totalDollar || record.totalDollar || adj.totalDollar) || 0;
+                                                                    const dollarRate = parseFloat(record.updatedDollarRate || record.dollarRate || latestMilestone.dollarRate || adj.dollarRate || 0);
+
+                                                                    const activeProductsList = (latestMilestone?.productsList && latestMilestone.productsList.length > 0)
+                                                                        ? latestMilestone.productsList
+                                                                        : (record.productsList && record.productsList.length > 0 ? record.productsList : null);
+
+                                                                    const productsToBreakdown = activeProductsList || [{
+                                                                        productName: record.productName || '-',
+                                                                        quantity: record.quantity || 0,
+                                                                        rate: record.rate || 0,
+                                                                        freight: record.freight || 0,
+                                                                        totalDollar: record.totalDollar || 0
+                                                                    }];
                                                                     const totalOpeningQtyTons = productsToBreakdown.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
                                                                     const totalOpeningQtyKg = totalOpeningQtyTons * 1000;
+
+                                                                    const productDollarMap = productsToBreakdown.map(p => {
+                                                                        const pOpeningQtyKg = (parseFloat(p.quantity) || 0) * 1000;
+                                                                        const pAdjustedValueBdt = totalOpeningQtyKg > 0 ? (adj.adjustedTotalAmount * (pOpeningQtyKg / totalOpeningQtyKg)) : adj.adjustedTotalAmount;
+
+                                                                        const pQtyTon = parseFloat(p.quantity) || 0;
+                                                                        const pRate = parseFloat(p.rate) || 0;
+                                                                        const pFreight = parseFloat(p.freight) || 0;
+                                                                        const rScaled = pRate > 0 ? (pRate < 10 ? pRate * 1000 : pRate) : 0;
+                                                                        const fScaled = pFreight < 0.1 ? pFreight * 1000 : pFreight;
+                                                                        const pCalculatedDollar = pQtyTon * (rScaled + fScaled);
+
+                                                                        let pTotalDollar = parseFloat(p.totalDollar) || 0;
+                                                                        if (pTotalDollar === 0 && pCalculatedDollar > 0) {
+                                                                            pTotalDollar = pCalculatedDollar;
+                                                                        }
+                                                                        if (pTotalDollar === 0 && productsToBreakdown.length === 1) {
+                                                                            pTotalDollar = totalDollarRecord;
+                                                                        }
+                                                                        if (pTotalDollar === 0 && totalDollarRecord > 0) {
+                                                                            pTotalDollar = totalOpeningQtyKg > 0 ? (totalDollarRecord * (pOpeningQtyKg / totalOpeningQtyKg)) : totalDollarRecord;
+                                                                        }
+                                                                        if (pTotalDollar === 0 && dollarRate > 0 && pAdjustedValueBdt > 0) {
+                                                                            pTotalDollar = pAdjustedValueBdt / dollarRate;
+                                                                        }
+
+                                                                        return pTotalDollar;
+                                                                    });
+
+                                                                    const totalDollarSum = productDollarMap.reduce((sum, val) => sum + val, 0) || totalDollarRecord || (dollarRate > 0 && adj.adjustedTotalAmount > 0 ? (adj.adjustedTotalAmount / dollarRate) : 0);
 
                                                                     return (
                                                                         <div className="space-y-3">
@@ -11523,6 +11560,8 @@ style={
                                                                                         <tr className="bg-gray-50/50 border-b border-gray-100/80">
                                                                                             <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Product Name</th>
                                                                                             <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-right text-[11px]">Quantity (Kg)</th>
+                                                                                            <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-right text-[11px]">Total Dollar ($)</th>
+                                                                                            <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-right text-[11px]">Dollar Rate</th>
                                                                                             <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-right text-[11px]">Value (৳)</th>
                                                                                             <th className="px-4 py-3 font-bold text-gray-500 uppercase tracking-wider text-right text-[11px]">LC Balance (Kg)</th>
                                                                                         </tr>
@@ -11533,6 +11572,7 @@ style={
                                                                                             const pAdjustmentQtyKg = totalOpeningQtyKg > 0 ? (adj.actualAdjustmentQtyKg * (pOpeningQtyKg / totalOpeningQtyKg)) : 0;
                                                                                             const pAdjustedQtyKg = pOpeningQtyKg + pAdjustmentQtyKg;
                                                                                             const pAdjustedValueBdt = totalOpeningQtyKg > 0 ? (adj.adjustedTotalAmount * (pOpeningQtyKg / totalOpeningQtyKg)) : adj.adjustedTotalAmount;
+                                                                                            const pTotalDollar = productDollarMap[idx] || 0;
 
                                                                                             const pReceiptsMap = {};
                                                                                             allStockRecords
@@ -11593,6 +11633,8 @@ style={
                                                                                                 <tr key={idx} className="hover:bg-gray-50/30">
                                                                                                     <td className="px-4 py-3 font-bold text-gray-800">{p.productName || '-'}</td>
                                                                                                     <td className="px-4 py-3 text-right font-semibold text-gray-700">{pAdjustedQtyKg.toLocaleString('en-US')} Kg</td>
+                                                                                                    <td className="px-4 py-3 text-right font-bold text-blue-600">${pTotalDollar.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                                                    <td className="px-4 py-3 text-right font-bold text-gray-700">{dollarRate > 0 ? `৳${dollarRate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td>
                                                                                                     <td className="px-4 py-3 text-right font-bold text-gray-900">৳{pAdjustedValueBdt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                                                                                                     <td className={`px-4 py-3 text-right font-black ${pCombinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{pCombinedRemKg.toLocaleString('en-IN')} Kg</td>
                                                                                                 </tr>
@@ -11602,6 +11644,8 @@ style={
                                                                                         <tr className="bg-gray-50/50 font-black border-t border-gray-200">
                                                                                             <td className="px-4 py-3 font-bold text-gray-850 uppercase tracking-wider text-[11px]">Total</td>
                                                                                             <td className="px-4 py-3 text-right font-black text-gray-900">{adj.adjustedQtyKg.toLocaleString('en-US')} Kg</td>
+                                                                                            <td className="px-4 py-3 text-right font-black text-blue-700">${totalDollarSum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                                            <td className="px-4 py-3 text-right font-bold text-gray-400">—</td>
                                                                                             <td className="px-4 py-3 text-right font-black text-gray-900">৳{adj.adjustedTotalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                                                                                             <td className={`px-4 py-3 text-right font-black ${adj.combinedRemKg <= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{adj.combinedRemKg.toLocaleString('en-IN')} Kg</td>
                                                                                         </tr>
