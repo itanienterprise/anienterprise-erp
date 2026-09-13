@@ -1,9 +1,11 @@
 const ActivityLog = require('../models/ActivityLog');
+const { decryptData } = require('../utils/encryption');
 
 /**
  * Maps API routes to human-friendly ERP Module names
  */
 const MODULE_PATH_MAP = [
+    { pattern: /^\/api\/notifications/i, module: 'Notification' },
     { pattern: /^\/api\/sales/i, module: 'Sales' },
     { pattern: /^\/api\/orders/i, module: 'Order' },
     { pattern: /^\/api\/pi/i, module: 'PI' },
@@ -81,8 +83,166 @@ const sanitizePayload = (obj) => {
     }
 };
 
+const IGNORED_KEYS = new Set([
+    '_id', '__v', 'id', 'password', 'confirmPassword', 'token', 'secret',
+    'signature', 'createdAt', 'updatedAt', 'user', 'userId', 'createdBy',
+    'updatedBy', 'payload', 'data', 'ciphertext', 'readbyusers'
+]);
+
+const isEncryptedString = (val) => {
+    if (typeof val !== 'string') return false;
+    if (val.startsWith('U2FsdGVkX1')) return true;
+    if (val.length > 50 && /^[A-Za-z0-9+/=]+$/.test(val) && !val.includes(' ')) return true;
+    return false;
+};
+
+const FIELD_LABEL_MAP = {
+    customerName: 'Customer Name',
+    companyName: 'Company Name',
+    productName: 'Product Name',
+    employeeName: 'Employee Name',
+    supplierName: 'Supplier Name',
+    importerName: 'Importer Name',
+    exporterName: 'Exporter Name',
+    contactPerson: 'Contact Person',
+    name: 'Name',
+    phone: 'Phone',
+    mobile: 'Mobile',
+    email: 'Email',
+    address: 'Address',
+    location: 'Location',
+    customerType: 'Customer Type',
+    role: 'Role',
+    designation: 'Designation',
+    department: 'Department',
+    salary: 'Salary',
+    status: 'Status',
+    rate: 'Rate',
+    price: 'Price',
+    unitPrice: 'Unit Price',
+    totalPrice: 'Total Price',
+    totalAmount: 'Total Amount',
+    paidAmount: 'Paid Amount',
+    dueAmount: 'Due Amount',
+    balance: 'Balance',
+    openingBalance: 'Opening Balance',
+    quantity: 'Quantity',
+    qty: 'Quantity',
+    stock: 'Stock',
+    warehouse: 'Warehouse',
+    lcNo: 'LC No',
+    piNo: 'PI No',
+    invoiceNo: 'Invoice No',
+    orderNo: 'Order No',
+    challanNo: 'Challan No',
+    truckNo: 'Truck No',
+    gatePassNo: 'Gate Pass No',
+    importer: 'Importer',
+    exporter: 'Exporter',
+    supplier: 'Supplier',
+    customer: 'Customer',
+    bank: 'Bank',
+    bankName: 'Bank Name',
+    branch: 'Branch',
+    accountNo: 'Account No',
+    accountType: 'Account Type',
+    paymentMethod: 'Payment Method',
+    paymentType: 'Payment Type',
+    amount: 'Amount',
+    remarks: 'Remarks',
+    description: 'Description',
+    note: 'Note',
+    uom: 'UOM',
+    category: 'Category',
+    date: 'Date',
+    title: 'Title',
+    message: 'Message'
+};
+
+const formatFieldLabel = (key) => {
+    if (FIELD_LABEL_MAP[key]) return FIELD_LABEL_MAP[key];
+    return key
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/_/g, ' ')
+        .replace(/^./, s => s.toUpperCase())
+        .trim();
+};
+
+const formatFieldValue = (val) => {
+    if (val === null || val === undefined) return '';
+    if (isEncryptedString(val)) return '';
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    if (typeof val === 'number') return val.toLocaleString();
+    if (typeof val === 'string') return val;
+    if (Array.isArray(val)) {
+        if (val.length === 0) return '';
+        if (typeof val[0] === 'object') {
+            return `${val.length} item${val.length > 1 ? 's' : ''}`;
+        }
+        return val.join(', ');
+    }
+    if (typeof val === 'object') {
+        const keys = Object.keys(val);
+        if (keys.length === 0) return '';
+        return JSON.stringify(val);
+    }
+    return String(val);
+};
+
+const resolvePayloadObject = (body) => {
+    if (!body || typeof body !== 'object') return {};
+
+    // Check if body.data is an encrypted ciphertext string
+    if (typeof body.data === 'string' && isEncryptedString(body.data)) {
+        try {
+            const dec = decryptData(body.data);
+            if (dec && typeof dec === 'object') return dec;
+        } catch (e) {}
+    }
+
+    // Check if body.payload is an encrypted ciphertext string
+    if (typeof body.payload === 'string' && isEncryptedString(body.payload)) {
+        try {
+            const dec = decryptData(body.payload);
+            if (dec && typeof dec === 'object') return dec;
+        } catch (e) {}
+    }
+
+    // Check if body.data is a nested object
+    if (body.data && typeof body.data === 'object' && !Array.isArray(body.data)) {
+        return body.data;
+    }
+
+    return body;
+};
+
+const extractFilledFields = (body) => {
+    if (!body || typeof body !== 'object') return [];
+    
+    const targetObj = resolvePayloadObject(body);
+
+    const list = [];
+    for (const [key, val] of Object.entries(targetObj)) {
+        if (key.startsWith('_')) continue;
+        if (IGNORED_KEYS.has(key.toLowerCase())) continue;
+        if (val === null || val === undefined || val === '') continue;
+        if (isEncryptedString(val)) continue;
+
+        const formattedVal = formatFieldValue(val);
+        if (!formattedVal) continue;
+        if (isEncryptedString(formattedVal)) continue;
+
+        list.push({
+            field: key,
+            label: formatFieldLabel(key),
+            value: formattedVal
+        });
+    }
+    return list;
+};
+
 /**
- * Generate human-friendly description of the operation
+ * Generate human-friendly description of the operation with full field details
  */
 const generateOperationDescription = (method, path, module, body, statusCode) => {
     const isError = statusCode >= 400;
@@ -100,6 +260,19 @@ const generateOperationDescription = (method, path, module, body, statusCode) =>
     if (lowerPath.includes('/logout')) {
         return `User logged out`;
     }
+    if (lowerPath.includes('/notifications')) {
+        if (lowerPath.includes('/clear')) {
+            return `${errorPrefix}Cleared all notifications`;
+        }
+        if (method.toUpperCase() === 'PUT') {
+            return `${errorPrefix}Marked notification as read ${targetId ? `(#${targetId.slice(-6)})` : ''}`.trim();
+        }
+        if (method.toUpperCase() === 'POST') {
+            const targetObj = resolvePayloadObject(body);
+            const notifTitle = targetObj?.title || targetObj?.message || 'Notification';
+            return `${errorPrefix}Created notification: "${notifTitle}"`;
+        }
+    }
     if (lowerPath.includes('/approve')) {
         return `${errorPrefix}Approved ${module} record ${targetId ? `(#${targetId.slice(-6)})` : ''}`.trim();
     }
@@ -113,25 +286,48 @@ const generateOperationDescription = (method, path, module, body, statusCode) =>
         return `${errorPrefix}Generated system database backup`;
     }
 
-    // Identify useful fields from body
-    const nameIdentifier = body?.name || body?.customerName || body?.productName || body?.employeeName || body?.title || body?.invoiceNo || body?.lcNo || body?.orderNo;
+    const targetObj = resolvePayloadObject(body);
+
+    const filledFields = extractFilledFields(body);
+    const nameIdentifier = targetObj.name || targetObj.customerName || targetObj.companyName || 
+        targetObj.productName || targetObj.employeeName || targetObj.supplierName || targetObj.importerName || 
+        targetObj.exporterName || targetObj.bankName || targetObj.title || targetObj.invoiceNo || 
+        targetObj.lcNo || targetObj.orderNo || targetObj.challanNo || targetObj.piNo || targetObj.truckNo;
+
+    // Build human-friendly string of filled fields
+    const filledSummary = filledFields
+        .filter(f => f.value !== nameIdentifier && f.field !== 'password' && !isEncryptedString(f.value))
+        .slice(0, 6)
+        .map(f => `${f.label}: "${f.value}"`)
+        .join(', ');
 
     switch (method.toUpperCase()) {
         case 'POST': {
+            let desc = `${errorPrefix}Created new ${module}`;
             if (nameIdentifier) {
-                return `${errorPrefix}Created new ${module}: "${nameIdentifier}"`;
+                desc += `: "${nameIdentifier}"`;
             }
-            return `${errorPrefix}Created new ${module} record`;
+            if (filledSummary) {
+                desc += ` (Filled: ${filledSummary})`;
+            }
+            return desc;
         }
         case 'PUT':
         case 'PATCH': {
+            let desc = `${errorPrefix}Updated ${module}`;
             if (nameIdentifier) {
-                return `${errorPrefix}Updated ${module}: "${nameIdentifier}" ${targetId ? `(#${targetId.slice(-6)})` : ''}`.trim();
+                desc += `: "${nameIdentifier}"`;
+            } else if (targetId) {
+                desc += ` (#${targetId.slice(-6)})`;
             }
-            return `${errorPrefix}Updated ${module} record ${targetId ? `(#${targetId.slice(-6)})` : ''}`.trim();
+            if (filledSummary) {
+                desc += ` (Updated: ${filledSummary})`;
+            }
+            return desc;
         }
         case 'DELETE': {
-            return `${errorPrefix}Deleted ${module} record ${targetId ? `(#${targetId.slice(-6)})` : ''}`.trim();
+            const idHint = nameIdentifier ? `"${nameIdentifier}"` : targetId ? `(#${targetId.slice(-6)})` : '';
+            return `${errorPrefix}Deleted ${module} record ${idHint}`.trim();
         }
         default:
             return `${errorPrefix}Performed ${method} on ${module}`;
@@ -208,5 +404,6 @@ module.exports = {
     resolveModuleFromPath,
     sanitizePayload,
     generateOperationDescription,
-    resolveActionDetails
+    resolveActionDetails,
+    extractFilledFields
 };

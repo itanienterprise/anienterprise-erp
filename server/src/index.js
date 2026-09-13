@@ -95,7 +95,8 @@ const {
   resolveModuleFromPath,
   sanitizePayload,
   generateOperationDescription,
-  resolveActionDetails
+  resolveActionDetails,
+  extractFilledFields
 } = require('./services/activityLogger');
 
 // Auto-seed admin user if no users exist
@@ -127,8 +128,23 @@ app.post('/v', (req, res, next) => {
 
   // Internal dispatching
   req.url = p;
+  req.originalUrl = p;
   req.method = m;
   req.body = d;
+
+  // Extract and populate req.query from p so router handlers receive query parameters
+  try {
+    const qIndex = p.indexOf('?');
+    if (qIndex !== -1) {
+      const qs = p.slice(qIndex + 1);
+      const searchParams = new URLSearchParams(qs);
+      req.query = Object.fromEntries(searchParams.entries());
+    } else {
+      req.query = {};
+    }
+  } catch (e) {
+    req.query = {};
+  }
 
   // Pass to internal router
   apiRouter(req, res, next);
@@ -139,10 +155,36 @@ app.get('/', (req, res) => {
   res.send('API is running...');
 });
 
-// Admin Authorization Middleware
-const adminOnly = (req, res, next) => {
-  const user = req.session.user;
-  const isAdmin = user && (user.username === 'admin' || user.role === 'admin');
+// Admin Authorization Helper & Middleware
+const isUserAdmin = async (user) => {
+  if (!user) return false;
+  if (user.username === 'admin') return true;
+  const roleLower = (user.role || '').toLowerCase().trim();
+  if (roleLower === 'admin') return true;
+
+  // Check if role is an ID that resolves to Admin in MetaData
+  if (/^[0-9a-fA-F]{24}$/.test(user.role)) {
+    try {
+      const MetaData = require('./models/MetaData');
+      const rec = await MetaData.findById(user.role);
+      if (rec) {
+        const d = decryptData(rec.data);
+        if (d && (d.name || '').toLowerCase().trim() === 'admin') return true;
+      }
+    } catch (e) {}
+  }
+
+  // Check custom permissions for log module
+  if (user.permissions && user.permissions.log && user.permissions.log.view) {
+    return true;
+  }
+
+  return false;
+};
+
+const adminOnly = async (req, res, next) => {
+  const user = req.session?.user;
+  const isAdmin = await isUserAdmin(user);
   if (!isAdmin) {
     return res.status(403).json({ message: 'Forbidden: Admin access required' });
   }
@@ -153,9 +195,10 @@ const adminOrLcManager = (req, res, next) => {
   return verifyPermission('importerExporter', 'edit')(req, res, next);
 };
 
-const adminOrSalesManager = (req, res, next) => {
-  const user = req.session.user;
-  const isAuthorized = user && (user.username === 'admin' || user.role === 'admin' || (user.role || '').toLowerCase() === 'sales manager');
+const adminOrSalesManager = async (req, res, next) => {
+  const user = req.session?.user;
+  const isAdmin = await isUserAdmin(user);
+  const isAuthorized = isAdmin || ((user?.role || '').toLowerCase().trim() === 'sales manager');
   if (!isAuthorized) {
     return res.status(403).json({ message: 'Forbidden: Admin or Sales Manager access required' });
   }
@@ -357,6 +400,24 @@ apiRouter.use((req, res, next) => {
       const { action, category } = resolveActionDetails(method, url);
       const description = generateOperationDescription(method, url, module, reqBodySnapshot, res.statusCode);
       const status = res.statusCode < 400 ? 'SUCCESS' : 'FAILED';
+      const filledFields = extractFilledFields(reqBodySnapshot);
+
+      let cleanSnapshot = { ...reqBodySnapshot };
+      if (typeof reqBodySnapshot?.data === 'string' && reqBodySnapshot.data.startsWith('U2FsdGVkX1')) {
+        try {
+          const dec = decryptData(reqBodySnapshot.data);
+          if (dec && typeof dec === 'object') {
+            cleanSnapshot = { ...dec };
+          }
+        } catch (e) {}
+      } else if (typeof reqBodySnapshot?.payload === 'string' && reqBodySnapshot.payload.startsWith('U2FsdGVkX1')) {
+        try {
+          const dec = decryptData(reqBodySnapshot.payload);
+          if (dec && typeof dec === 'object') {
+            cleanSnapshot = { ...dec };
+          }
+        } catch (e) {}
+      }
 
       logActivity({
         userId,
@@ -367,7 +428,10 @@ apiRouter.use((req, res, next) => {
         action,
         actionCategory: category,
         description,
-        details: reqBodySnapshot,
+        details: {
+          ...cleanSnapshot,
+          _filledFields: filledFields
+        },
         ip: clientIp,
         userAgent,
         method,
@@ -3815,10 +3879,10 @@ apiRouter.get('/api/logs', adminOnly, async (req, res) => {
     const query = {};
 
     if (user && user !== 'ALL') {
-      query.username = user;
+      query.username = new RegExp('^' + user.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     }
     if (module && module !== 'ALL') {
-      query.module = module;
+      query.module = new RegExp('^' + module.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     }
     if (category && category !== 'ALL') {
       query.actionCategory = category;
@@ -3829,16 +3893,16 @@ apiRouter.get('/api/logs', adminOnly, async (req, res) => {
     if (startDate || endDate) {
       query.timestamp = {};
       if (startDate) {
-        query.timestamp.$gte = new Date(startDate);
+        const start = startDate.includes('T') ? new Date(startDate) : new Date(`${startDate}T00:00:00`);
+        query.timestamp.$gte = start;
       }
       if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
+        const end = endDate.includes('T') ? new Date(endDate) : new Date(`${endDate}T23:59:59.999`);
         query.timestamp.$lte = end;
       }
     }
     if (search && search.trim()) {
-      const searchRegex = new RegExp(search.trim(), 'i');
+      const searchRegex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       query.$or = [
         { description: searchRegex },
         { username: searchRegex },
@@ -3878,7 +3942,9 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       todayLogs,
       todayUsers,
       categoryStats,
-      actionStats
+      actionStats,
+      distinctUsers,
+      distinctModules
     ] = await Promise.all([
       ActivityLog.countDocuments({}),
       ActivityLog.countDocuments({ timestamp: { $gte: todayStart } }),
@@ -3888,7 +3954,9 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       ]),
       ActivityLog.aggregate([
         { $group: { _id: '$action', count: { $sum: 1 } } }
-      ])
+      ]),
+      ActivityLog.distinct('username'),
+      ActivityLog.distinct('module')
     ]);
 
     const categories = {};
@@ -3903,7 +3971,9 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       todayLogs,
       todayActiveUsers: todayUsers.length,
       categories,
-      actions
+      actions,
+      distinctUsers: (distinctUsers || []).filter(Boolean).sort(),
+      distinctModules: (distinctModules || []).filter(Boolean).sort()
     });
   } catch (err) {
     console.error('Error fetching log stats:', err);

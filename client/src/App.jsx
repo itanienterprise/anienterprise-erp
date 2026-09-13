@@ -2227,8 +2227,9 @@ function App() {
       }
       case 'log-section': {
         const isAdminUser = currentUser?.username === 'admin';
-        const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
-        if (!isAdminUser && !isAdminRole) return null;
+        const isAdminRole = (currentUser?.role || '').toLowerCase().trim() === 'admin';
+        const hasLogPerm = hasPermission(currentUser, 'log', 'view');
+        if (!isAdminUser && !isAdminRole && !hasLogPerm) return null;
         return <LogManagement currentUser={currentUser} addNotification={addNotification} />;
       }
       default:
@@ -3109,7 +3110,7 @@ function App() {
               )}
 
               {/* Log — Admin Only */}
-              {(currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin') && (
+              {(currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase().trim() === 'admin' || hasPermission(currentUser, 'log', 'view')) && (
                 <button
                   onClick={() => { handleViewChange('log-section'); }}
                   title={isMini ? 'Log' : undefined}

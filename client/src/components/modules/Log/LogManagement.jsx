@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from '../../../utils/api';
+import { decryptData } from '../../../utils/encryption';
 import {
     SearchIcon,
     RefreshIcon,
@@ -9,15 +10,223 @@ import {
     ActivityLogIcon,
     ChevronLeftIcon,
     ChevronRightIcon,
+    ChevronDownIcon,
     CalendarIcon,
     FunnelIcon,
     XIcon,
     CheckIcon,
     ShieldIcon,
-    UserIcon
+    UserIcon,
+    ClipboardIcon,
+    FileTextIcon
 } from '../../Icons';
 
-const LogManagement = ({ currentUser, addNotification }) => {
+const IGNORED_KEYS = new Set([
+    '_id', '__v', 'id', 'password', 'confirmPassword', 'token', 'secret',
+    'signature', 'createdAt', 'updatedAt', 'user', 'userId', 'createdBy',
+    'updatedBy', 'payload', 'data', 'ciphertext', 'readbyusers', '_filledfields'
+]);
+
+const isEncryptedString = (val) => {
+    if (typeof val !== 'string') return false;
+    if (val.startsWith('U2FsdGVkX1')) return true;
+    if (val.length > 50 && /^[A-Za-z0-9+/=]+$/.test(val) && !val.includes(' ')) return true;
+    return false;
+};
+
+const FIELD_LABEL_MAP = {
+    customerName: 'Customer Name',
+    companyName: 'Company Name',
+    productName: 'Product Name',
+    employeeName: 'Employee Name',
+    supplierName: 'Supplier Name',
+    importerName: 'Importer Name',
+    exporterName: 'Exporter Name',
+    contactPerson: 'Contact Person',
+    name: 'Name',
+    phone: 'Phone',
+    mobile: 'Mobile',
+    email: 'Email',
+    address: 'Address',
+    location: 'Location',
+    customerType: 'Customer Type',
+    role: 'Role',
+    designation: 'Designation',
+    department: 'Department',
+    salary: 'Salary',
+    status: 'Status',
+    rate: 'Rate',
+    price: 'Price',
+    unitPrice: 'Unit Price',
+    totalPrice: 'Total Price',
+    totalAmount: 'Total Amount',
+    paidAmount: 'Paid Amount',
+    dueAmount: 'Due Amount',
+    balance: 'Balance',
+    openingBalance: 'Opening Balance',
+    quantity: 'Quantity',
+    qty: 'Quantity',
+    stock: 'Stock',
+    warehouse: 'Warehouse',
+    lcNo: 'LC No',
+    piNo: 'PI No',
+    invoiceNo: 'Invoice No',
+    orderNo: 'Order No',
+    challanNo: 'Challan No',
+    truckNo: 'Truck No',
+    gatePassNo: 'Gate Pass No',
+    importer: 'Importer',
+    exporter: 'Exporter',
+    supplier: 'Supplier',
+    customer: 'Customer',
+    bank: 'Bank',
+    bankName: 'Bank Name',
+    branch: 'Branch',
+    accountNo: 'Account No',
+    accountType: 'Account Type',
+    paymentMethod: 'Payment Method',
+    paymentType: 'Payment Type',
+    amount: 'Amount',
+    remarks: 'Remarks',
+    description: 'Description',
+    note: 'Note',
+    uom: 'UOM',
+    category: 'Category',
+    date: 'Date',
+    title: 'Title',
+    message: 'Message'
+};
+
+const formatFieldLabel = (key) => {
+    if (FIELD_LABEL_MAP[key]) return FIELD_LABEL_MAP[key];
+    return key
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/_/g, ' ')
+        .replace(/^./, s => s.toUpperCase())
+        .trim();
+};
+
+const formatFieldValue = (val) => {
+    if (val === null || val === undefined) return '';
+    if (isEncryptedString(val)) return '';
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    if (typeof val === 'number') return val.toLocaleString();
+    if (typeof val === 'string') return val;
+    if (Array.isArray(val)) {
+        if (val.length === 0) return '';
+        if (typeof val[0] === 'object') {
+            return `${val.length} item${val.length > 1 ? 's' : ''}`;
+        }
+        return val.join(', ');
+    }
+    if (typeof val === 'object') {
+        const keys = Object.keys(val);
+        if (keys.length === 0) return '';
+        return JSON.stringify(val);
+    }
+    return String(val);
+};
+
+const formatLogDescription = (desc, log) => {
+    if (!desc) return 'Performed action';
+
+    // Notifications route handling
+    if (log?.path?.includes('/notifications')) {
+        const idMatch = log.path.match(/([a-f0-9]{24}|\d+)/i);
+        const idHint = idMatch ? `(#${idMatch[1].slice(-6)})` : '';
+        if (log.method === 'DELETE' || log.path.includes('/clear')) {
+            return 'Cleared all notifications';
+        }
+        if (log.method === 'POST') {
+            return 'Created new notification';
+        }
+        return `Marked notification as read ${idHint}`.trim();
+    }
+
+    // Strip ugly encrypted ciphertext strings like (Updated: Data: "U2FsdGVkX1...")
+    let cleaned = desc
+        .replace(/\s*\((?:Filled|Updated):\s*Data:\s*"U2FsdGVkX1[^"]*"\)/gi, '')
+        .replace(/\s*\(Updated:\s*[^)]*U2FsdGVkX1[^)]*\)/gi, '')
+        .replace(/\s*\(Filled:\s*[^)]*U2FsdGVkX1[^)]*\)/gi, '')
+        .replace(/"U2FsdGVkX1[^"]*"/gi, '');
+
+    return cleaned.trim();
+};
+
+const getLogFilledFields = (log) => {
+    if (!log) return [];
+
+    // If pre-calculated, filter out raw encrypted strings or data fields
+    if (Array.isArray(log.details?._filledFields) && log.details._filledFields.length > 0) {
+        const clean = log.details._filledFields.filter(
+            f => !IGNORED_KEYS.has((f.field || '').toLowerCase()) && !isEncryptedString(f.value)
+        );
+        if (clean.length > 0) return clean;
+    }
+
+    const details = log.details;
+    if (!details || typeof details !== 'object') return [];
+
+    let targetObj = details;
+
+    // Check if payload is encrypted
+    if (typeof details.data === 'string' && isEncryptedString(details.data)) {
+        try {
+            const dec = decryptData(details.data);
+            if (dec && typeof dec === 'object') targetObj = dec;
+        } catch (e) {}
+    } else if (typeof details.payload === 'string' && isEncryptedString(details.payload)) {
+        try {
+            const dec = decryptData(details.payload);
+            if (dec && typeof dec === 'object') targetObj = dec;
+        } catch (e) {}
+    } else if (details.data && typeof details.data === 'object' && !Array.isArray(details.data)) {
+        targetObj = details.data;
+    }
+
+    const list = [];
+    for (const [key, val] of Object.entries(targetObj)) {
+        if (key.startsWith('_')) continue;
+        if (IGNORED_KEYS.has(key.toLowerCase())) continue;
+        if (val === null || val === undefined || val === '') continue;
+        if (isEncryptedString(val)) continue;
+
+        const formattedVal = formatFieldValue(val);
+        if (!formattedVal) continue;
+        if (isEncryptedString(formattedVal)) continue;
+
+        list.push({
+            field: key,
+            label: formatFieldLabel(key),
+            value: formattedVal
+        });
+    }
+    return list;
+};
+
+const getCleanDetails = (details) => {
+    if (!details || typeof details !== 'object') return {};
+    let copy = { ...details };
+    delete copy._filledFields;
+
+    // If data or payload is encrypted, decrypt so user sees readable payload in modal
+    if (typeof copy.data === 'string' && isEncryptedString(copy.data)) {
+        try {
+            const dec = decryptData(copy.data);
+            if (dec && typeof dec === 'object') return dec;
+        } catch (e) {}
+    }
+    if (typeof copy.payload === 'string' && isEncryptedString(copy.payload)) {
+        try {
+            const dec = decryptData(copy.payload);
+            if (dec && typeof dec === 'object') return dec;
+        } catch (e) {}
+    }
+
+    return copy;
+};
+
+const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     // Data states
     const [logs, setLogs] = useState([]);
     const [totalLogs, setTotalLogs] = useState(0);
@@ -36,9 +245,17 @@ const LogManagement = ({ currentUser, addNotification }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUser, setSelectedUser] = useState('ALL');
     const [selectedModule, setSelectedModule] = useState('ALL');
-    const [datePreset, setDatePreset] = useState('ALL'); // ALL, TODAY, YESTERDAY, 7DAYS, 30DAYS, CUSTOM
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const getTodayStr = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
+    const [datePreset, setDatePreset] = useState('TODAY'); // ALL, TODAY, YESTERDAY, 7DAYS, 30DAYS, CUSTOM
+    const [startDate, setStartDate] = useState(getTodayStr());
+    const [endDate, setEndDate] = useState(getTodayStr());
 
     // Pagination
     const [page, setPage] = useState(1);
@@ -59,6 +276,32 @@ const LogManagement = ({ currentUser, addNotification }) => {
     // List of distinct users and modules for filter dropdowns
     const [userOptions, setUserOptions] = useState([]);
     const [moduleOptions, setModuleOptions] = useState([]);
+
+    // Custom popover dropdown states
+    const [openDropdown, setOpenDropdown] = useState(null); // 'user', 'module', 'refresh', 'limit', null
+    const userDropdownRef = useRef(null);
+    const moduleDropdownRef = useRef(null);
+    const autoRefreshRef = useRef(null);
+    const limitRef = useRef(null);
+    const [userSearchText, setUserSearchText] = useState('');
+    const [moduleSearchText, setModuleSearchText] = useState('');
+
+    // Close dropdowns on click outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                (userDropdownRef.current && userDropdownRef.current.contains(event.target)) ||
+                (moduleDropdownRef.current && moduleDropdownRef.current.contains(event.target)) ||
+                (autoRefreshRef.current && autoRefreshRef.current.contains(event.target)) ||
+                (limitRef.current && limitRef.current.contains(event.target))
+            ) {
+                return;
+            }
+            setOpenDropdown(null);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Calculate dates based on preset
     useEffect(() => {
@@ -99,19 +342,20 @@ const LogManagement = ({ currentUser, addNotification }) => {
         else setIsRefreshing(true);
 
         try {
-            const params = {
-                page,
-                limit,
-                search: searchTerm.trim() || undefined,
-                user: selectedUser !== 'ALL' ? selectedUser : undefined,
-                module: selectedModule !== 'ALL' ? selectedModule : undefined,
-                category: activeCategory !== 'ALL' ? activeCategory : undefined,
-                startDate: startDate || undefined,
-                endDate: endDate || undefined
-            };
+            const queryParams = new URLSearchParams();
+            queryParams.append('page', page);
+            queryParams.append('limit', limit);
+            if (searchTerm.trim()) queryParams.append('search', searchTerm.trim());
+            if (selectedUser && selectedUser !== 'ALL') queryParams.append('user', selectedUser);
+            if (selectedModule && selectedModule !== 'ALL') queryParams.append('module', selectedModule);
+            if (activeCategory && activeCategory !== 'ALL') queryParams.append('category', activeCategory);
+            if (startDate) queryParams.append('startDate', startDate);
+            if (endDate) queryParams.append('endDate', endDate);
+
+            const url = `/api/logs?${queryParams.toString()}`;
 
             const [logsRes, statsRes] = await Promise.all([
-                axios.get('/api/logs', { params }),
+                axios.get(url),
                 axios.get('/api/logs/stats')
             ]);
 
@@ -121,7 +365,7 @@ const LogManagement = ({ currentUser, addNotification }) => {
                 setTotalLogs(logsRes.data.total || 0);
                 setTotalPages(logsRes.data.totalPages || 1);
 
-                // Collect distinct users & modules for dropdowns
+                // Collect distinct users & modules from current batch as fallback
                 setUserOptions(prev => {
                     const set = new Set(prev);
                     fetchedLogs.forEach(l => { if (l.username) set.add(l.username); });
@@ -143,6 +387,14 @@ const LogManagement = ({ currentUser, addNotification }) => {
                     categories: statsRes.data.categories || {},
                     actions: statsRes.data.actions || {}
                 });
+
+                // Set complete list of distinct users and modules across all logs
+                if (Array.isArray(statsRes.data.distinctUsers) && statsRes.data.distinctUsers.length > 0) {
+                    setUserOptions(statsRes.data.distinctUsers);
+                }
+                if (Array.isArray(statsRes.data.distinctModules) && statsRes.data.distinctModules.length > 0) {
+                    setModuleOptions(statsRes.data.distinctModules);
+                }
             }
         } catch (err) {
             console.error('Error fetching logs:', err);
@@ -202,7 +454,7 @@ const LogManagement = ({ currentUser, addNotification }) => {
     };
 
     // Action Badge styling
-    const getActionBadge = (action, category) => {
+    const getActionBadge = (action, _category) => {
         const act = (action || '').toUpperCase();
         if (act === 'CREATE') {
             return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">CREATE</span>;
@@ -324,20 +576,52 @@ const LogManagement = ({ currentUser, addNotification }) => {
 
                 {/* Header Actions */}
                 <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Auto refresh dropdown */}
-                    <div className="flex items-center text-xs text-slate-600 bg-slate-100 rounded-lg p-1 border border-slate-200">
-                        <span className="px-2 font-medium">Auto-Refresh:</span>
-                        <select
-                            value={autoRefreshInterval}
-                            onChange={(e) => setAutoRefreshInterval(Number(e.target.value))}
-                            className="bg-white text-xs font-semibold text-slate-700 rounded px-2 py-1 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    {/* Auto refresh dropdown button */}
+                    <div className="relative" ref={autoRefreshRef}>
+                        <button
+                            type="button"
+                            onClick={() => setOpenDropdown(prev => prev === 'refresh' ? null : 'refresh')}
+                            className={`inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl border transition-all shadow-xs ${
+                                openDropdown === 'refresh'
+                                    ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/40 text-blue-700'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+                            }`}
                         >
-                            <option value={0}>Paused</option>
-                            <option value={10}>Every 10s</option>
-                            <option value={15}>Every 15s</option>
-                            <option value={30}>Every 30s</option>
-                            <option value={60}>Every 60s</option>
-                        </select>
+                            <span>
+                                {autoRefreshInterval === 0 ? 'Auto-Refresh: Paused' : `Auto-Refresh: Every ${autoRefreshInterval}s`}
+                            </span>
+                            <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${openDropdown === 'refresh' ? 'rotate-180 text-blue-600' : ''}`} />
+                        </button>
+                        {openDropdown === 'refresh' && (
+                            <div className="absolute right-0 mt-1.5 w-48 bg-white border border-gray-100 rounded-xl shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-150">
+                                {[
+                                    { val: 0, label: 'Paused' },
+                                    { val: 10, label: 'Every 10 seconds' },
+                                    { val: 15, label: 'Every 15 seconds' },
+                                    { val: 30, label: 'Every 30 seconds' },
+                                    { val: 60, label: 'Every 60 seconds' }
+                                ].map(opt => (
+                                    <button
+                                        key={opt.val}
+                                        type="button"
+                                        onClick={() => {
+                                            setAutoRefreshInterval(opt.val);
+                                            setOpenDropdown(null);
+                                        }}
+                                        className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
+                                            autoRefreshInterval === opt.val
+                                                ? 'bg-blue-50 text-blue-700 font-bold'
+                                                : 'text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <span>{opt.label}</span>
+                                        {autoRefreshInterval === opt.val && (
+                                            <CheckIcon className="w-3.5 h-3.5 text-blue-600" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* Manual Refresh Button */}
@@ -480,57 +764,174 @@ const LogManagement = ({ currentUser, addNotification }) => {
                 <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                         {/* Search Input */}
-                        <div className="md:col-span-4 relative">
-                            <SearchIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        {/* Search Input */}
+                        <div className="md:col-span-4 relative group">
+                            <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500 transition-colors" />
                             <input
                                 type="text"
                                 placeholder="Search by keyword, user, module, IP..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800"
+                                className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-gray-200 hover:border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-800 shadow-xs transition-all"
                             />
                             {searchTerm && (
                                 <button
                                     onClick={() => setSearchTerm('')}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                                 >
                                     <XIcon className="w-3.5 h-3.5" />
                                 </button>
                             )}
                         </div>
 
-                        {/* Filter by User */}
-                        <div className="md:col-span-2">
-                            <select
-                                value={selectedUser}
-                                onChange={(e) => {
-                                    setSelectedUser(e.target.value);
-                                    setPage(1);
+                        {/* Filter by User Dropdown Button */}
+                        <div className="md:col-span-2 relative" ref={userDropdownRef}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setOpenDropdown(prev => prev === 'user' ? null : 'user');
+                                    setUserSearchText('');
                                 }}
-                                className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 font-medium"
+                                className={`w-full px-3.5 py-2 bg-white border rounded-xl text-xs font-semibold text-left flex items-center justify-between transition-all shadow-xs ${
+                                    openDropdown === 'user'
+                                        ? 'border-blue-500 ring-2 ring-blue-500/20 text-blue-700 bg-blue-50/20'
+                                        : selectedUser !== 'ALL'
+                                        ? 'border-blue-300 bg-blue-50/40 text-blue-700 font-bold'
+                                        : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                                }`}
                             >
-                                <option value="ALL">All Users</option>
-                                {userOptions.map(u => (
-                                    <option key={u} value={u}>{u}</option>
-                                ))}
-                            </select>
+                                <span className="truncate">
+                                    {selectedUser === 'ALL' ? 'All Users' : selectedUser}
+                                </span>
+                                <ChevronDownIcon className={`w-3.5 h-3.5 ml-1 text-gray-400 flex-shrink-0 transition-transform duration-200 ${openDropdown === 'user' ? 'rotate-180 text-blue-500' : ''}`} />
+                            </button>
+
+                            {openDropdown === 'user' && (
+                                <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-64 flex flex-col py-1 animate-in fade-in zoom-in-95 duration-150">
+                                    {userOptions.length > 5 && (
+                                        <div className="p-2 border-b border-gray-100">
+                                            <input
+                                                type="text"
+                                                placeholder="Search user..."
+                                                value={userSearchText}
+                                                onChange={(e) => setUserSearchText(e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="w-full px-2.5 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="overflow-y-auto max-h-48 py-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedUser('ALL');
+                                                setPage(1);
+                                                setOpenDropdown(null);
+                                            }}
+                                            className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
+                                                selectedUser === 'ALL' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <span>All Users</span>
+                                            {selectedUser === 'ALL' && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
+                                        </button>
+                                        {userOptions
+                                            .filter(u => !userSearchText || u.toLowerCase().includes(userSearchText.toLowerCase()))
+                                            .map(u => (
+                                                <button
+                                                    key={u}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedUser(u);
+                                                        setPage(1);
+                                                        setOpenDropdown(null);
+                                                    }}
+                                                    className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
+                                                        selectedUser === u ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    <span className="truncate">{u}</span>
+                                                    {selectedUser === u && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+                                                </button>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Filter by Module */}
-                        <div className="md:col-span-2">
-                            <select
-                                value={selectedModule}
-                                onChange={(e) => {
-                                    setSelectedModule(e.target.value);
-                                    setPage(1);
+                        {/* Filter by Module Dropdown Button */}
+                        <div className="md:col-span-2 relative" ref={moduleDropdownRef}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setOpenDropdown(prev => prev === 'module' ? null : 'module');
+                                    setModuleSearchText('');
                                 }}
-                                className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 font-medium"
+                                className={`w-full px-3.5 py-2 bg-white border rounded-xl text-xs font-semibold text-left flex items-center justify-between transition-all shadow-xs ${
+                                    openDropdown === 'module'
+                                        ? 'border-blue-500 ring-2 ring-blue-500/20 text-blue-700 bg-blue-50/20'
+                                        : selectedModule !== 'ALL'
+                                        ? 'border-blue-300 bg-blue-50/40 text-blue-700 font-bold'
+                                        : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                                }`}
                             >
-                                <option value="ALL">All Modules</option>
-                                {moduleOptions.map(m => (
-                                    <option key={m} value={m}>{m}</option>
-                                ))}
-                            </select>
+                                <span className="truncate">
+                                    {selectedModule === 'ALL' ? 'All Modules' : selectedModule}
+                                </span>
+                                <ChevronDownIcon className={`w-3.5 h-3.5 ml-1 text-gray-400 flex-shrink-0 transition-transform duration-200 ${openDropdown === 'module' ? 'rotate-180 text-blue-500' : ''}`} />
+                            </button>
+
+                            {openDropdown === 'module' && (
+                                <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-64 flex flex-col py-1 animate-in fade-in zoom-in-95 duration-150">
+                                    {moduleOptions.length > 6 && (
+                                        <div className="p-2 border-b border-gray-100">
+                                            <input
+                                                type="text"
+                                                placeholder="Search module..."
+                                                value={moduleSearchText}
+                                                onChange={(e) => setModuleSearchText(e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="w-full px-2.5 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="overflow-y-auto max-h-48 py-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedModule('ALL');
+                                                setPage(1);
+                                                setOpenDropdown(null);
+                                            }}
+                                            className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
+                                                selectedModule === 'ALL' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <span>All Modules</span>
+                                            {selectedModule === 'ALL' && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
+                                        </button>
+                                        {moduleOptions
+                                            .filter(m => !moduleSearchText || m.toLowerCase().includes(moduleSearchText.toLowerCase()))
+                                            .map(m => (
+                                                <button
+                                                    key={m}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedModule(m);
+                                                        setPage(1);
+                                                        setOpenDropdown(null);
+                                                    }}
+                                                    className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
+                                                        selectedModule === m ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    <span className="truncate">{m}</span>
+                                                    {selectedModule === m && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+                                                </button>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Date Preset Buttons */}
@@ -632,6 +1033,7 @@ const LogManagement = ({ currentUser, addNotification }) => {
                                     logs.map((log) => {
                                         const dateObj = new Date(log.timestamp);
                                         const fullDate = dateObj.toLocaleString();
+                                        const filledFields = getLogFilledFields(log);
 
                                         return (
                                             <tr key={log._id} className="hover:bg-slate-50/80 transition-colors">
@@ -664,7 +1066,7 @@ const LogManagement = ({ currentUser, addNotification }) => {
 
                                                 {/* Module */}
                                                 <td className="py-3 px-4 whitespace-nowrap">
-                                                    {getModuleBadge(log.module)}
+                                                    {getModuleBadge(log.path?.includes('/notifications') ? 'Notification' : log.module)}
                                                 </td>
 
                                                 {/* Action */}
@@ -672,14 +1074,42 @@ const LogManagement = ({ currentUser, addNotification }) => {
                                                     {getActionBadge(log.action, log.actionCategory)}
                                                 </td>
 
-                                                {/* Description */}
-                                                <td className="py-3 px-4">
-                                                    <div className="font-medium text-slate-800 line-clamp-2">
-                                                        {log.description}
+                                                {/* Description & Inserted/Filled Fields */}
+                                                <td className="py-3 px-4 min-w-[280px]">
+                                                    <div className="font-semibold text-slate-800 text-xs leading-relaxed">
+                                                        {formatLogDescription(log.description, log)}
                                                     </div>
+                                                    {filledFields.length > 0 && (
+                                                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                                                                Filled:
+                                                            </span>
+                                                            {filledFields.slice(0, 4).map((f, i) => (
+                                                                <span
+                                                                    key={i}
+                                                                    title={`${f.label}: ${f.value}`}
+                                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50/90 border border-blue-200/80 text-blue-900 text-[11px] font-medium max-w-[240px] truncate shadow-2xs"
+                                                                >
+                                                                    <span className="text-blue-600 font-medium text-[10px]">{f.label}:</span>
+                                                                    <span className="font-semibold text-slate-800 text-[10px] truncate">{f.value}</span>
+                                                                </span>
+                                                            ))}
+                                                            {filledFields.length > 4 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSelectedLog(log)}
+                                                                    className="cursor-pointer text-[10px] font-bold text-blue-600 hover:text-blue-800 px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors"
+                                                                    title="Click to view all filled fields in inspector"
+                                                                >
+                                                                    +{filledFields.length - 4} more
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                     {log.path && (
-                                                        <div className="text-3xs text-slate-400 font-mono mt-0.5 truncate">
-                                                            {log.method} {log.path}
+                                                        <div className="text-3xs text-slate-400 font-mono mt-1 truncate flex items-center gap-1.5">
+                                                            <span className="px-1 py-0.2 bg-slate-100 rounded text-slate-600 font-semibold">{log.method}</span>
+                                                            <span>{log.path}</span>
                                                         </div>
                                                     )}
                                                 </td>
@@ -724,18 +1154,41 @@ const LogManagement = ({ currentUser, addNotification }) => {
                             <span>Showing {logs.length > 0 ? (page - 1) * limit + 1 : 0} to {Math.min(page * limit, totalLogs)} of {totalLogs.toLocaleString()} entries</span>
                             <span className="text-slate-300">|</span>
                             <span>Rows per page:</span>
-                            <select
-                                value={limit}
-                                onChange={(e) => {
-                                    setLimit(Number(e.target.value));
-                                    setPage(1);
-                                }}
-                                className="bg-white border border-slate-200 rounded px-2 py-0.5 text-xs font-medium focus:outline-none"
-                            >
-                                <option value={25}>25</option>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                            </select>
+                            <div className="relative inline-flex items-center" ref={limitRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setOpenDropdown(prev => prev === 'limit' ? null : 'limit')}
+                                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg border bg-white flex items-center gap-1.5 transition-all shadow-xs ${
+                                        openDropdown === 'limit'
+                                            ? 'border-blue-500 ring-2 ring-blue-500/20 text-blue-700'
+                                            : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <span>{limit}</span>
+                                    <ChevronDownIcon className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${openDropdown === 'limit' ? 'rotate-180 text-blue-500' : ''}`} />
+                                </button>
+                                {openDropdown === 'limit' && (
+                                    <div className="absolute bottom-full mb-1 left-0 w-20 bg-white border border-gray-100 rounded-xl shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-150">
+                                        {[25, 50, 100].map(cnt => (
+                                            <button
+                                                key={cnt}
+                                                type="button"
+                                                onClick={() => {
+                                                    setLimit(cnt);
+                                                    setPage(1);
+                                                    setOpenDropdown(null);
+                                                }}
+                                                className={`w-full px-2.5 py-1.5 text-left text-xs transition-colors flex items-center justify-between ${
+                                                    limit === cnt ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <span>{cnt}</span>
+                                                {limit === cnt && <CheckIcon className="w-3 h-3 text-blue-600" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="flex items-center gap-1.5">
@@ -762,103 +1215,145 @@ const LogManagement = ({ currentUser, addNotification }) => {
             </div>
 
             {/* Inspection Modal */}
-            {selectedLog && (
-                <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
-                        {/* Modal Header */}
-                        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
-                                    <ActivityLogIcon className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-slate-800 text-base">Operation Detail Inspection</h3>
-                                    <p className="text-xs text-slate-500 font-mono">ID: {selectedLog._id}</p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setSelectedLog(null)}
-                                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60"
-                            >
-                                <XIcon className="w-5 h-5" />
-                            </button>
-                        </div>
+            {selectedLog && (() => {
+                const modalFilledFields = getLogFilledFields(selectedLog);
+                const cleanPayload = getCleanDetails(selectedLog.details);
 
-                        {/* Modal Body */}
-                        <div className="p-6 overflow-y-auto space-y-4 text-xs">
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                <div>
-                                    <span className="text-slate-400 font-semibold block text-3xs uppercase">Timestamp</span>
-                                    <span className="text-slate-800 font-mono font-medium">{new Date(selectedLog.timestamp).toLocaleString()}</span>
+                return (
+                    <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+                            {/* Modal Header */}
+                            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
+                                        <ActivityLogIcon className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-slate-800 text-base">Operation Detail & Insertion Inspector</h3>
+                                        <p className="text-xs text-slate-500 font-mono">Log ID: {selectedLog._id}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <span className="text-slate-400 font-semibold block text-3xs uppercase">User</span>
-                                    <span className="text-slate-800 font-semibold">{selectedLog.displayName || selectedLog.username} (@{selectedLog.username})</span>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400 font-semibold block text-3xs uppercase">Role</span>
-                                    <span className="text-slate-800 font-medium">{selectedLog.userRole || 'N/A'}</span>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400 font-semibold block text-3xs uppercase">Module</span>
-                                    <span className="text-slate-800 font-semibold">{selectedLog.module}</span>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400 font-semibold block text-3xs uppercase">Action Type</span>
-                                    <span className="font-bold">{selectedLog.action} ({selectedLog.actionCategory})</span>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400 font-semibold block text-3xs uppercase">IP Address</span>
-                                    <span className="text-slate-800 font-mono">{selectedLog.ip || '127.0.0.1'}</span>
-                                </div>
+                                <button
+                                    onClick={() => setSelectedLog(null)}
+                                    className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60"
+                                >
+                                    <XIcon className="w-5 h-5" />
+                                </button>
                             </div>
 
-                            {/* Full Description */}
-                            <div>
-                                <h4 className="text-xs font-bold text-slate-700 mb-1">Description</h4>
-                                <div className="p-3 bg-slate-100 rounded-lg text-slate-800 font-medium border border-slate-200">
-                                    {selectedLog.description}
+                            {/* Modal Body */}
+                            <div className="p-6 overflow-y-auto space-y-4 text-xs">
+                                {/* Basic Meta Grid */}
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <div>
+                                        <span className="text-slate-400 font-semibold block text-3xs uppercase">Timestamp</span>
+                                        <span className="text-slate-800 font-mono font-medium">{new Date(selectedLog.timestamp).toLocaleString()}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-semibold block text-3xs uppercase">User</span>
+                                        <span className="text-slate-800 font-semibold">{selectedLog.displayName || selectedLog.username} (@{selectedLog.username})</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-semibold block text-3xs uppercase">Role</span>
+                                        <span className="text-slate-800 font-medium">{selectedLog.userRole || 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-semibold block text-3xs uppercase">Module</span>
+                                        <span className="text-slate-800 font-semibold">{selectedLog.path?.includes('/notifications') ? 'Notification' : selectedLog.module}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-semibold block text-3xs uppercase">Action Type</span>
+                                        <div className="mt-0.5">{getActionBadge(selectedLog.action, selectedLog.actionCategory)}</div>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-semibold block text-3xs uppercase">IP Address</span>
+                                        <span className="text-slate-800 font-mono">{selectedLog.ip || '127.0.0.1'}</span>
+                                    </div>
+                                </div>
+
+                                {/* Detailed Operation Description */}
+                                <div>
+                                    <div className="flex items-center gap-1.5 mb-1.5">
+                                        <FileTextIcon className="w-4 h-4 text-blue-600" />
+                                        <h4 className="text-xs font-bold text-slate-700">Detailed Operation Description</h4>
+                                    </div>
+                                    <div className="p-3.5 bg-blue-50/60 rounded-xl text-slate-800 font-semibold text-xs border border-blue-100 leading-relaxed">
+                                        {formatLogDescription(selectedLog.description, selectedLog)}
+                                    </div>
+                                </div>
+
+                                {/* Inserted & Filled Fields Section */}
+                                {modalFilledFields.length > 0 ? (
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                <h4 className="text-xs font-bold text-slate-700">
+                                                    Inserted & Filled Fields ({modalFilledFields.length} field{modalFilledFields.length > 1 ? 's' : ''})
+                                                </h4>
+                                            </div>
+                                            <span className="text-3xs font-medium text-slate-400">Captured from submitted form / request</span>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                                            {modalFilledFields.map((item, idx) => (
+                                                <div key={idx} className="bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                                        <span className="text-xs font-semibold text-slate-700">{item.label}</span>
+                                                        <span className="text-3xs font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{item.field}</span>
+                                                    </div>
+                                                    <div className="font-mono text-xs font-bold text-slate-900 break-words bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                                                        {item.value}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-500 text-xs italic">
+                                        No specific form insertion fields recorded for this action.
+                                    </div>
+                                )}
+
+                                {/* Technical Details / Raw Snapshot */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <h4 className="text-xs font-bold text-slate-700">Raw Payload Snapshot & Context</h4>
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(JSON.stringify(cleanPayload, null, 2));
+                                                if (addNotification) addNotification('Copied details to clipboard', 'info');
+                                            }}
+                                            className="inline-flex items-center gap-1 text-3xs text-blue-600 hover:text-blue-700 hover:underline font-semibold"
+                                        >
+                                            <ClipboardIcon className="w-3.5 h-3.5" />
+                                            Copy JSON
+                                        </button>
+                                    </div>
+                                    <pre className="p-4 bg-slate-900 text-emerald-400 rounded-xl font-mono text-2xs overflow-x-auto max-h-48 leading-relaxed">
+                                        {JSON.stringify(cleanPayload, null, 2)}
+                                    </pre>
+                                </div>
+
+                                {/* Client & Request Info */}
+                                <div className="pt-2 border-t border-slate-200 text-3xs text-slate-500 font-mono space-y-1">
+                                    <div>HTTP Method: <span className="text-slate-700 font-bold">{selectedLog.method || 'N/A'}</span> | Route: <span className="text-slate-700 font-bold">{selectedLog.path || 'N/A'}</span></div>
+                                    <div className="truncate">User Agent: {selectedLog.userAgent || 'N/A'}</div>
                                 </div>
                             </div>
 
-                            {/* Technical Details / Snapshot */}
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <h4 className="text-xs font-bold text-slate-700">Payload Snapshot / Context Details</h4>
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(JSON.stringify(selectedLog.details || {}, null, 2));
-                                            if (addNotification) addNotification('Copied details to clipboard', 'info');
-                                        }}
-                                        className="text-3xs text-blue-600 hover:underline font-semibold"
-                                    >
-                                        Copy JSON
-                                    </button>
-                                </div>
-                                <pre className="p-4 bg-slate-900 text-emerald-400 rounded-xl font-mono text-2xs overflow-x-auto max-h-56 leading-relaxed">
-                                    {JSON.stringify(selectedLog.details || {}, null, 2)}
-                                </pre>
+                            {/* Modal Footer */}
+                            <div className="px-6 py-3 border-t border-slate-200 flex justify-end bg-slate-50">
+                                <button
+                                    onClick={() => setSelectedLog(null)}
+                                    className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+                                >
+                                    Close
+                                </button>
                             </div>
-
-                            {/* Client & Request Info */}
-                            <div className="pt-2 border-t border-slate-200 text-3xs text-slate-500 font-mono space-y-1">
-                                <div>HTTP Method: {selectedLog.method || 'N/A'} | Route: {selectedLog.path || 'N/A'}</div>
-                                <div className="truncate">User Agent: {selectedLog.userAgent || 'N/A'}</div>
-                            </div>
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="px-6 py-3 border-t border-slate-200 flex justify-end bg-slate-50">
-                            <button
-                                onClick={() => setSelectedLog(null)}
-                                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-100"
-                            >
-                                Close
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Clear Logs Confirmation Modal */}
             {showClearModal && (
@@ -886,17 +1381,22 @@ const LogManagement = ({ currentUser, addNotification }) => {
                                         className="text-blue-600 focus:ring-blue-500"
                                     />
                                     <span>Delete logs older than:</span>
-                                    <select
-                                        value={clearOlderThan}
-                                        onChange={(e) => setClearOlderThan(e.target.value)}
-                                        disabled={clearAllConfirm}
-                                        className="bg-slate-100 border border-slate-200 rounded px-2 py-1 text-xs font-medium"
-                                    >
-                                        <option value="7">7 Days</option>
-                                        <option value="30">30 Days</option>
-                                        <option value="60">60 Days</option>
-                                        <option value="90">90 Days</option>
-                                    </select>
+                                    <div className="relative inline-block group">
+                                        <select
+                                            value={clearOlderThan}
+                                            onChange={(e) => setClearOlderThan(e.target.value)}
+                                            disabled={clearAllConfirm}
+                                            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 text-gray-700 rounded-lg py-1 pl-2.5 pr-7 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                                        >
+                                            <option value="7">7 Days</option>
+                                            <option value="30">30 Days</option>
+                                            <option value="60">60 Days</option>
+                                            <option value="90">90 Days</option>
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 group-hover:text-gray-600 transition-colors">
+                                            <ChevronDownIcon className="w-3 h-3" />
+                                        </div>
+                                    </div>
                                 </label>
 
                                 <label className="flex items-center gap-2 cursor-pointer text-rose-600 font-semibold">

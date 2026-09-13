@@ -18,8 +18,30 @@ axios.interceptors.request.use((config) => {
     const timestamp = Date.now().toString();
     config.headers['X-Timestamp'] = timestamp;
 
+    // Serialize params into URL if config.params is provided
+    let fullUrl = config.url;
+    if (config.params) {
+        let qs = '';
+        if (config.params instanceof URLSearchParams) {
+            qs = config.params.toString();
+        } else if (typeof config.params === 'object') {
+            const queryParams = new URLSearchParams();
+            Object.entries(config.params).forEach(([key, val]) => {
+                if (val !== undefined && val !== null && val !== '') {
+                    queryParams.append(key, val);
+                }
+            });
+            qs = queryParams.toString();
+        }
+        if (qs) {
+            fullUrl += (fullUrl.includes('?') ? '&' : '?') + qs;
+        }
+        // Remove params from config so axios doesn't append them to '/v'
+        delete config.params;
+    }
+
     // Capture original details for the gateway
-    const originalUrl = config.url;
+    const originalUrl = fullUrl;
     const originalMethod = config.method.toUpperCase();
     const originalData = config.data || {};
 
