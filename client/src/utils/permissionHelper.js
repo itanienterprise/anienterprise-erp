@@ -219,7 +219,8 @@ export const MODULES_LIST = [
         ]
     },
     { key: 'returnProduct', label: 'Return Product' },
-    { key: 'backupRestore', label: 'Backup & Restore' }
+    { key: 'backupRestore', label: 'Backup & Restore' },
+    { key: 'log', label: 'Log' }
 ].sort((a, b) => (a.label || '').localeCompare(b.label || ''));
 
 /**
@@ -254,7 +255,7 @@ export const getDefaultPermissionsForRole = (role) => {
     } else if (roleLower === 'incharge') {
         // Incharge can do almost everything except delete employees or backup/restore
         MODULES_LIST.forEach(mod => {
-            if (mod.key !== 'backupRestore') {
+            if (mod.key !== 'backupRestore' && mod.key !== 'log') {
                 const permsObj = {
                     view: true,
                     add: true,
@@ -301,7 +302,7 @@ export const getDefaultPermissionsForRole = (role) => {
     } else if (roleLower === 'head of sales') {
         // Head of Sales has approval rights for sales and payment operations
         MODULES_LIST.forEach(mod => {
-            if (mod.key !== 'backupRestore') {
+            if (mod.key !== 'backupRestore' && mod.key !== 'log') {
                 const permsObj = { view: true, add: true, edit: true, delete: false, special: true };
                 if (mod.specialLabels) {
                     mod.specialLabels.forEach(sItem => {
@@ -343,7 +344,7 @@ export const getDefaultPermissionsForRole = (role) => {
     } else if (roleLower === 'data entry') {
         // Data entry can do everything except delete and backup/restore
         MODULES_LIST.forEach(mod => {
-            if (mod.key !== 'backupRestore') {
+            if (mod.key !== 'backupRestore' && mod.key !== 'log') {
                 const permsObj = { view: true, add: true, edit: true, delete: false, special: false };
                 if (mod.specialLabels) {
                     mod.specialLabels.forEach(sItem => {

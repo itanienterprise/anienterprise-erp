@@ -89,6 +89,14 @@ const StockBaseline = require('./models/StockBaseline');
 const { encryptData, decryptData } = require('./utils/encryption');
 const { updateBrandAcrossAllCollections } = require('./services/brandCascadeService');
 const CryptoJS = require('crypto-js');
+const ActivityLog = require('./models/ActivityLog');
+const {
+  logActivity,
+  resolveModuleFromPath,
+  sanitizePayload,
+  generateOperationDescription,
+  resolveActionDetails
+} = require('./services/activityLogger');
 
 // Auto-seed admin user if no users exist
 const seedAdminUser = async () => {
@@ -161,7 +169,7 @@ const getDefaultPermissionsForRole = (role) => {
   const modules = [
     'employees', 'port', 'importerExporter', 'cnf', 'cnfPayment', 'ipManagement', 'pi', 'packingList', 'trSetup',
     'product', 'customer', 'lcReceive', 'warehouse', 'stock', 'sales', 'borderSale', 'purchase', 'purchaseReceive', 'profitLoss', 'costOfGoods', 'paymentCollection', 'payToCustomer', 'bank',
-    'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore'
+    'insurance', 'insurancePayment', 'lcManagement', 'lcGp', 'lcExpense', 'returnProduct', 'backupRestore', 'log'
   ];
 
   modules.forEach(m => {
@@ -174,7 +182,7 @@ const getDefaultPermissionsForRole = (role) => {
     });
   } else if (roleLower === 'incharge') {
     modules.forEach(m => {
-      if (m !== 'backupRestore') {
+      if (m !== 'backupRestore' && m !== 'log') {
         defaults[m] = { view: true, add: true, edit: true, delete: m !== 'employees', special: true, showRate: true };
       }
     });
@@ -201,7 +209,7 @@ const getDefaultPermissionsForRole = (role) => {
     });
   } else if (roleLower === 'data entry') {
     modules.forEach(m => {
-      if (m !== 'backupRestore') {
+      if (m !== 'backupRestore' && m !== 'log') {
         defaults[m] = { view: true, add: true, edit: true, delete: false, special: false, showRate: false };
       }
     });
@@ -315,6 +323,64 @@ const verifyPermission = (moduleName, action = 'view') => {
     return res.status(403).json({ message: `Forbidden: You do not have permission to ${action} in ${moduleName}` });
   };
 };
+
+// Operation & Activity Logger Middleware for all API operations
+apiRouter.use((req, res, next) => {
+  const method = (req.method || '').toUpperCase();
+  const url = req.url || '';
+
+  const isExcluded = url.startsWith('/api/logs') || url === '/health' || url === '/api/health';
+  const isMutating = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+  const isAuthOrBackup = url.includes('/login') || url.includes('/logout') || url.includes('/backup-database');
+
+  if (isExcluded || (!isMutating && !isAuthOrBackup)) {
+    return next();
+  }
+
+  const reqBodySnapshot = sanitizePayload(req.body);
+  const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
+  const userAgent = req.headers['user-agent'] || '';
+
+  res.on('finish', () => {
+    try {
+      const user = req.session?.user;
+      const username = user?.username || reqBodySnapshot?.username || 'anonymous';
+      const userRole = user?.role || '';
+      const displayName = user?.name || username;
+      const userId = user?.id || '';
+
+      if (username === 'anonymous' && !url.includes('/login')) {
+        return;
+      }
+
+      const module = resolveModuleFromPath(url);
+      const { action, category } = resolveActionDetails(method, url);
+      const description = generateOperationDescription(method, url, module, reqBodySnapshot, res.statusCode);
+      const status = res.statusCode < 400 ? 'SUCCESS' : 'FAILED';
+
+      logActivity({
+        userId,
+        username,
+        userRole,
+        displayName,
+        module,
+        action,
+        actionCategory: category,
+        description,
+        details: reqBodySnapshot,
+        ip: clientIp,
+        userAgent,
+        method,
+        path: url,
+        status
+      });
+    } catch (err) {
+      console.error('[OperationLogger] Error logging request:', err.message);
+    }
+  });
+
+  next();
+});
 
 // IP Records APIs
 apiRouter.post('/api/ip-records', async (req, res) => {
@@ -3722,6 +3788,205 @@ apiRouter.delete('/api/backup-files/:filename', adminOnly, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// ==========================================
+// System Operation & Activity Log APIs (Admin Only)
+// ==========================================
+
+// 1. Fetch paginated & filtered activity logs
+apiRouter.get('/api/logs', adminOnly, async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 50,
+      search = '',
+      user = '',
+      module = '',
+      category = '',
+      action = '',
+      startDate = '',
+      endDate = ''
+    } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit) || 50));
+    const skip = (pageNum - 1) * limitNum;
+
+    const query = {};
+
+    if (user && user !== 'ALL') {
+      query.username = user;
+    }
+    if (module && module !== 'ALL') {
+      query.module = module;
+    }
+    if (category && category !== 'ALL') {
+      query.actionCategory = category;
+    }
+    if (action && action !== 'ALL') {
+      query.action = action;
+    }
+    if (startDate || endDate) {
+      query.timestamp = {};
+      if (startDate) {
+        query.timestamp.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.timestamp.$lte = end;
+      }
+    }
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      query.$or = [
+        { description: searchRegex },
+        { username: searchRegex },
+        { displayName: searchRegex },
+        { module: searchRegex },
+        { action: searchRegex },
+        { ip: searchRegex }
+      ];
+    }
+
+    const [logs, total] = await Promise.all([
+      ActivityLog.find(query).sort({ timestamp: -1 }).skip(skip).limit(limitNum).lean(),
+      ActivityLog.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      logs,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum) || 1
+    });
+  } catch (err) {
+    console.error('Error fetching logs:', err);
+    res.status(500).json({ message: 'Failed to fetch logs: ' + err.message });
+  }
+});
+
+// 2. Fetch log statistics for dashboard cards
+apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [
+      totalLogs,
+      todayLogs,
+      todayUsers,
+      categoryStats,
+      actionStats
+    ] = await Promise.all([
+      ActivityLog.countDocuments({}),
+      ActivityLog.countDocuments({ timestamp: { $gte: todayStart } }),
+      ActivityLog.distinct('username', { timestamp: { $gte: todayStart } }),
+      ActivityLog.aggregate([
+        { $group: { _id: '$actionCategory', count: { $sum: 1 } } }
+      ]),
+      ActivityLog.aggregate([
+        { $group: { _id: '$action', count: { $sum: 1 } } }
+      ])
+    ]);
+
+    const categories = {};
+    categoryStats.forEach(c => { if (c._id) categories[c._id] = c.count; });
+
+    const actions = {};
+    actionStats.forEach(a => { if (a._id) actions[a._id] = a.count; });
+
+    res.json({
+      success: true,
+      totalLogs,
+      todayLogs,
+      todayActiveUsers: todayUsers.length,
+      categories,
+      actions
+    });
+  } catch (err) {
+    console.error('Error fetching log stats:', err);
+    res.status(500).json({ message: 'Failed to fetch log statistics' });
+  }
+});
+
+// 3. Client-side user action & click logger (authenticated users)
+apiRouter.post('/api/logs/client-action', async (req, res) => {
+  try {
+    const user = req.session?.user;
+    const actions = Array.isArray(req.body.actions) ? req.body.actions : [req.body];
+    const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
+    const userAgent = req.headers['user-agent'] || '';
+
+    const logsToInsert = actions.map(act => ({
+      timestamp: act.timestamp ? new Date(act.timestamp) : new Date(),
+      userId: user?.id || '',
+      username: user?.username || 'anonymous',
+      userRole: user?.role || '',
+      displayName: user?.name || user?.username || 'User',
+      module: act.module || 'System',
+      action: act.action || 'CLICK',
+      actionCategory: act.actionCategory || 'UI_CLICK',
+      description: act.description || `User clicked "${act.actionName || 'Button'}" in ${act.module || 'System'}`,
+      details: act.details || {},
+      ip: clientIp,
+      userAgent,
+      method: 'CLICK',
+      path: act.path || '',
+      status: 'SUCCESS'
+    }));
+
+    if (logsToInsert.length > 0) {
+      await ActivityLog.insertMany(logsToInsert, { ordered: false });
+    }
+
+    res.json({ success: true, count: logsToInsert.length });
+  } catch (err) {
+    console.error('Error logging client actions:', err);
+    res.status(500).json({ message: 'Failed to record action log' });
+  }
+});
+
+// 4. Purge/clear logs (Admin only)
+apiRouter.delete('/api/logs/clear', adminOnly, async (req, res) => {
+  try {
+    const { olderThanDays, all } = req.body;
+    let query = {};
+
+    if (!all) {
+      const days = parseInt(olderThanDays) || 30;
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      query = { timestamp: { $lt: cutoff } };
+    }
+
+    const result = await ActivityLog.deleteMany(query);
+
+    // Record this clear action
+    await logActivity({
+      username: req.session?.user?.username || 'admin',
+      userRole: 'admin',
+      module: 'Log',
+      action: 'DELETE',
+      actionCategory: 'SYSTEM',
+      description: all ? 'Admin purged all activity logs' : `Admin cleared logs older than ${olderThanDays || 30} days (${result.deletedCount} deleted)`,
+      ip: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '',
+      method: 'DELETE',
+      path: '/api/logs/clear',
+      status: 'SUCCESS'
+    });
+
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `Successfully deleted ${result.deletedCount} log entries`
+    });
+  } catch (err) {
+    console.error('Error clearing logs:', err);
+    res.status(500).json({ message: 'Failed to clear logs: ' + err.message });
+  }
+});
+
 
 // Auto-Backup Scheduling Logic
 const runAutoBackup = async () => {

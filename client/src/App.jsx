@@ -4,7 +4,7 @@ import {
   MenuIcon, SearchIcon, HomeIcon, UsersIcon, UserIcon, AnchorIcon,
   BarChartIcon, FunnelIcon, XIcon, DollarSignIcon, ShoppingCartIcon,
   ChevronDownIcon, BoxIcon, BellIcon, TrashIcon, VegetableIcon, ReceiptIcon, TrendingUpIcon, LogOutIcon, BriefcaseIcon, TruckIcon,
-  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon
+  GlobeIcon, ArrowUpRightIcon, ArrowDownLeftIcon, LinkIcon, BuildingIcon, ShieldIcon, FileTextIcon, LayoutIcon, LCManagerIcon, RotateCcwIcon, ClipboardIcon, SettingsIcon, DatabaseIcon, TransferIcon, ActivityLogIcon
 } from './components/Icons';
 
 import { encryptData, decryptData } from './utils/encryption';
@@ -76,6 +76,8 @@ import NotificationMenu from './components/modules/Notification/NotificationMenu
 import ReturnProduct from './components/modules/ReturnProduct/ReturnProduct';
 import BackupRestore from './components/modules/BackupRestore/BackupRestore';
 import CostOfGoods from './components/modules/CostOfGoods/CostOfGoods';
+import LogManagement from './components/modules/Log/LogManagement';
+import { initActivityTracker } from './utils/activityTracker';
 import { hasPermission } from './utils/permissionHelper';
 
 
@@ -712,6 +714,13 @@ function App() {
   const [insuranceDropdownOpen, setInsuranceDropdownOpen] = useState(false);
   const [ipDropdownOpen, setIpDropdownOpen] = useState(false);
   const [piDropdownOpen, setPiDropdownOpen] = useState(false);
+
+  // Initialize user click & operation tracking
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      initActivityTracker(() => currentUser, () => currentView);
+    }
+  }, [isAuthenticated, currentUser, currentView]);
 
   const toggleSidebarDropdown = (dropdownName) => {
     setStockDropdownOpen(dropdownName === 'stock' ? !stockDropdownOpen : false);
@@ -2216,6 +2225,12 @@ function App() {
         if (!isAdminUser && !isAdminRole) return null;
         return <BackupRestore addNotification={addNotification} />;
       }
+      case 'log-section': {
+        const isAdminUser = currentUser?.username === 'admin';
+        const isAdminRole = (currentUser?.role || '').toLowerCase() === 'admin';
+        if (!isAdminUser && !isAdminRole) return null;
+        return <LogManagement currentUser={currentUser} addNotification={addNotification} />;
+      }
       default:
         return null;
     }
@@ -3089,6 +3104,20 @@ function App() {
                   <DatabaseIcon className="w-5 h-5 flex-shrink-0" />
                   <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
                     Backup & Restore
+                  </span>
+                </button>
+              )}
+
+              {/* Log — Admin Only */}
+              {(currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin') && (
+                <button
+                  onClick={() => { handleViewChange('log-section'); }}
+                  title={isMini ? 'Log' : undefined}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors duration-200 overflow-hidden ${currentView === 'log-section' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  <ActivityLogIcon className="w-5 h-5 flex-shrink-0" />
+                  <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden ${isMini ? 'w-0 opacity-0 max-w-0 ml-0 pointer-events-none' : 'ml-3 opacity-100 max-w-[160px]'}`}>
+                    Log
                   </span>
                 </button>
               )}
