@@ -70,9 +70,14 @@ const FIELD_LABEL_MAP = {
     stock: 'Stock',
     warehouse: 'Warehouse',
     lcNo: 'LC No',
+    lcNumber: 'LC No',
     piNo: 'PI No',
+    piNumber: 'PI No',
+    piNumbers: 'PI No',
     invoiceNo: 'Invoice No',
+    invoiceNumber: 'Invoice No',
     orderNo: 'Order No',
+    orderNumber: 'Order No',
     challanNo: 'Challan No',
     truckNo: 'Truck No',
     gatePassNo: 'Gate Pass No',
@@ -84,6 +89,7 @@ const FIELD_LABEL_MAP = {
     bankName: 'Bank Name',
     branch: 'Branch',
     accountNo: 'Account No',
+    accountName: 'Account Name',
     accountType: 'Account Type',
     paymentMethod: 'Payment Method',
     paymentType: 'Payment Type',
@@ -98,7 +104,15 @@ const FIELD_LABEL_MAP = {
     message: 'Message',
     approvedBy: 'Approved By',
     rejectedBy: 'Rejected By',
-    closedBy: 'Closed By'
+    closedBy: 'Closed By',
+    productsList: 'Products',
+    ipNumbers: 'IP Numbers',
+    grandTotalQuantity: 'Total Quantity',
+    grandTotal: 'Grand Total',
+    piRevision: 'Revision',
+    reviseNo: 'Revise No',
+    reviseDate: 'Revise Date',
+    revisions: 'Revisions'
 };
 
 const formatFieldLabel = (key) => {
@@ -137,6 +151,7 @@ const formatFieldValue = (val) => {
 const getLogModule = (log) => {
     if (!log) return 'System';
     if (log.path?.includes('/notifications')) return 'Notification';
+    if (log.path?.includes('/metadata')) return 'Settings / Metadata';
     
     // Check if Border Sale
     let details = log.details || {};
@@ -168,7 +183,22 @@ const getLogAction = (log) => {
     const path = (log.path || '').toLowerCase();
     const desc = (log.description || '').toLowerCase();
 
-    // Check Card Open / Close
+    // Check Card Open / Close / Discard
+    if (
+        details.actionType === 'DISCARD_ENTRY' ||
+        act === 'CARD CLOSE (NO SAVE)' ||
+        details.wasCreated === false ||
+        desc.includes('without creating') ||
+        desc.includes('without save')
+    ) {
+        return 'CARD CLOSE (NO SAVE)';
+    }
+    if (
+        details.actionType === 'OPEN_CREATE_FORM' ||
+        desc.includes('opened new entry card')
+    ) {
+        return 'CARD OPEN';
+    }
     if (
         details.actionType === 'CARD_OPEN' ||
         act === 'CARD OPEN' ||
@@ -232,6 +262,44 @@ const getLogAction = (log) => {
         desc.startsWith('closed ')
     ) {
         return 'CLOSE';
+    }
+
+    // Check revision delete
+    if (
+        act === 'DELETE_REVISION' ||
+        details.isRevisionDelete === true ||
+        details.actionType === 'DELETE_REVISION' ||
+        desc.toLowerCase().includes('deleted revision')
+    ) {
+        return 'DELETE_REVISION';
+    }
+
+    // Check revision
+    if (
+        act === 'REVISE' ||
+        act === 'REVISED' ||
+        details.isRevision === true ||
+        details.actionType === 'REVISE' ||
+        details.actionType === 'UPDATE_REVISION' ||
+        Boolean(details.piRevision) ||
+        Boolean(details.reviseNo) ||
+        Boolean(details.currentReviseNo) ||
+        (details.lastRevisedAt && log?.method === 'PUT') ||
+        (Array.isArray(details.revisions) && details.revisions.length > 0 && (path.includes('/pi') || details.piNumber || details.piNo)) ||
+        desc.toLowerCase().startsWith('revised ') ||
+        desc.toLowerCase().includes('revised pi')
+    ) {
+        return 'REVISED';
+    }
+
+    // Check Original PI Edit
+    if (
+        act === 'UPDATE_ORIGINAL' ||
+        (details.isOriginalPi && act === 'UPDATE') ||
+        (details.piTargetType === 'Original PI') ||
+        (path.includes('/pi') && act === 'UPDATE' && !details.isRevision && !details.piRevision && (desc.toLowerCase().includes('original') || (!details.revisions || details.revisions.length <= 1)))
+    ) {
+        return 'UPDATE_ORIGINAL';
     }
 
     return act;
@@ -333,6 +401,9 @@ const formatLogDescription = (desc, log) => {
 
     // Card Open
     if (action === 'CARD OPEN' || desc.includes('opened card') || desc.includes('card open')) {
+        if (details.cardType === 'create' || details.actionType === 'OPEN_CREATE_FORM' || desc.includes('new entry card') || (!details.invoiceNo && !details.customerName && !details.name)) {
+            return `Opened new entry card in ${mod}`;
+        }
         let inv = details.invoiceNo;
         if (!inv) {
             const invMatch = desc.match(/Invoice #?([A-Z0-9_-]+)/i) || desc.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
@@ -348,8 +419,11 @@ const formatLogDescription = (desc, log) => {
         return `Opened card: ${invPart} ${namePart} in ${mod}`.replace(/\s+/g, ' ').trim();
     }
 
-    // Card Close
-    if (action === 'CARD CLOSE' || desc.includes('closed card') || desc.includes('card close')) {
+    // Card Close / Discard
+    if (action === 'CARD CLOSE' || action === 'CARD CLOSE (NO SAVE)' || desc.includes('closed card') || desc.includes('card close')) {
+        if (details.cardType === 'create' || details.actionType === 'DISCARD_ENTRY' || details.wasCreated === false || details.saved === false || desc.includes('without creating')) {
+            return `Closed card without creating in ${mod}`;
+        }
         let inv = details.invoiceNo;
         if (!inv) {
             const invMatch = desc.match(/Invoice #?([A-Z0-9_-]+)/i) || desc.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
@@ -365,9 +439,40 @@ const formatLogDescription = (desc, log) => {
         return `Closed card: ${invPart} ${namePart} in ${mod}`.replace(/\s+/g, ' ').trim();
     }
 
-    // Legacy CSS button clicks cleaner
-    if (desc.includes('p-1.5 text-gray-400') || desc.includes('transition-all ml-1')) {
-        return `Toggled card in ${mod}`;
+    // New Entry / Creation
+    if (action === 'CREATE' || desc.startsWith('Created ')) {
+        const piVal = details.piNumber || details.piNo || details.piNumbers;
+        const lcVal = details.lcNo || details.lcNumber;
+        const invVal = details.invoiceNo || details.invoiceNumber;
+        const ordVal = details.orderNo || details.orderNumber;
+        const chVal = details.challanNo || details.challanNumber;
+
+        let ref = '';
+        if (piVal) ref = `PI #${piVal}`;
+        else if (lcVal) ref = `LC #${lcVal}`;
+        else if (invVal) ref = `Invoice #${invVal}`;
+        else if (ordVal) ref = `Order #${ordVal}`;
+        else if (chVal) ref = `Challan #${chVal}`;
+        else {
+            const match = desc.match(/(?:Invoice|Order|LC|PI|Challan)\s*#?\s*["']?([^"',\]()]+)["']?/i);
+            if (match) ref = match[0].trim();
+        }
+
+        const invPart = ref;
+        let name = details.customerName || details.companyName || details.name || details.productName || details.employeeName || details.supplierName || '';
+        if (!name) {
+            const nameMatch = desc.match(/"([^"]+)"/);
+            if (nameMatch) name = nameMatch[1].trim();
+        }
+        const namePart = name ? `("${name}")` : '';
+        let base = invPart && namePart ? `Created new ${mod}: ${invPart} ${namePart}` :
+            invPart ? `Created new ${mod}: ${invPart}` :
+            namePart ? `Created new ${mod}: ${namePart}` : `Created new ${mod}`;
+        const total = details.totalAmount || details.grandTotal || details.amount;
+        if (total && !isNaN(Number(total))) {
+            base += ` • Total: ৳${parseFloat(total).toLocaleString('en-IN')}`;
+        }
+        return base;
     }
 
     // Close
@@ -378,21 +483,93 @@ const formatLogDescription = (desc, log) => {
         return `Closed ${mod} ${inv} ${namePart}`.replace(/\s+/g, ' ').trim();
     }
 
-    // Edits and Updates
-    if (action === 'UPDATE' || desc.startsWith('Updated ')) {
-        let inv = details.invoiceNo;
-        if (!inv) {
-            const invMatch = desc.match(/(?:Invoice|Order|LC|PI|Challan)\s*No:?\s*["']?([^"',\]]+)["']?/i);
-            if (invMatch) inv = invMatch[1].trim();
+    // Clicks
+    if (action === 'CLICK' || log?.actionCategory === 'UI_CLICK') {
+        if (desc.includes('clicked "Edit PI"') && mod === 'PI') {
+            return `User clicked "Edit Original PI" in PI`;
         }
-        const invPart = inv ? `Invoice #${inv}` : '';
+    }
 
-        let name = details.customerName || details.companyName || details.name || details.productName || details.employeeName || '';
+    // Revision Delete
+    if (action === 'DELETE_REVISION' || desc.toLowerCase().includes('deleted revision')) {
+        let piVal = details.piNumber || details.piNo || details.piNumbers;
+        let refPart = piVal ? `PI #${piVal}` : '';
+        const revNo = details.deletedRevisionNo || 'Revision';
+        return `Deleted ${revNo} of ${mod}${refPart ? `: ${refPart}` : ''}`.trim();
+    }
+
+    // Revision
+    if (action === 'REVISED' || desc.startsWith('Revised ') || desc.startsWith('Updated Revised ')) {
+        const piVal = details.piNumber || details.piNo || details.piNumbers;
+        let refPart = '';
+        if (piVal) refPart = `PI #${piVal}`;
+        else {
+            const match = desc.match(/(?:PI)\s*#?\s*["']?([^"',\]()]+)["']?/i);
+            if (match) refPart = match[0].trim();
+        }
+
+        let name = details.customerName || details.companyName || details.name || details.productName || '';
         if (!name) {
-            const nameMatch = desc.match(/Updated\s+[^:]+:\s*"([^"]+)"/i) || desc.match(/"([^"]+)"/);
+            const nameMatch = desc.match(/\("([^"]+)"\)/) || desc.match(/"([^"]+)"/);
             if (nameMatch) name = nameMatch[1].trim();
         }
-        const namePart = name ? `"${name}"` : '';
+        const namePart = name ? `("${name}")` : '';
+
+        const revNo = details.currentReviseNo || details.reviseNo || (typeof details.piRevision === 'string' ? details.piRevision.split('DATE:')[0].trim() : '') || (Array.isArray(details.revisions) && details.revisions.length > 0 ? details.revisions[details.revisions.length - 1]?.reviseNo : '');
+        const revPart = revNo && revNo !== 'Original PI' ? ` (${revNo.toLowerCase().startsWith('revise') ? revNo : `Revise: ${revNo}`})` : '';
+
+        const isRevisionEdit = details.actionType === 'UPDATE_REVISION' || Boolean(details.editingRevisionNo) || desc.startsWith('Updated Revised');
+        const revisePrefix = isRevisionEdit ? 'Updated Revised' : 'Revised';
+        let baseDesc = refPart && namePart ? `${revisePrefix} ${mod}: ${refPart} ${namePart}${revPart}` :
+            refPart ? `${revisePrefix} ${mod}: ${refPart}${revPart}` :
+            namePart ? `${revisePrefix} ${mod}: ${namePart}${revPart}` : `${revisePrefix} ${mod}${revPart}`;
+
+        // Append specific changed fields if recorded in details._updatedFields
+        const upd = Array.isArray(details._updatedFields) && details._updatedFields.length > 0 ? details._updatedFields : [];
+        if (upd.length > 0) {
+            const meaningful = upd.filter(f => !['id', '_id', 'updatedat', 'revisions', 'lastrevisedat', 'pirevision', 'isrevision', 'currentreviseno', 'actiontype', 'editingrevisionno'].includes((f.field || '').toLowerCase()));
+            if (meaningful.length === 1) {
+                const f = meaningful[0];
+                const lbl = FIELD_LABEL_MAP[f.field] || (f.label === 'Products List' ? 'Products' : f.label === 'Ip Numbers' ? 'IP Numbers' : f.label);
+                return `${baseDesc} • Changed ${lbl}: ${f.oldValue ? `${f.oldValue} ➔ ` : ''}${f.value}`.trim();
+            } else if (meaningful.length <= 3) {
+                return `${baseDesc} • Changed: ${meaningful.map(f => {
+                    const lbl = FIELD_LABEL_MAP[f.field] || (f.label === 'Products List' ? 'Products' : f.label === 'Ip Numbers' ? 'IP Numbers' : f.label);
+                    return `${lbl} (${f.value})`;
+                }).join(', ')}`.trim();
+            } else {
+                const firstTwo = meaningful.slice(0, 2).map(f => FIELD_LABEL_MAP[f.field] || (f.label === 'Products List' ? 'Products' : f.label === 'Ip Numbers' ? 'IP Numbers' : f.label)).join(', ');
+                return `${baseDesc} • Changed ${firstTwo} and ${meaningful.length - 2} other fields`.trim();
+            }
+        }
+        return baseDesc;
+    }
+
+    // Edits and Updates
+    if (action === 'UPDATE' || action === 'UPDATE_ORIGINAL' || desc.startsWith('Updated ')) {
+        const piVal = details.piNumber || details.piNo || details.piNumbers;
+        const lcVal = details.lcNo || details.lcNumber;
+        const invVal = details.invoiceNo || details.invoiceNumber;
+        const ordVal = details.orderNo || details.orderNumber;
+        const chVal = details.challanNo || details.challanNumber;
+
+        let refPart = '';
+        if (piVal) refPart = `PI #${piVal}`;
+        else if (lcVal) refPart = `LC #${lcVal}`;
+        else if (invVal) refPart = `Invoice #${invVal}`;
+        else if (ordVal) refPart = `Order #${ordVal}`;
+        else if (chVal) refPart = `Challan #${chVal}`;
+        else {
+            const match = desc.match(/(?:Invoice|Order|LC|PI|Challan)\s*#?\s*["']?([^"',\]()]+)["']?/i);
+            if (match) refPart = match[0].trim();
+        }
+
+        let name = details.customerName || details.companyName || details.name || details.productName || details.employeeName || details.supplierName || details.bankName || '';
+        if (!name) {
+            const nameMatch = desc.match(/Updated\s+[^:]+:\s*(?:[^#]+#\S+\s+)?\("([^"]+)"\)/i) || desc.match(/"([^"]+)"/);
+            if (nameMatch) name = nameMatch[1].trim();
+        }
+        const namePart = name ? `("${name}")` : '';
 
         let code = details.customerId ? `ID: ${details.customerId}` :
             details.employeeId ? `ID: ${details.employeeId}` :
@@ -405,25 +582,69 @@ const formatLogDescription = (desc, log) => {
             }
         }
 
-        if (invPart && namePart) {
-            return `Updated ${mod}: ${invPart} (${namePart})`.trim();
-        } else if (invPart) {
-            return `Updated ${mod}: ${invPart}`.trim();
+        const isOrigPi = (mod === 'PI') && (action === 'UPDATE_ORIGINAL' || details.isOriginalPi || details.piTargetType === 'Original PI' || !details.isRevision);
+        const updatePrefix = isOrigPi ? 'Updated Original' : 'Updated';
+        let baseDesc = '';
+        if (refPart && namePart) {
+            baseDesc = `${updatePrefix} ${mod}: ${refPart} ${namePart}`;
+        } else if (refPart) {
+            baseDesc = `${updatePrefix} ${mod}: ${refPart}`;
         } else if (namePart && code) {
-            return `Updated ${mod}: ${namePart} (${code})`.trim();
+            baseDesc = `${updatePrefix} ${mod}: ${namePart} (${code})`;
         } else if (namePart) {
-            return `Updated ${mod}: ${namePart}`.trim();
+            baseDesc = `${updatePrefix} ${mod}: ${namePart}`;
+        } else {
+            baseDesc = `${updatePrefix} ${mod}`;
         }
 
-        // Clean out bracketed/parenthesized dumps from older description formats
-        let clean = desc
-            .replace(/\s*\[Updated:\s*[^\]]*\]/gi, '')
-            .replace(/\s*\(Updated:\s*[^)]*\)/gi, '')
-            .replace(/\s*\(Filled:\s*[^)]*\)/gi, '')
-            .replace(/\s*\((?:Filled|Updated):\s*Data:\s*"U2FsdGVkX1[^"]*"\)/gi, '')
-            .replace(/"U2FsdGVkX1[^"]*"/gi, '')
-            .trim();
-        return clean || `Updated ${mod}`;
+        // Append specific changed fields if recorded in details._updatedFields
+        const upd = Array.isArray(details._updatedFields) && details._updatedFields.length > 0 ? details._updatedFields : [];
+        if (upd.length > 0) {
+            if (upd.length === 1) {
+                const f = upd[0];
+                return `${baseDesc} • Changed ${f.label}: ${f.oldValue ? `${f.oldValue} ➔ ` : ''}${f.value}`.trim();
+            } else if (upd.length <= 3) {
+                return `${baseDesc} • Changed: ${upd.map(f => `${f.label} (${f.value})`).join(', ')}`.trim();
+            } else {
+                return `${baseDesc} • Changed ${upd.slice(0, 2).map(f => f.label).join(', ')} and ${upd.length - 2} other fields`.trim();
+            }
+        }
+        return baseDesc;
+    }
+
+    // Deletes
+    if (action === 'DELETE' || desc.startsWith('Deleted ')) {
+        let inv = details.invoiceNo;
+        if (!inv) {
+            const invMatch = desc.match(/(?:Invoice|Order|LC|PI|Challan)\s*No:?\s*["']?([^"',\]]+)["']?/i);
+            if (invMatch) inv = invMatch[1].trim();
+        }
+        const invPart = inv ? `Invoice #${inv}` : '';
+
+        let name = details.customerName || details.companyName || details.name || details.productName || details.employeeName || details.supplierName || details.value || details.label || '';
+        if (!name) {
+            const nameMatch = desc.match(/Deleted\s+[^:]+:\s*(?:[^#]+#\S+\s+)?\("([^"]+)"\)/i) || desc.match(/"([^"]+)"/);
+            if (nameMatch) name = nameMatch[1].trim();
+        }
+        const namePart = name ? `("${name}")` : '';
+
+        let code = details.customerId ? `ID: ${details.customerId}` :
+            details.employeeId ? `ID: ${details.employeeId}` :
+            details.productId ? `Code: ${details.productId}` :
+            details.category ? `Category: ${details.category}` : null;
+
+        if (invPart && namePart) {
+            return `Deleted ${mod}: ${invPart} (${namePart})`;
+        } else if (invPart) {
+            return `Deleted ${mod}: ${invPart}`;
+        } else if (namePart && code) {
+            return `Deleted ${mod}: "${name}" (${code})`;
+        } else if (namePart) {
+            return `Deleted ${mod}: "${name}"`;
+        } else if (code) {
+            return `Deleted ${mod} (${code})`;
+        }
+        return desc;
     }
 
     // Strip bracket dumps: [Updated: ...] or (Updated: ...) or (Filled: ...)
@@ -543,8 +764,8 @@ const getLogFilledFields = (log) => {
         return list;
     }
 
-    // For Card Open and Close actions
-    if (action === 'CARD OPEN' || action === 'CARD CLOSE') {
+    // For Card Open, Close, and Discard actions
+    if (action === 'CARD OPEN' || action === 'CARD CLOSE' || action === 'CARD CLOSE (NO SAVE)' || action === 'DISCARD') {
         const list = [];
         let inv = targetObj.invoiceNo;
         if (!inv && typeof log.description === 'string') {
@@ -559,8 +780,42 @@ const getLogFilledFields = (log) => {
             if (m) cust = m[1].trim();
         }
         if (cust) list.push({ field: 'customerName', label: 'Customer', value: String(cust) });
-        list.push({ field: 'cardState', label: 'Card State', value: action === 'CARD OPEN' ? 'Opened' : 'Closed' });
+
+        if (action === 'CARD CLOSE (NO SAVE)' || targetObj.actionType === 'DISCARD_ENTRY' || targetObj.wasCreated === false || log.description?.includes('without creating')) {
+            list.push({ field: 'cardState', label: 'Card State', value: 'Closed Without Save' });
+            list.push({ field: 'result', label: 'Result', value: 'Discarded without creating' });
+        } else if (targetObj.actionType === 'OPEN_CREATE_FORM' || targetObj.cardType === 'create' || log.description?.includes('new entry card')) {
+            list.push({ field: 'cardState', label: 'Card State', value: 'Opened For New Entry' });
+        } else {
+            list.push({ field: 'cardState', label: 'Card State', value: action === 'CARD OPEN' ? 'Opened' : 'Closed' });
+        }
         return list;
+    }
+
+    // For Create actions, extract clean summary fields
+    if (action === 'CREATE') {
+        const list = [];
+        const pi = targetObj.piNumber || targetObj.piNo || targetObj.piNumbers;
+        if (pi) list.push({ field: 'piNumber', label: 'PI No', value: String(pi) });
+        const lc = targetObj.lcNo || targetObj.lcNumber;
+        if (lc) list.push({ field: 'lcNo', label: 'LC No', value: String(lc) });
+        const inv = targetObj.invoiceNo || targetObj.invoiceNumber;
+        if (inv) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(inv) });
+        const ord = targetObj.orderNo || targetObj.orderNumber;
+        if (ord) list.push({ field: 'orderNo', label: 'Order No', value: String(ord) });
+        const challan = targetObj.challanNo || targetObj.challanNumber;
+        if (challan) list.push({ field: 'challanNo', label: 'Challan No', value: String(challan) });
+
+        const name = targetObj.customerName || targetObj.companyName || targetObj.name || targetObj.supplierName || targetObj.employeeName || targetObj.productName;
+        if (name) list.push({ field: 'name', label: 'Entity / Name', value: String(name) });
+        if (targetObj.totalAmount || targetObj.grandTotal || targetObj.amount) {
+            list.push({ field: 'totalAmount', label: 'Total Amount', value: formatFieldValue(targetObj.totalAmount || targetObj.grandTotal || targetObj.amount) });
+        }
+        if (targetObj.paidAmount !== undefined && targetObj.paidAmount !== null && targetObj.paidAmount !== '') {
+            list.push({ field: 'paidAmount', label: 'Paid Amount', value: formatFieldValue(targetObj.paidAmount) });
+        }
+        if (targetObj.status) list.push({ field: 'status', label: 'Status', value: String(targetObj.status) });
+        if (list.length > 0) return list;
     }
 
     // For Close actions
@@ -575,22 +830,75 @@ const getLogFilledFields = (log) => {
         return list;
     }
 
+    // For UPDATE and REVISE actions: STRICTLY return only actual modified / differential fields
+    if (action === 'UPDATE' || action === 'UPDATE_ORIGINAL' || action === 'REVISE' || action === 'REVISED') {
+        const mapFieldLabels = (fields) => {
+            return (fields || [])
+                .filter(f => !['revisions', 'pirevision', 'lastrevisedat', 'isrevision', 'currentreviseno', 'actiontype', 'id', '_id', 'updatedat'].includes((f.field || '').toLowerCase()))
+                .map(f => {
+                    let label = f.label;
+                    if (!label || label === f.field) {
+                        label = FIELD_LABEL_MAP[f.field] || f.label;
+                    } else if (label === 'Products List') {
+                        label = 'Products';
+                    } else if (label === 'Ip Numbers') {
+                        label = 'IP Numbers';
+                    }
+                    return {
+                        ...f,
+                        label
+                    };
+                });
+        };
+
+        if (Array.isArray(log.details?._updatedFields) && log.details._updatedFields.length > 0) {
+            return mapFieldLabels(log.details._updatedFields);
+        }
+        if (Array.isArray(log.details?._filledFields) && log.details._filledFields.length > 0) {
+            const clean = log.details._filledFields.filter(
+                f => !IGNORED_KEYS.has((f.field || '').toLowerCase()) && !isEncryptedString(f.value) && !/^[a-f0-9]{24}$/i.test(f.value)
+            );
+            // If it was a legacy full-payload dump with > 5 fields, don't show whole record
+            if (clean.length > 5) {
+                const operationalKeys = new Set(['truckno', 'challanno', 'rate', 'quantity', 'unitprice', 'totalamount', 'paidamount', 'dueamount', 'discount', 'paymentmethod', 'remarks', 'department', 'designation', 'salary', 'phone', 'email', 'grandtotal', 'grandtotalquantity', 'productslist', 'ipnumbers', 'accountno', 'accountname', 'branch', 'bankname']);
+                return mapFieldLabels(clean.filter(f => operationalKeys.has((f.field || '').toLowerCase())));
+            }
+            return mapFieldLabels(clean);
+        }
+        return [];
+    }
+
+    // For DELETE actions: return identity fields of the deleted record
+    if (action === 'DELETE') {
+        if (Array.isArray(log.details?._filledFields) && log.details._filledFields.length > 0) {
+            return log.details._filledFields;
+        }
+        const list = [];
+        if (targetObj.employeeId) list.push({ field: 'employeeId', label: 'Employee ID', value: String(targetObj.employeeId) });
+        if (targetObj.customerId) list.push({ field: 'customerId', label: 'Customer ID', value: String(targetObj.customerId) });
+        if (targetObj.productId) list.push({ field: 'productId', label: 'Product Code', value: String(targetObj.productId) });
+        if (targetObj.invoiceNo) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(targetObj.invoiceNo) });
+        if (targetObj.orderNo) list.push({ field: 'orderNo', label: 'Order No', value: String(targetObj.orderNo) });
+        if (targetObj.lcNo) list.push({ field: 'lcNo', label: 'LC No', value: String(targetObj.lcNo) });
+        const nameVal = targetObj.name || targetObj.customerName || targetObj.employeeName || targetObj.companyName || targetObj.productName || targetObj.value || targetObj.label;
+        if (nameVal) list.push({ field: 'name', label: targetObj.value ? 'Item / Value' : 'Name', value: String(nameVal) });
+        if (targetObj.category) list.push({ field: 'category', label: 'Category', value: String(targetObj.category) });
+        if (targetObj.designation) list.push({ field: 'designation', label: 'Designation', value: String(targetObj.designation) });
+        if (targetObj.department) list.push({ field: 'department', label: 'Department', value: String(targetObj.department) });
+        if (targetObj.role) list.push({ field: 'role', label: 'Role', value: String(targetObj.role) });
+        return list;
+    }
+
     // If pre-calculated updated fields exist (from differential logging), use them directly
     if (Array.isArray(log.details?._updatedFields) && log.details._updatedFields.length > 0) {
         return log.details._updatedFields;
     }
 
-    // If pre-calculated, filter out raw encrypted strings or data fields or ObjectIds
+    // If pre-calculated filled fields exist
     if (Array.isArray(log.details?._filledFields) && log.details._filledFields.length > 0) {
         let clean = log.details._filledFields.filter(
             f => !IGNORED_KEYS.has((f.field || '').toLowerCase()) && !isEncryptedString(f.value) && !/^[a-f0-9]{24}$/i.test(f.value)
         );
-        if (action === 'UPDATE' && clean.length > 8) {
-            // For legacy UPDATE logs with full payload dumps, filter to operational/modified fields only
-            const operationalKeys = new Set(['truckno', 'challanno', 'rate', 'quantity', 'unitprice', 'totalamount', 'paidamount', 'dueamount', 'discount', 'paymentmethod', 'remarks']);
-            const opClean = clean.filter(f => operationalKeys.has((f.field || '').toLowerCase()));
-            if (opClean.length > 0) return opClean;
-        }
         if (clean.length > 0) return clean;
     }
 
@@ -877,39 +1185,120 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     const getActionBadge = (action) => {
         const act = (action || '').toUpperCase();
         if (act === 'CREATE') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">CREATE</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    NEW ENTRY
+                </span>
+            );
+        }
+        if (act === 'UPDATE_ORIGINAL') {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    EDIT ORIGINAL
+                </span>
+            );
         }
         if (act === 'UPDATE') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">UPDATE</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    EDIT
+                </span>
+            );
+        }
+        if (act === 'REVISE' || act === 'REVISED') {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-800 border border-violet-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-600"></span>
+                    REVISED
+                </span>
+            );
+        }
+        if (act === 'DELETE_REVISION') {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    DEL REVISION
+                </span>
+            );
         }
         if (act === 'DELETE') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">DELETE</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    DELETE
+                </span>
+            );
         }
         if (act === 'ACCEPT') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">ACCEPT</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-800 border border-teal-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+                    ACCEPT
+                </span>
+            );
         }
         if (act === 'APPROVE') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200">APPROVE</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                    APPROVE
+                </span>
+            );
         }
         if (act === 'REJECT') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">REJECT</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    REJECT
+                </span>
+            );
         }
         if (act === 'CARD OPEN' || act === 'CARD_OPEN') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200">CARD OPEN</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                    CARD OPEN
+                </span>
+            );
         }
         if (act === 'CARD CLOSE' || act === 'CARD_CLOSE') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-700 border border-slate-300">CARD CLOSE</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    CARD CLOSE
+                </span>
+            );
+        }
+        if (act === 'CARD CLOSE (NO SAVE)' || act === 'DISCARD' || act === 'DISCARD_ENTRY') {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    CLOSED (NO SAVE)
+                </span>
+            );
         }
         if (act === 'CLOSE') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">CLOSE</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    CLOSE
+                </span>
+            );
         }
         if (act === 'LOGIN' || act === 'LOGOUT') {
-            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">{act}</span>;
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200 shadow-2xs">
+                    {act}
+                </span>
+            );
         }
         if (act === 'CLICK') {
             return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">CLICK</span>;
         }
-        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">{act}</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">{act}</span>;
     };
 
     // Module Badge styling
@@ -1524,22 +1913,34 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                     {filledFields.length > 0 && (
                                                         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                                             <span className={`text-[10px] uppercase font-bold tracking-wider ${
-                                                                action === 'UPDATE' ? 'text-amber-600' : 'text-slate-400'
+                                                                (action === 'REVISED' || action === 'REVISE') ? 'text-violet-600' : (action === 'UPDATE' || action === 'UPDATE_ORIGINAL') ? 'text-amber-600' : (action === 'DELETE' || action === 'DELETE_REVISION') ? 'text-rose-600' : 'text-slate-400'
                                                             }`}>
-                                                                {['APPROVE', 'ACCEPT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE'].includes(action) ? 'Details:' : action === 'REJECT' ? 'Reason:' : action === 'UPDATE' ? 'Updated:' : 'Filled:'}
+                                                                {['APPROVE', 'ACCEPT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE', 'CARD CLOSE (NO SAVE)'].includes(action) ? 'Details:' : action === 'REJECT' ? 'Reason:' : (action === 'REVISED' || action === 'REVISE') ? 'Revision:' : (action === 'UPDATE' || action === 'UPDATE_ORIGINAL') ? 'Changes:' : (action === 'DELETE' || action === 'DELETE_REVISION') ? 'Deleted Record:' : 'Fields:'}
                                                             </span>
                                                             {filledFields.slice(0, 5).map((f, i) => (
                                                                 <span
                                                                     key={i}
-                                                                    title={`${f.label}: ${f.value}`}
-                                                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium max-w-[240px] truncate shadow-2xs ${
-                                                                        action === 'UPDATE'
+                                                                    title={`${f.label}: ${f.oldValue ? `${f.oldValue} ➔ ` : ''}${f.value}`}
+                                                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium max-w-[280px] truncate shadow-2xs ${
+                                                                        (action === 'REVISED' || action === 'REVISE')
+                                                                            ? 'bg-violet-50/90 border border-violet-200/80 text-violet-950'
+                                                                            : (action === 'UPDATE' || action === 'UPDATE_ORIGINAL')
                                                                             ? 'bg-amber-50/90 border border-amber-200/80 text-amber-950'
+                                                                            : (action === 'DELETE' || action === 'DELETE_REVISION')
+                                                                            ? 'bg-rose-50/90 border border-rose-200/80 text-rose-950'
                                                                             : 'bg-blue-50/90 border border-blue-200/80 text-blue-900'
                                                                     }`}
                                                                 >
-                                                                    <span className={`font-medium text-[10px] ${action === 'UPDATE' ? 'text-amber-700' : 'text-blue-600'}`}>{f.label}:</span>
-                                                                    <span className="font-semibold text-slate-800 text-[10px] truncate">{f.value}</span>
+                                                                    <span className={`font-medium text-[10px] ${(action === 'REVISED' || action === 'REVISE') ? 'text-violet-700' : (action === 'UPDATE' || action === 'UPDATE_ORIGINAL') ? 'text-amber-700' : (action === 'DELETE' || action === 'DELETE_REVISION') ? 'text-rose-700' : 'text-blue-600'}`}>{f.label}:</span>
+                                                                    {(action === 'UPDATE' || action === 'UPDATE_ORIGINAL' || action === 'REVISED' || action === 'REVISE') && f.oldValue ? (
+                                                                        <span className="flex items-center gap-1 text-[10px] truncate">
+                                                                            <span className="line-through text-slate-400 font-normal">{f.oldValue}</span>
+                                                                            <span className={`font-bold ${(action === 'REVISED' || action === 'REVISE') ? 'text-violet-600' : 'text-amber-600'}`}>➔</span>
+                                                                            <span className="font-bold text-slate-800">{f.value}</span>
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="font-semibold text-slate-800 text-[10px] truncate">{f.value}</span>
+                                                                    )}
                                                                 </span>
                                                             ))}
                                                             {filledFields.length > 5 && (
@@ -1547,7 +1948,9 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                                     type="button"
                                                                     onClick={() => setSelectedLog(log)}
                                                                     className={`cursor-pointer text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${
-                                                                        action === 'UPDATE'
+                                                                        (action === 'REVISED' || action === 'REVISE')
+                                                                            ? 'text-violet-700 hover:text-violet-900 bg-violet-50 hover:bg-violet-100 border-violet-200'
+                                                                            : (action === 'UPDATE' || action === 'UPDATE_ORIGINAL')
                                                                             ? 'text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border-amber-200'
                                                                             : 'text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border-blue-200'
                                                                     }`}
@@ -1743,7 +2146,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                                                 <h4 className="text-xs font-bold text-slate-700">
-                                                    {modalAction === 'UPDATE' ? 'Modified / Updated Fields' : ['APPROVE', 'ACCEPT', 'REJECT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE'].includes(modalAction) ? 'Operation Details' : 'Inserted & Filled Fields'} ({modalFilledFields.length} field{modalFilledFields.length > 1 ? 's' : ''})
+                                                    {(modalAction === 'REVISED' || modalAction === 'REVISE') ? 'Modified / Revised Fields' : (modalAction === 'UPDATE' || modalAction === 'UPDATE_ORIGINAL') ? 'Modified / Updated Fields' : ['APPROVE', 'ACCEPT', 'REJECT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE'].includes(modalAction) ? 'Operation Details' : 'Inserted & Filled Fields'} ({modalFilledFields.length} field{modalFilledFields.length > 1 ? 's' : ''})
                                                 </h4>
                                             </div>
                                             <span className="text-3xs font-medium text-slate-400">Captured from submitted form / request</span>
@@ -1755,9 +2158,17 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                         <span className="text-xs font-semibold text-slate-700">{item.label}</span>
                                                         <span className="text-3xs font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{item.field}</span>
                                                     </div>
-                                                    <div className="font-mono text-xs font-bold text-slate-900 break-words bg-slate-50 px-2 py-1 rounded border border-slate-100">
-                                                        {item.value}
-                                                    </div>
+                                                    {(modalAction === 'UPDATE' || modalAction === 'UPDATE_ORIGINAL' || modalAction === 'REVISED' || modalAction === 'REVISE') && item.oldValue ? (
+                                                        <div className="flex items-center gap-1.5 font-mono text-xs flex-wrap">
+                                                            <span className="line-through text-rose-500 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">{item.oldValue}</span>
+                                                            <span className={`${(modalAction === 'REVISED' || modalAction === 'REVISE') ? 'text-violet-600' : 'text-amber-600'} font-bold`}>➔</span>
+                                                            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">{item.value}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="font-mono text-xs font-bold text-slate-900 break-words bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                                                            {item.value}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>

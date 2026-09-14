@@ -114,7 +114,8 @@ const {
   generateOperationDescription,
   resolveActionDetails,
   extractFilledFields,
-  computeUpdatedFields
+  computeUpdatedFields,
+  resolvePayloadObject
 } = require('./services/activityLogger');
 
 // Auto-seed admin user if no users exist
@@ -440,8 +441,8 @@ apiRouter.use(async (req, res, next) => {
   const userAgent = req.headers['user-agent'] || '';
 
   let previousDocSnapshot = null;
-  if (method === 'PUT' || method === 'PATCH') {
-    const match = url.match(/^\/api\/([a-zA-Z0-9_-]+)\/([a-f0-9]{24})/i);
+  if (method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+    const match = url.match(/(?:\/api)?\/([a-zA-Z0-9_-]+)\/([a-f0-9]{24})/i);
     if (match) {
       const routeKey = match[1].toLowerCase();
       const docId = match[2];
@@ -450,18 +451,9 @@ apiRouter.use(async (req, res, next) => {
         try {
           const doc = await model.findById(docId).lean();
           if (doc) {
-            if (doc.data) {
-              try {
-                let dec = decryptData(doc.data);
-                if (dec && dec.data && typeof dec.data === 'string' && !dec.invoiceNo) {
-                  try { dec = decryptData(dec.data); } catch (e) {}
-                }
-                previousDocSnapshot = dec || doc;
-              } catch (e) {
-                previousDocSnapshot = doc;
-              }
-            } else {
-              previousDocSnapshot = doc;
+            previousDocSnapshot = resolvePayloadObject(doc);
+            if (doc.category && !previousDocSnapshot.category) {
+              previousDocSnapshot.category = doc.category;
             }
           }
         } catch (e) {}
@@ -509,28 +501,15 @@ apiRouter.use(async (req, res, next) => {
 
       const module = resolveModuleFromPath(url, reqBodySnapshot);
       const { action, category } = resolveActionDetails(method, url, reqBodySnapshot);
-      const description = generateOperationDescription(method, url, module, reqBodySnapshot, res.statusCode);
       const status = res.statusCode < 400 ? 'SUCCESS' : 'FAILED';
 
-      let cleanSnapshot = { ...reqBodySnapshot };
-      if (typeof reqBodySnapshot?.data === 'string' && reqBodySnapshot.data.startsWith('U2FsdGVkX1')) {
-        try {
-          const dec = decryptData(reqBodySnapshot.data);
-          if (dec && typeof dec === 'object') {
-            cleanSnapshot = { ...dec };
-          }
-        } catch (e) {}
-      } else if (typeof reqBodySnapshot?.payload === 'string' && reqBodySnapshot.payload.startsWith('U2FsdGVkX1')) {
-        try {
-          const dec = decryptData(reqBodySnapshot.payload);
-          if (dec && typeof dec === 'object') {
-            cleanSnapshot = { ...dec };
-          }
-        } catch (e) {}
+      let cleanSnapshot = resolvePayloadObject(reqBodySnapshot);
+      if (method === 'DELETE' && previousDocSnapshot) {
+        cleanSnapshot = { ...previousDocSnapshot };
       }
 
       let filledFields = [];
-      if (action === 'UPDATE' || method === 'PUT' || method === 'PATCH') {
+      if (action === 'UPDATE' || action === 'UPDATE_ORIGINAL' || action === 'REVISE' || method === 'PUT' || method === 'PATCH') {
         if (Array.isArray(cleanSnapshot._updatedFields) && cleanSnapshot._updatedFields.length > 0) {
           filledFields = cleanSnapshot._updatedFields;
         } else if (previousDocSnapshot) {
@@ -539,8 +518,10 @@ apiRouter.use(async (req, res, next) => {
           filledFields = [];
         }
       } else {
-        filledFields = extractFilledFields(reqBodySnapshot, action);
+        filledFields = extractFilledFields(cleanSnapshot, action);
       }
+
+      const description = generateOperationDescription(method, url, module, cleanSnapshot, res.statusCode, filledFields);
 
       logActivity({
         userId,
@@ -554,7 +535,7 @@ apiRouter.use(async (req, res, next) => {
         details: {
           ...cleanSnapshot,
           _filledFields: filledFields,
-          _updatedFields: action === 'UPDATE' ? filledFields : undefined
+          _updatedFields: (action === 'UPDATE' || action === 'UPDATE_ORIGINAL' || action === 'REVISE') ? filledFields : undefined
         },
         ip: clientIp,
         userAgent,

@@ -38,7 +38,8 @@ const MODULE_PATH_MAP = [
     { pattern: /^\/api\/logout/i, module: 'Authentication' },
     { pattern: /^\/api\/backup/i, module: 'Backup & Restore' },
     { pattern: /^\/api\/restore/i, module: 'Backup & Restore' },
-    { pattern: /^\/api\/system-access/i, module: 'System Access' }
+    { pattern: /^\/api\/system-access/i, module: 'System Access' },
+    { pattern: /^\/api\/metadata/i, module: 'Settings / Metadata' }
 ];
 
 /**
@@ -54,28 +55,35 @@ const isEncryptedString = (val) => {
 const resolvePayloadObject = (body) => {
     if (!body || typeof body !== 'object') return {};
 
+    let result = body;
+
     // Check if body.data is an encrypted ciphertext string
     if (typeof body.data === 'string' && isEncryptedString(body.data)) {
         try {
             const dec = decryptData(body.data);
-            if (dec && typeof dec === 'object') return dec;
+            if (dec && typeof dec === 'object') {
+                result = { ...dec };
+                if (body.category) result.category = body.category;
+            }
         } catch (e) {}
-    }
-
-    // Check if body.payload is an encrypted ciphertext string
-    if (typeof body.payload === 'string' && isEncryptedString(body.payload)) {
+    } else if (typeof body.payload === 'string' && isEncryptedString(body.payload)) {
         try {
             const dec = decryptData(body.payload);
-            if (dec && typeof dec === 'object') return dec;
+            if (dec && typeof dec === 'object') {
+                result = { ...dec };
+                if (body.category) result.category = body.category;
+            }
         } catch (e) {}
+    } else if (body.data && typeof body.data === 'object' && !Array.isArray(body.data)) {
+        result = { ...body.data };
+        if (body.category) result.category = body.category;
     }
 
-    // Check if body.data is a nested object
-    if (body.data && typeof body.data === 'object' && !Array.isArray(body.data)) {
-        return body.data;
+    if (body.category && !result.category) {
+        result.category = body.category;
     }
 
-    return body;
+    return result;
 };
 
 const resolveModuleFromPath = (path, body) => {
@@ -188,9 +196,14 @@ const FIELD_LABEL_MAP = {
     stock: 'Stock',
     warehouse: 'Warehouse',
     lcNo: 'LC No',
+    lcNumber: 'LC No',
     piNo: 'PI No',
+    piNumber: 'PI No',
+    piNumbers: 'PI No',
     invoiceNo: 'Invoice No',
+    invoiceNumber: 'Invoice No',
     orderNo: 'Order No',
+    orderNumber: 'Order No',
     challanNo: 'Challan No',
     truckNo: 'Truck No',
     gatePassNo: 'Gate Pass No',
@@ -202,6 +215,7 @@ const FIELD_LABEL_MAP = {
     bankName: 'Bank Name',
     branch: 'Branch',
     accountNo: 'Account No',
+    accountName: 'Account Name',
     accountType: 'Account Type',
     paymentMethod: 'Payment Method',
     paymentType: 'Payment Type',
@@ -216,7 +230,15 @@ const FIELD_LABEL_MAP = {
     message: 'Message',
     approvedBy: 'Approved By',
     rejectedBy: 'Rejected By',
-    closedBy: 'Closed By'
+    closedBy: 'Closed By',
+    productsList: 'Products',
+    ipNumbers: 'IP Numbers',
+    grandTotalQuantity: 'Grand Total Quantity',
+    grandTotal: 'Grand Total',
+    piRevision: 'Revision',
+    reviseNo: 'Revise No',
+    reviseDate: 'Revise Date',
+    revisions: 'Revisions'
 };
 
 const formatFieldLabel = (key) => {
@@ -255,6 +277,28 @@ const extractFilledFields = (body, action) => {
     if (action === 'CLICK') return [];
 
     const targetObj = resolvePayloadObject(body);
+
+    // For DELETE actions, provide focused identification fields of the deleted record
+    if (action === 'DELETE') {
+        const list = [];
+        if (targetObj.invoiceNo) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(targetObj.invoiceNo) });
+        if (targetObj.orderNo) list.push({ field: 'orderNo', label: 'Order No', value: String(targetObj.orderNo) });
+        if (targetObj.lcNo) list.push({ field: 'lcNo', label: 'LC No', value: String(targetObj.lcNo) });
+        if (targetObj.employeeId) list.push({ field: 'employeeId', label: 'Employee ID', value: String(targetObj.employeeId) });
+        if (targetObj.customerId) list.push({ field: 'customerId', label: 'Customer ID', value: String(targetObj.customerId) });
+        if (targetObj.productId) list.push({ field: 'productId', label: 'Product Code', value: String(targetObj.productId) });
+
+        const nameVal = targetObj.name || targetObj.customerName || targetObj.employeeName || targetObj.companyName || targetObj.productName || targetObj.value || targetObj.label;
+        if (nameVal) list.push({ field: 'name', label: targetObj.value ? 'Item / Value' : 'Name', value: String(nameVal) });
+
+        if (targetObj.category) list.push({ field: 'category', label: 'Category', value: String(targetObj.category) });
+        if (targetObj.designation) list.push({ field: 'designation', label: 'Designation', value: String(targetObj.designation) });
+        if (targetObj.department) list.push({ field: 'department', label: 'Department', value: String(targetObj.department) });
+        if (targetObj.phone) list.push({ field: 'phone', label: 'Phone', value: String(targetObj.phone) });
+        if (targetObj.role) list.push({ field: 'role', label: 'Role', value: String(targetObj.role) });
+        if (targetObj.totalAmount) list.push({ field: 'totalAmount', label: 'Total Amount', value: formatFieldValue(targetObj.totalAmount) });
+        return list;
+    }
 
     // For Accept and Approval actions, provide focused summary fields rather than dumping 35 database fields
     if (action === 'ACCEPT' || action === 'APPROVE') {
@@ -392,6 +436,32 @@ const resolveActionDetails = (method, path, body) => {
         return { action: 'CLOSE', category: 'OPERATION' };
     }
 
+    // Revision Delete Check
+    if (targetObj.isRevisionDelete === true || targetObj.actionType === 'DELETE_REVISION') {
+        return { action: 'DELETE_REVISION', category: 'MUTATION' };
+    }
+
+    // Revision Check
+    if (
+        lowerPath.includes('/revise') ||
+        lowerPath.includes('/revision') ||
+        targetObj.isRevision === true ||
+        targetObj.actionType === 'REVISE' ||
+        targetObj.actionType === 'UPDATE_REVISION' ||
+        (m === 'PUT' && (lowerPath.includes('/pi') || targetObj.piNumber || targetObj.piNo) && (targetObj.piRevision || targetObj.lastRevisedAt || targetObj.reviseNo || targetObj.currentReviseNo))
+    ) {
+        return { action: 'REVISE', category: 'MUTATION' };
+    }
+
+    // Original PI Edit Check
+    if (
+        (m === 'PUT' || m === 'PATCH') &&
+        (lowerPath.includes('/pi') || targetObj.piNumber || targetObj.piNo) &&
+        (targetObj.isOriginalPi === true || targetObj.actionType === 'UPDATE_ORIGINAL' || targetObj.piTargetType === 'Original PI')
+    ) {
+        return { action: 'UPDATE_ORIGINAL', category: 'MUTATION' };
+    }
+
     if (m === 'POST') return { action: 'CREATE', category: 'MUTATION' };
     if (m === 'PUT' || m === 'PATCH') return { action: 'UPDATE', category: 'MUTATION' };
     if (m === 'DELETE') return { action: 'DELETE', category: 'MUTATION' };
@@ -399,10 +469,29 @@ const resolveActionDetails = (method, path, body) => {
     return { action: m, category: 'GENERAL' };
 };
 
+const extractReferenceNumber = (targetObj) => {
+    if (!targetObj || typeof targetObj !== 'object') return null;
+    const inv = targetObj.invoiceNo || targetObj.invoiceNumber;
+    if (inv) return `Invoice #${inv}`;
+    const pi = targetObj.piNumber || targetObj.piNo || targetObj.piNumbers;
+    if (pi) return `PI #${pi}`;
+    const lc = targetObj.lcNo || targetObj.lcNumber;
+    if (lc) return `LC #${lc}`;
+    const ord = targetObj.orderNo || targetObj.orderNumber;
+    if (ord) return `Order #${ord}`;
+    const challan = targetObj.challanNo || targetObj.challanNumber;
+    if (challan) return `Challan #${challan}`;
+    const gatePass = targetObj.gatePassNo || targetObj.gatePassNumber;
+    if (gatePass) return `Gate Pass #${gatePass}`;
+    const truck = targetObj.truckNo || targetObj.truckNumber;
+    if (truck) return `Truck #${truck}`;
+    return null;
+};
+
 /**
  * Generate human-friendly description of the operation with full field details
  */
-const generateOperationDescription = (method, path, module, body, statusCode) => {
+const generateOperationDescription = (method, path, module, body, statusCode, updatedFields = []) => {
     const isError = statusCode >= 400;
     const errorPrefix = isError ? '[FAILED] ' : '';
 
@@ -441,10 +530,11 @@ const generateOperationDescription = (method, path, module, body, statusCode) =>
     const targetObj = resolvePayloadObject(body);
     const { action } = resolveActionDetails(method, path, body);
 
-    const nameIdentifier = targetObj.customerName || targetObj.name || targetObj.companyName || 
+    const nameIdentifier = targetObj.customerName || targetObj.companyName || targetObj.name || 
         targetObj.productName || targetObj.employeeName || targetObj.supplierName || targetObj.importerName || 
-        targetObj.exporterName || targetObj.bankName || targetObj.title || targetObj.invoiceNo || 
-        targetObj.lcNo || targetObj.orderNo || targetObj.challanNo || targetObj.piNo || targetObj.truckNo;
+        targetObj.exporterName || targetObj.bankName || targetObj.title || targetObj.value || targetObj.label ||
+        targetObj.piNumber || targetObj.piNo || targetObj.piNumbers || targetObj.invoiceNo || targetObj.lcNo || 
+        targetObj.orderNo || targetObj.challanNo || targetObj.truckNo;
 
     // ACCEPT
     if (action === 'ACCEPT') {
@@ -476,6 +566,9 @@ const generateOperationDescription = (method, path, module, body, statusCode) =>
 
     // CARD OPEN
     if (action === 'CARD OPEN') {
+        if (targetObj.cardType === 'create' || targetObj.actionType === 'OPEN_CREATE_FORM' || (!targetObj.invoiceNo && !nameIdentifier)) {
+            return `${errorPrefix}Opened new entry card in ${module}`.trim();
+        }
         const inv = targetObj.invoiceNo ? `Invoice #${targetObj.invoiceNo}` : '';
         const namePart = nameIdentifier ? `("${nameIdentifier}")` : '';
         return `${errorPrefix}Opened card: ${inv} ${namePart} in ${module}`.replace(/\s+/g, ' ').trim();
@@ -483,6 +576,9 @@ const generateOperationDescription = (method, path, module, body, statusCode) =>
 
     // CARD CLOSE
     if (action === 'CARD CLOSE') {
+        if (targetObj.cardType === 'create' || targetObj.actionType === 'DISCARD_ENTRY' || targetObj.wasCreated === false || targetObj.saved === false) {
+            return `${errorPrefix}Closed card without creating in ${module}`.trim();
+        }
         const inv = targetObj.invoiceNo ? `Invoice #${targetObj.invoiceNo}` : '';
         const namePart = nameIdentifier ? `("${nameIdentifier}")` : '';
         return `${errorPrefix}Closed card: ${inv} ${namePart} in ${module}`.replace(/\s+/g, ' ').trim();
@@ -495,23 +591,58 @@ const generateOperationDescription = (method, path, module, body, statusCode) =>
         return `${errorPrefix}Closed ${module} ${inv} ${namePart}`.trim();
     }
 
-    const filledFields = extractFilledFields(body, action);
+    // REVISE
+    if (action === 'REVISE') {
+        const refNo = extractReferenceNumber(targetObj);
+        const entityName = targetObj.customerName || targetObj.companyName || targetObj.name || 
+            targetObj.productName || targetObj.employeeName || targetObj.supplierName || 
+            targetObj.importerName || targetObj.exporterName || targetObj.partyName;
+        const revNo = targetObj.currentReviseNo || targetObj.reviseNo || (typeof targetObj.piRevision === 'string' ? targetObj.piRevision.split('DATE:')[0].trim() : '') || (Array.isArray(targetObj.revisions) && targetObj.revisions.length > 0 ? targetObj.revisions[targetObj.revisions.length - 1]?.reviseNo : '');
+        const revPart = revNo && revNo !== 'Original PI' ? ` (${revNo.toLowerCase().startsWith('revise') ? revNo : `Revise: ${revNo}`})` : '';
 
-    // Build human-friendly string of filled fields
-    const filledSummary = filledFields
-        .filter(f => f.value !== nameIdentifier && f.field !== 'password' && !isEncryptedString(f.value))
-        .slice(0, 6)
-        .map(f => `${f.label}: "${f.value}"`)
-        .join(', ');
+        const isRevisionEdit = targetObj.actionType === 'UPDATE_REVISION' || Boolean(targetObj.editingRevisionNo);
+        let desc = isRevisionEdit ? `${errorPrefix}Updated Revised ${module}` : `${errorPrefix}Revised ${module}`;
+        if (refNo && entityName) {
+            desc += `: ${refNo} ("${entityName}")${revPart}`;
+        } else if (refNo) {
+            desc += `: ${refNo}${revPart}`;
+        } else if (entityName) {
+            desc += `: "${entityName}"${revPart}`;
+        } else if (nameIdentifier) {
+            desc += `: "${nameIdentifier}"${revPart}`;
+        } else if (targetId) {
+            desc += ` (#${targetId.slice(-6)})${revPart}`;
+        }
+
+        if (Array.isArray(updatedFields) && updatedFields.length > 0) {
+            const meaningfulFields = updatedFields.filter(f => !['id', '_id', 'updatedat', 'revisions', 'lastrevisedat', 'pirevision', 'isrevision', 'currentreviseno', 'actiontype', 'editingrevisionno'].includes((f.field || '').toLowerCase()));
+            if (meaningfulFields.length === 1) {
+                const f = meaningfulFields[0];
+                desc += ` • Changed ${f.label}: ${f.oldValue ? `${f.oldValue} ➔ ` : ''}${f.value}`;
+            } else if (meaningfulFields.length <= 3) {
+                desc += ` • Changed: ${meaningfulFields.map(f => `${f.label} (${f.value})`).join(', ')}`;
+            } else {
+                desc += ` • Changed ${meaningfulFields.slice(0, 2).map(f => f.label).join(', ')} and ${meaningfulFields.length - 2} other fields`;
+            }
+        }
+        return desc;
+    }
+
+    // DELETE_REVISION
+    if (action === 'DELETE_REVISION') {
+        const refNo = extractReferenceNumber(targetObj);
+        const revNo = targetObj.deletedRevisionNo || 'Revision';
+        return `${errorPrefix}Deleted ${revNo} of ${module}${refNo ? `: ${refNo}` : ''}`.trim();
+    }
+
+    const filledFields = Array.isArray(updatedFields) && updatedFields.length > 0 
+        ? updatedFields 
+        : extractFilledFields(body, action);
 
     switch (method.toUpperCase()) {
         case 'POST': {
             let desc = `${errorPrefix}Created new ${module}`;
-            const refNo = targetObj.invoiceNo ? `Invoice #${targetObj.invoiceNo}` :
-                targetObj.orderNo ? `Order #${targetObj.orderNo}` :
-                targetObj.lcNo ? `LC #${targetObj.lcNo}` :
-                targetObj.piNo ? `PI #${targetObj.piNo}` :
-                targetObj.challanNo ? `Challan #${targetObj.challanNo}` : null;
+            const refNo = extractReferenceNumber(targetObj);
             const entityName = targetObj.customerName || targetObj.companyName || targetObj.name || 
                 targetObj.productName || targetObj.employeeName || targetObj.supplierName || 
                 targetObj.importerName || targetObj.exporterName || targetObj.bankName;
@@ -530,16 +661,18 @@ const generateOperationDescription = (method, path, module, body, statusCode) =>
             } else if (nameIdentifier) {
                 desc += `: "${nameIdentifier}"`;
             }
+
+            const total = targetObj.totalAmount || targetObj.grandTotal || targetObj.amount;
+            if (total && !isNaN(Number(total))) {
+                desc += ` • Total: ৳${parseFloat(total).toLocaleString('en-IN')}`;
+            }
             return desc;
         }
         case 'PUT':
         case 'PATCH': {
-            let desc = `${errorPrefix}Updated ${module}`;
-            const refNo = targetObj.invoiceNo ? `Invoice #${targetObj.invoiceNo}` :
-                targetObj.orderNo ? `Order #${targetObj.orderNo}` :
-                targetObj.lcNo ? `LC #${targetObj.lcNo}` :
-                targetObj.piNo ? `PI #${targetObj.piNo}` :
-                targetObj.challanNo ? `Challan #${targetObj.challanNo}` : null;
+            const isOriginalPi = (module === 'PI') && (action === 'UPDATE_ORIGINAL' || targetObj.isOriginalPi || targetObj.piTargetType === 'Original PI' || (!targetObj.isRevision && !targetObj.piRevision && (!targetObj.revisions || targetObj.revisions.length <= 1)));
+            let desc = isOriginalPi ? `${errorPrefix}Updated Original ${module}` : `${errorPrefix}Updated ${module}`;
+            const refNo = extractReferenceNumber(targetObj);
             const entityName = targetObj.customerName || targetObj.companyName || targetObj.name || 
                 targetObj.productName || targetObj.employeeName || targetObj.supplierName || 
                 targetObj.importerName || targetObj.exporterName || targetObj.bankName;
@@ -560,11 +693,48 @@ const generateOperationDescription = (method, path, module, body, statusCode) =>
             } else if (targetId) {
                 desc += ` (#${targetId.slice(-6)})`;
             }
+
+            // Append specific edited fields directly to description for immediate clarity
+            if (Array.isArray(updatedFields) && updatedFields.length > 0) {
+                const meaningfulFields = updatedFields.filter(f => !['id', '_id', 'updatedat'].includes((f.field || '').toLowerCase()));
+                if (meaningfulFields.length === 1) {
+                    const f = meaningfulFields[0];
+                    desc += ` • Changed ${f.label}: ${f.oldValue ? `${f.oldValue} ➔ ` : ''}${f.value}`;
+                } else if (meaningfulFields.length <= 3) {
+                    desc += ` • Changed: ${meaningfulFields.map(f => `${f.label} (${f.value})`).join(', ')}`;
+                } else {
+                    desc += ` • Changed ${meaningfulFields.slice(0, 2).map(f => f.label).join(', ')} and ${meaningfulFields.length - 2} more fields`;
+                }
+            }
+
             return desc;
         }
         case 'DELETE': {
-            const idHint = nameIdentifier ? `"${nameIdentifier}"` : targetId ? `(#${targetId.slice(-6)})` : '';
-            return `${errorPrefix}Deleted ${module} record ${idHint}`.trim();
+            let desc = `${errorPrefix}Deleted ${module}`;
+            const refNo = extractReferenceNumber(targetObj);
+            const entityName = targetObj.customerName || targetObj.companyName || targetObj.name || 
+                targetObj.productName || targetObj.employeeName || targetObj.supplierName || 
+                targetObj.importerName || targetObj.exporterName || targetObj.bankName ||
+                targetObj.value || targetObj.label;
+            const codeId = targetObj.customerId ? `ID: ${targetObj.customerId}` :
+                targetObj.employeeId ? `ID: ${targetObj.employeeId}` :
+                targetObj.productId ? `Code: ${targetObj.productId}` :
+                targetObj.category ? `Category: ${targetObj.category}` : null;
+
+            if (refNo && entityName) {
+                desc += `: ${refNo} ("${entityName}")`;
+            } else if (refNo) {
+                desc += `: ${refNo}`;
+            } else if (entityName && codeId) {
+                desc += `: "${entityName}" (${codeId})`;
+            } else if (entityName) {
+                desc += `: "${entityName}"`;
+            } else if (nameIdentifier) {
+                desc += `: "${nameIdentifier}"`;
+            } else if (targetId) {
+                desc += ` record (#${targetId.slice(-6)})`;
+            }
+            return desc.trim();
         }
         default:
             return `${errorPrefix}Performed ${method} on ${module}`;
@@ -593,10 +763,13 @@ const logActivity = async (entry) => {
             const rawStr = JSON.stringify(cleanDetails);
             if (rawStr.length > 2500) {
                 const essentialKeys = [
-                    '_id', 'id', 'invoiceNo', 'orderNo', 'lcNo', 'billNo', 'challanNo',
+                    '_id', 'id', 'invoiceNo', 'invoiceNumber', 'orderNo', 'orderNumber',
+                    'lcNo', 'lcNumber', 'piNo', 'piNumber', 'piNumbers', 'billNo', 'challanNo',
                     'customerName', 'companyName', 'supplierName', 'employeeName', 'productName',
                     'name', 'phone', 'totalAmount', 'grandTotal', 'amount', 'paidAmount', 'dueAmount',
-                    'status', 'view', 'tag', '_filledFields', '_updatedFields'
+                    'status', 'view', 'tag', '_filledFields', '_updatedFields',
+                    'isRevision', 'reviseNo', 'currentReviseNo', 'piRevision', 'actionType',
+                    'deletedRevisionNo', 'isRevisionDelete', 'lastRevisedAt'
                 ];
                 const pruned = {};
                 for (const key of essentialKeys) {
@@ -660,7 +833,9 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
         'createdby', 'updatedby', 'payload', 'data', 'ciphertext',
         'token', 'secret', 'signature', '_filledfields', '_updatedfields',
         'isedited', 'editedby', 'editedbyname', 'editedbyusername',
-        'requestedby', 'requestedbyusername', 'status', 'saletype', 'view', 'targetid'
+        'requestedby', 'requestedbyusername', 'saletype', 'view', 'targetid',
+        'revisions', 'pirevision', 'lastrevisedat', 'revisedby', 'revisedbyname',
+        'isrevision', 'currentreviseno', 'actiontype', 'isrevisiondelete', 'deletedrevisionno'
     ]);
 
     const changes = [];
@@ -680,7 +855,9 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
             let rateChanged = false;
             let itemsChanged = false;
             let newRateVal = null;
+            let oldRateVal = null;
             let newQtyVal = null;
+            let oldQtyVal = null;
 
             if (newVal.length !== oldItems.length) {
                 itemsChanged = true;
@@ -702,10 +879,12 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
                         if (nP !== undefined && String(nP).trim() !== String(oP ?? '').trim()) {
                             rateChanged = true;
                             newRateVal = nP;
+                            oldRateVal = oP;
                         }
                         if (nb.quantity !== undefined && String(nb.quantity).trim() !== String(ob.quantity ?? '').trim()) {
                             qtyChanged = true;
                             newQtyVal = nb.quantity;
+                            oldQtyVal = ob.quantity;
                         }
                         if (nb.brand !== ob.brand || nb.warehouseName !== ob.warehouseName) itemsChanged = true;
                     }
@@ -716,14 +895,16 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
                 changes.push({
                     field: 'unitPrice',
                     label: 'Price',
-                    value: `৳${parseFloat(newRateVal || 0).toLocaleString('en-IN')}`
+                    value: `৳${parseFloat(newRateVal || 0).toLocaleString('en-IN')}`,
+                    oldValue: oldRateVal !== null && oldRateVal !== undefined ? `৳${parseFloat(oldRateVal || 0).toLocaleString('en-IN')}` : undefined
                 });
             }
             if (qtyChanged) {
                 changes.push({
                     field: 'quantity',
                     label: 'Quantity',
-                    value: parseFloat(newQtyVal || 0).toLocaleString()
+                    value: parseFloat(newQtyVal || 0).toLocaleString(),
+                    oldValue: oldQtyVal !== null && oldQtyVal !== undefined ? parseFloat(oldQtyVal || 0).toLocaleString() : undefined
                 });
             }
             if (itemsChanged && !qtyChanged && !rateChanged) {
@@ -732,14 +913,170 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
             continue;
         }
 
+        // productsList comparison (for PI)
+        if (key === 'productsList' && Array.isArray(newVal)) {
+            const oldList = Array.isArray(oldVal) ? oldVal : [];
+            let listChanged = false;
+            if (newVal.length !== oldList.length) {
+                listChanged = true;
+            } else {
+                for (let i = 0; i < newVal.length; i++) {
+                    const np = newVal[i] || {};
+                    const op = oldList[i] || {};
+                    if (np.productName !== op.productName || String(np.quantity) !== String(op.quantity) || String(np.rate) !== String(op.rate)) {
+                        listChanged = true;
+                        break;
+                    }
+                }
+            }
+
+            if (listChanged) {
+                changes.push({
+                    field: 'productsList',
+                    label: 'Products',
+                    value: `${newVal.length} item${newVal.length !== 1 ? 's' : ''}`,
+                    oldValue: oldList.length > 0 ? `${oldList.length} item${oldList.length !== 1 ? 's' : ''}` : undefined
+                });
+            }
+            continue;
+        }
+
+        // ipNumbers array comparison (for PI)
+        if (key === 'ipNumbers' && Array.isArray(newVal)) {
+            const oldArr = Array.isArray(oldVal) ? oldVal : [];
+            if (JSON.stringify(newVal) !== JSON.stringify(oldArr)) {
+                const strNew = newVal.every(x => typeof x === 'string');
+                if (strNew && newVal.length <= 3) {
+                    changes.push({
+                        field: 'ipNumbers',
+                        label: 'IP Numbers',
+                        value: newVal.join(', '),
+                        oldValue: oldArr.length > 0 ? oldArr.join(', ') : undefined
+                    });
+                } else {
+                    changes.push({
+                        field: 'ipNumbers',
+                        label: 'IP Numbers',
+                        value: `${newVal.length} item${newVal.length !== 1 ? 's' : ''}`,
+                        oldValue: `${oldArr.length} item${oldArr.length !== 1 ? 's' : ''}`
+                    });
+                }
+            }
+            continue;
+        }
+
+        // branches array comparison (for Bank)
+        if (key === 'branches' && Array.isArray(newVal)) {
+            const oldBranches = Array.isArray(oldVal) ? oldVal : [];
+            const branchChanges = [];
+
+            // Compare existing branches
+            const commonLength = Math.min(newVal.length, oldBranches.length);
+            for (let i = 0; i < commonLength; i++) {
+                const nb = newVal[i] || {};
+                const ob = oldBranches[i] || {};
+                const bName = nb.branch || ob.branch || (newVal.length > 1 ? `Branch #${i + 1}` : '');
+                const bSuffix = bName ? ` (${bName})` : '';
+
+                const branchFieldKeys = [
+                    { key: 'accountNo', label: `Account No${bSuffix}` },
+                    { key: 'accountName', label: `Account Name${bSuffix}` },
+                    { key: 'branch', label: 'Branch Name' },
+                    { key: 'lcCommission', label: `LC Commission${bSuffix}` },
+                    { key: 'vatOnCommission', label: `VAT on Commission${bSuffix}` },
+                    { key: 'swiftCharge', label: `SWIFT Charge${bSuffix}` },
+                    { key: 'vatOnSwiftCharge', label: `VAT on SWIFT${bSuffix}` },
+                    { key: 'lcApplicationForm', label: `LC App Form${bSuffix}` },
+                    { key: 'mpCharge', label: `MP Charge${bSuffix}` },
+                    { key: 'stampCharge', label: `Stamp Charge${bSuffix}` },
+                    { key: 'amendmentCommission', label: `Amendment Commission${bSuffix}` },
+                    { key: 'amendmentVatOnCommission', label: `Amendment VAT on Commission${bSuffix}` },
+                    { key: 'amendmentSwiftCharge', label: `Amendment SWIFT${bSuffix}` },
+                    { key: 'amendmentVatOnSwift', label: `Amendment VAT on SWIFT${bSuffix}` }
+                ];
+
+                for (const { key: fk, label: fl } of branchFieldKeys) {
+                    const nV = (nb[fk] === null || nb[fk] === undefined) ? '' : String(nb[fk]).trim();
+                    const oV = (ob[fk] === null || ob[fk] === undefined) ? '' : String(ob[fk]).trim();
+                    if (nV !== oV) {
+                        branchChanges.push({
+                            field: fk,
+                            label: fl,
+                            value: nV || '(Empty)',
+                            oldValue: oV || '(Empty)'
+                        });
+                    }
+                }
+            }
+
+            // Branches added
+            if (newVal.length > oldBranches.length) {
+                for (let i = oldBranches.length; i < newVal.length; i++) {
+                    const nb = newVal[i] || {};
+                    branchChanges.push({
+                        field: 'branches',
+                        label: 'Added Branch',
+                        value: `${nb.branch || 'New Branch'}${nb.accountNo ? ` (A/C: ${nb.accountNo})` : ''}`
+                    });
+                }
+            }
+
+            // Branches removed
+            if (newVal.length < oldBranches.length) {
+                for (let i = newVal.length; i < oldBranches.length; i++) {
+                    const ob = oldBranches[i] || {};
+                    branchChanges.push({
+                        field: 'branches',
+                        label: 'Removed Branch',
+                        value: `${ob.branch || 'Branch'}${ob.accountNo ? ` (A/C: ${ob.accountNo})` : ''}`
+                    });
+                }
+            }
+
+            if (branchChanges.length > 0) {
+                changes.push(...branchChanges);
+            }
+            continue;
+        }
+
         // Generic Array comparison
         if (Array.isArray(newVal)) {
             const oldArr = Array.isArray(oldVal) ? oldVal : [];
             if (JSON.stringify(newVal) !== JSON.stringify(oldArr)) {
+                // If it's an array of objects and lengths are equal, extract object-level diffs
+                if (newVal.length > 0 && newVal.length === oldArr.length && typeof newVal[0] === 'object' && newVal[0] !== null) {
+                    const objDiffs = [];
+                    for (let i = 0; i < newVal.length; i++) {
+                        const nObj = newVal[i] || {};
+                        const oObj = oldArr[i] || {};
+                        const allKeys = new Set([...Object.keys(nObj), ...Object.keys(oObj)]);
+                        for (const subKey of allKeys) {
+                            if (subKey.startsWith('_') || ignoreKeys.has(subKey.toLowerCase())) continue;
+                            const nV = (nObj[subKey] === null || nObj[subKey] === undefined) ? '' : String(nObj[subKey]).trim();
+                            const oV = (oObj[subKey] === null || oObj[subKey] === undefined) ? '' : String(oObj[subKey]).trim();
+                            if (nV !== oV) {
+                                const itemLabel = nObj.name || nObj.title || nObj.branch || nObj.label || (newVal.length > 1 ? `#${i + 1}` : '');
+                                const itemSuffix = itemLabel ? ` (${itemLabel})` : '';
+                                objDiffs.push({
+                                    field: subKey,
+                                    label: `${formatFieldLabel(subKey)}${itemSuffix}`,
+                                    value: nV || '(Empty)',
+                                    oldValue: oV || '(Empty)'
+                                });
+                            }
+                        }
+                    }
+                    if (objDiffs.length > 0 && objDiffs.length <= 10) {
+                        changes.push(...objDiffs);
+                        continue;
+                    }
+                }
+
                 changes.push({
                     field: key,
                     label: formatFieldLabel(key),
-                    value: `${newVal.length} item${newVal.length !== 1 ? 's' : ''}`
+                    value: `${newVal.length} item${newVal.length !== 1 ? 's' : ''}`,
+                    oldValue: `${oldArr.length} item${oldArr.length !== 1 ? 's' : ''}`
                 });
             }
             continue;
@@ -751,7 +1088,8 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
                 changes.push({
                     field: key,
                     label: formatFieldLabel(key),
-                    value: formatFieldValue(newVal)
+                    value: formatFieldValue(newVal),
+                    oldValue: formatFieldValue(oldVal) || undefined
                 });
             }
             continue;
@@ -763,11 +1101,13 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
 
         if (strOld !== strNew) {
             const formatted = formatFieldValue(newVal);
+            const formattedOld = formatFieldValue(oldVal);
             if (formatted) {
                 changes.push({
                     field: key,
                     label: formatFieldLabel(key),
-                    value: formatted
+                    value: formatted,
+                    oldValue: formattedOld || undefined
                 });
             }
         }
@@ -783,5 +1123,6 @@ module.exports = {
     generateOperationDescription,
     resolveActionDetails,
     extractFilledFields,
-    computeUpdatedFields
+    computeUpdatedFields,
+    resolvePayloadObject
 };

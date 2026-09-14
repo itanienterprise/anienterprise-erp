@@ -1845,6 +1845,9 @@ function PI({
                 : `${API_BASE_URL}/api/pi`;
 
             if (editingId) {
+                submissionData.isOriginalPi = true;
+                submissionData.piTargetType = 'Original PI';
+                submissionData.actionType = 'UPDATE_ORIGINAL';
                 await axios.put(url, submissionData);
 
                 // Add persistent notification for PI Update
@@ -2682,7 +2685,12 @@ function PI({
                     revisedBy: currentUser?.username || currentUser?.id || currentUser?.employeeId || '',
                     revisedByName: currentUser?.name || currentUser?.nameEn || currentUser?.employeeName || currentUser?.fullName || '',
                     lastRevisedAt: new Date().toISOString()
-                } : {})
+                } : {}),
+                isRevision: true,
+                currentReviseNo: newRevision.reviseNo,
+                reviseNo: newRevision.reviseNo,
+                actionType: editingRevisionOriginalNo ? 'UPDATE_REVISION' : 'REVISE',
+                editingRevisionNo: editingRevisionOriginalNo || undefined
             };
 
             await axios.put(`${API_BASE_URL}/api/pi/${selectedRevisePiId}`, updatedPiData);
@@ -2772,6 +2780,10 @@ function PI({
                     };
                 }
             }
+
+            updatedPiData.isRevisionDelete = true;
+            updatedPiData.actionType = 'DELETE_REVISION';
+            updatedPiData.deletedRevisionNo = revision.reviseNo;
 
             await axios.put(`${API_BASE_URL}/api/pi/${record._id}`, updatedPiData);
 
@@ -5868,7 +5880,9 @@ function PI({
                                                                 <button
                                                                     onClick={() => handleEdit(record)}
                                                                     className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
-                                                                    title="Edit PI"
+                                                                    title="Edit Original PI"
+                                                                    data-action="Edit Original PI"
+                                                                    aria-label="Edit Original PI"
                                                                 >
                                                                     <EditIcon className="w-5 h-5" />
                                                                 </button>
@@ -6159,8 +6173,11 @@ function PI({
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
                                                             className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-amber-50 text-amber-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
+                                                            title="Edit Original PI"
+                                                            data-action="Edit Original PI"
+                                                            aria-label="Edit Original PI"
                                                         >
-                                                            <EditIcon className="w-3.5 h-3.5" /> Edit
+                                                            <EditIcon className="w-3.5 h-3.5" /> Edit Original
                                                         </button>
                                                     )}
                                                     {canDelete && (
@@ -6613,10 +6630,13 @@ function PI({
                                                                     setShowReviseForm(true);
                                                                 }
                                                             }}
+                                                            data-action={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
+                                                            title={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
+                                                            aria-label={activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}
                                                             className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
                                                         >
                                                             <EditIcon className="w-4 h-4 text-gray-500" />
-                                                            <span>Edit PI</span>
+                                                            <span>{activeRevision.reviseNo === 'Original PI' ? 'Edit Original PI' : `Edit Revised PI (${activeRevision.reviseNo})`}</span>
                                                         </button>
                                                     )}
                                                 </div>
