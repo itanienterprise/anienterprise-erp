@@ -24,7 +24,8 @@ import {
 const IGNORED_KEYS = new Set([
     '_id', '__v', 'id', 'password', 'confirmPassword', 'token', 'secret',
     'signature', 'createdAt', 'updatedAt', 'user', 'userId', 'createdBy',
-    'updatedBy', 'payload', 'data', 'ciphertext', 'readbyusers', '_filledfields'
+    'updatedBy', 'payload', 'data', 'ciphertext', 'readbyusers', '_filledfields',
+    'tag', 'view', 'targetid', 'targetname', 'targetroles', 'targetusers', 'isedited'
 ]);
 
 const isEncryptedString = (val) => {
@@ -94,7 +95,10 @@ const FIELD_LABEL_MAP = {
     category: 'Category',
     date: 'Date',
     title: 'Title',
-    message: 'Message'
+    message: 'Message',
+    approvedBy: 'Approved By',
+    rejectedBy: 'Rejected By',
+    closedBy: 'Closed By'
 };
 
 const formatFieldLabel = (key) => {
@@ -111,7 +115,10 @@ const formatFieldValue = (val) => {
     if (isEncryptedString(val)) return '';
     if (typeof val === 'boolean') return val ? 'Yes' : 'No';
     if (typeof val === 'number') return val.toLocaleString();
-    if (typeof val === 'string') return val;
+    if (typeof val === 'string') {
+        if (/^[a-f0-9]{24}$/i.test(val)) return '';
+        return val;
+    }
     if (Array.isArray(val)) {
         if (val.length === 0) return '';
         if (typeof val[0] === 'object') {
@@ -127,8 +134,128 @@ const formatFieldValue = (val) => {
     return String(val);
 };
 
+const getLogModule = (log) => {
+    if (!log) return 'System';
+    if (log.path?.includes('/notifications')) return 'Notification';
+    
+    // Check if Border Sale
+    let details = log.details || {};
+    if (details.data && typeof details.data === 'object' && !Array.isArray(details.data)) {
+        details = details.data;
+    }
+    const isBorder = (log.module === 'Border Sale') ||
+        details.saleType === 'Border' ||
+        details.isBorderSale === true ||
+        (typeof details.invoiceNo === 'string' && details.invoiceNo.startsWith('BS')) ||
+        (typeof log.description === 'string' && (log.description.includes('BS') || log.description.toLowerCase().includes('border sale')));
+    
+    if (isBorder) return 'Border Sale';
+
+    return log.module || 'System';
+};
+
+const getLogAction = (log) => {
+    if (!log) return 'UNKNOWN';
+    let act = (log.action || '').toUpperCase().trim();
+    if (act === 'CARD_OPEN') act = 'CARD OPEN';
+    if (act === 'CARD_CLOSE') act = 'CARD CLOSE';
+    if (act === 'ACCEPT' || act === 'REJECT' || act === 'APPROVE' || act === 'CLOSE' || act === 'CARD OPEN' || act === 'CARD CLOSE') return act;
+
+    let details = log.details || {};
+    if (details.data && typeof details.data === 'object' && !Array.isArray(details.data)) {
+        details = details.data;
+    }
+    const path = (log.path || '').toLowerCase();
+    const desc = (log.description || '').toLowerCase();
+
+    // Check Card Open / Close
+    if (
+        details.actionType === 'CARD_OPEN' ||
+        act === 'CARD OPEN' ||
+        desc.includes('opened card') ||
+        desc.includes('card open')
+    ) {
+        return 'CARD OPEN';
+    }
+    if (
+        details.actionType === 'CARD_CLOSE' ||
+        act === 'CARD CLOSE' ||
+        desc.includes('closed card') ||
+        desc.includes('card close')
+    ) {
+        return 'CARD CLOSE';
+    }
+
+    // Check rejection
+    if (
+        path.includes('/reject') ||
+        details.rejectedBy ||
+        details.rejectionReason ||
+        (typeof details.status === 'string' && details.status.toLowerCase().includes('reject')) ||
+        desc.startsWith('rejected ')
+    ) {
+        return 'REJECT';
+    }
+
+    // Check accept (specific for requests/sales where accept is used)
+    if (
+        path.includes('/accept') ||
+        (typeof details.status === 'string' && details.status.toLowerCase().includes('accept')) ||
+        details.acceptedBy ||
+        details.acceptedByName ||
+        details.acceptedByUsername ||
+        desc.startsWith('accepted ')
+    ) {
+        return 'ACCEPT';
+    }
+
+    // Check approval
+    if (
+        path.includes('/approve') ||
+        details.approvedBy ||
+        details.approvedByName ||
+        details.firstApprovedBy ||
+        details.secondApprovedBy ||
+        details.smApprovedBy ||
+        details.editApprovedBy ||
+        desc.startsWith('approved ')
+    ) {
+        return 'APPROVE';
+    }
+
+    // Check close
+    if (
+        path.includes('/close') ||
+        details.closedBy ||
+        details.isClosed === true ||
+        (typeof details.status === 'string' && ['closed', 'close'].includes(details.status.toLowerCase())) ||
+        desc.startsWith('closed ')
+    ) {
+        return 'CLOSE';
+    }
+
+    return act;
+};
+
 const formatLogDescription = (desc, log) => {
     if (!desc) return 'Performed action';
+    let details = log?.details || {};
+    if (typeof details.data === 'string' && isEncryptedString(details.data)) {
+        try {
+            const dec = decryptData(details.data);
+            if (dec && typeof dec === 'object') details = dec;
+        } catch (e) {}
+    } else if (typeof details.payload === 'string' && isEncryptedString(details.payload)) {
+        try {
+            const dec = decryptData(details.payload);
+            if (dec && typeof dec === 'object') details = dec;
+        } catch (e) {}
+    } else if (details.data && typeof details.data === 'object' && !Array.isArray(details.data)) {
+        details = details.data;
+    }
+
+    const mod = getLogModule(log);
+    const action = getLogAction(log);
 
     // Notifications route handling
     if (log?.path?.includes('/notifications')) {
@@ -143,11 +270,168 @@ const formatLogDescription = (desc, log) => {
         return `Marked notification as read ${idHint}`.trim();
     }
 
-    // Strip ugly encrypted ciphertext strings like (Updated: Data: "U2FsdGVkX1...")
+    // Accept
+    if (action === 'ACCEPT' || desc.startsWith('accepted ') || desc.startsWith('Accepted ')) {
+        let inv = details.invoiceNo;
+        if (!inv) {
+            const invMatch = desc.match(/Invoice #?([A-Z0-9_-]+)/i) || desc.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
+            if (invMatch) inv = invMatch[1].trim();
+        }
+        const invPart = inv ? `Invoice #${inv}` : '';
+        let name = details.customerName || details.companyName || details.name || '';
+        if (!name) {
+            const nameMatch = desc.match(/\("([^"]+)"\)/) || desc.match(/Updated\s+(?:Sales|Customer|PI):\s*"([^"]+)"/i) || desc.match(/"([^"]+)"/);
+            if (nameMatch) name = nameMatch[1].trim();
+        }
+        const namePart = name ? `("${name}")` : '';
+        const by = details.acceptedByName || details.acceptedBy || log.displayName || log.username;
+        const byPart = by ? ` by ${by}` : '';
+        return `Accepted ${mod}: ${invPart} ${namePart}${byPart}`.replace(/\s+/g, ' ').trim();
+    }
+
+    // Approvals
+    if (action === 'APPROVE') {
+        let inv = details.invoiceNo;
+        if (!inv) {
+            const invMatch = desc.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
+            if (invMatch) inv = invMatch[1].trim();
+        }
+        const invPart = inv ? `Invoice #${inv}` : '';
+        let name = details.customerName || details.companyName || details.name || '';
+        if (!name) {
+            const nameMatch = desc.match(/Updated\s+(?:Sales|Customer|PI):\s*"([^"]+)"/i) || desc.match(/"([^"]+)"/);
+            if (nameMatch) name = nameMatch[1].trim();
+        }
+        const namePart = name ? `("${name}")` : '';
+        const by = details.approvedByName || details.approvedBy || details.acceptedBy || log.displayName || log.username;
+        const byPart = by ? ` by ${by}` : '';
+        return `Approved ${mod}: ${invPart} ${namePart}${byPart}`.replace(/\s+/g, ' ').trim();
+    }
+
+    // Rejections
+    if (action === 'REJECT') {
+        let inv = details.invoiceNo;
+        if (!inv) {
+            const invMatch = desc.match(/Invoice #?([A-Z0-9_-]+)/i) || desc.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
+            if (invMatch) inv = invMatch[1].trim();
+        }
+        const invPart = inv ? `Invoice #${inv}` : '';
+        let name = details.customerName || details.companyName || details.name || '';
+        if (!name) {
+            const nameMatch = desc.match(/\("([^"]+)"\)/) || desc.match(/Updated\s+(?:Sales|Customer|PI):\s*"([^"]+)"/i) || desc.match(/"([^"]+)"/);
+            if (nameMatch) name = nameMatch[1].trim();
+        }
+        const namePart = name ? `("${name}")` : '';
+        let reason = details.rejectionReason;
+        if (!reason) {
+            const reasonMatch = desc.match(/Reason:\s*"([^"]+)"/i);
+            if (reasonMatch) reason = reasonMatch[1].trim();
+        }
+        const reasonPart = reason ? ` (Reason: "${reason}")` : '';
+        return `Rejected ${mod}: ${invPart} ${namePart}${reasonPart}`.replace(/\s+/g, ' ').trim();
+    }
+
+    // Card Open
+    if (action === 'CARD OPEN' || desc.includes('opened card') || desc.includes('card open')) {
+        let inv = details.invoiceNo;
+        if (!inv) {
+            const invMatch = desc.match(/Invoice #?([A-Z0-9_-]+)/i) || desc.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
+            if (invMatch) inv = invMatch[1].trim();
+        }
+        const invPart = inv ? `Invoice #${inv}` : '';
+        let name = details.customerName || details.companyName || details.name || '';
+        if (!name) {
+            const nameMatch = desc.match(/\("([^"]+)"\)/);
+            if (nameMatch) name = nameMatch[1].trim();
+        }
+        const namePart = name ? `("${name}")` : '';
+        return `Opened card: ${invPart} ${namePart} in ${mod}`.replace(/\s+/g, ' ').trim();
+    }
+
+    // Card Close
+    if (action === 'CARD CLOSE' || desc.includes('closed card') || desc.includes('card close')) {
+        let inv = details.invoiceNo;
+        if (!inv) {
+            const invMatch = desc.match(/Invoice #?([A-Z0-9_-]+)/i) || desc.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
+            if (invMatch) inv = invMatch[1].trim();
+        }
+        const invPart = inv ? `Invoice #${inv}` : '';
+        let name = details.customerName || details.companyName || details.name || '';
+        if (!name) {
+            const nameMatch = desc.match(/\("([^"]+)"\)/);
+            if (nameMatch) name = nameMatch[1].trim();
+        }
+        const namePart = name ? `("${name}")` : '';
+        return `Closed card: ${invPart} ${namePart} in ${mod}`.replace(/\s+/g, ' ').trim();
+    }
+
+    // Legacy CSS button clicks cleaner
+    if (desc.includes('p-1.5 text-gray-400') || desc.includes('transition-all ml-1')) {
+        return `Toggled card in ${mod}`;
+    }
+
+    // Close
+    if (action === 'CLOSE') {
+        const inv = details.invoiceNo || details.orderNo || details.lcNo ? `#${details.invoiceNo || details.orderNo || details.lcNo}` : '';
+        const name = details.customerName || details.name || details.companyName || '';
+        const namePart = name ? `("${name}")` : '';
+        return `Closed ${mod} ${inv} ${namePart}`.replace(/\s+/g, ' ').trim();
+    }
+
+    // Edits and Updates
+    if (action === 'UPDATE' || desc.startsWith('Updated ')) {
+        let inv = details.invoiceNo;
+        if (!inv) {
+            const invMatch = desc.match(/(?:Invoice|Order|LC|PI|Challan)\s*No:?\s*["']?([^"',\]]+)["']?/i);
+            if (invMatch) inv = invMatch[1].trim();
+        }
+        const invPart = inv ? `Invoice #${inv}` : '';
+
+        let name = details.customerName || details.companyName || details.name || details.productName || details.employeeName || '';
+        if (!name) {
+            const nameMatch = desc.match(/Updated\s+[^:]+:\s*"([^"]+)"/i) || desc.match(/"([^"]+)"/);
+            if (nameMatch) name = nameMatch[1].trim();
+        }
+        const namePart = name ? `"${name}"` : '';
+
+        let code = details.customerId ? `ID: ${details.customerId}` :
+            details.employeeId ? `ID: ${details.employeeId}` :
+            details.productId ? `Code: ${details.productId}` : null;
+
+        if (!code) {
+            const codeMatch = desc.match(/(?:Customer|Employee)\s*Id:?\s*["']?([^"',\]]+)["']?/i);
+            if (codeMatch && !/^[a-f0-9]{24}$/i.test(codeMatch[1].trim())) {
+                code = `ID: ${codeMatch[1].trim()}`;
+            }
+        }
+
+        if (invPart && namePart) {
+            return `Updated ${mod}: ${invPart} (${namePart})`.trim();
+        } else if (invPart) {
+            return `Updated ${mod}: ${invPart}`.trim();
+        } else if (namePart && code) {
+            return `Updated ${mod}: ${namePart} (${code})`.trim();
+        } else if (namePart) {
+            return `Updated ${mod}: ${namePart}`.trim();
+        }
+
+        // Clean out bracketed/parenthesized dumps from older description formats
+        let clean = desc
+            .replace(/\s*\[Updated:\s*[^\]]*\]/gi, '')
+            .replace(/\s*\(Updated:\s*[^)]*\)/gi, '')
+            .replace(/\s*\(Filled:\s*[^)]*\)/gi, '')
+            .replace(/\s*\((?:Filled|Updated):\s*Data:\s*"U2FsdGVkX1[^"]*"\)/gi, '')
+            .replace(/"U2FsdGVkX1[^"]*"/gi, '')
+            .trim();
+        return clean || `Updated ${mod}`;
+    }
+
+    // Strip bracket dumps: [Updated: ...] or (Updated: ...) or (Filled: ...)
     let cleaned = desc
+        .replace(/\s*\[Updated:\s*[^\]]*\]/gi, '')
+        .replace(/\s*\(Updated:\s*[^)]*\)/gi, '')
+        .replace(/\s*\(Filled:\s*[^)]*\)/gi, '')
         .replace(/\s*\((?:Filled|Updated):\s*Data:\s*"U2FsdGVkX1[^"]*"\)/gi, '')
-        .replace(/\s*\(Updated:\s*[^)]*U2FsdGVkX1[^)]*\)/gi, '')
-        .replace(/\s*\(Filled:\s*[^)]*U2FsdGVkX1[^)]*\)/gi, '')
         .replace(/"U2FsdGVkX1[^"]*"/gi, '');
 
     return cleaned.trim();
@@ -155,13 +439,11 @@ const formatLogDescription = (desc, log) => {
 
 const getLogFilledFields = (log) => {
     if (!log) return [];
+    const action = getLogAction(log);
 
-    // If pre-calculated, filter out raw encrypted strings or data fields
-    if (Array.isArray(log.details?._filledFields) && log.details._filledFields.length > 0) {
-        const clean = log.details._filledFields.filter(
-            f => !IGNORED_KEYS.has((f.field || '').toLowerCase()) && !isEncryptedString(f.value)
-        );
-        if (clean.length > 0) return clean;
+    // Clicks do not have filled form insertion fields
+    if (action === 'CLICK' || log.actionCategory === 'UI_CLICK') {
+        return [];
     }
 
     const details = log.details;
@@ -184,16 +466,146 @@ const getLogFilledFields = (log) => {
         targetObj = details.data;
     }
 
+    // For Accept actions
+    if (action === 'ACCEPT') {
+        const list = [];
+        let inv = targetObj.invoiceNo;
+        if (!inv && typeof log.description === 'string') {
+            const m = log.description.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i) || log.description.match(/Invoice #?([A-Z0-9_-]+)/i);
+            if (m) inv = m[1].trim();
+        }
+        if (inv) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(inv) });
+
+        let cust = targetObj.customerName || targetObj.companyName || targetObj.name;
+        if (!cust && typeof log.description === 'string') {
+            const m = log.description.match(/Updated\s+(?:Sales|Customer|PI):\s*"([^"]+)"/i) || log.description.match(/\("([^"]+)"\)/);
+            if (m) cust = m[1].trim();
+        }
+        if (cust) list.push({ field: 'customerName', label: 'Customer', value: String(cust) });
+
+        list.push({ field: 'status', label: 'Status', value: targetObj.status || 'Accepted' });
+        const by = targetObj.acceptedBy || targetObj.acceptedByName || log.displayName || log.username;
+        if (by) list.push({ field: 'acceptedBy', label: 'Accepted By', value: String(by) });
+        if (targetObj.totalAmount) list.push({ field: 'totalAmount', label: 'Total Amount', value: formatFieldValue(targetObj.totalAmount) });
+        return list;
+    }
+
+    // For Approval actions, provide focused summary fields rather than dumping 35 database fields
+    if (action === 'APPROVE') {
+        const list = [];
+        let inv = targetObj.invoiceNo;
+        if (!inv && typeof log.description === 'string') {
+            const m = log.description.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i) || log.description.match(/Invoice #?([A-Z0-9_-]+)/i);
+            if (m) inv = m[1].trim();
+        }
+        if (inv) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(inv) });
+
+        let cust = targetObj.customerName || targetObj.companyName || targetObj.name;
+        if (!cust && typeof log.description === 'string') {
+            const m = log.description.match(/Updated\s+(?:Sales|Customer|PI):\s*"([^"]+)"/i) || log.description.match(/"([^"]+)"/);
+            if (m) cust = m[1].trim();
+        }
+        if (cust) list.push({ field: 'customerName', label: 'Customer', value: String(cust) });
+
+        if (targetObj.status) list.push({ field: 'status', label: 'Status', value: String(targetObj.status) });
+        const by = targetObj.approvedByName || targetObj.approvedBy || targetObj.acceptedBy || log.displayName || log.username;
+        if (by) list.push({ field: 'approvedBy', label: 'Approved By', value: String(by) });
+        if (targetObj.totalAmount) list.push({ field: 'totalAmount', label: 'Total Amount', value: formatFieldValue(targetObj.totalAmount) });
+        return list;
+    }
+
+    // For Rejection actions
+    if (action === 'REJECT') {
+        const list = [];
+        let inv = targetObj.invoiceNo;
+        if (!inv && typeof log.description === 'string') {
+            const m = log.description.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i) || log.description.match(/Invoice #?([A-Z0-9_-]+)/i);
+            if (m) inv = m[1].trim();
+        }
+        if (inv) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(inv) });
+
+        let cust = targetObj.customerName || targetObj.companyName || targetObj.name;
+        if (!cust && typeof log.description === 'string') {
+            const m = log.description.match(/\("([^"]+)"\)/) || log.description.match(/Updated\s+(?:Sales|Customer|PI):\s*"([^"]+)"/i);
+            if (m) cust = m[1].trim();
+        }
+        if (cust) list.push({ field: 'customerName', label: 'Customer', value: String(cust) });
+
+        list.push({ field: 'status', label: 'Status', value: 'Rejected' });
+        const by = targetObj.rejectedBy || log.displayName || log.username;
+        if (by) list.push({ field: 'rejectedBy', label: 'Rejected By', value: String(by) });
+        let reason = targetObj.rejectionReason;
+        if (!reason && typeof log.description === 'string') {
+            const m = log.description.match(/Reason:\s*"([^"]+)"/i);
+            if (m) reason = m[1].trim();
+        }
+        if (reason) list.push({ field: 'rejectionReason', label: 'Reason', value: String(reason) });
+        return list;
+    }
+
+    // For Card Open and Close actions
+    if (action === 'CARD OPEN' || action === 'CARD CLOSE') {
+        const list = [];
+        let inv = targetObj.invoiceNo;
+        if (!inv && typeof log.description === 'string') {
+            const m = log.description.match(/Invoice #?([A-Z0-9_-]+)/i) || log.description.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
+            if (m) inv = m[1].trim();
+        }
+        if (inv) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(inv) });
+
+        let cust = targetObj.customerName || targetObj.companyName || targetObj.name;
+        if (!cust && typeof log.description === 'string') {
+            const m = log.description.match(/\("([^"]+)"\)/);
+            if (m) cust = m[1].trim();
+        }
+        if (cust) list.push({ field: 'customerName', label: 'Customer', value: String(cust) });
+        list.push({ field: 'cardState', label: 'Card State', value: action === 'CARD OPEN' ? 'Opened' : 'Closed' });
+        return list;
+    }
+
+    // For Close actions
+    if (action === 'CLOSE') {
+        const list = [];
+        if (targetObj.invoiceNo || targetObj.orderNo || targetObj.lcNo) {
+            list.push({ field: 'referenceNo', label: 'Reference No', value: String(targetObj.invoiceNo || targetObj.orderNo || targetObj.lcNo) });
+        }
+        list.push({ field: 'status', label: 'Status', value: 'Closed' });
+        const by = targetObj.closedBy || log.displayName || log.username;
+        if (by) list.push({ field: 'closedBy', label: 'Closed By', value: String(by) });
+        return list;
+    }
+
+    // If pre-calculated updated fields exist (from differential logging), use them directly
+    if (Array.isArray(log.details?._updatedFields) && log.details._updatedFields.length > 0) {
+        return log.details._updatedFields;
+    }
+
+    // If pre-calculated, filter out raw encrypted strings or data fields or ObjectIds
+    if (Array.isArray(log.details?._filledFields) && log.details._filledFields.length > 0) {
+        let clean = log.details._filledFields.filter(
+            f => !IGNORED_KEYS.has((f.field || '').toLowerCase()) && !isEncryptedString(f.value) && !/^[a-f0-9]{24}$/i.test(f.value)
+        );
+        if (action === 'UPDATE' && clean.length > 8) {
+            // For legacy UPDATE logs with full payload dumps, filter to operational/modified fields only
+            const operationalKeys = new Set(['truckno', 'challanno', 'rate', 'quantity', 'unitprice', 'totalamount', 'paidamount', 'dueamount', 'discount', 'paymentmethod', 'remarks']);
+            const opClean = clean.filter(f => operationalKeys.has((f.field || '').toLowerCase()));
+            if (opClean.length > 0) return opClean;
+        }
+        if (clean.length > 0) return clean;
+    }
+
     const list = [];
     for (const [key, val] of Object.entries(targetObj)) {
         if (key.startsWith('_')) continue;
         if (IGNORED_KEYS.has(key.toLowerCase())) continue;
         if (val === null || val === undefined || val === '') continue;
         if (isEncryptedString(val)) continue;
+        if (typeof val === 'string' && /^[a-f0-9]{24}$/i.test(val)) continue;
 
         const formattedVal = formatFieldValue(val);
         if (!formattedVal) continue;
         if (isEncryptedString(formattedVal)) continue;
+        if (/^[a-f0-9]{24}$/i.test(formattedVal)) continue;
 
         list.push({
             field: key,
@@ -234,6 +646,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
         totalLogs: 0,
         todayLogs: 0,
         todayActiveUsers: 0,
+        storageSize: '0.5 MB',
+        dataSize: '0 KB',
         categories: {},
         actions: {}
     });
@@ -360,7 +774,11 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             ]);
 
             if (logsRes.data?.success) {
-                const fetchedLogs = logsRes.data.logs || [];
+                const fetchedLogs = (logsRes.data.logs || []).filter(l => 
+                    l.module !== 'Notification' && 
+                    !l.path?.includes('/notifications') &&
+                    !l.description?.toLowerCase().includes('notification')
+                );
                 setLogs(fetchedLogs);
                 setTotalLogs(logsRes.data.total || 0);
                 setTotalPages(logsRes.data.totalPages || 1);
@@ -374,8 +792,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                 setModuleOptions(prev => {
                     const set = new Set(prev);
-                    fetchedLogs.forEach(l => { if (l.module) set.add(l.module); });
-                    return Array.from(set).sort();
+                    fetchedLogs.forEach(l => { if (l.module && l.module !== 'Notification') set.add(l.module); });
+                    return Array.from(set).filter(m => m !== 'Notification').sort();
                 });
             }
 
@@ -384,6 +802,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     totalLogs: statsRes.data.totalLogs || 0,
                     todayLogs: statsRes.data.todayLogs || 0,
                     todayActiveUsers: statsRes.data.todayActiveUsers || 0,
+                    storageSize: statsRes.data.storageSize || '0.5 MB',
+                    dataSize: statsRes.data.dataSize || '0 KB',
                     categories: statsRes.data.categories || {},
                     actions: statsRes.data.actions || {}
                 });
@@ -393,7 +813,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     setUserOptions(statsRes.data.distinctUsers);
                 }
                 if (Array.isArray(statsRes.data.distinctModules) && statsRes.data.distinctModules.length > 0) {
-                    setModuleOptions(statsRes.data.distinctModules);
+                    setModuleOptions(statsRes.data.distinctModules.filter(m => m && m !== 'Notification'));
                 }
             }
         } catch (err) {
@@ -454,7 +874,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     };
 
     // Action Badge styling
-    const getActionBadge = (action, _category) => {
+    const getActionBadge = (action) => {
         const act = (action || '').toUpperCase();
         if (act === 'CREATE') {
             return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">CREATE</span>;
@@ -465,8 +885,23 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
         if (act === 'DELETE') {
             return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">DELETE</span>;
         }
+        if (act === 'ACCEPT') {
+            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">ACCEPT</span>;
+        }
         if (act === 'APPROVE') {
             return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200">APPROVE</span>;
+        }
+        if (act === 'REJECT') {
+            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">REJECT</span>;
+        }
+        if (act === 'CARD OPEN' || act === 'CARD_OPEN') {
+            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200">CARD OPEN</span>;
+        }
+        if (act === 'CARD CLOSE' || act === 'CARD_CLOSE') {
+            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-700 border border-slate-300">CARD CLOSE</span>;
+        }
+        if (act === 'CLOSE') {
+            return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">CLOSE</span>;
         }
         if (act === 'LOGIN' || act === 'LOGOUT') {
             return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">{act}</span>;
@@ -561,11 +996,14 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                         <ActivityLogIcon className="w-5 h-5" />
                     </div>
                     <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <h1 className="text-xl font-bold text-slate-800 tracking-tight">System Operation & Audit Logs</h1>
                             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                                 Live Tracking
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                Storage: {stats.storageSize || '0.5 MB'}
                             </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
@@ -670,7 +1108,9 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                         <div className="mt-2 text-2xl font-black text-slate-800 tracking-tight">
                             {stats.totalLogs.toLocaleString()}
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">All recorded actions in system</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                            All recorded actions • {stats.storageSize || '0.5 MB'}
+                        </p>
                     </div>
 
                     {/* Operations Today */}
@@ -1033,6 +1473,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                     logs.map((log) => {
                                         const dateObj = new Date(log.timestamp);
                                         const fullDate = dateObj.toLocaleString();
+                                        const action = getLogAction(log);
+                                        const module = getLogModule(log);
                                         const filledFields = getLogFilledFields(log);
 
                                         return (
@@ -1066,12 +1508,12 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                                                 {/* Module */}
                                                 <td className="py-3 px-4 whitespace-nowrap">
-                                                    {getModuleBadge(log.path?.includes('/notifications') ? 'Notification' : log.module)}
+                                                    {getModuleBadge(module)}
                                                 </td>
 
                                                 {/* Action */}
                                                 <td className="py-3 px-4 whitespace-nowrap">
-                                                    {getActionBadge(log.action, log.actionCategory)}
+                                                    {getActionBadge(action, log.actionCategory)}
                                                 </td>
 
                                                 {/* Description & Inserted/Filled Fields */}
@@ -1081,27 +1523,37 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                     </div>
                                                     {filledFields.length > 0 && (
                                                         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                                                                Filled:
+                                                            <span className={`text-[10px] uppercase font-bold tracking-wider ${
+                                                                action === 'UPDATE' ? 'text-amber-600' : 'text-slate-400'
+                                                            }`}>
+                                                                {['APPROVE', 'ACCEPT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE'].includes(action) ? 'Details:' : action === 'REJECT' ? 'Reason:' : action === 'UPDATE' ? 'Updated:' : 'Filled:'}
                                                             </span>
-                                                            {filledFields.slice(0, 4).map((f, i) => (
+                                                            {filledFields.slice(0, 5).map((f, i) => (
                                                                 <span
                                                                     key={i}
                                                                     title={`${f.label}: ${f.value}`}
-                                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50/90 border border-blue-200/80 text-blue-900 text-[11px] font-medium max-w-[240px] truncate shadow-2xs"
+                                                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium max-w-[240px] truncate shadow-2xs ${
+                                                                        action === 'UPDATE'
+                                                                            ? 'bg-amber-50/90 border border-amber-200/80 text-amber-950'
+                                                                            : 'bg-blue-50/90 border border-blue-200/80 text-blue-900'
+                                                                    }`}
                                                                 >
-                                                                    <span className="text-blue-600 font-medium text-[10px]">{f.label}:</span>
+                                                                    <span className={`font-medium text-[10px] ${action === 'UPDATE' ? 'text-amber-700' : 'text-blue-600'}`}>{f.label}:</span>
                                                                     <span className="font-semibold text-slate-800 text-[10px] truncate">{f.value}</span>
                                                                 </span>
                                                             ))}
-                                                            {filledFields.length > 4 && (
+                                                            {filledFields.length > 5 && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setSelectedLog(log)}
-                                                                    className="cursor-pointer text-[10px] font-bold text-blue-600 hover:text-blue-800 px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors"
-                                                                    title="Click to view all filled fields in inspector"
+                                                                    className={`cursor-pointer text-[10px] font-bold px-1.5 py-0.5 rounded border transition-colors ${
+                                                                        action === 'UPDATE'
+                                                                            ? 'text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                                                                            : 'text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border-blue-200'
+                                                                    }`}
+                                                                    title="Click to view all fields in inspector"
                                                                 >
-                                                                    +{filledFields.length - 4} more
+                                                                    +{filledFields.length - 5} more
                                                                 </button>
                                                             )}
                                                         </div>
@@ -1216,6 +1668,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
             {/* Inspection Modal */}
             {selectedLog && (() => {
+                const modalAction = getLogAction(selectedLog);
+                const modalModule = getLogModule(selectedLog);
                 const modalFilledFields = getLogFilledFields(selectedLog);
                 const cleanPayload = getCleanDetails(selectedLog.details);
 
@@ -1259,11 +1713,11 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-semibold block text-3xs uppercase">Module</span>
-                                        <span className="text-slate-800 font-semibold">{selectedLog.path?.includes('/notifications') ? 'Notification' : selectedLog.module}</span>
+                                        <span className="text-slate-800 font-semibold">{modalModule}</span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-semibold block text-3xs uppercase">Action Type</span>
-                                        <div className="mt-0.5">{getActionBadge(selectedLog.action, selectedLog.actionCategory)}</div>
+                                        <div className="mt-0.5">{getActionBadge(modalAction, selectedLog.actionCategory)}</div>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-semibold block text-3xs uppercase">IP Address</span>
@@ -1289,7 +1743,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                                                 <h4 className="text-xs font-bold text-slate-700">
-                                                    Inserted & Filled Fields ({modalFilledFields.length} field{modalFilledFields.length > 1 ? 's' : ''})
+                                                    {modalAction === 'UPDATE' ? 'Modified / Updated Fields' : ['APPROVE', 'ACCEPT', 'REJECT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE'].includes(modalAction) ? 'Operation Details' : 'Inserted & Filled Fields'} ({modalFilledFields.length} field{modalFilledFields.length > 1 ? 's' : ''})
                                                 </h4>
                                             </div>
                                             <span className="text-3xs font-medium text-slate-400">Captured from submitted form / request</span>

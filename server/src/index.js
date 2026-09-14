@@ -7,7 +7,17 @@ const session = require('express-session');
 const { MongoStore } = require('connect-mongo');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
 const BackupSetting = require('./models/BackupSetting');
+
+const uploadDir = path.resolve(__dirname, '../backups/uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+const backupUpload = multer({
+  dest: uploadDir,
+  limits: { fileSize: 500 * 1024 * 1024 } // 500 MB limit
+});
 
 dotenv.config();
 
@@ -20,8 +30,8 @@ app.use(cors({
   origin: true,
   credentials: true
 }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(cookieParser());
 
 // Security Middleware (Decryption and Signature Verification)
@@ -96,7 +106,8 @@ const {
   sanitizePayload,
   generateOperationDescription,
   resolveActionDetails,
-  extractFilledFields
+  extractFilledFields,
+  computeUpdatedFields
 } = require('./services/activityLogger');
 
 // Auto-seed admin user if no users exist
@@ -149,6 +160,9 @@ app.post('/v', (req, res, next) => {
   // Pass to internal router
   apiRouter(req, res, next);
 });
+
+// Mount apiRouter for direct API requests (e.g. backup & restore uploads/downloads)
+app.use(apiRouter);
 
 // Routes
 app.get('/', (req, res) => {
@@ -367,14 +381,48 @@ const verifyPermission = (moduleName, action = 'view') => {
   };
 };
 
-// Operation & Activity Logger Middleware for all API operations
-apiRouter.use((req, res, next) => {
-  const method = (req.method || '').toUpperCase();
-  const url = req.url || '';
+const ROUTE_MODEL_MAP = {
+  'sales': Sale,
+  'customers': Customer,
+  'products': Product,
+  'purchases': Purchase,
+  'purchase-receives': PurchaseReceive,
+  'employees': Employee,
+  'importers': Importer,
+  'exporters': Exporter,
+  'suppliers': Supplier,
+  'ports': Port,
+  'warehouses': Warehouse,
+  'stock': Stock,
+  'damages': Damage,
+  'returns': Return,
+  'banks': Bank,
+  'insurance': Insurance,
+  'insurance-payments': InsurancePayment,
+  'lc-management': LCManagement,
+  'lc-gp': LCGatePass,
+  'lc-expenses': LCExpense,
+  'margin-returns': MarginReturn,
+  'pi': PI,
+  'packing-lists': PackingList,
+  'tr-setups': TRSetup,
+  'cost-of-goods': CostOfGoods,
+  'cnfs': CnF,
+  'cnf-payments': CnFPayment,
+  'metadata': MetaData,
+  'users': User,
+  'ip-records': IpRecord
+};
 
-  const isExcluded = url.startsWith('/api/logs') || url === '/health' || url === '/api/health';
-  const isMutating = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
-  const isAuthOrBackup = url.includes('/login') || url.includes('/logout') || url.includes('/backup-database');
+// Global Activity / Audit Logging Middleware
+apiRouter.use(async (req, res, next) => {
+  const method = req.method;
+  const url = req.originalUrl || req.url;
+
+  // Only log state mutations, auth actions, or specific system operations
+  const isMutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+  const isAuthOrBackup = url.includes('/login') || url.includes('/logout') || url.includes('/backup') || url.includes('/restore');
+  const isExcluded = url.includes('/logs') || url.includes('/notifications');
 
   if (isExcluded || (!isMutating && !isAuthOrBackup)) {
     return next();
@@ -383,6 +431,36 @@ apiRouter.use((req, res, next) => {
   const reqBodySnapshot = sanitizePayload(req.body);
   const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
   const userAgent = req.headers['user-agent'] || '';
+
+  let previousDocSnapshot = null;
+  if (method === 'PUT' || method === 'PATCH') {
+    const match = url.match(/^\/api\/([a-zA-Z0-9_-]+)\/([a-f0-9]{24})/i);
+    if (match) {
+      const routeKey = match[1].toLowerCase();
+      const docId = match[2];
+      const model = ROUTE_MODEL_MAP[routeKey];
+      if (model) {
+        try {
+          const doc = await model.findById(docId).lean();
+          if (doc) {
+            if (doc.data) {
+              try {
+                let dec = decryptData(doc.data);
+                if (dec && dec.data && typeof dec.data === 'string' && !dec.invoiceNo) {
+                  try { dec = decryptData(dec.data); } catch (e) {}
+                }
+                previousDocSnapshot = dec || doc;
+              } catch (e) {
+                previousDocSnapshot = doc;
+              }
+            } else {
+              previousDocSnapshot = doc;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+  }
 
   res.on('finish', () => {
     try {
@@ -396,11 +474,36 @@ apiRouter.use((req, res, next) => {
         return;
       }
 
-      const module = resolveModuleFromPath(url);
-      const { action, category } = resolveActionDetails(method, url);
+      // Do not log notification operations
+      if (url.includes('/notifications')) {
+        return;
+      }
+
+      // Do not log full payload for large backup or restore operations to prevent MongoDB BSON size limits
+      if (url.includes('/backup') || url.includes('/restore')) {
+        logActivity({
+          userId,
+          username,
+          userRole,
+          displayName,
+          module: 'Backup & Restore',
+          action: url.includes('/backup') ? 'BACKUP' : 'RESTORE',
+          actionCategory: 'SYSTEM',
+          description: url.includes('/backup') ? 'System database backup' : 'System database restore',
+          details: { message: 'Database backup/restore operation completed' },
+          ip: clientIp,
+          userAgent,
+          method,
+          endpoint: url,
+          status
+        });
+        return;
+      }
+
+      const module = resolveModuleFromPath(url, reqBodySnapshot);
+      const { action, category } = resolveActionDetails(method, url, reqBodySnapshot);
       const description = generateOperationDescription(method, url, module, reqBodySnapshot, res.statusCode);
       const status = res.statusCode < 400 ? 'SUCCESS' : 'FAILED';
-      const filledFields = extractFilledFields(reqBodySnapshot);
 
       let cleanSnapshot = { ...reqBodySnapshot };
       if (typeof reqBodySnapshot?.data === 'string' && reqBodySnapshot.data.startsWith('U2FsdGVkX1')) {
@@ -419,6 +522,19 @@ apiRouter.use((req, res, next) => {
         } catch (e) {}
       }
 
+      let filledFields = [];
+      if (action === 'UPDATE' || method === 'PUT' || method === 'PATCH') {
+        if (Array.isArray(cleanSnapshot._updatedFields) && cleanSnapshot._updatedFields.length > 0) {
+          filledFields = cleanSnapshot._updatedFields;
+        } else if (previousDocSnapshot) {
+          filledFields = computeUpdatedFields(previousDocSnapshot, cleanSnapshot);
+        } else {
+          filledFields = [];
+        }
+      } else {
+        filledFields = extractFilledFields(reqBodySnapshot, action);
+      }
+
       logActivity({
         userId,
         username,
@@ -430,7 +546,8 @@ apiRouter.use((req, res, next) => {
         description,
         details: {
           ...cleanSnapshot,
-          _filledFields: filledFields
+          _filledFields: filledFields,
+          _updatedFields: action === 'UPDATE' ? filledFields : undefined
         },
         ip: clientIp,
         userAgent,
@@ -3669,40 +3786,103 @@ apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
   }
 });
 
-// Restore Database API
-apiRouter.post('/api/restore-database', adminOnly, async (req, res) => {
-  try {
-    const { version, data } = req.body;
-    if (!data || typeof data !== 'object') {
-      return res.status(400).json({ message: 'Invalid backup format' });
-    }
+// Helper function to perform robust, batch-chunked database restore
+const performDatabaseRestore = async (backupData) => {
+  const { data } = backupData;
+  if (!data || typeof data !== 'object') {
+    throw new Error('Invalid backup file structure: missing "data" object.');
+  }
 
-    const models = mongoose.connection.models;
+  const models = mongoose.connection.models;
+  const restoredCollections = [];
+  let totalDocsRestored = 0;
 
-    // Validate that all collections in backup exist in registered models
-    for (const modelName in data) {
-      if (!models[modelName]) {
-        return res.status(400).json({ message: `Unknown model: ${modelName} in backup file` });
+  for (const modelName in data) {
+    let Model = models[modelName];
+    if (!Model) {
+      try {
+        Model = mongoose.model(modelName, new mongoose.Schema({}, { strict: false }));
+      } catch (e) {
+        Model = mongoose.models[modelName];
       }
     }
 
-    // Process restoration
-    for (const modelName in data) {
-      const Model = models[modelName];
-      const documents = data[modelName];
+    const documents = data[modelName];
+    if (Array.isArray(documents)) {
+      // Clear existing records in this collection
+      await Model.deleteMany({});
 
-      if (Array.isArray(documents)) {
-        // Delete all existing documents in the collection
-        await Model.deleteMany({});
-
-        // Insert backup documents if any exist
-        if (documents.length > 0) {
-          await Model.insertMany(documents, { validateBeforeSave: false });
+      if (documents.length > 0) {
+        // Insert in safe batches of 200 to prevent MongoDB BSON payload size limits and memory spikes
+        const BATCH_SIZE = 200;
+        for (let i = 0; i < documents.length; i += BATCH_SIZE) {
+          const batch = documents.slice(i, i + BATCH_SIZE);
+          await Model.insertMany(batch, { validateBeforeSave: false, ordered: false });
         }
       }
+      restoredCollections.push(`${modelName} (${documents.length})`);
+      totalDocsRestored += documents.length;
+    }
+  }
+
+  // Ensure admin user exists if user collection was modified
+  try {
+    if (typeof seedAdminUser === 'function') {
+      await seedAdminUser();
+    }
+  } catch (e) {
+    console.error('Error verifying admin user after restore:', e);
+  }
+
+  return {
+    success: true,
+    message: `Database restored successfully (${totalDocsRestored} records restored across ${restoredCollections.length} collections).`,
+    restoredCollections,
+    totalDocsRestored
+  };
+};
+
+// Restore Database via Upload (Multipart/form-data for large backup files)
+apiRouter.post('/api/restore-database-upload', adminOnly, backupUpload.single('backupFile'), async (req, res) => {
+  let tempFilePath = null;
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No backup file received. Please choose a valid JSON file.' });
+    }
+    tempFilePath = req.file.path;
+    const rawData = fs.readFileSync(tempFilePath, 'utf8');
+    const backupJson = JSON.parse(rawData);
+
+    // Save a copy in BACKUP_DIR so it also appears under Saved Auto Backups on Server
+    try {
+      const BACKUP_DIR = await getBackupDir();
+      const originalName = req.file.originalname || `uploaded_backup_${Date.now()}.json`;
+      const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const savedPath = path.join(BACKUP_DIR, safeName);
+      fs.writeFileSync(savedPath, rawData);
+    } catch (saveErr) {
+      console.warn('Could not save uploaded backup copy to backups directory:', saveErr);
     }
 
-    res.json({ success: true, message: 'Database restored successfully' });
+    const result = await performDatabaseRestore(backupJson);
+    res.json(result);
+  } catch (err) {
+    console.error('Restore database upload error:', err);
+    res.status(500).json({ message: 'Restore failed: ' + err.message });
+  } finally {
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (e) {}
+    }
+  }
+});
+
+// Restore Database API (JSON body fallback)
+apiRouter.post('/api/restore-database', adminOnly, async (req, res) => {
+  try {
+    const result = await performDatabaseRestore(req.body);
+    res.json(result);
   } catch (err) {
     console.error('Restore database error:', err);
     res.status(500).json({ message: 'Restore failed: ' + err.message });
@@ -3812,29 +3992,10 @@ apiRouter.post('/api/backup-files/:filename/restore', adminOnly, async (req, res
       return res.status(404).json({ message: 'Backup file not found' });
     }
     const backupData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    const { data } = backupData;
-    if (!data || typeof data !== 'object') {
-      return res.status(400).json({ message: 'Invalid backup file structure' });
-    }
-    const models = mongoose.connection.models;
-    for (const modelName in data) {
-      if (!models[modelName]) {
-        return res.status(400).json({ message: `Unknown model: ${modelName}` });
-      }
-    }
-    for (const modelName in data) {
-      const Model = models[modelName];
-      const documents = data[modelName];
-      if (Array.isArray(documents)) {
-        await Model.deleteMany({});
-        if (documents.length > 0) {
-          await Model.insertMany(documents, { validateBeforeSave: false });
-        }
-      }
-    }
-    res.json({ success: true, message: 'Database restored successfully' });
+    const result = await performDatabaseRestore(backupData);
+    res.json(result);
   } catch (err) {
-    console.error(err);
+    console.error('Saved backup restore error:', err);
     res.status(500).json({ message: 'Restore failed: ' + err.message });
   }
 });
@@ -3876,7 +4037,10 @@ apiRouter.get('/api/logs', adminOnly, async (req, res) => {
     const limitNum = Math.min(200, Math.max(1, parseInt(limit) || 50));
     const skip = (pageNum - 1) * limitNum;
 
-    const query = {};
+    const query = {
+      module: { $ne: 'Notification' },
+      path: { $not: /\/notifications/i }
+    };
 
     if (user && user !== 'ALL') {
       query.username = new RegExp('^' + user.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
@@ -3937,6 +4101,11 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
+    const baseFilter = {
+      module: { $ne: 'Notification' },
+      path: { $not: /\/notifications/i }
+    };
+
     const [
       totalLogs,
       todayLogs,
@@ -3946,17 +4115,19 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       distinctUsers,
       distinctModules
     ] = await Promise.all([
-      ActivityLog.countDocuments({}),
-      ActivityLog.countDocuments({ timestamp: { $gte: todayStart } }),
-      ActivityLog.distinct('username', { timestamp: { $gte: todayStart } }),
+      ActivityLog.countDocuments(baseFilter),
+      ActivityLog.countDocuments({ ...baseFilter, timestamp: { $gte: todayStart } }),
+      ActivityLog.distinct('username', { ...baseFilter, timestamp: { $gte: todayStart } }),
       ActivityLog.aggregate([
+        { $match: baseFilter },
         { $group: { _id: '$actionCategory', count: { $sum: 1 } } }
       ]),
       ActivityLog.aggregate([
+        { $match: baseFilter },
         { $group: { _id: '$action', count: { $sum: 1 } } }
       ]),
-      ActivityLog.distinct('username'),
-      ActivityLog.distinct('module')
+      ActivityLog.distinct('username', baseFilter),
+      ActivityLog.distinct('module', baseFilter)
     ]);
 
     const categories = {};
@@ -3965,15 +4136,27 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
     const actions = {};
     actionStats.forEach(a => { if (a._id) actions[a._id] = a.count; });
 
+    let storageSizeFormatted = '0.5 MB';
+    let dataSizeFormatted = '0 KB';
+    try {
+      const collStats = await mongoose.connection.db.command({ collStats: 'activitylogs' });
+      if (collStats) {
+        storageSizeFormatted = (collStats.storageSize / (1024 * 1024)).toFixed(2) + ' MB';
+        dataSizeFormatted = Math.round(collStats.size / 1024) + ' KB';
+      }
+    } catch (statErr) {}
+
     res.json({
       success: true,
       totalLogs,
       todayLogs,
       todayActiveUsers: todayUsers.length,
+      storageSize: storageSizeFormatted,
+      dataSize: dataSizeFormatted,
       categories,
       actions,
       distinctUsers: (distinctUsers || []).filter(Boolean).sort(),
-      distinctModules: (distinctModules || []).filter(Boolean).sort()
+      distinctModules: (distinctModules || []).filter(m => m && m !== 'Notification').sort()
     });
   } catch (err) {
     console.error('Error fetching log stats:', err);
@@ -3981,31 +4164,45 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
   }
 });
 
-// 3. Client-side user action & click logger (authenticated users)
+// 3. Client-side user action & click logger (authenticated users only)
 apiRouter.post('/api/logs/client-action', async (req, res) => {
   try {
     const user = req.session?.user;
-    const actions = Array.isArray(req.body.actions) ? req.body.actions : [req.body];
+    if (!user || user.username === 'anonymous') {
+      return res.json({ success: true, count: 0 });
+    }
+
+    const rawActions = Array.isArray(req.body.actions) ? req.body.actions : [req.body];
+    const actions = rawActions.slice(0, 10);
     const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
     const userAgent = req.headers['user-agent'] || '';
 
-    const logsToInsert = actions.map(act => ({
-      timestamp: act.timestamp ? new Date(act.timestamp) : new Date(),
-      userId: user?.id || '',
-      username: user?.username || 'anonymous',
-      userRole: user?.role || '',
-      displayName: user?.name || user?.username || 'User',
-      module: act.module || 'System',
-      action: act.action || 'CLICK',
-      actionCategory: act.actionCategory || 'UI_CLICK',
-      description: act.description || `User clicked "${act.actionName || 'Button'}" in ${act.module || 'System'}`,
-      details: act.details || {},
-      ip: clientIp,
-      userAgent,
-      method: 'CLICK',
-      path: act.path || '',
-      status: 'SUCCESS'
-    }));
+    const logsToInsert = actions.map(act => {
+      let cleanDetails = sanitizePayload(act.details || {});
+      if (cleanDetails && typeof cleanDetails === 'object') {
+        const str = JSON.stringify(cleanDetails);
+        if (str.length > 1000) {
+          cleanDetails = { view: cleanDetails.view, tag: cleanDetails.tag, targetId: cleanDetails.targetId };
+        }
+      }
+      return {
+        timestamp: act.timestamp ? new Date(act.timestamp) : new Date(),
+        userId: user?.id || '',
+        username: user?.username || 'System',
+        userRole: user?.role || '',
+        displayName: user?.name || user?.username || 'User',
+        module: act.module || 'System',
+        action: act.action || 'CLICK',
+        actionCategory: act.actionCategory || 'UI_CLICK',
+        description: act.description || `User clicked "${act.actionName || 'Button'}" in ${act.module || 'System'}`,
+        details: cleanDetails,
+        ip: clientIp,
+        userAgent,
+        method: 'CLICK',
+        path: act.path || '',
+        status: 'SUCCESS'
+      };
+    });
 
     if (logsToInsert.length > 0) {
       await ActivityLog.insertMany(logsToInsert, { ordered: false });
@@ -4018,7 +4215,7 @@ apiRouter.post('/api/logs/client-action', async (req, res) => {
   }
 });
 
-// 4. Purge/clear logs (Admin only)
+// 4. Purge/clear logs (Admin only) with physical disk compaction
 apiRouter.delete('/api/logs/clear', adminOnly, async (req, res) => {
   try {
     const { olderThanDays, all } = req.body;
@@ -4031,6 +4228,13 @@ apiRouter.delete('/api/logs/clear', adminOnly, async (req, res) => {
     }
 
     const result = await ActivityLog.deleteMany(query);
+
+    // Physically reclaim disk space in MongoDB
+    try {
+      await mongoose.connection.db.command({ compact: 'activitylogs' });
+    } catch (compactErr) {
+      console.warn('[ActivityLog] Compact warning:', compactErr.message);
+    }
 
     // Record this clear action
     await logActivity({
@@ -4049,13 +4253,46 @@ apiRouter.delete('/api/logs/clear', adminOnly, async (req, res) => {
     res.json({
       success: true,
       deletedCount: result.deletedCount,
-      message: `Successfully deleted ${result.deletedCount} log entries`
+      message: `Successfully deleted ${result.deletedCount} log entries and freed physical disk space`
     });
   } catch (err) {
     console.error('Error clearing logs:', err);
     res.status(500).json({ message: 'Failed to clear logs: ' + err.message });
   }
 });
+
+// Automated Activity Log Retention & Housekeeping
+const cleanupOldActivityLogs = async () => {
+  try {
+    const now = Date.now();
+    // 1. Purge high-frequency UI_CLICK logs older than 7 days
+    const clickCutoff = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    const clickRes = await ActivityLog.deleteMany({
+      actionCategory: 'UI_CLICK',
+      timestamp: { $lt: clickCutoff }
+    });
+
+    // 2. Purge audit logs older than 90 days
+    const generalCutoff = new Date(now - 90 * 24 * 60 * 60 * 1000);
+    const generalRes = await ActivityLog.deleteMany({
+      timestamp: { $lt: generalCutoff }
+    });
+
+    const totalCleaned = (clickRes.deletedCount || 0) + (generalRes.deletedCount || 0);
+    if (totalCleaned > 0) {
+      console.log(`[LogHousekeeping] Pruned ${totalCleaned} old logs (${clickRes.deletedCount || 0} UI clicks, ${generalRes.deletedCount || 0} audit logs). Reclaiming storage...`);
+      try {
+        await mongoose.connection.db.command({ compact: 'activitylogs' });
+      } catch (ce) {}
+    }
+  } catch (e) {
+    console.warn('[LogHousekeeping] Retention run failed:', e.message);
+  }
+};
+
+// Run housekeeping once a day and 15 seconds after startup
+setInterval(cleanupOldActivityLogs, 24 * 60 * 60 * 1000);
+setTimeout(cleanupOldActivityLogs, 15000);
 
 
 // Auto-Backup Scheduling Logic

@@ -15,6 +15,16 @@ axios.interceptors.request.use((config) => {
         return config;
     }
 
+    // Skip gateway encryption for FormData (file uploads) and database backup/restore routes
+    if (
+        config.data instanceof FormData ||
+        config.url.includes('/restore-database') ||
+        config.url.includes('/backup-database') ||
+        config.url.includes('/backup-files')
+    ) {
+        return config;
+    }
+
     const timestamp = Date.now().toString();
     config.headers['X-Timestamp'] = timestamp;
 

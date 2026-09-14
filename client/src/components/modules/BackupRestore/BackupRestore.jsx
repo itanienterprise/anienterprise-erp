@@ -253,13 +253,24 @@ const BackupRestore = ({ addNotification }) => {
         try {
             let response;
             if (restoreTarget.type === 'uploaded') {
-                response = await axios.post(`${API_BASE_URL}/api/restore-database`, fileData);
+                if (!backupFile) {
+                    setErrorMessage('Please select a backup file first.');
+                    return;
+                }
+                const formData = new FormData();
+                formData.append('backupFile', backupFile);
+                response = await axios.post(`${API_BASE_URL}/api/restore-database-upload`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    timeout: 600000
+                });
             } else {
-                response = await axios.post(`${API_BASE_URL}/api/backup-files/${restoreTarget.filename}/restore`);
+                response = await axios.post(`${API_BASE_URL}/api/backup-files/${restoreTarget.filename}/restore`, {}, {
+                    timeout: 600000
+                });
             }
 
             if (response.data.success) {
-                setSuccessMessage('Database restored successfully! Reloading page to apply changes...');
+                setSuccessMessage(response.data.message || 'Database restored successfully! Reloading page to apply changes...');
                 if (addNotification) {
                     addNotification('System Restore', 'Database has been restored successfully.', ['admin'], [], true);
                 }
@@ -271,7 +282,8 @@ const BackupRestore = ({ addNotification }) => {
             }
         } catch (error) {
             console.error('Restore error:', error);
-            setErrorMessage(error.response?.data?.message || 'Error occurred while restoring the database.');
+            const serverMsg = error.response?.data?.message || (typeof error.response?.data === 'string' && !error.response.data.startsWith('<') ? error.response.data : '');
+            setErrorMessage(serverMsg || error.message || 'Error occurred while restoring the database.');
         } finally {
             setIsRestoring(false);
         }

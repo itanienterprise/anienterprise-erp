@@ -5,6 +5,7 @@ let flushTimeout = null;
 let isInitialized = false;
 let getCurrentUser = () => null;
 let getCurrentView = () => 'General';
+const recentClicks = new Map();
 
 /**
  * Format view name to human friendly module name
@@ -53,12 +54,51 @@ export const trackUserAction = (actionName, moduleName, details = {}) => {
 
     const resolvedModule = moduleName || viewToModuleName(getCurrentView());
 
+    let action = details.action || 'CLICK';
+    let actionCategory = details.actionCategory || 'UI_CLICK';
+    let description = details.description;
+
+    const lowerName = (actionName || '').toLowerCase();
+    if (lowerName === 'accept' || details.actionType === 'ACCEPT' || details.action === 'ACCEPT') {
+        action = 'ACCEPT';
+        actionCategory = 'APPROVAL';
+        const inv = details.invoiceNo ? `Invoice #${details.invoiceNo}` : '';
+        const name = details.customerName || details.companyName || '';
+        const namePart = name ? `("${name}")` : '';
+        description = description || `Accepted ${resolvedModule}: ${inv} ${namePart}`.replace(/\s+/g, ' ').trim();
+    } else if (lowerName === 'reject' || details.actionType === 'REJECT' || details.action === 'REJECT') {
+        action = 'REJECT';
+        actionCategory = 'APPROVAL';
+        const inv = details.invoiceNo ? `Invoice #${details.invoiceNo}` : '';
+        const name = details.customerName || details.companyName || '';
+        const namePart = name ? `("${name}")` : '';
+        description = description || `Rejected ${resolvedModule}: ${inv} ${namePart}`.replace(/\s+/g, ' ').trim();
+    } else if (lowerName === 'card open' || lowerName.includes('open card') || details.actionType === 'CARD_OPEN' || details.action === 'CARD OPEN') {
+        action = 'CARD OPEN';
+        actionCategory = 'UI_INTERACTION';
+        const inv = details.invoiceNo ? `Invoice #${details.invoiceNo}` : '';
+        const name = details.customerName || details.companyName || '';
+        const namePart = name ? `("${name}")` : '';
+        description = description || `Opened card: ${inv} ${namePart} in ${resolvedModule}`.replace(/\s+/g, ' ').trim();
+    } else if (lowerName === 'card close' || lowerName.includes('close card') || details.actionType === 'CARD_CLOSE' || details.action === 'CARD CLOSE') {
+        action = 'CARD CLOSE';
+        actionCategory = 'UI_INTERACTION';
+        const inv = details.invoiceNo ? `Invoice #${details.invoiceNo}` : '';
+        const name = details.customerName || details.companyName || '';
+        const namePart = name ? `("${name}")` : '';
+        description = description || `Closed card: ${inv} ${namePart} in ${resolvedModule}`.replace(/\s+/g, ' ').trim();
+    }
+
+    if (!description) {
+        description = `User clicked "${actionName}" in ${resolvedModule}`;
+    }
+
     actionQueue.push({
         actionName: actionName || 'User Action',
         module: resolvedModule,
-        action: 'CLICK',
-        actionCategory: 'UI_CLICK',
-        description: `User clicked "${actionName}" in ${resolvedModule}`,
+        action,
+        actionCategory,
+        description,
         details: {
             ...details,
             view: getCurrentView()
@@ -67,7 +107,7 @@ export const trackUserAction = (actionName, moduleName, details = {}) => {
         timestamp: new Date().toISOString()
     });
 
-    if (actionQueue.length >= 5) {
+    if (action === 'ACCEPT' || action === 'REJECT' || action === 'CARD OPEN' || action === 'CARD CLOSE' || actionQueue.length >= 5) {
         flushQueue();
     } else if (!flushTimeout) {
         flushTimeout = setTimeout(flushQueue, 3000);
@@ -102,16 +142,21 @@ export const initActivityTracker = (userGetter, viewGetter) => {
             const curView = getCurrentView();
             if (curView === 'log-section') return;
 
-            // Extract readable label
+            // Extract readable label (avoiding raw CSS utility class dumps)
             let label = clickable.getAttribute('title') ||
                 clickable.getAttribute('aria-label') ||
+                clickable.getAttribute('data-action') ||
                 clickable.innerText?.trim() ||
                 clickable.name ||
-                clickable.id ||
-                clickable.getAttribute('data-action') ||
-                clickable.className;
+                clickable.id;
 
-            if (!label || typeof label !== 'string') return;
+            if (!label || typeof label !== 'string') {
+                if (clickable.className && typeof clickable.className === 'string' && clickable.className.includes('close')) {
+                    label = 'Close';
+                } else {
+                    return;
+                }
+            }
 
             // Trim label and sanitize
             label = label.split('\n')[0].trim();
@@ -120,6 +165,21 @@ export const initActivityTracker = (userGetter, viewGetter) => {
 
             // Skip trivial elements like generic empty spans or raw numbers
             if (/^(\d+|[.\-_]+)$/.test(label)) return;
+            // Skip raw CSS class strings if any leaked through
+            if (label.includes('bg-') || label.includes('text-') || label.includes('p-1') || label.includes('rounded')) return;
+
+            // Debounce identical clicks within 2.5 seconds to prevent spam
+            const clickKey = `${curView}:${label}`;
+            const now = Date.now();
+            if (recentClicks.has(clickKey) && (now - recentClicks.get(clickKey) < 2500)) {
+                return;
+            }
+            recentClicks.set(clickKey, now);
+            if (recentClicks.size > 100) {
+                // Keep recentClicks map bounded
+                const oldestKeys = Array.from(recentClicks.keys()).slice(0, 30);
+                oldestKeys.forEach(k => recentClicks.delete(k));
+            }
 
             trackUserAction(label, viewToModuleName(curView), {
                 tag: clickable.tagName.toLowerCase(),

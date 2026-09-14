@@ -1,8 +1,14 @@
 const { decryptData, encryptData, verifySignature } = require('../utils/encryption');
 
 const securityMiddleware = (req, res, next) => {
-    // Apply to /api routes and the secure gateway /v
-    if (req.method === 'OPTIONS' || (!req.path.startsWith('/api') && req.path !== '/v') || req.path === '/api/health') {
+    // Apply to /api routes and the secure gateway /v (bypass health checks and large backup/restore routes)
+    if (
+        req.method === 'OPTIONS' ||
+        (!req.path.startsWith('/api') && req.path !== '/v') ||
+        req.path === '/api/health' ||
+        req.path.startsWith('/api/backup') ||
+        req.path.startsWith('/api/restore')
+    ) {
         return next();
     }
 

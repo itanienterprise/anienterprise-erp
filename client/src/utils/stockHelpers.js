@@ -605,8 +605,8 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
         });
     }
 
-    // Build Map of order reference + product + brand -> sold quantity from General Sales
-    // Key: `${ref}_${normProductName}_${normBrand}`
+    // Build list & map of fulfilling sales entries from General Sales to track order fulfillment accurately
+    const fulfilledSaleEntries = [];
     const orderFulfilledQtyMap = {};
     salesRecords.forEach(s => {
         const sType = (s.saleType || '').toLowerCase();
@@ -621,21 +621,77 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
 
             refs.forEach(ref => {
                 (s.items || []).forEach(item => {
-                    const pName = (item.productName || '').trim().toLowerCase();
+                    const pName = (item.productName || item.product || '').trim().toLowerCase();
                     const brandEntries = (item.brandEntries && item.brandEntries.length > 0)
                         ? item.brandEntries
-                        : [{ brand: item.brand || '', quantity: item.quantity }];
+                        : [{ brand: item.brand || item.brandName || '', quantity: item.quantity, warehouseName: item.warehouseName || s.warehouse || '' }];
 
                     brandEntries.forEach(be => {
-                        const bName = (be.brand || '').trim().toLowerCase();
+                        const bName = (be.brand || be.brandName || '').trim().toLowerCase();
+                        const wName = (be.warehouseName || be.warehouse || item.warehouseName || item.whName || item.warehouse || s.warehouse || s.whName || '').trim().toLowerCase();
                         const key = `${ref}_${pName}_${bName}`;
                         const qty = parseFloat(be.quantity) || 0;
                         orderFulfilledQtyMap[key] = (orderFulfilledQtyMap[key] || 0) + qty;
+                        if (qty > 0) {
+                            fulfilledSaleEntries.push({
+                                ref,
+                                refs,
+                                pName,
+                                bName,
+                                wName,
+                                qty,
+                                remainingQty: qty
+                            });
+                        }
                     });
                 });
             });
         }
     });
+
+    const allocateFulfilledQtyForOrder = (ordRefs, pKeyName, bKeyName, orderWh, neededQty) => {
+        if (!neededQty || neededQty <= 0) return 0;
+        let allocated = 0;
+        let remainingNeeded = neededQty;
+
+        const cleanOrderWh = (orderWh || '').trim().toLowerCase();
+
+        // Pass 1: exact or prefix warehouse match
+        for (const f of fulfilledSaleEntries) {
+            if (remainingNeeded <= 0) break;
+            const matchesRef = f.refs.some(r => ordRefs.includes(r));
+            if (!matchesRef) continue;
+            if (f.pName !== pKeyName || f.bName !== bKeyName) continue;
+
+            const whMatch = f.wName && cleanOrderWh && (f.wName === cleanOrderWh || f.wName.startsWith(cleanOrderWh) || cleanOrderWh.startsWith(f.wName));
+            if (whMatch && f.remainingQty > 0) {
+                const take = Math.min(remainingNeeded, f.remainingQty);
+                f.remainingQty -= take;
+                allocated += take;
+                remainingNeeded -= take;
+            }
+        }
+
+        // Pass 2: fallback if either fulfilling sale or order had no warehouse specified
+        if (remainingNeeded > 0) {
+            for (const f of fulfilledSaleEntries) {
+                if (remainingNeeded <= 0) break;
+                const matchesRef = f.refs.some(r => ordRefs.includes(r));
+                if (!matchesRef) continue;
+                if (f.pName !== pKeyName || f.bName !== bKeyName) continue;
+
+                const noWh = !f.wName || !cleanOrderWh;
+                if (noWh && f.remainingQty > 0) {
+                    const take = Math.min(remainingNeeded, f.remainingQty);
+                    f.remainingQty -= take;
+                    allocated += take;
+                    remainingNeeded -= take;
+                }
+            }
+        }
+
+        return allocated;
+    };
 
     // 1. Process Primary Stock Records (LC Receive)
     const sortedStockRecords = [...stockRecords].sort((a, b) => {
@@ -1057,12 +1113,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 if (isOrder) {
                                     if (isFulfilled || (sale.status || '').toLowerCase() === 'rejected') return;
 
-                                    const soldQty1 = inv && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${inv}_${pKeyName}_${bKeyName}`] || 0) : 0;
-                                    const soldQty2 = ordNo && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${ordNo}_${pKeyName}_${bKeyName}`] || 0) : 0;
-                                    const soldQty3 = ordId && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${ordId}_${pKeyName}_${bKeyName}`] || 0) : 0;
-                                    const totalSoldQty = Math.max(soldQty1, soldQty2, soldQty3);
+                                    const ordRefs = [inv, ordNo, ordId].filter(Boolean);
+                                    const allocatedSoldQty = allocateFulfilledQtyForOrder(ordRefs, pKeyName, bKeyName, saleWH, sq);
 
-                                    const netOrderSq = Math.max(0, sq - totalSoldQty);
+                                    const netOrderSq = Math.max(0, sq - allocatedSoldQty);
                                     if (netOrderSq <= 0) return;
 
                                     const pktRatio = sq > 0 ? (sp / sq) : 0;
@@ -1361,12 +1415,10 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     if (isOrder) {
                         if (isFulfilled || (sale.status || '').toLowerCase() === 'rejected') return;
 
-                        const soldQty1 = inv && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${inv}_${pKeyName}_${bKeyName}`] || 0) : 0;
-                        const soldQty2 = ordNo && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${ordNo}_${pKeyName}_${bKeyName}`] || 0) : 0;
-                        const soldQty3 = ordId && pKeyName && bKeyName ? (orderFulfilledQtyMap[`${ordId}_${pKeyName}_${bKeyName}`] || 0) : 0;
-                        const totalSoldQty = Math.max(soldQty1, soldQty2, soldQty3);
+                        const ordRefs = [inv, ordNo, ordId].filter(Boolean);
+                        const allocatedSoldQty = allocateFulfilledQtyForOrder(ordRefs, pKeyName, bKeyName, saleWH, sq);
 
-                        const netOrderSq = Math.max(0, sq - totalSoldQty);
+                        const netOrderSq = Math.max(0, sq - allocatedSoldQty);
                         if (netOrderSq <= 0) return;
 
                         const pktRatio = sq > 0 ? (sp / sq) : 0;

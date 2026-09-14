@@ -9,6 +9,7 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import axios from '../../../utils/api';
 import { calculateStockData, isLcMatch } from '../../../utils/stockHelpers';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { trackUserAction } from '../../../utils/activityTracker';
 import './SaleManagement.css';
 
 const getSafeString = (val) => {
@@ -300,9 +301,38 @@ const SaleManagement = ({
     const [expandedMobileRows, setExpandedMobileRows] = useState([]);
 
     const toggleMobileRowExpansion = (saleId) => {
+        const sale = (sales || []).find(s => s._id === saleId) || (allSalesRecords || []).find(s => s._id === saleId);
+        const isCurrentlyExpanded = expandedMobileRows.includes(saleId);
+        const nextState = !isCurrentlyExpanded;
+
         setExpandedMobileRows(prev =>
             prev.includes(saleId) ? prev.filter(id => id !== saleId) : [...prev, saleId]
         );
+
+        const inv = sale?.invoiceNo ? `Invoice #${sale.invoiceNo}` : '';
+        const name = sale?.customerName || sale?.companyName || '';
+        const namePart = name ? `("${name}")` : '';
+        const modName = saleType === 'Border' ? 'Border Sale' : saleType === 'Order' ? 'Order Sale' : 'Sales';
+
+        if (nextState) {
+            trackUserAction('Card Open', modName, {
+                action: 'CARD OPEN',
+                actionCategory: 'UI_INTERACTION',
+                description: `Opened card: ${inv} ${namePart} in ${modName}`.replace(/\s+/g, ' ').trim(),
+                invoiceNo: sale?.invoiceNo,
+                customerName: sale?.customerName || sale?.companyName,
+                targetId: saleId
+            });
+        } else {
+            trackUserAction('Card Close', modName, {
+                action: 'CARD CLOSE',
+                actionCategory: 'UI_INTERACTION',
+                description: `Closed card: ${inv} ${namePart} in ${modName}`.replace(/\s+/g, ' ').trim(),
+                invoiceNo: sale?.invoiceNo,
+                customerName: sale?.customerName || sale?.companyName,
+                targetId: saleId
+            });
+        }
     };
     const [showSaleFilterPanel, setShowSaleFilterPanel] = useState(false);
     const [saleFilterSearch, setSaleFilterSearch] = useState({ companySearch: '', invoiceSearch: '', portSearch: '', productSearch: '', brandSearch: '', indCnfSearch: '', bdCnfSearch: '' });
@@ -491,6 +521,15 @@ const SaleManagement = ({
                         editApprovedByUsername: (currentUser?.username || '')
                     } : {})
                 };
+
+                const modName = saleType === 'Border' ? 'Border Sale' : saleType === 'Order' ? 'Order Sale' : 'Sales';
+                trackUserAction('Accept', modName, {
+                    action: 'ACCEPT',
+                    actionCategory: 'APPROVAL',
+                    invoiceNo: sale?.invoiceNo,
+                    customerName: sale?.customerName || sale?.companyName,
+                    targetId: sale?._id
+                });
 
                 await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
 
@@ -970,6 +1009,25 @@ const SaleManagement = ({
             const actionUsername = currentUser ? (currentUser.username || '') : '';
             const { _id, createdAt: _createdAt, ...rest } = sale;
 
+            const modName = saleType === 'Border' ? 'Border Sale' : saleType === 'Order' ? 'Order Sale' : 'Sales';
+            if (newStatus === 'accepted') {
+                trackUserAction('Accept', modName, {
+                    action: 'ACCEPT',
+                    actionCategory: 'APPROVAL',
+                    invoiceNo: sale?.invoiceNo,
+                    customerName: sale?.customerName || sale?.companyName,
+                    targetId: sale?._id
+                });
+            } else if (newStatus === 'Rejected') {
+                trackUserAction('Reject', modName, {
+                    action: 'REJECT',
+                    actionCategory: 'APPROVAL',
+                    invoiceNo: sale?.invoiceNo,
+                    customerName: sale?.customerName || sale?.companyName,
+                    targetId: sale?._id
+                });
+            }
+
             const finalStatus = newStatus === 'accepted'
                 ? ((parseFloat(sale.paidAmount || 0) >= parseFloat(sale.totalAmount || 0) && parseFloat(sale.totalAmount || 0) > 0) ? 'Complete' : 'Pending')
                 : newStatus;
@@ -1068,9 +1126,38 @@ const SaleManagement = ({
     const lcRef = useRef(null);
 
     const toggleRowExpansion = (saleId) => {
+        const sale = (sales || []).find(s => s._id === saleId) || (allSalesRecords || []).find(s => s._id === saleId);
+        const isCurrentlyCollapsed = collapsedRows.includes(saleId);
+        const nextStateExpanded = isCurrentlyCollapsed;
+
         setCollapsedRows(prev =>
             prev.includes(saleId) ? prev.filter(id => id !== saleId) : [...prev, saleId]
         );
+
+        const inv = sale?.invoiceNo ? `Invoice #${sale.invoiceNo}` : '';
+        const name = sale?.customerName || sale?.companyName || '';
+        const namePart = name ? `("${name}")` : '';
+        const modName = saleType === 'Border' ? 'Border Sale' : saleType === 'Order' ? 'Order Sale' : 'Sales';
+
+        if (nextStateExpanded) {
+            trackUserAction('Card Open', modName, {
+                action: 'CARD OPEN',
+                actionCategory: 'UI_INTERACTION',
+                description: `Opened card: ${inv} ${namePart} in ${modName}`.replace(/\s+/g, ' ').trim(),
+                invoiceNo: sale?.invoiceNo,
+                customerName: sale?.customerName || sale?.companyName,
+                targetId: saleId
+            });
+        } else {
+            trackUserAction('Card Close', modName, {
+                action: 'CARD CLOSE',
+                actionCategory: 'UI_INTERACTION',
+                description: `Closed card: ${inv} ${namePart} in ${modName}`.replace(/\s+/g, ' ').trim(),
+                invoiceNo: sale?.invoiceNo,
+                customerName: sale?.customerName || sale?.companyName,
+                targetId: saleId
+            });
+        }
     };
 
     const activeFilterCount = Object.entries(saleFilters).filter(([key, val]) => {
@@ -1894,13 +1981,102 @@ const SaleManagement = ({
                 const isAcceptedEdit = origStatus !== 'requested';
                 const isAdminUser = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
                 const editorName = currentUser ? (currentUser.name || currentUser.username || '') : '';
-                const editorUsername = currentUser ? (currentUser.username || '') : '';
+                const diffUpdatedFields = [];
+                if (originalData) {
+                    const ignoreKeys = new Set(['_id', '__v', 'createdAt', 'updatedAt', 'isEdited', 'editedBy', 'editedByName', 'editedByUsername', 'status', 'saleType']);
+                    const fieldLabelsMap = {
+                        truckNo: 'Truck No',
+                        challanNo: 'Challan No',
+                        totalAmount: 'Total Price',
+                        paidAmount: 'Paid Amount',
+                        dueAmount: 'Due Amount',
+                        discount: 'Discount',
+                        date: 'Date',
+                        companyName: 'Company Name',
+                        customerName: 'Customer Name',
+                        port: 'Port',
+                        importer: 'Importer',
+                        exporter: 'Exporter',
+                        paymentMethod: 'Payment Method',
+                        indianCnF: 'IND C&F',
+                        bdCnf: 'BD C&F',
+                        remarks: 'Remarks',
+                        orderNo: 'Order No'
+                    };
+
+                    // Granular check of items (Price vs Quantity vs Truck)
+                    let itemPriceChanged = false;
+                    let itemQtyChanged = false;
+                    let newPriceVal = null;
+                    let newQtyVal = null;
+
+                    if (originalData.items && Array.isArray(formData.items)) {
+                        formData.items.forEach((item, pIdx) => {
+                            const origItem = (originalData.items || [])[pIdx];
+                            if (!origItem) {
+                                itemPriceChanged = true;
+                                itemQtyChanged = true;
+                                return;
+                            }
+                            (item.brandEntries || []).forEach((entry, eIdx) => {
+                                const origEntry = (origItem.brandEntries || [])[eIdx];
+                                if (!origEntry) {
+                                    itemPriceChanged = true;
+                                    itemQtyChanged = true;
+                                    return;
+                                }
+                                const nP = entry.unitPrice ?? entry.rate;
+                                const oP = origEntry.unitPrice ?? origEntry.rate;
+                                if (nP !== undefined && String(nP).trim() !== String(oP ?? '').trim()) {
+                                    itemPriceChanged = true;
+                                    newPriceVal = nP;
+                                }
+                                if (entry.quantity !== undefined && String(entry.quantity).trim() !== String(origEntry.quantity ?? '').trim()) {
+                                    itemQtyChanged = true;
+                                    newQtyVal = entry.quantity;
+                                }
+                            });
+                        });
+                    }
+
+                    if (itemPriceChanged) {
+                        diffUpdatedFields.push({
+                            field: 'unitPrice',
+                            label: 'Price',
+                            value: `৳${parseFloat(newPriceVal || 0).toLocaleString('en-IN')}`
+                        });
+                    }
+                    if (itemQtyChanged) {
+                        diffUpdatedFields.push({
+                            field: 'quantity',
+                            label: 'Quantity',
+                            value: parseFloat(newQtyVal || 0).toLocaleString()
+                        });
+                    }
+
+                    for (const [k, v] of Object.entries(formData)) {
+                        if (ignoreKeys.has(k) || k.startsWith('_') || k === 'items') continue;
+                        const oldVal = (originalData[k] ?? '').toString().trim();
+                        const newVal = (v ?? '').toString().trim();
+                        if (oldVal !== newVal) {
+                            diffUpdatedFields.push({
+                                field: k,
+                                label: fieldLabelsMap[k] || k.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
+                                value: (k === 'totalAmount' || k === 'dueAmount' || k === 'paidAmount' || k === 'discount')
+                                    ? `৳${parseFloat(newVal || 0).toLocaleString('en-IN')}`
+                                    : newVal
+                            });
+                        }
+                    }
+                }
+
                 const payload = {
                     ...formData,
                     isEdited: isAdminUser ? false : (isAcceptedEdit ? true : false),
                     editedBy: editorUsername || editorName,
                     editedByName: editorName || editorUsername,
                     editedByUsername: editorUsername,
+                    _updatedFields: diffUpdatedFields,
                     ...(isAcceptedEdit ? {
                         editRequestedBy: editorName || editorUsername,
                         editRequestedByUsername: editorUsername
@@ -6901,14 +7077,22 @@ const SaleManagement = ({
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); toggleMobileRowExpansion(sale._id); }}
                                                         className="p-1.5 text-gray-400 bg-gray-100 rounded-lg transition-all ml-1"
+                                                        title="Card Close"
+                                                        data-action="Card Close"
                                                     >
                                                         <ChevronDownIcon className="w-4 h-4 rotate-180" />
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="p-1.5 bg-gray-100 text-gray-400 rounded-lg">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); toggleMobileRowExpansion(sale._id); }}
+                                                    className="p-1.5 bg-gray-100 text-gray-400 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors"
+                                                    title="Card Open"
+                                                    data-action="Card Open"
+                                                >
                                                     <ChevronDownIcon className="w-3.5 h-3.5" />
-                                                </div>
+                                                </button>
                                             )}
                                         </div>
                                     </div>
