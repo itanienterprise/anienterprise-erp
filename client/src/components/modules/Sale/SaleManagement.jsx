@@ -6395,7 +6395,20 @@ const SaleManagement = ({
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                                 {canEditRequestedSale(sale) && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
+                                                                        data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
+                                                                        data-order-no={sale.orderNo || ''}
+                                                                        data-invoice-no={sale.invoiceNo || ''}
+                                                                        data-customer-name={sale.customerName || sale.companyName || ''}
+                                                                        data-total-amount={sale.grandTotal || sale.totalAmount || ''}
+                                                                        data-sale-type={saleType || ''}
+                                                                        data-status={sale.status || ''}
+                                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <EditIcon className="w-5 h-5" />
+                                                                    </button>
                                                                 )}
                                                                 {canApprove && (
                                                                     <>
@@ -6469,7 +6482,20 @@ const SaleManagement = ({
                                                                     <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
                                                                 )}
                                                                 {canUserEditSale(sale) && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
+                                                                        data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
+                                                                        data-order-no={sale.orderNo || ''}
+                                                                        data-invoice-no={sale.invoiceNo || ''}
+                                                                        data-customer-name={sale.customerName || sale.companyName || ''}
+                                                                        data-total-amount={sale.grandTotal || sale.totalAmount || ''}
+                                                                        data-sale-type={saleType || ''}
+                                                                        data-status={sale.status || ''}
+                                                                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <EditIcon className="w-5 h-5" />
+                                                                    </button>
                                                                 )}
                                                                 {canUserDeleteSale(sale) && (
                                                                     <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
@@ -6804,7 +6830,20 @@ const SaleManagement = ({
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="View Details"><EyeIcon className="w-5 h-5" /></button>
                                                             {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
+                                                                    data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
+                                                                    data-order-no={sale.orderNo || ''}
+                                                                    data-invoice-no={sale.invoiceNo || ''}
+                                                                    data-customer-name={sale.customerName || sale.companyName || ''}
+                                                                    data-total-amount={sale.grandTotal || sale.totalAmount || ''}
+                                                                    data-sale-type={saleType || ''}
+                                                                    data-status={sale.status || ''}
+                                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                    title="Edit"
+                                                                >
+                                                                    <EditIcon className="w-5 h-5" />
+                                                                </button>
                                                             )}
                                                             {canApprove && (
                                                                 <>
@@ -6878,7 +6917,20 @@ const SaleManagement = ({
                                                                 <button onClick={(e) => { e.stopPropagation(); generateSaleInvoicePDF(sale, customers); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Invoice"><FileTextIcon className="w-5 h-5" /></button>
                                                             )}
                                                             {canUserEditSale(sale) && (
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><EditIcon className="w-5 h-5" /></button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
+                                                                    data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
+                                                                    data-order-no={sale.orderNo || ''}
+                                                                    data-invoice-no={sale.invoiceNo || ''}
+                                                                    data-customer-name={sale.customerName || sale.companyName || ''}
+                                                                    data-total-amount={sale.grandTotal || sale.totalAmount || ''}
+                                                                    data-sale-type={saleType || ''}
+                                                                    data-status={sale.status || ''}
+                                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                    title="Edit"
+                                                                >
+                                                                    <EditIcon className="w-5 h-5" />
+                                                                </button>
                                                             )}
                                                             {canUserDeleteSale(sale) && (
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(sale); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
@@ -7010,7 +7062,20 @@ const SaleManagement = ({
                                                         <>
                                                             <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
                                                             {(canEditRequestedSale(sale) || canUserEditSale(sale)) && (
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
+                                                                    data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
+                                                                    data-order-no={sale.orderNo || ''}
+                                                                    data-invoice-no={sale.invoiceNo || ''}
+                                                                    data-customer-name={sale.customerName || sale.companyName || ''}
+                                                                    data-total-amount={sale.grandTotal || sale.totalAmount || ''}
+                                                                    data-sale-type={saleType || ''}
+                                                                    data-status={sale.status || ''}
+                                                                    className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                                    title="Edit"
+                                                                >
+                                                                    <EditIcon className="w-4 h-4" />
+                                                                </button>
                                                             )}
                                                             {canApprove && (
                                                                 <>
@@ -7039,7 +7104,20 @@ const SaleManagement = ({
                                                                 <button onClick={(e) => { e.stopPropagation(); setViewData(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="View Details"><EyeIcon className="w-4 h-4" /></button>
                                                             )}
                                                             {canUserEditSale(sale) && (
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(sale); }} className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100" title="Edit"><EditIcon className="w-4 h-4" /></button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(sale); }}
+                                                                    data-action={`Edit ${saleType === 'Border' ? 'Border Sale' : 'General Sale'} (${sale.orderNo && sale.invoiceNo ? `${sale.orderNo} - ${sale.invoiceNo}` : (sale.invoiceNo || sale.orderNo || 'Sale')})`}
+                                                                    data-order-no={sale.orderNo || ''}
+                                                                    data-invoice-no={sale.invoiceNo || ''}
+                                                                    data-customer-name={sale.customerName || sale.companyName || ''}
+                                                                    data-total-amount={sale.grandTotal || sale.totalAmount || ''}
+                                                                    data-sale-type={saleType || ''}
+                                                                    data-status={sale.status || ''}
+                                                                    className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
+                                                                    title="Edit"
+                                                                >
+                                                                    <EditIcon className="w-4 h-4" />
+                                                                </button>
                                                             )}
                                                             {saleType === 'General' ? (
                                                                 <div className="relative inline-block sale-pdf-dropdown-container">

@@ -755,30 +755,105 @@ const formatLogDescription = (desc, log) => {
 const getLogFilledFields = (log) => {
     if (!log) return [];
     const action = getLogAction(log);
-
-    // Clicks do not have filled form insertion fields
-    if (action === 'CLICK' || log.actionCategory === 'UI_CLICK') {
-        return [];
-    }
-
     const details = log.details;
-    if (!details || typeof details !== 'object') return [];
-
-    let targetObj = details;
+    let targetObj = (details && typeof details === 'object') ? details : {};
 
     // Check if payload is encrypted
-    if (typeof details.data === 'string' && isEncryptedString(details.data)) {
+    if (typeof targetObj.data === 'string' && isEncryptedString(targetObj.data)) {
         try {
-            const dec = decryptData(details.data);
+            const dec = decryptData(targetObj.data);
             if (dec && typeof dec === 'object') targetObj = dec;
         } catch (e) {}
-    } else if (typeof details.payload === 'string' && isEncryptedString(details.payload)) {
+    } else if (typeof targetObj.payload === 'string' && isEncryptedString(targetObj.payload)) {
         try {
-            const dec = decryptData(details.payload);
+            const dec = decryptData(targetObj.payload);
             if (dec && typeof dec === 'object') targetObj = dec;
         } catch (e) {}
-    } else if (details.data && typeof details.data === 'object' && !Array.isArray(details.data)) {
-        targetObj = details.data;
+    } else if (targetObj.data && typeof targetObj.data === 'object' && !Array.isArray(targetObj.data)) {
+        targetObj = targetObj.data;
+    }
+
+    // For UI Click actions, extract contextual references and metadata
+    if (action === 'CLICK' || log.actionCategory === 'UI_CLICK') {
+        const list = [];
+        const desc = typeof log.description === 'string' ? log.description : '';
+
+        // Receipt No
+        let rc = targetObj.receiptNo || targetObj.receipt;
+        if (!rc && desc) {
+            const m = desc.match(/(RC-\d+)/i) || desc.match(/Receipt #?([A-Z0-9_-]+)/i);
+            if (m) rc = m[1].trim();
+        }
+        if (rc) list.push({ field: 'receiptNo', label: 'Receipt No', value: String(rc) });
+
+        // Order No
+        let ord = targetObj.orderNo;
+        if (!ord && desc) {
+            const m = desc.match(/Order #?([A-Z0-9_-]+)/i) || desc.match(/\((ORD[0-9]+)\s*[-–]/i);
+            if (m) ord = m[1].trim();
+        }
+        if (ord) list.push({ field: 'orderNo', label: 'Order No', value: String(ord) });
+
+        // Invoice No
+        let inv = targetObj.invoiceNo;
+        if (!inv && desc) {
+            const m = desc.match(/Invoice #?([A-Z0-9_-]+)/i) ||
+                      desc.match(/[-–]\s*(GS[0-9]+|BS[0-9]+|INV[0-9]+)/i) ||
+                      desc.match(/\((GS[0-9]+|BS[0-9]+|INV[0-9]+)\)/i);
+            if (m) inv = m[1].trim();
+        }
+        if (inv) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(inv) });
+
+        // Customer / Party Name
+        let cust = targetObj.customerName || targetObj.companyName || targetObj.partyName || targetObj.name;
+        if (!cust && desc) {
+            const m = desc.match(/\("([^"]+)"\)/) || desc.match(/[-–]\s*([A-Z\s]{3,})\)/i);
+            if (m && !/^(GS|BS|ORD|INV)/i.test(m[1].trim())) {
+                cust = m[1].trim();
+            } else {
+                const clickMatch = desc.match(/User clicked "([^"]+)"/i);
+                if (clickMatch && !/^(Save|Edit|Delete|View|Create|Accept|Reject|\+|Card)/i.test(clickMatch[1].trim()) && !/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(clickMatch[1].trim())) {
+                    cust = clickMatch[1].trim();
+                }
+            }
+        }
+        if (cust) list.push({ field: 'customerName', label: 'Customer', value: String(cust) });
+
+        // Total Amount
+        let amt = targetObj.totalAmount || targetObj.amount;
+        if (!amt && desc) {
+            const m = desc.match(/[৳$]([\d,]+(?:\.\d{2})?)/) ||
+                      desc.match(/(?:Total|Amount)[\s:]*([৳$]?[\d,]+(?:\.\d{2})?)/i);
+            if (m) amt = m[1].replace(/,/g, '');
+        }
+        if (amt && !isNaN(Number(amt))) {
+            list.push({ field: 'totalAmount', label: 'Total Amount', value: `৳${Number(amt).toLocaleString('en-IN')}` });
+        } else if (amt) {
+            list.push({ field: 'totalAmount', label: 'Total Amount', value: String(amt) });
+        }
+
+        // Date
+        let dVal = targetObj.date;
+        if (!dVal && desc) {
+            const m = desc.match(/[\[\(](\d{1,2}[/-]\d{1,2}[/-]\d{2,4})[\]\)]/);
+            if (m) dVal = m[1];
+        }
+        if (dVal) list.push({ field: 'date', label: 'Date', value: String(dVal) });
+
+        // Sale Type
+        const sType = targetObj.saleType || (desc.includes('Border Sale') ? 'Border' : desc.includes('General Sale') ? 'General' : null);
+        if (sType) list.push({ field: 'saleType', label: 'Sale Type', value: `${sType} Sale` });
+
+        // Status
+        if (targetObj.status) list.push({ field: 'status', label: 'Status', value: String(targetObj.status) });
+
+        // View / Section
+        if (targetObj.view && typeof targetObj.view === 'string') {
+            const formatted = targetObj.view.replace(/-section$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            list.push({ field: 'moduleSection', label: 'Section', value: formatted });
+        }
+
+        return list;
     }
 
     // For Accept actions
@@ -2052,7 +2127,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                             <span className={`text-[10px] uppercase font-bold tracking-wider ${
                                                                 (action === 'REVISED' || action === 'REVISE') ? 'text-violet-600' : (action === 'UPDATE' || action === 'UPDATE_ORIGINAL') ? 'text-amber-600' : (action === 'DELETE' || action === 'DELETE_REVISION') ? 'text-rose-600' : 'text-slate-400'
                                                             }`}>
-                                                                {['APPROVE', 'ACCEPT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE', 'CARD CLOSE (NO SAVE)'].includes(action) ? 'Details:' : action === 'REJECT' ? 'Reason:' : (action === 'REVISED' || action === 'REVISE') ? 'Revision:' : (action === 'UPDATE' || action === 'UPDATE_ORIGINAL') ? 'Changes:' : (action === 'DELETE' || action === 'DELETE_REVISION') ? 'Deleted Record:' : 'Fields:'}
+                                                                {['APPROVE', 'ACCEPT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE', 'CARD CLOSE (NO SAVE)', 'CLICK'].includes(action) ? 'Details:' : action === 'REJECT' ? 'Reason:' : (action === 'REVISED' || action === 'REVISE') ? 'Revision:' : (action === 'UPDATE' || action === 'UPDATE_ORIGINAL') ? 'Changes:' : (action === 'DELETE' || action === 'DELETE_REVISION') ? 'Deleted Record:' : 'Fields:'}
                                                             </span>
                                                             {filledFields.slice(0, 5).map((f, i) => (
                                                                 <span
@@ -2283,10 +2358,12 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                                                 <h4 className="text-xs font-bold text-slate-700">
-                                                    {(modalAction === 'REVISED' || modalAction === 'REVISE') ? 'Modified / Revised Fields' : (modalAction === 'UPDATE' || modalAction === 'UPDATE_ORIGINAL') ? 'Modified / Updated Fields' : ['APPROVE', 'ACCEPT', 'REJECT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE'].includes(modalAction) ? 'Operation Details' : 'Inserted & Filled Fields'} ({modalFilledFields.length} field{modalFilledFields.length > 1 ? 's' : ''})
+                                                    {(modalAction === 'REVISED' || modalAction === 'REVISE') ? 'Modified / Revised Fields' : (modalAction === 'UPDATE' || modalAction === 'UPDATE_ORIGINAL') ? 'Modified / Updated Fields' : ['APPROVE', 'ACCEPT', 'REJECT', 'CLOSE', 'CARD OPEN', 'CARD CLOSE', 'CLICK'].includes(modalAction) ? 'Operation Details' : 'Inserted & Filled Fields'} ({modalFilledFields.length} field{modalFilledFields.length > 1 ? 's' : ''})
                                                 </h4>
                                             </div>
-                                            <span className="text-3xs font-medium text-slate-400">Captured from submitted form / request</span>
+                                            <span className="text-3xs font-medium text-slate-400">
+                                                {modalAction === 'CLICK' ? 'Captured from target record & interaction' : 'Captured from submitted form / request'}
+                                            </span>
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                                             {modalFilledFields.map((item, idx) => (

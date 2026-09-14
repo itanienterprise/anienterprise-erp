@@ -107,8 +107,10 @@ const extractContextFromRow = (clickable, row) => {
     }
 
     // Patterns for business reference codes
-    const refRegex = /\b(?:INV|SI|PI|LC|PO|PR|CH|GP|DMG|RET|TR|BS|TP|IP|PL)[-0-9A-Z/]+\b/i;
+    const refRegex = /\b(?:GS|BS|ORD|INV|SI|PI|LC|PO|PR|CH|GP|DMG|RET|TR|TP|IP|PL)[-0-9A-Z/]+\b/i;
     let foundRef = null;
+    let foundOrd = null;
+    let foundInv = null;
     let foundName = null;
 
     // Scan cells for prominent text
@@ -121,9 +123,16 @@ const extractContextFromRow = (clickable, row) => {
         if (!cellText || cellText.length < 2 || cellText.length > 80) continue;
 
         // Check reference code
-        if (!foundRef) {
-            const m = cellText.match(refRegex);
-            if (m) foundRef = m[0].trim();
+        const m = cellText.match(refRegex);
+        if (m) {
+            const code = m[0].trim();
+            if (code.toUpperCase().startsWith('ORD')) {
+                if (!foundOrd) foundOrd = code;
+            } else if (code.toUpperCase().startsWith('GS') || code.toUpperCase().startsWith('BS') || code.toUpperCase().startsWith('INV')) {
+                if (!foundInv) foundInv = code;
+            } else if (!foundRef) {
+                foundRef = code;
+            }
         }
 
         // Look for prominent entity text (.font-bold, .font-semibold, .font-medium, strong, etc.)
@@ -143,17 +152,96 @@ const extractContextFromRow = (clickable, row) => {
                 foundName = candidate;
             }
         }
-
-        if (foundRef && foundName) break;
     }
 
-    if (foundName && foundRef && foundName !== foundRef) {
-        return `${foundName} (${foundRef})`;
+    if (foundOrd && foundInv) {
+        return foundName ? `${foundOrd} - ${foundInv} - ${foundName}` : `${foundOrd} - ${foundInv}`;
     }
+    const bestRef = foundInv || foundOrd || foundRef;
+    if (foundName && bestRef && foundName !== bestRef) {
+        return `${foundName} (${bestRef})`;
+    }
+    if (bestRef) return bestRef;
     if (foundName) return foundName;
-    if (foundRef) return foundRef;
 
     return null;
+};
+
+/**
+ * Extract structured field details from row element for rich action inspection
+ */
+const extractRowDetails = (clickable, row) => {
+    if (!row && !clickable) return {};
+    const details = {};
+
+    // 1. Explicit data attributes on clickable or row
+    const getAttr = (attr) => clickable?.getAttribute(attr) || row?.getAttribute(attr);
+
+    const orderNo = getAttr('data-order-no');
+    if (orderNo) details.orderNo = orderNo.trim();
+
+    const invoiceNo = getAttr('data-invoice-no');
+    if (invoiceNo) details.invoiceNo = invoiceNo.trim();
+
+    const customerName = getAttr('data-customer-name') || getAttr('data-customer') || getAttr('data-party-name');
+    if (customerName) details.customerName = customerName.trim();
+
+    const totalAmount = getAttr('data-total-amount') || getAttr('data-amount') || getAttr('data-total');
+    if (totalAmount) details.totalAmount = totalAmount.trim();
+
+    const saleType = getAttr('data-sale-type');
+    if (saleType) details.saleType = saleType.trim();
+
+    const status = getAttr('data-status');
+    if (status) details.status = status.trim();
+
+    // 2. Scan row cells if missing any fields
+    if (row) {
+        const refRegex = /\b(?:GS|BS|ORD|INV|SI|PI|LC|PO|PR|CH|GP|DMG|RET|TR|TP|IP|PL)[-0-9A-Z/]+\b/i;
+        const cells = Array.from(row.querySelectorAll('td, th, [role="cell"]'));
+        for (const cell of cells) {
+            if (clickable && cell.contains(clickable)) continue;
+            const txt = cell.innerText?.trim() || '';
+            if (!txt) continue;
+
+            const m = txt.match(refRegex);
+            if (m) {
+                const code = m[0].trim();
+                if (code.toUpperCase().startsWith('ORD') && !details.orderNo) {
+                    details.orderNo = code;
+                } else if ((code.toUpperCase().startsWith('GS') || code.toUpperCase().startsWith('BS') || code.toUpperCase().startsWith('INV')) && !details.invoiceNo) {
+                    details.invoiceNo = code;
+                }
+            }
+
+            if (!details.totalAmount) {
+                const amtMatch = txt.match(/[৳$]([\d,]+(?:\.\d{2})?)/);
+                if (amtMatch) {
+                    details.totalAmount = amtMatch[1].replace(/,/g, '');
+                }
+            }
+
+            if (!details.customerName) {
+                const strongEl = cell.querySelector('.font-bold, .font-semibold, .font-medium, strong, b, h3, h4, .text-gray-900, .text-slate-900');
+                const candidate = strongEl ? strongEl.innerText?.trim() : txt;
+                if (
+                    candidate &&
+                    candidate.length >= 2 &&
+                    candidate.length <= 50 &&
+                    !/^\d+$/.test(candidate) &&
+                    !/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(candidate) &&
+                    !/^(active|inactive|pending|approved|rejected|completed|broken|paid|unpaid|due|edit|delete|view|action|actions|details|-|n\/a)$/i.test(candidate) &&
+                    !candidate.startsWith('৳') &&
+                    !candidate.startsWith('$') &&
+                    !candidate.match(refRegex)
+                ) {
+                    details.customerName = candidate;
+                }
+            }
+        }
+    }
+
+    return details;
 };
 
 /**
@@ -194,6 +282,75 @@ const extractContextFromModal = (modal) => {
     }
 
     return null;
+};
+
+/**
+ * Extract structured details from modal or form element
+ */
+const extractModalDetails = (clickable, modal) => {
+    if (!modal && !clickable) return {};
+    const details = {};
+
+    const getAttr = (attr) => clickable?.getAttribute(attr) || modal?.getAttribute(attr);
+
+    const customerName = getAttr('data-customer-name') || getAttr('data-customer') || getAttr('data-party-name');
+    if (customerName) details.customerName = customerName.trim();
+
+    const totalAmount = getAttr('data-total-amount') || getAttr('data-amount') || getAttr('data-total');
+    if (totalAmount) details.totalAmount = totalAmount.trim();
+
+    const invoiceNo = getAttr('data-invoice-no');
+    if (invoiceNo) details.invoiceNo = invoiceNo.trim();
+
+    const orderNo = getAttr('data-order-no');
+    if (orderNo) details.orderNo = orderNo.trim();
+
+    const receiptNo = getAttr('data-receipt-no') || getAttr('data-receipt');
+    if (receiptNo) details.receiptNo = receiptNo.trim();
+
+    const date = getAttr('data-date');
+    if (date) details.date = date.trim();
+
+    if (modal) {
+        if (!details.customerName) {
+            const custInput = modal.querySelector('input[name*="customer" i], input[name*="party" i], select[name*="customer" i]');
+            if (custInput && custInput.value && custInput.value.trim().length > 1) {
+                details.customerName = custInput.value.trim();
+            } else if (custInput?.placeholder && !custInput.placeholder.includes('Search') && custInput.placeholder.trim().length > 1) {
+                details.customerName = custInput.placeholder.trim();
+            }
+        }
+
+        if (!details.totalAmount) {
+            const amtInputs = Array.from(modal.querySelectorAll('input[name*="amount" i], input[name*="total" i], input[name*="paid" i], input[id*="amount" i], input[id*="total" i]'));
+            let sumAmt = 0;
+            let foundAny = false;
+            for (const inp of amtInputs) {
+                const val = parseFloat(inp.value);
+                if (!isNaN(val) && val > 0) {
+                    sumAmt += val;
+                    foundAny = true;
+                }
+            }
+            if (foundAny && sumAmt > 0) {
+                details.totalAmount = String(sumAmt);
+            }
+        }
+
+        if (!details.totalAmount) {
+            const allText = modal.innerText || '';
+            const match = allText.match(/(?:Total|Collection|Grand Total)[\s:]*[৳$]?\s*([\d,]+(?:\.\d{2})?)/i) ||
+                          allText.match(/[৳$]\s*([\d,]+(?:\.\d{2})?)/);
+            if (match) {
+                const parsed = match[1].replace(/,/g, '');
+                if (parseFloat(parsed) > 0) {
+                    details.totalAmount = parsed;
+                }
+            }
+        }
+    }
+
+    return details;
 };
 
 /**
@@ -390,12 +547,50 @@ export const initActivityTracker = (userGetter, viewGetter) => {
             const clickable = e.target.closest('button, a, [role="button"], input[type="submit"], input[type="checkbox"]');
             if (!clickable) return;
 
+            // Ignore clicks inside sidebar navigation, main navigation bar, or header menus
+            if (clickable.closest('aside, nav, [role="navigation"], header, .sidebar, #sidebar')) {
+                return;
+            }
+
+            // Ignore clicks with data-ignore-action or inside option dropdowns/listboxes
+            if (
+                clickable.getAttribute('data-ignore-action') === 'true' ||
+                clickable.closest('[data-dropdown], [data-ignore-action="true"], .dropdown-options, [role="listbox"], [role="option"]')
+            ) {
+                return;
+            }
+
+            // Ignore tab bar and filter toggles
+            if (clickable.closest('[role="tab"], [role="tablist"], .tabs, .tab-buttons, .tab-nav')) {
+                return;
+            }
+
             // Read active view directly from closest DOM container if present
             const domView = clickable.closest('[data-current-view]')?.getAttribute('data-current-view');
             const curView = domView || getCurrentView();
             if (curView === 'log-section') return;
 
             const modName = viewToModuleName(curView);
+
+            // Filter keywords for navigation and local view tabs
+            const NAV_FILTER_KEYWORDS = new Set([
+                'log', 'logs', 'activity log', 'requested', 'edit requested', 'all', 'stock', 'sale', 'sales',
+                'general sale', 'border sale', 'order sale', 'payment collection', 'pay to customer',
+                'collection & pay', 'customer', 'customers', 'supplier', 'suppliers', 'warehouse', 'damage', 'purchase',
+                'purchase receive', 'hrms', 'employee', 'insurance', 'c&f', 'lc gate pass', 'lc expense',
+                'margin return', 'return product', 'profit loss', 'cost of goods', 'backup & restore',
+                'dashboard', 'settings', 'system access', 'role creation', 'notifications',
+                'pending', 'complete', 'completed', 'active', 'inactive', 'approved', 'rejected',
+                'summary', 'history', 'daily', 'monthly', 'yearly', 'today', 'sale request',
+                'next', 'prev', 'previous'
+            ]);
+
+            const row = clickable.closest('tr, [data-row], [role="row"], li, .sale-mgmt-mobile-card');
+            const rowDetails = extractRowDetails(clickable, row);
+
+            const modal = clickable.closest('.modal, [role="dialog"], form, .fixed, .drawer, .card');
+            const modalDetails = extractModalDetails(clickable, modal);
+            const combinedDetails = { ...rowDetails, ...modalDetails };
 
             // Extract explicit data-action if set
             let label = clickable.getAttribute('data-action');
@@ -408,18 +603,26 @@ export const initActivityTracker = (userGetter, viewGetter) => {
                     clickable.name ||
                     clickable.id || '';
 
+                const cleanRaw = rawLabel.trim().toLowerCase();
+                if (NAV_FILTER_KEYWORDS.has(cleanRaw) || /^(requested|edit requested)(\s+\d+)?$/i.test(cleanRaw)) {
+                    return;
+                }
+
                 const verb = detectButtonVerb(clickable, rawLabel);
 
                 if (verb === 'Edit' || verb === 'Delete' || verb === 'View' || verb === 'Accept' || verb === 'Reject') {
-                    const row = clickable.closest('tr, [data-row], [role="row"], li, .sale-mgmt-mobile-card');
                     const context = extractContextFromRow(clickable, row);
                     label = context ? `${verb} ${modName} (${context})` : `${verb} ${modName}`;
                 } else if (verb === 'Create New') {
                     label = `Create New ${modName}`;
                 } else if (verb === 'Save' || verb === 'Update' || verb === 'Submit') {
-                    const modal = clickable.closest('.modal, [role="dialog"], form, .fixed, .drawer, .card');
                     const context = extractContextFromModal(modal);
-                    label = context ? `${verb} ${modName} (${context})` : `${verb} ${modName}`;
+                    let prefix = context ? `${verb} ${modName} (${context})` : `${verb} ${modName}`;
+                    if (combinedDetails.totalAmount && !prefix.includes('৳')) {
+                        const custPart = combinedDetails.customerName && !prefix.includes(combinedDetails.customerName) ? ` ("${combinedDetails.customerName}")` : '';
+                        prefix = `${prefix}${custPart} • ৳${Number(combinedDetails.totalAmount).toLocaleString('en-IN')}`;
+                    }
+                    label = prefix;
                 } else if (rawLabel) {
                     label = rawLabel;
                 } else if (clickable.className && typeof clickable.className === 'string' && clickable.className.includes('close')) {
@@ -429,13 +632,18 @@ export const initActivityTracker = (userGetter, viewGetter) => {
 
             if (!label || typeof label !== 'string') return;
 
+            // Trim label and sanitize
+            label = label.split('\n')[0].trim();
+            const cleanLower = label.toLowerCase();
+            if (NAV_FILTER_KEYWORDS.has(cleanLower) || /^(requested|edit requested)(\s+\d+)?$/i.test(cleanLower)) {
+                return;
+            }
+
             // Suppress redundant click tracking for Accept/Reject actions (the backend logs authoritative ACCEPT/REJECT mutation records)
             if (/^(Accept|Reject|Bulk Accept|Bulk Reject)\b/i.test(label) || label.includes('Accept Sale Request') || label.includes('Reject Sale Request')) {
                 return;
             }
 
-            // Trim label and sanitize
-            label = label.split('\n')[0].trim();
             if (label.length > 70) label = label.substring(0, 70) + '...';
             if (!label) return;
 
@@ -496,6 +704,7 @@ export const initActivityTracker = (userGetter, viewGetter) => {
             }
 
             trackUserAction(label, modName, {
+                ...combinedDetails,
                 tag: clickable.tagName.toLowerCase(),
                 targetId: clickable.id || undefined,
                 targetName: clickable.name || undefined

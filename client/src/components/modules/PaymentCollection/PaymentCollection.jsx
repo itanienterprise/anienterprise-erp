@@ -10,6 +10,7 @@ import axios, { api } from '../../../utils/api';
 import PaymentCollectionReport from './PaymentCollectionReport';
 import './PaymentCollection.css';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { trackUserAction } from '../../../utils/activityTracker';
 
 const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refreshPendingIndicators, highlightId, isRequestedNotif }) => {
     const [payments, setPayments] = useState([]);
@@ -1584,6 +1585,25 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
                     rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || 'Customer';
                 const totalAmt = newPayment.items.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+
+                // Log user activity for collection creation
+                try {
+                    trackUserAction(
+                        `Created new Payment Collection: ${nextReceiptNo} ("${partyName}") • Total: ৳${totalAmt.toLocaleString('en-IN')}`,
+                        'Payment Collection',
+                        {
+                            action: 'CREATE',
+                            actionCategory: 'MUTATION',
+                            customerName: partyName,
+                            receiptNo: nextReceiptNo,
+                            totalAmount: String(totalAmt),
+                            amount: String(totalAmt),
+                            date: newPayment.date,
+                            view: 'payment-collection-section'
+                        }
+                    );
+                } catch (actErr) {}
+
                 if (addNotification) await addNotification(
                     'New Payment Collection Requested',
                     `${dateStr} | ${timeStr} | ${employeeName} requested a new payment of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName} (${nextReceiptNo})`,
@@ -1719,6 +1739,25 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                 const totalAmt = activeItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
                 const isEditReq = (!isAdmin && !canApproveEditRequest);
                 const title = isEditReq ? 'Payment Collection Edit Requested' : 'Payment Collection Updated';
+
+                // Log user activity for collection update
+                try {
+                    trackUserAction(
+                        `Updated Payment Collection: ${editingPayment?.receiptNo} ("${partyName}") • Total: ৳${totalAmt.toLocaleString('en-IN')}`,
+                        'Payment Collection',
+                        {
+                            action: 'UPDATE',
+                            actionCategory: 'MUTATION',
+                            customerName: partyName,
+                            receiptNo: editingPayment?.receiptNo,
+                            totalAmount: String(totalAmt),
+                            amount: String(totalAmt),
+                            date: newPayment.date,
+                            view: 'payment-collection-section'
+                        }
+                    );
+                } catch (actErr) {}
+
                 const msg = isEditReq
                     ? `${dateStr} | ${timeStr} | ${editorName} requested an edit on payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`
                     : `${dateStr} | ${timeStr} | ${editorName} updated payment (${editingPayment?.receiptNo}) of ৳${totalAmt.toLocaleString('en-IN')} from ${partyName}`;
@@ -3035,6 +3074,7 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                                                     <button
                                                         key={customer._id}
                                                         type="button"
+                                                        data-ignore-action="true"
                                                         onClick={() => {
                                                             setNewPayment(prev => ({ ...prev, customerId: customer._id }));
                                                             setCustomerSearchQuery('');
@@ -3413,25 +3453,45 @@ const PaymentCollection = ({ addNotification, currentUser: propCurrentUser, refr
                         )}
 
                         {/* Footer Buttons */}
-                        <div className="md:col-span-2 flex items-center justify-end gap-3 pt-4 border-t border-gray-50 mt-6 relative z-10">
-                            <button
-                                type="submit"
-                                disabled={isSubmitting}
-                                className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                        <span>Saving...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <DollarSignIcon className="w-4 h-4" />
-                                        <span>Save Collection</span>
-                                    </>
-                                )}
-                            </button>
-                        </div>
+                        {(() => {
+                            const partyName = rawCustomers.find(c => c._id === newPayment.customerId)?.companyName ||
+                                              rawCustomers.find(c => c._id === newPayment.customerId)?.customerName || '';
+                            const totalAmt = (newPayment.items || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+                            return (
+                                <div className="md:col-span-2 flex items-center justify-end gap-3 pt-4 border-t border-gray-50 mt-6 relative z-10">
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        data-action={
+                                            partyName && totalAmt > 0
+                                                ? `Save Payment Collection ("${partyName}") • ৳${totalAmt.toLocaleString('en-IN')}`
+                                                : partyName
+                                                ? `Save Payment Collection ("${partyName}")`
+                                                : totalAmt > 0
+                                                ? `Save Payment Collection • ৳${totalAmt.toLocaleString('en-IN')}`
+                                                : 'Save Payment Collection'
+                                        }
+                                        data-customer-name={partyName}
+                                        data-total-amount={totalAmt > 0 ? String(totalAmt) : ''}
+                                        data-amount={totalAmt > 0 ? String(totalAmt) : ''}
+                                        data-date={newPayment.date || ''}
+                                        className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                <span>Saving...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <DollarSignIcon className="w-4 h-4" />
+                                                <span>Save Collection</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            );
+                        })()}
                     </form>
                 </div>
             )}
