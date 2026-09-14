@@ -1656,6 +1656,7 @@ const Customer = ({
                                         if (!showForm) resetForm();
                                         setShowForm(!showForm);
                                     }}
+                                    data-action="Create New Customer"
                                     className="h-10 border border-transparent flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 active:scale-95 text-sm font-medium"
                                 >
                                     <span className="text-sm font-medium">+ Add New</span>
@@ -1855,6 +1856,7 @@ const Customer = ({
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
+                                    data-action={editingId ? `Update Customer (${formData.customerName || formData.companyName || ''})` : `Save New Customer`}
                                     className={`customer-form-submit ${isSubmitting ? 'disabled' : ''}`}
                                 >
                                     {isSubmitting ? 'Saving...' : editingId ? 'Update Record' : 'Save Record'}
@@ -1945,12 +1947,12 @@ const Customer = ({
                                                         <td className="px-6 py-4 text-sm text-gray-600"><span className={`customer-status-badge ${c.status === 'Active' ? 'active' : 'inactive'}`}>{c.status}</span></td>
                                                         <td className="px-6 py-4 text-sm text-gray-600">
                                                             <div className="flex items-center justify-center space-x-2">
-                                                                <button onClick={(e) => { e.stopPropagation(); setViewData(c); }} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); setViewData(c); }} data-action={`View Customer (${c.customerName || c.companyName || ''})`} title={`View Customer (${c.customerName || c.companyName || ''})`} className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-colors"><EyeIcon className="w-5 h-5" /></button>
                                                                 {canEdit && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} data-action={`Edit Customer (${c.customerName || c.companyName || ''})`} title={`Edit Customer (${c.customerName || c.companyName || ''})`} className="p-1 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded transition-colors"><EditIcon className="w-5 h-5" /></button>
                                                                 )}
                                                                 {canDelete && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(c._id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(c._id); }} data-action={`Delete Customer (${c.customerName || c.companyName || ''})`} title={`Delete Customer (${c.customerName || c.companyName || ''})`} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"><TrashIcon className="w-5 h-5" /></button>
                                                                 )}
                                                             </div>
                                                         </td>
@@ -2023,6 +2025,7 @@ const Customer = ({
                                                             <div className="mobile-card-actions">
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); setViewData(c); }}
+                                                                    data-action={`View Customer (${c.customerName || c.companyName || ''})`}
                                                                     className="flex items-center justify-center gap-1.5 py-2 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold flex-1"
                                                                 >
                                                                     <EyeIcon className="w-4 h-4" /> View
@@ -2030,6 +2033,7 @@ const Customer = ({
                                                                 {canEdit && (
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); handleEdit(c); }}
+                                                                        data-action={`Edit Customer (${c.customerName || c.companyName || ''})`}
                                                                         className="flex items-center justify-center gap-1.5 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex-1"
                                                                     >
                                                                         <EditIcon className="w-4 h-4" /> Edit
@@ -2038,6 +2042,7 @@ const Customer = ({
                                                                 {canDelete && (
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); handleDelete(c._id); }}
+                                                                        data-action={`Delete Customer (${c.customerName || c.companyName || ''})`}
                                                                         className="flex items-center justify-center gap-1.5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold px-3"
                                                                     >
                                                                         <TrashIcon className="w-4 h-4" />

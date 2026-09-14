@@ -266,7 +266,7 @@ const Port = ({
                             </div>
                             <div className="flex gap-3">
                                 <button type="button" onClick={() => { setShowForm(false); resetForm(); }} className="flex-1 md:flex-none px-6 py-2.5 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-all text-sm">Cancel</button>
-                                <button type="submit" disabled={isSubmitting} className={`flex-1 md:flex-none px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 hover:from-blue-700 hover:to-indigo-700 transition-all text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <button type="submit" disabled={isSubmitting} data-action={editingId ? `Update Port (${formData.name || ''})` : `Save New Port`} className={`flex-1 md:flex-none px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 hover:from-blue-700 hover:to-indigo-700 transition-all text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                     {isSubmitting ? 'Saving...' : editingId ? 'Update Port' : 'Register Port'}
                                 </button>
                             </div>
@@ -307,9 +307,9 @@ const Port = ({
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-center items-center gap-2">
-                                                    <button onClick={() => handleEdit(port)} className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleEdit(port)} data-action={`Edit Port (${port.name || ''})`} className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
                                                      {!cannotDelete && (
-                                                         <button onClick={() => handleDelete(port._id)} className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                         <button onClick={() => handleDelete(port._id)} data-action={`Delete Port (${port.name || ''})`} className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
                                                      )}
                                                 </div>
                                             </td>
@@ -343,9 +343,9 @@ const Port = ({
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <div className="flex items-center bg-gray-50/80 p-0.5 rounded-lg border border-gray-100 divide-x divide-gray-100">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(port); }} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-all"><EditIcon className="w-5 h-5" /></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(port); }} data-action={`Edit Port (${port.name || ''})`} className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-all"><EditIcon className="w-5 h-5" /></button>
                                                      {!cannotDelete && (
-                                                         <button onClick={(e) => { e.stopPropagation(); handleDelete(port._id); }} className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"><TrashIcon className="w-5 h-5" /></button>
+                                                         <button onClick={(e) => { e.stopPropagation(); handleDelete(port._id); }} data-action={`Delete Port (${port.name || ''})`} className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"><TrashIcon className="w-5 h-5" /></button>
                                                      )}
                                                 </div>
                                             </div>

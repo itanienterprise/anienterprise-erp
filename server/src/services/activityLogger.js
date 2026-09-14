@@ -9,6 +9,9 @@ const MODULE_PATH_MAP = [
     { pattern: /^\/api\/orders/i, module: 'Order' },
     { pattern: /^\/api\/pi/i, module: 'PI' },
     { pattern: /^\/api\/ip-records/i, module: 'IP' },
+    { pattern: /^\/api\/packing-lists/i, module: 'Packing List' },
+    { pattern: /^\/api\/tr-setups/i, module: 'TR Setup' },
+    { pattern: /^\/api\/margin-returns/i, module: 'Margin Return' },
     { pattern: /^\/api\/purchase-receives/i, module: 'Purchase Receive' },
     { pattern: /^\/api\/purchase/i, module: 'Purchase' },
     { pattern: /^\/api\/stock-baseline/i, module: 'Stock Baseline' },
@@ -25,10 +28,10 @@ const MODULE_PATH_MAP = [
     { pattern: /^\/api\/damages/i, module: 'Damage' },
     { pattern: /^\/api\/banks/i, module: 'Bank' },
     { pattern: /^\/api\/insurance-payments/i, module: 'Insurance Payment' },
-    { pattern: /^\/api\/insurances/i, module: 'Insurance' },
+    { pattern: /^\/api\/insurances?/i, module: 'Insurance' },
     { pattern: /^\/api\/lc-management/i, module: 'LC Management' },
     { pattern: /^\/api\/lc-expenses/i, module: 'LC Expense' },
-    { pattern: /^\/api\/lc-gatepasses/i, module: 'LC GatePass' },
+    { pattern: /^\/api\/lc-(?:gp|gatepasses)/i, module: 'LC GatePass' },
     { pattern: /^\/api\/returns/i, module: 'Return Product' },
     { pattern: /^\/api\/transfers/i, module: 'Stock Transfer' },
     { pattern: /^\/api\/cost-of-goods/i, module: 'Cost of Goods' },
@@ -96,14 +99,24 @@ const resolveModuleFromPath = (path, body) => {
         return 'C&F';
     }
     if (/^\/api\/sales/i.test(path)) {
-        if (
-            targetObj.saleType === 'Border' ||
-            targetObj.isBorderSale === true ||
-            (typeof targetObj.invoiceNo === 'string' && targetObj.invoiceNo.startsWith('BS'))
-        ) {
+        if (targetObj.saleType === 'Border' || targetObj.isBorderSale === true) {
             return 'Border Sale';
         }
-        return 'Sales';
+        if (targetObj.saleType === 'General') {
+            return 'General Sale';
+        }
+        if (targetObj.saleType === 'Order') {
+            return 'Order Sale';
+        }
+        if (typeof targetObj.invoiceNo === 'string') {
+            if (targetObj.invoiceNo.startsWith('BS')) return 'Border Sale';
+            if (targetObj.invoiceNo.startsWith('GS')) return 'General Sale';
+            if (targetObj.invoiceNo.startsWith('ORD')) return 'Order Sale';
+        }
+        if (typeof targetObj.orderNo === 'string' && targetObj.orderNo.length > 0) {
+            return 'Order Sale';
+        }
+        return 'General Sale';
     }
 
     for (const item of MODULE_PATH_MAP) {
@@ -308,11 +321,15 @@ const extractFilledFields = (body, action) => {
         if (targetObj.invoiceNo) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(targetObj.invoiceNo) });
         if (targetObj.orderNo) list.push({ field: 'orderNo', label: 'Order No', value: String(targetObj.orderNo) });
         if (targetObj.lcNo) list.push({ field: 'lcNo', label: 'LC No', value: String(targetObj.lcNo) });
+        if (targetObj.ipNumber || targetObj.ipNo) list.push({ field: 'ipNumber', label: 'IP Number', value: String(targetObj.ipNumber || targetObj.ipNo) });
         if (targetObj.employeeId) list.push({ field: 'employeeId', label: 'Employee ID', value: String(targetObj.employeeId) });
         if (targetObj.customerId) list.push({ field: 'customerId', label: 'Customer ID', value: String(targetObj.customerId) });
         if (targetObj.productId) list.push({ field: 'productId', label: 'Product Code', value: String(targetObj.productId) });
+        if (targetObj.accountNumber || targetObj.accountNo) list.push({ field: 'accountNumber', label: 'Account No', value: String(targetObj.accountNumber || targetObj.accountNo) });
+        if (targetObj.warehouse) list.push({ field: 'warehouse', label: 'Warehouse', value: String(targetObj.warehouse) });
+        if (targetObj.damageNo) list.push({ field: 'damageNo', label: 'Damage No', value: String(targetObj.damageNo) });
 
-        const nameVal = targetObj.name || targetObj.customerName || targetObj.employeeName || targetObj.companyName || targetObj.productName || targetObj.value || targetObj.label;
+        const nameVal = targetObj.name || targetObj.customerName || targetObj.supplierName || targetObj.importerName || targetObj.exporterName || targetObj.bankName || targetObj.employeeName || targetObj.companyName || targetObj.productName || targetObj.value || targetObj.label;
         if (nameVal) list.push({ field: 'name', label: targetObj.value ? 'Item / Value' : 'Name', value: String(nameVal) });
 
         if (targetObj.category) list.push({ field: 'category', label: 'Category', value: String(targetObj.category) });
@@ -530,12 +547,13 @@ const resolveActionDetails = (method, path, body, previousDocSnapshot) => {
 const extractReferenceNumber = (targetObj) => {
     if (!targetObj || typeof targetObj !== 'object') return null;
     const inv = targetObj.invoiceNo || targetObj.invoiceNumber;
+    const ord = targetObj.orderNo || targetObj.orderNumber;
+    if (ord && inv && ord !== inv) return `Order #${ord} (Invoice #${inv})`;
     if (inv) return `Invoice #${inv}`;
     const pi = targetObj.piNumber || targetObj.piNo || targetObj.piNumbers;
     if (pi) return `PI #${pi}`;
     const lc = targetObj.lcNo || targetObj.lcNumber;
     if (lc) return `LC #${lc}`;
-    const ord = targetObj.orderNo || targetObj.orderNumber;
     if (ord) return `Order #${ord}`;
     const challan = targetObj.challanNo || targetObj.challanNumber;
     if (challan) return `Challan #${challan}`;
@@ -545,6 +563,22 @@ const extractReferenceNumber = (targetObj) => {
     if (gatePass) return `Gate Pass #${gatePass}`;
     const truck = targetObj.truckNo || targetObj.truckNumber;
     if (truck) return `Truck #${truck}`;
+    const po = targetObj.poNumber || targetObj.poNo;
+    if (po) return `PO #${po}`;
+    const pr = targetObj.prNumber || targetObj.prNo;
+    if (pr) return `PR #${pr}`;
+    const ret = targetObj.returnNo || targetObj.returnNumber;
+    if (ret) return `Return #${ret}`;
+    const dmg = targetObj.damageNo || targetObj.damageNumber;
+    if (dmg) return `Damage #${dmg}`;
+    const vch = targetObj.voucherNo || targetObj.voucherNumber;
+    if (vch) return `Voucher #${vch}`;
+    const rec = targetObj.receiptNo || targetObj.receiptNumber;
+    if (rec) return `Receipt #${rec}`;
+    const acc = targetObj.accountNumber || targetObj.accountNo;
+    if (acc) return `A/C #${acc}`;
+    const ref = targetObj.referenceNo || targetObj.referenceNumber;
+    if (ref) return `Ref #${ref}`;
     return null;
 };
 
@@ -598,11 +632,21 @@ const generateOperationDescription = (method, path, module, body, statusCode, up
 
     // ACCEPT
     if (action === 'ACCEPT') {
-        const inv = targetObj.invoiceNo ? `Invoice #${targetObj.invoiceNo}` : targetObj.orderNo ? `Order #${targetObj.orderNo}` : (targetId ? `(#${targetId.slice(-6)})` : '');
-        const namePart = nameIdentifier && nameIdentifier !== targetObj.invoiceNo ? `("${nameIdentifier}")` : '';
+        let inv = '';
+        if (targetObj.orderNo && targetObj.invoiceNo) {
+            inv = `Order #${targetObj.orderNo} (Invoice #${targetObj.invoiceNo})`;
+        } else if (targetObj.orderNo) {
+            inv = `Order #${targetObj.orderNo}`;
+        } else if (targetObj.invoiceNo) {
+            inv = `Invoice #${targetObj.invoiceNo}`;
+        } else if (targetId) {
+            inv = `(#${targetId.slice(-6)})`;
+        }
+        const namePart = nameIdentifier && nameIdentifier !== targetObj.invoiceNo && nameIdentifier !== targetObj.orderNo ? `("${nameIdentifier}")` : '';
         const by = targetObj.acceptedBy || targetObj.approvedByName || targetObj.approvedBy;
         const byPart = by ? ` by ${by}` : '';
-        return `${errorPrefix}Accepted ${module}: ${inv} ${namePart}${byPart}`.replace(/\s+/g, ' ').trim();
+        const colon = (inv || namePart) ? ': ' : ' ';
+        return `${errorPrefix}Accepted ${module}${colon}${inv} ${namePart}${byPart}`.replace(/\s+/g, ' ').trim();
     }
 
     // APPROVE
@@ -616,12 +660,22 @@ const generateOperationDescription = (method, path, module, body, statusCode, up
 
     // REJECT
     if (action === 'REJECT') {
-        const inv = targetObj.invoiceNo ? `Invoice #${targetObj.invoiceNo}` : targetObj.orderNo ? `Order #${targetObj.orderNo}` : (targetId ? `(#${targetId.slice(-6)})` : '');
-        const namePart = nameIdentifier && nameIdentifier !== targetObj.invoiceNo ? `("${nameIdentifier}")` : '';
+        let inv = '';
+        if (targetObj.orderNo && targetObj.invoiceNo) {
+            inv = `Order #${targetObj.orderNo} (Invoice #${targetObj.invoiceNo})`;
+        } else if (targetObj.orderNo) {
+            inv = `Order #${targetObj.orderNo}`;
+        } else if (targetObj.invoiceNo) {
+            inv = `Invoice #${targetObj.invoiceNo}`;
+        } else if (targetId) {
+            inv = `(#${targetId.slice(-6)})`;
+        }
+        const namePart = nameIdentifier && nameIdentifier !== targetObj.invoiceNo && nameIdentifier !== targetObj.orderNo ? `("${nameIdentifier}")` : '';
         const reason = targetObj.rejectionReason ? ` (Reason: "${targetObj.rejectionReason}")` : '';
         const by = targetObj.rejectedBy;
         const byPart = by ? ` by ${by}` : '';
-        return `${errorPrefix}Rejected ${module}: ${inv} ${namePart}${reason}${byPart}`.replace(/\s+/g, ' ').trim();
+        const colon = (inv || namePart) ? ': ' : ' ';
+        return `${errorPrefix}Rejected ${module}${colon}${inv} ${namePart}${reason}${byPart}`.replace(/\s+/g, ' ').trim();
     }
 
     // CARD OPEN
@@ -699,16 +753,35 @@ const generateOperationDescription = (method, path, module, body, statusCode, up
         ? updatedFields 
         : extractFilledFields(body, action);
 
+    const resolveEntityName = (obj, isCnf) => {
+        if (!obj || typeof obj !== 'object') return null;
+        if (isCnf) {
+            return obj.cnfName || obj.indianCnF || obj.bdCnf || obj.customerName || obj.name || null;
+        }
+        return obj.customerName || obj.companyName || obj.name || 
+            obj.productName || obj.employeeName || obj.supplierName || 
+            obj.importerName || obj.exporterName || obj.ipParty || obj.bankName ||
+            obj.warehouseName || obj.warehouse || obj.portName || obj.port ||
+            obj.insuranceCompany || obj.reason || null;
+    };
+
+    const resolveCodeId = (obj) => {
+        if (!obj || typeof obj !== 'object') return null;
+        if (obj.customerId) return `ID: ${obj.customerId}`;
+        if (obj.employeeId) return `ID: ${obj.employeeId}`;
+        if (obj.productId) return `Code: ${obj.productId}`;
+        if (obj.accountNumber || obj.accountNo) return `A/C: ${obj.accountNumber || obj.accountNo}`;
+        if (obj.warehouse && obj.warehouse !== obj.name) return `Warehouse: ${obj.warehouse}`;
+        if (obj.category) return `Category: ${obj.category}`;
+        return null;
+    };
+
     switch (method.toUpperCase()) {
         case 'POST': {
             let desc = `${errorPrefix}Created new ${module}`;
             const refNo = extractReferenceNumber(targetObj);
-            const entityName = targetObj.customerName || targetObj.companyName || targetObj.name || 
-                targetObj.productName || targetObj.employeeName || targetObj.supplierName || 
-                targetObj.importerName || targetObj.exporterName || targetObj.ipParty || targetObj.bankName;
-            const codeId = targetObj.customerId ? `ID: ${targetObj.customerId}` :
-                targetObj.employeeId ? `ID: ${targetObj.employeeId}` :
-                targetObj.productId ? `Code: ${targetObj.productId}` : null;
+            const entityName = resolveEntityName(targetObj, false);
+            const codeId = resolveCodeId(targetObj);
 
             if (refNo && entityName) {
                 desc += `: ${refNo} ("${entityName}")`;
@@ -734,12 +807,8 @@ const generateOperationDescription = (method, path, module, body, statusCode, up
             const isCnfComm = targetObj.isCnfCommissionUpdate === true || module === 'C&F' || Boolean(targetObj.cnfName);
             let desc = isOriginalPi ? `${errorPrefix}Updated Original ${module}` : isCnfComm ? `${errorPrefix}Updated C&F Commission` : `${errorPrefix}Updated ${module}`;
             const refNo = extractReferenceNumber(targetObj);
-            const entityName = isCnfComm ? (targetObj.cnfName || targetObj.indianCnF || targetObj.bdCnf || targetObj.customerName || targetObj.name) : (targetObj.customerName || targetObj.companyName || targetObj.name || 
-                targetObj.productName || targetObj.employeeName || targetObj.supplierName || 
-                targetObj.importerName || targetObj.exporterName || targetObj.ipParty || targetObj.bankName);
-            const codeId = targetObj.customerId ? `ID: ${targetObj.customerId}` :
-                targetObj.employeeId ? `ID: ${targetObj.employeeId}` :
-                targetObj.productId ? `Code: ${targetObj.productId}` : null;
+            const entityName = resolveEntityName(targetObj, isCnfComm);
+            const codeId = resolveCodeId(targetObj);
 
             if (refNo && entityName) {
                 desc += `: ${refNo} ("${entityName}")`;
@@ -773,14 +842,8 @@ const generateOperationDescription = (method, path, module, body, statusCode, up
         case 'DELETE': {
             let desc = `${errorPrefix}Deleted ${module}`;
             const refNo = extractReferenceNumber(targetObj);
-            const entityName = targetObj.customerName || targetObj.companyName || targetObj.name || 
-                targetObj.productName || targetObj.employeeName || targetObj.supplierName || 
-                targetObj.importerName || targetObj.exporterName || targetObj.bankName ||
-                targetObj.value || targetObj.label;
-            const codeId = targetObj.customerId ? `ID: ${targetObj.customerId}` :
-                targetObj.employeeId ? `ID: ${targetObj.employeeId}` :
-                targetObj.productId ? `Code: ${targetObj.productId}` :
-                targetObj.category ? `Category: ${targetObj.category}` : null;
+            const entityName = resolveEntityName(targetObj, false) || targetObj.value || targetObj.label;
+            const codeId = resolveCodeId(targetObj);
 
             if (refNo && entityName) {
                 desc += `: ${refNo} ("${entityName}")`;

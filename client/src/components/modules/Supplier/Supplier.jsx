@@ -652,7 +652,7 @@ const Supplier = ({
 
                 {canAdd && (
                     <div className="w-full md:w-1/4 flex justify-end z-10">
-                        <button onClick={() => setShowForm(!showForm)} className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm whitespace-nowrap">
+                        <button onClick={() => setShowForm(!showForm)} data-action="Create New Supplier" className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm whitespace-nowrap">
                             <span className="mr-2 text-xl font-bold">+</span> Add New
                         </button>
                     </div>
@@ -809,7 +809,7 @@ const Supplier = ({
                                 </p>
                             )}
                             <div className="supplier-form-spacer"></div>
-                            <button type="submit" disabled={isSubmitting} className={`supplier-form-submit ${isSubmitting ? 'disabled' : ''}`}>
+                            <button type="submit" disabled={isSubmitting} data-action={editingId ? `Update Supplier (${formData.name || ''})` : `Save New Supplier`} className={`supplier-form-submit ${isSubmitting ? 'disabled' : ''}`}>
                                 {isSubmitting ? 'Saving...' : editingId ? 'Update Record' : 'Save Record'}
                             </button>
                         </div>
@@ -959,16 +959,16 @@ const Supplier = ({
                                                     </td>
                                                     <td className="supplier-table-cell text-right" onClick={(e) => e.stopPropagation()}>
                                                         <div className="supplier-table-actions justify-end">
-                                                            <button onClick={() => setViewData(supplier)} className="supplier-action-btn" title="View details">
+                                                            <button onClick={() => setViewData(supplier)} data-action={`View Supplier (${supplier.name || ''})`} className="supplier-action-btn" title="View details">
                                                                 <EyeIcon className="w-5 h-5 text-gray-500 hover:text-blue-600 transition-colors" />
                                                             </button>
                                                             {canManage && (
-                                                                <button onClick={() => handleEdit(supplier)} className="supplier-action-btn supplier-action-edit" title="Edit">
+                                                                <button onClick={() => handleEdit(supplier)} data-action={`Edit Supplier (${supplier.name || ''})`} className="supplier-action-btn supplier-action-edit" title="Edit">
                                                                     <EditIcon className="w-4 h-4" />
                                                                 </button>
                                                             )}
                                                             {canDelete && (
-                                                                <button onClick={() => handleDelete(supplier._id)} className="supplier-action-btn supplier-action-delete" title="Delete">
+                                                                <button onClick={() => handleDelete(supplier._id)} data-action={`Delete Supplier (${supplier.name || ''})`} className="supplier-action-btn supplier-action-delete" title="Delete">
                                                                     <TrashIcon className="w-4 h-4" />
                                                                 </button>
                                                             )}
@@ -1033,6 +1033,7 @@ const Supplier = ({
                                                             {canManage && (
                                                                 <button 
                                                                     onClick={(e) => { e.stopPropagation(); handleEdit(supplier); }} 
+                                                                    data-action={`Edit Supplier (${supplier.name || ''})`}
                                                                     className="p-1.5 bg-gray-100 rounded-lg text-gray-600 active:bg-gray-200"
                                                                 >
                                                                     <EditIcon className="w-3.5 h-3.5" />
@@ -1041,6 +1042,7 @@ const Supplier = ({
                                                             {canDelete && (
                                                                 <button 
                                                                     onClick={(e) => { e.stopPropagation(); handleDelete(supplier._id); }} 
+                                                                    data-action={`Delete Supplier (${supplier.name || ''})`}
                                                                     className="p-1.5 bg-red-50 rounded-lg text-red-600 active:bg-red-100"
                                                                 >
                                                                     <TrashIcon className="w-3.5 h-3.5" />

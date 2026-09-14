@@ -419,7 +419,8 @@ const ROUTE_MODEL_MAP = {
   'cnf-payments': CnFPayment,
   'metadata': MetaData,
   'users': User,
-  'ip-records': IpRecord
+  'ip-records': IpRecord,
+  'stock-baseline': StockBaseline
 };
 
 // Global Activity / Audit Logging Middleware
@@ -439,6 +440,22 @@ apiRouter.use(async (req, res, next) => {
   const reqBodySnapshot = sanitizePayload(req.body);
   const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
   const userAgent = req.headers['user-agent'] || '';
+
+  let resBodyData = null;
+  const originalJson = res.json;
+  res.json = function (data) {
+    resBodyData = data;
+    return originalJson.apply(this, arguments);
+  };
+  const originalSend = res.send;
+  res.send = function (data) {
+    if (!resBodyData && data) {
+      try {
+        resBodyData = typeof data === 'string' ? JSON.parse(data) : data;
+      } catch (e) {}
+    }
+    return originalSend.apply(this, arguments);
+  };
 
   let previousDocSnapshot = null;
   if (method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
@@ -478,6 +495,12 @@ apiRouter.use(async (req, res, next) => {
         return;
       }
 
+      // Do not log operations explicitly marked to skip activity logging (e.g. automated background ledger syncs)
+      const targetObj = resolvePayloadObject(reqBodySnapshot);
+      if (targetObj && (targetObj._skipActivityLog === true || targetObj.isSaleSync === true || targetObj.isAutomatedSync === true)) {
+        return;
+      }
+
       // Do not log full payload for large backup or restore operations to prevent MongoDB BSON size limits
       if (url.includes('/backup') || url.includes('/restore')) {
         logActivity({
@@ -506,6 +529,18 @@ apiRouter.use(async (req, res, next) => {
       let cleanSnapshot = resolvePayloadObject(reqBodySnapshot);
       if (method === 'DELETE' && previousDocSnapshot) {
         cleanSnapshot = { ...previousDocSnapshot };
+      } else {
+        const freshReq = sanitizePayload(req.body);
+        const resolvedFresh = resolvePayloadObject(freshReq);
+        const resolvedRes = resBodyData ? resolvePayloadObject(resBodyData) : {};
+        cleanSnapshot = {
+          ...cleanSnapshot,
+          ...resolvedFresh,
+          ...(resolvedRes.invoiceNo ? { invoiceNo: resolvedRes.invoiceNo } : {}),
+          ...(resolvedRes.orderNo ? { orderNo: resolvedRes.orderNo } : {}),
+          ...(resolvedRes.challanNo ? { challanNo: resolvedRes.challanNo } : {}),
+          ...(resolvedRes._id ? { _id: resolvedRes._id } : {})
+        };
       }
 
       let filledFields = [];
@@ -519,6 +554,13 @@ apiRouter.use(async (req, res, next) => {
         }
       } else {
         filledFields = extractFilledFields(cleanSnapshot, action);
+      }
+
+      // Skip logging customer updates if no customer profile fields changed (e.g. background salesHistory/paymentHistory updates)
+      if (/^\/api\/customers\//i.test(url) && (method === 'PUT' || method === 'PATCH') && (action === 'UPDATE' || action === 'EDIT')) {
+        if (!filledFields || filledFields.length === 0) {
+          return;
+        }
       }
 
       const description = generateOperationDescription(method, url, module, cleanSnapshot, res.statusCode, filledFields, action, previousDocSnapshot);

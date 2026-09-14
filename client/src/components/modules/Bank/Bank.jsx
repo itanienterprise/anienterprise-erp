@@ -836,6 +836,7 @@ const Bank = ({ onDeleteConfirm }) => {
                     <div className="w-full md:w-1/4 flex justify-end gap-3">
                         <button
                             onClick={() => setShowForm(true)}
+                            data-action="Create New Bank"
                             className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 md:hover:scale-105 flex items-center justify-center text-sm"
                         >
                             <span className="mr-2 text-xl font-bold">+</span>
@@ -1214,6 +1215,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
+                                    data-action={editingId ? `Update Bank (${formData.bankName || ''})` : `Save New Bank`}
                                     className={`flex-1 md:flex-none px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 hover:from-blue-700 hover:to-indigo-700 transition-all text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     {isSubmitting ? 'Saving...' : editingId ? 'Update Bank' : 'Save Bank'}
@@ -1291,6 +1293,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                         {!cannotAddEdit && (
                                                                             <button
                                                                                 onClick={() => handleEdit(item)}
+                                                                                data-action={`Edit Bank (${group.bankName || item.bankName || ''})`}
                                                                                 className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"
                                                                                 title="Edit"
                                                                             >
@@ -1300,6 +1303,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                                                         {!cannotDelete && (
                                                                             <button
                                                                                 onClick={() => handleDelete(item._id)}
+                                                                                data-action={`Delete Bank (${group.bankName || item.bankName || ''})`}
                                                                                 className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"
                                                                                 title="Delete"
                                                                             >
@@ -1444,6 +1448,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                                     {!isBorderManager && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleEdit(group.items[0]); }}
+                                                            data-action={`Edit Bank (${group.bankName || ''})`}
                                                             className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-all"
                                                             title="Edit Bank"
                                                         >
@@ -1453,6 +1458,7 @@ const Bank = ({ onDeleteConfirm }) => {
                                                     {!isBorderManager && !cannotDelete && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(group.items[0]._id); }}
+                                                            data-action={`Delete Bank (${group.bankName || ''})`}
                                                             className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-all"
                                                             title="Delete Bank"
                                                         >

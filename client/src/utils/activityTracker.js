@@ -9,20 +9,74 @@ const recentClicks = new Map();
 let pendingCreateModule = null;
 
 const VIEW_MODULE_MAP = {
-    'ip-section': 'IP',
-    'ip': 'IP',
+    'dashboard': 'Dashboard',
+    'lc-entry-section': 'LC Entry',
+    'lc-management-section': 'LC Management',
     'lc-section': 'LC Management',
     'lc': 'LC Management',
+    'cnf-payment-section': 'C&F Payment',
+    'ip-section': 'IP',
+    'ip': 'IP',
     'pi-section': 'PI',
     'pi': 'PI',
+    'packing-list-section': 'Packing List',
+    'tr-setup-section': 'TR Setup',
+    'tr-setup': 'TR Setup',
+    'importer-section': 'Importer',
+    'importer': 'Importer',
+    'exporter-section': 'Exporter',
+    'exporter': 'Exporter',
+    'supplier-section': 'Supplier',
+    'supplier': 'Supplier',
+    'indian-cnf-section': 'Indian C&F',
+    'indian-cnf': 'Indian C&F',
+    'bd-cnf-section': 'BD C&F',
+    'bd-cnf': 'BD C&F',
     'cnf-section': 'C&F',
     'cnf': 'C&F',
-    'indian-cnf': 'Indian C&F',
-    'bd-cnf': 'BD C&F',
-    'tr-setup': 'TR Setup',
-    'cost-of-goods': 'Cost of Goods',
+    'bank-section': 'Bank',
+    'bank': 'Bank',
+    'port-section': 'Port',
+    'port': 'Port',
+    'products-section': 'Product',
+    'product-section': 'Product',
+    'products': 'Product',
+    'product': 'Product',
+    'customer-section': 'Customer',
+    'customer': 'Customer',
+    'payment-collection-section': 'Payment Collection',
+    'pay-to-customer-section': 'Pay to Customer',
+    'warehouse-section': 'Warehouse',
+    'warehouse': 'Warehouse',
+    'damage-section': 'Damage',
+    'damage': 'Damage',
+    'transfer-section': 'Stock Transfer',
+    'stock-transfer': 'Stock Transfer',
+    'purchase-sale-section': 'Purchase',
+    'purchase-section': 'Purchase',
+    'purchase': 'Purchase',
+    'purchase-receive-sale-section': 'Purchase Receive',
+    'purchase-receive-section': 'Purchase Receive',
+    'order-sale-section': 'Order Sale',
+    'general-sale-section': 'General Sale',
+    'border-sale-section': 'Border Sale',
+    'employee-section': 'HRMS / Employee',
     'hrms-section': 'HRMS / Employee',
-    'hrms': 'HRMS / Employee'
+    'hrms': 'HRMS / Employee',
+    'role-creation': 'Role Creation',
+    'system-access': 'System Access',
+    'insurance-section': 'Insurance',
+    'insurance': 'Insurance',
+    'insurance-payment-section': 'Insurance Payment',
+    'lc-gp-section': 'LC Gate Pass',
+    'lc-expense-section': 'LC Expense',
+    'margin-return-section': 'Margin Return',
+    'return-product-section': 'Return Product',
+    'profit-loss-section': 'Profit Loss',
+    'cost-of-goods-section': 'Cost of Goods',
+    'cost-of-goods': 'Cost of Goods',
+    'backup-restore-section': 'Backup & Restore',
+    'log-section': 'Activity Log'
 };
 
 /**
@@ -33,6 +87,156 @@ const viewToModuleName = (view) => {
     if (VIEW_MODULE_MAP[view]) return VIEW_MODULE_MAP[view];
     const clean = view.replace(/-section$/, '').replace(/-/g, ' ');
     return clean.replace(/\b\w/g, c => c.toUpperCase());
+};
+
+/**
+ * Extract context identifier or name from row element
+ */
+const extractContextFromRow = (clickable, row) => {
+    if (!row) return null;
+    
+    // Check explicit data attributes first
+    const explicitId = row.getAttribute('data-identifier') || 
+                       row.getAttribute('data-name') || 
+                       row.getAttribute('data-ref') || 
+                       row.getAttribute('data-id') || 
+                       row.getAttribute('data-title') ||
+                       clickable.getAttribute('data-context-id');
+    if (explicitId && typeof explicitId === 'string' && explicitId.trim().length > 1) {
+        return explicitId.trim();
+    }
+
+    // Patterns for business reference codes
+    const refRegex = /\b(?:INV|SI|PI|LC|PO|PR|CH|GP|DMG|RET|TR|BS|TP|IP|PL)[-0-9A-Z/]+\b/i;
+    let foundRef = null;
+    let foundName = null;
+
+    // Scan cells for prominent text
+    const cells = Array.from(row.querySelectorAll('td, th, [role="cell"]'));
+    for (const cell of cells) {
+        // Skip cell that contains the clickable button itself
+        if (cell.contains(clickable)) continue;
+
+        const cellText = cell.innerText?.trim() || '';
+        if (!cellText || cellText.length < 2 || cellText.length > 80) continue;
+
+        // Check reference code
+        if (!foundRef) {
+            const m = cellText.match(refRegex);
+            if (m) foundRef = m[0].trim();
+        }
+
+        // Look for prominent entity text (.font-bold, .font-semibold, .font-medium, strong, etc.)
+        if (!foundName) {
+            const strongEl = cell.querySelector('.font-bold, .font-semibold, .font-medium, strong, b, h3, h4, .text-gray-900, .text-slate-900');
+            const candidate = strongEl ? strongEl.innerText?.trim() : cellText;
+            if (
+                candidate &&
+                candidate.length >= 2 &&
+                candidate.length <= 50 &&
+                !/^\d+$/.test(candidate) &&
+                !/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(candidate) &&
+                !/^(active|inactive|pending|approved|rejected|completed|broken|paid|unpaid|due|edit|delete|view|action|actions|details|-|n\/a)$/i.test(candidate) &&
+                !candidate.startsWith('৳') &&
+                !candidate.startsWith('$')
+            ) {
+                foundName = candidate;
+            }
+        }
+
+        if (foundRef && foundName) break;
+    }
+
+    if (foundName && foundRef && foundName !== foundRef) {
+        return `${foundName} (${foundRef})`;
+    }
+    if (foundName) return foundName;
+    if (foundRef) return foundRef;
+
+    return null;
+};
+
+/**
+ * Extract context identifier or name from modal / form element
+ */
+const extractContextFromModal = (modal) => {
+    if (!modal) return null;
+
+    // Check modal heading
+    const heading = modal.querySelector('h1, h2, h3, h4, .modal-title, [data-modal-title]');
+    if (heading) {
+        const text = heading.innerText?.trim() || '';
+        const match = text.match(/(?:Edit|Update|Delete)\s+[^:]+:\s*(.+)/i) || 
+                      text.match(/(?:Edit|Update|Delete)\s+(.+)/i);
+        if (match && match[1] && match[1].trim().length > 1) {
+            const candidate = match[1].trim();
+            if (!/^(record|entry|item|details)$/i.test(candidate)) {
+                return candidate;
+            }
+        }
+    }
+
+    // Check relevant inputs
+    const selector = 'input[name="name"], input[name="customerName"], input[name="supplierName"], input[name="importerName"], input[name="exporterName"], input[name="bankName"], input[name="productName"], input[name="warehouse"], input[name="accountNumber"], input[name="invoiceNo"], input[name="lcNo"], input[name="ipNumber"], input[name="poNumber"]';
+    const namedInput = modal.querySelector(selector);
+    if (namedInput && namedInput.value && namedInput.value.trim().length > 1) {
+        return namedInput.value.trim();
+    }
+
+    // Fallback: first non-empty text input
+    const textInputs = Array.from(modal.querySelectorAll('input[type="text"], input:not([type])'));
+    for (const inp of textInputs) {
+        if (inp.name === 'date' || inp.name === 'search' || inp.id?.includes('search')) continue;
+        const val = inp.value?.trim();
+        if (val && val.length >= 2 && val.length <= 50 && !/^\d+$/.test(val)) {
+            return val;
+        }
+    }
+
+    return null;
+};
+
+/**
+ * Identify canonical action verb from element attributes or SVG icon
+ */
+const detectButtonVerb = (clickable, rawLabel) => {
+    const l = (rawLabel || '').toLowerCase();
+    
+    // Explicit label matches
+    if (/^(edit|edit record|edit original|revise)\b/i.test(l)) return 'Edit';
+    if (/^(delete|trash|remove)\b/i.test(l)) return 'Delete';
+    if (/^(view|preview|view details)\b/i.test(l)) return 'View';
+    if (/^(save|save record|save changes)\b/i.test(l)) return 'Save';
+    if (/^(update|update record)\b/i.test(l)) return 'Update';
+    if (/^(submit|confirm)\b/i.test(l)) return 'Submit';
+    if (/^(\+ new|\+ add|\+|new|add)\b/i.test(l)) return 'Create New';
+    if (/^(accept|approve)\b/i.test(l)) return 'Accept';
+    if (/^(reject|decline)\b/i.test(l)) return 'Reject';
+    if (/^(download|export|excel|pdf)\b/i.test(l)) return 'Download';
+    if (/^(print)\b/i.test(l)) return 'Print';
+
+    // SVG Icon inspection (handles empty or icon-only buttons)
+    const html = clickable.innerHTML || '';
+    if (html.includes('16.5 3.5') || html.includes('M12 20h9') || clickable.querySelector('.lucide-pencil, .lucide-edit')) {
+        return 'Edit';
+    }
+    if (html.includes('3 6 5 6 21 6') || html.includes('M19 6v14') || clickable.querySelector('.lucide-trash, .lucide-trash-2')) {
+        return 'Delete';
+    }
+    if (html.includes('1 12s4-8') || clickable.querySelector('.lucide-eye')) {
+        return 'View';
+    }
+    if (html.includes('x1="12" y1="5" x2="12" y2="19"') || clickable.querySelector('.lucide-plus')) {
+        return 'Create New';
+    }
+    if (html.includes('20 6 9 17 4 12') || clickable.querySelector('.lucide-check')) {
+        return 'Accept';
+    }
+    if (html.includes('18 6 6 18') || clickable.querySelector('.lucide-x')) {
+        return 'Reject';
+    }
+
+    return null;
 };
 
 /**
@@ -78,20 +282,23 @@ export const trackUserAction = (actionName, moduleName, details = {}) => {
     let description = details.description;
 
     const lowerName = (actionName || '').toLowerCase();
-    if (lowerName === 'accept' || details.actionType === 'ACCEPT' || details.action === 'ACCEPT') {
+    // Only genuine programmatic APPROVAL calls with explicit action should become APPROVAL
+    if (details.actionType === 'ACCEPT' || (details.action === 'ACCEPT' && details.actionCategory !== 'UI_CLICK')) {
         action = 'ACCEPT';
         actionCategory = 'APPROVAL';
-        const inv = details.invoiceNo ? `Invoice #${details.invoiceNo}` : '';
-        const name = details.customerName || details.companyName || '';
+        const inv = details.invoiceNo ? `Invoice #${details.invoiceNo}` : (details.orderNo ? `Order #${details.orderNo}` : '');
+        const name = details.customerName || details.companyName || details.entityName || '';
         const namePart = name ? `("${name}")` : '';
-        description = description || `Accepted ${resolvedModule}: ${inv} ${namePart}`.replace(/\s+/g, ' ').trim();
-    } else if (lowerName === 'reject' || details.actionType === 'REJECT' || details.action === 'REJECT') {
+        const refPart = inv ? `${inv} ` : '';
+        description = description || `Accepted ${resolvedModule}: ${refPart}${namePart}`.replace(/:\s*$/, '').trim();
+    } else if (details.actionType === 'REJECT' || (details.action === 'REJECT' && details.actionCategory !== 'UI_CLICK')) {
         action = 'REJECT';
         actionCategory = 'APPROVAL';
-        const inv = details.invoiceNo ? `Invoice #${details.invoiceNo}` : '';
-        const name = details.customerName || details.companyName || '';
+        const inv = details.invoiceNo ? `Invoice #${details.invoiceNo}` : (details.orderNo ? `Order #${details.orderNo}` : '');
+        const name = details.customerName || details.companyName || details.entityName || '';
         const namePart = name ? `("${name}")` : '';
-        description = description || `Rejected ${resolvedModule}: ${inv} ${namePart}`.replace(/\s+/g, ' ').trim();
+        const refPart = inv ? `${inv} ` : '';
+        description = description || `Rejected ${resolvedModule}: ${refPart}${namePart}`.replace(/:\s*$/, '').trim();
     } else if (
         details.actionType === 'DISCARD_ENTRY' ||
         details.action === 'CARD CLOSE (NO SAVE)' ||
@@ -126,7 +333,11 @@ export const trackUserAction = (actionName, moduleName, details = {}) => {
     }
 
     if (!description) {
-        description = `User clicked "${actionName}" in ${resolvedModule}`;
+        if (actionName && actionName.startsWith('User clicked')) {
+            description = actionName.includes(' in ') ? actionName : `${actionName} in ${resolvedModule}`;
+        } else {
+            description = `User clicked "${actionName}" in ${resolvedModule}`;
+        }
     }
 
     actionQueue.push({
@@ -161,18 +372,16 @@ export const trackUserAction = (actionName, moduleName, details = {}) => {
  * Initialize automatic click listener
  */
 export const initActivityTracker = (userGetter, viewGetter) => {
-    if (isInitialized) {
-        getCurrentUser = userGetter || getCurrentUser;
-        getCurrentView = viewGetter || getCurrentView;
-        return;
+    getCurrentUser = userGetter || getCurrentUser;
+    getCurrentView = viewGetter || getCurrentView;
+
+    if (typeof window !== 'undefined' && window.__activityTrackerClickListener) {
+        document.removeEventListener('click', window.__activityTrackerClickListener, true);
+        window.__activityTrackerClickListener = null;
     }
 
-    getCurrentUser = userGetter || (() => null);
-    getCurrentView = viewGetter || (() => 'General');
-    isInitialized = true;
-
     // Global click listener capturing meaningful user button clicks
-    document.addEventListener('click', (e) => {
+    const clickHandler = (e) => {
         try {
             const user = getCurrentUser();
             if (!user) return;
@@ -181,29 +390,53 @@ export const initActivityTracker = (userGetter, viewGetter) => {
             const clickable = e.target.closest('button, a, [role="button"], input[type="submit"], input[type="checkbox"]');
             if (!clickable) return;
 
-            // Ignore clicks within the Log module itself to prevent feedback loop
-            const curView = getCurrentView();
+            // Read active view directly from closest DOM container if present
+            const domView = clickable.closest('[data-current-view]')?.getAttribute('data-current-view');
+            const curView = domView || getCurrentView();
             if (curView === 'log-section') return;
 
-            // Extract readable label (avoiding raw CSS utility class dumps)
-            let label = clickable.getAttribute('data-action') ||
-                clickable.getAttribute('title') ||
-                clickable.getAttribute('aria-label') ||
-                clickable.innerText?.trim() ||
-                clickable.name ||
-                clickable.id;
+            const modName = viewToModuleName(curView);
 
-            if (!label || typeof label !== 'string') {
-                if (clickable.className && typeof clickable.className === 'string' && clickable.className.includes('close')) {
+            // Extract explicit data-action if set
+            let label = clickable.getAttribute('data-action');
+
+            // If not explicit, identify canonical verb & context
+            if (!label) {
+                const rawLabel = clickable.getAttribute('title') ||
+                    clickable.getAttribute('aria-label') ||
+                    clickable.innerText?.trim() ||
+                    clickable.name ||
+                    clickable.id || '';
+
+                const verb = detectButtonVerb(clickable, rawLabel);
+
+                if (verb === 'Edit' || verb === 'Delete' || verb === 'View' || verb === 'Accept' || verb === 'Reject') {
+                    const row = clickable.closest('tr, [data-row], [role="row"], li, .sale-mgmt-mobile-card');
+                    const context = extractContextFromRow(clickable, row);
+                    label = context ? `${verb} ${modName} (${context})` : `${verb} ${modName}`;
+                } else if (verb === 'Create New') {
+                    label = `Create New ${modName}`;
+                } else if (verb === 'Save' || verb === 'Update' || verb === 'Submit') {
+                    const modal = clickable.closest('.modal, [role="dialog"], form, .fixed, .drawer, .card');
+                    const context = extractContextFromModal(modal);
+                    label = context ? `${verb} ${modName} (${context})` : `${verb} ${modName}`;
+                } else if (rawLabel) {
+                    label = rawLabel;
+                } else if (clickable.className && typeof clickable.className === 'string' && clickable.className.includes('close')) {
                     label = 'Close';
-                } else {
-                    return;
                 }
+            }
+
+            if (!label || typeof label !== 'string') return;
+
+            // Suppress redundant click tracking for Accept/Reject actions (the backend logs authoritative ACCEPT/REJECT mutation records)
+            if (/^(Accept|Reject|Bulk Accept|Bulk Reject)\b/i.test(label) || label.includes('Accept Sale Request') || label.includes('Reject Sale Request')) {
+                return;
             }
 
             // Trim label and sanitize
             label = label.split('\n')[0].trim();
-            if (label.length > 50) label = label.substring(0, 50) + '...';
+            if (label.length > 70) label = label.substring(0, 70) + '...';
             if (!label) return;
 
             // Skip trivial elements like generic empty spans or raw numbers
@@ -224,10 +457,9 @@ export const initActivityTracker = (userGetter, viewGetter) => {
                 oldestKeys.forEach(k => recentClicks.delete(k));
             }
 
-            const modName = viewToModuleName(curView);
-            const isAddButton = /^(add|new|create)\b/i.test(label) || clickable.getAttribute('data-action') === 'create';
+            const isAddButton = /^(add|new|create)\b/i.test(label) || label.includes('Create New');
             const isCloseButton = /^(close|cancel|discard)\b/i.test(label) || clickable.className?.includes('close') || clickable.getAttribute('aria-label') === 'Close';
-            const isSaveButton = /^(save|submit|confirm|update|create)\b/i.test(label);
+            const isSaveButton = /^(save|submit|confirm|update)\b/i.test(label) || label.includes('Save') || label.includes('Update');
 
             if (isAddButton) {
                 pendingCreateModule = modName;
@@ -271,7 +503,10 @@ export const initActivityTracker = (userGetter, viewGetter) => {
         } catch (_err) {
             // Ignore click tracker errors
         }
-    }, true);
+    };
+
+    window.__activityTrackerClickListener = clickHandler;
+    document.addEventListener('click', clickHandler, true);
 
     // Flush on unload
     window.addEventListener('beforeunload', () => {

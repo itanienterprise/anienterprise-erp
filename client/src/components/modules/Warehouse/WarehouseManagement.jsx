@@ -1069,6 +1069,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                         </button>
                         <button
                             onClick={() => setShowWarehouseForm(true)}
+                            data-action="Add Warehouse"
                             className="h-10 border border-transparent flex-1 md:flex-none w-full md:w-auto flex justify-center items-center gap-2 px-2 sm:px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30 active:scale-95 text-sm font-medium"
                         >
                             <HomeIcon className="w-5 h-5 text-white/90 hidden sm:block" />
@@ -1273,6 +1274,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                 </button>
                                 <button
                                     type="submit"
+                                    data-action={editingWarehouseId ? `Update Warehouse (${warehouseFormData.name || ''})` : `Create Warehouse (${warehouseFormData.name || ''})`}
                                     className="flex items-center justify-center disabled:opacity-50 px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-200 text-sm shadow-md hover:scale-105"
                                     disabled={isSubmitting}
                                 >
@@ -1386,6 +1388,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                                                 productName: prodGroup.productName, 
                                                                                                 brand: brand.brand 
                                                                                             })} 
+                                                                                            data-action={`View Stock Transfer History (${whGroup.whName} - ${prodGroup.productName} - ${brand.brand})`}
                                                                                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                                                                                             title="View Transfer History"
                                                                                         >
@@ -1395,9 +1398,9 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                                             <>
                                                                                                 {brand._id && (
                                                                                                     <>
-                                                                                                        <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                                        <button onClick={() => handleEditStock(brand)} data-action={`Edit Stock (${whGroup.whName} - ${prodGroup.productName} - ${brand.brand})`} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
                                                                                                         {isAdmin && (
-                                                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: brand.recordType || 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: brand.recordType || 'stock' })} data-action={`Delete Stock (${whGroup.whName} - ${prodGroup.productName} - ${brand.brand})`} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
                                                                                                         )}
                                                                                                     </>
                                                                                                 )}
@@ -1472,6 +1475,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                                                         productName: prodGroup.productName, 
                                                                                                         brand: brand.brand 
                                                                                                     })} 
+                                                                                                    data-action={`View Stock Transfer History (${whGroup.whName} - ${prodGroup.productName} - ${brand.brand})`}
                                                                                                     className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                                                                                                     title="View Transfer History"
                                                                                                 >
@@ -1479,9 +1483,9 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                                                 </button>
                                                                                                 {brand._id && (
                                                                                                     <>
-                                                                                                        <button onClick={() => handleEditStock(brand)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                                                                        <button onClick={() => handleEditStock(brand)} data-action={`Edit Stock (${whGroup.whName} - ${prodGroup.productName} - ${brand.brand})`} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
                                                                                                         {isAdmin && (
-                                                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: brand.recordType || 'stock' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                                                                            <button onClick={() => setDeleteConfirm({ show: true, id: brand._id, type: brand.recordType || 'stock' })} data-action={`Delete Stock (${whGroup.whName} - ${prodGroup.productName} - ${brand.brand})`} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
                                                                                                         )}
                                                                                                     </>
                                                                                                 )}
@@ -1588,12 +1592,14 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                                     <div className="flex items-center justify-end gap-2">
                                                                         <button
                                                                             onClick={() => handleEditWarehouse(wh)}
+                                                                            data-action={`Edit Warehouse (${wh.whName})`}
                                                                             className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
                                                                         >
                                                                             <EditIcon className="w-4 h-4" />
                                                                         </button>
                                                                         <button
                                                                             onClick={() => setDeleteConfirm({ show: true, id: wh._id, type: 'warehouse' })}
+                                                                            data-action={`Delete Warehouse (${wh.whName})`}
                                                                             className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                                                                         >
                                                                             <TrashIcon className="w-4 h-4" />
@@ -1622,8 +1628,8 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                                                         <h4 className="font-black text-gray-900 tracking-tight">{wh.whName}</h4>
                                                     </div>
                                                     <div className="flex items-center gap-1">
-                                                        <button onClick={() => handleEditWarehouse(wh)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
-                                                        <button onClick={() => setDeleteConfirm({ show: true, id: wh._id, type: 'warehouse' })} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => handleEditWarehouse(wh)} data-action={`Edit Warehouse (${wh.whName})`} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"><EditIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => setDeleteConfirm({ show: true, id: wh._id, type: 'warehouse' })} data-action={`Delete Warehouse (${wh.whName})`} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
                                                     </div>
                                                 </div>
                                                 <div className="p-4 space-y-3">
@@ -1806,6 +1812,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                             </button>
                             <button
                                 onClick={handleSaveStockEdit}
+                                data-action={`Save Stock Changes (${editingStock?.whName || ''} - ${editingStock?.productName || ''} - ${editingStock?.brand || ''})`}
                                 className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
                             >
                                 Save Changes
@@ -1833,6 +1840,7 @@ const WarehouseManagement = ({ currentUser, damages, addNotification }) => {
                             </button>
                             <button
                                 onClick={() => handleDeleteStock(deleteConfirm.id, deleteConfirm.type)}
+                                data-action={`Confirm Delete ${deleteConfirm.type === 'warehouse' ? 'Warehouse' : 'Stock Record'}`}
                                 className="flex-1 px-6 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-200"
                             >
                                 Delete

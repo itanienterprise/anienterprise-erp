@@ -281,6 +281,7 @@ const ProductManagement = ({
                     {!showProductForm && (
                         <button
                             onClick={() => setShowProductForm(true)}
+                            data-action="Create New Product"
                             className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 text-sm md:text-base"
                         >
                             <span className="text-lg font-light mr-1 md:mr-2">+</span>
@@ -487,6 +488,7 @@ const ProductManagement = ({
                                     <button
                                         type="submit"
                                         disabled={isSubmitting}
+                                        data-action={editingId ? `Update Product (${productFormData.name || ''})` : `Save New Product`}
                                         className={`px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
                                         {isSubmitting ? (
@@ -562,14 +564,14 @@ const ProductManagement = ({
                                             <td className="px-6 py-4 text-sm text-gray-600 align-top">{product.category || '-'}</td>
                                             <td className="px-6 py-4 text-center align-top">
                                                 <div className="flex items-center justify-center space-x-3">
-                                                    <button onClick={() => setViewData((products || []).find(p => p._id === product._id) || product)} className="text-gray-400 hover:text-blue-600 transition-colors">
+                                                    <button onClick={() => setViewData((products || []).find(p => p._id === product._id) || product)} data-action={`View Product (${product.name || ''})`} title={`View Product (${product.name || ''})`} className="text-gray-400 hover:text-blue-600 transition-colors">
                                                         <EyeIcon className="w-5 h-5" />
                                                     </button>
-                                                    <button onClick={() => handleProductEdit(product)} className="text-gray-400 hover:text-blue-600 transition-colors">
+                                                    <button onClick={() => handleProductEdit(product)} data-action={`Edit Product (${product.name || ''})`} title={`Edit Product (${product.name || ''})`} className="text-gray-400 hover:text-blue-600 transition-colors">
                                                         <EditIcon className="w-5 h-5" />
                                                     </button>
                                                     {!cannotDelete && (
-                                                         <button onClick={() => handleProductDelete(product._id)} className="text-gray-400 hover:text-red-600 transition-colors">
+                                                         <button onClick={() => handleProductDelete(product._id)} data-action={`Delete Product (${product.name || ''})`} title={`Delete Product (${product.name || ''})`} className="text-gray-400 hover:text-red-600 transition-colors">
                                                              <TrashIcon className="w-5 h-5" />
                                                          </button>
                                                     )}
@@ -617,12 +619,14 @@ const ProductManagement = ({
                                                     <>
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); setViewData((products || []).find(p => p._id === product._id) || product); }}
+                                                            data-action={`View Product (${product.name || ''})`}
                                                             className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
                                                         >
                                                             <EyeIcon className="w-4 h-4" />
                                                         </button>
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleProductEdit(product); }}
+                                                            data-action={`Edit Product (${product.name || ''})`}
                                                             className="p-2 text-blue-600 bg-blue-50/50 rounded-lg transition-colors hover:bg-blue-100"
                                                         >
                                                             <EditIcon className="w-4 h-4" />
@@ -630,6 +634,7 @@ const ProductManagement = ({
                                                          {!cannotDelete && (
                                                              <button
                                                                  onClick={(e) => { e.stopPropagation(); handleProductDelete(product._id); }}
+                                                                 data-action={`Delete Product (${product.name || ''})`}
                                                                  className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
                                                              >
                                                                  <TrashIcon className="w-4 h-4" />

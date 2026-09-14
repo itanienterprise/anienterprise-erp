@@ -738,7 +738,7 @@ const Exporter = ({
 
                 {canAdd && (
                     <div className="w-full md:w-1/4 flex justify-end z-10">
-                        <button onClick={() => setShowForm(!showForm)} className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm whitespace-nowrap">
+                        <button onClick={() => setShowForm(!showForm)} data-action="Create New Exporter" className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm whitespace-nowrap">
                             <span className="mr-2 text-xl font-bold">+</span> Add New
                         </button>
                     </div>
@@ -850,7 +850,7 @@ const Exporter = ({
                                 </p>
                             )}
                             <div className="exporter-form-spacer"></div>
-                            <button type="submit" disabled={isSubmitting} className={`exporter-form-submit ${isSubmitting ? 'disabled' : ''}`}>
+                            <button type="submit" disabled={isSubmitting} data-action={editingId ? `Update Exporter (${formData.name || ''})` : `Save New Exporter`} className={`exporter-form-submit ${isSubmitting ? 'disabled' : ''}`}>
                                 {isSubmitting ? 'Saving...' : editingId ? 'Update Record' : 'Save Record'}
                             </button>
                         </div>
@@ -930,12 +930,12 @@ const Exporter = ({
                                                 </td>
                                                 <td className="exporter-table-cell">
                                                     <div className="exporter-table-actions">
-                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(exporter); }} className="exporter-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setViewData(exporter); }} data-action={`View Exporter (${exporter.name || ''})`} title={`View Exporter (${exporter.name || ''})`} className="exporter-action-btn hover:bg-gray-100 text-gray-400 hover:text-gray-600"><EyeIcon className="w-5 h-5" /></button>
                                                         {canManage && (
-                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }} data-action={`Edit Exporter (${exporter.name || ''})`} title={`Edit Exporter (${exporter.name || ''})`} className="exporter-action-btn exporter-action-edit"><EditIcon className="w-5 h-5" /></button>
                                                         )}
                                                         {canDelete && (
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }} data-action={`Delete Exporter (${exporter.name || ''})`} title={`Delete Exporter (${exporter.name || ''})`} className="exporter-action-btn exporter-action-delete"><TrashIcon className="w-5 h-5" /></button>
                                                         )}
                                                     </div>
                                                 </td>
@@ -1018,6 +1018,7 @@ const Exporter = ({
                                                     <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); setViewData(exporter); }}
+                                                            data-action={`View Exporter (${exporter.name || ''})`}
                                                             className="flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-50 text-gray-700 rounded-xl text-xs font-black flex-1 hover:bg-gray-100 transition-all active:scale-95"
                                                         >
                                                             <EyeIcon className="w-4 h-4" /> View History
@@ -1025,6 +1026,7 @@ const Exporter = ({
                                                         {canEdit && (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleEdit(exporter); }}
+                                                                data-action={`Edit Exporter (${exporter.name || ''})`}
                                                                 className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-black flex-1 hover:bg-blue-100 transition-all active:scale-95"
                                                             >
                                                                 <EditIcon className="w-4 h-4" /> Edit
@@ -1033,6 +1035,7 @@ const Exporter = ({
                                                         {canDelete && (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDelete(exporter._id); }}
+                                                                data-action={`Delete Exporter (${exporter.name || ''})`}
                                                                 className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all active:scale-95"
                                                             >
                                                                 <TrashIcon className="w-4 h-4" />

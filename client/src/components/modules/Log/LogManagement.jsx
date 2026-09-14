@@ -391,12 +391,22 @@ const formatLogDescription = (desc, log) => {
 
     // Accept
     if (action === 'ACCEPT' || desc.startsWith('accepted ') || desc.startsWith('Accepted ')) {
-        let inv = details.invoiceNo;
-        if (!inv) {
-            const invMatch = desc.match(/Invoice #?([A-Z0-9_-]+)/i) || desc.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
-            if (invMatch) inv = invMatch[1].trim();
+        // If this record came from a UI click, render it as a button click
+        if (log.method === 'CLICK' || log.actionCategory === 'UI_CLICK') {
+            const raw = desc.replace(/^Accepted\s+[A-Za-z0-9\s/&]+:\s*/i, '').trim();
+            const targetPart = raw ? ` "${raw}"` : (details.orderNo ? ` "Accept Sale Request (${details.orderNo})"` : ' "Accept Sale Request"');
+            return `User clicked${targetPart} in ${mod}`.replace(/\s+/g, ' ').trim();
         }
-        const invPart = inv ? `Invoice #${inv}` : '';
+
+        let ref = details.invoiceNo ? `Invoice #${details.invoiceNo}` : (details.orderNo ? `Order #${details.orderNo}` : '');
+        if (!ref) {
+            const invMatch = desc.match(/Invoice #?([A-Z0-9_-]+)/i) || desc.match(/Invoice No:?\s*["']?([^"',\]]+)["']?/i);
+            if (invMatch) ref = `Invoice #${invMatch[1].trim()}`;
+            else {
+                const ordMatch = desc.match(/Order #?([A-Z0-9_-]+)/i);
+                if (ordMatch) ref = `Order #${ordMatch[1].trim()}`;
+            }
+        }
         let name = details.customerName || details.companyName || details.name || '';
         if (!name) {
             const nameMatch = desc.match(/\("([^"]+)"\)/) || desc.match(/Updated\s+(?:Sales|Customer|PI):\s*"([^"]+)"/i) || desc.match(/"([^"]+)"/);
@@ -405,7 +415,8 @@ const formatLogDescription = (desc, log) => {
         const namePart = name ? `("${name}")` : '';
         const by = details.acceptedByName || details.acceptedBy || log.displayName || log.username;
         const byPart = by ? ` by ${by}` : '';
-        return `Accepted ${mod}: ${invPart} ${namePart}${byPart}`.replace(/\s+/g, ' ').trim();
+        const colon = (ref || namePart) ? ': ' : ' ';
+        return `Accepted ${mod}${colon}${ref} ${namePart}${byPart}`.replace(/\s+/g, ' ').trim();
     }
 
     // Approvals
@@ -503,6 +514,7 @@ const formatLogDescription = (desc, log) => {
         if (ipVal) ref = `IP #${ipVal}`;
         else if (piVal) ref = `PI #${piVal}`;
         else if (lcVal) ref = `LC #${lcVal}`;
+        else if (ordVal && invVal && ordVal !== invVal) ref = `Order #${ordVal} (Invoice #${invVal})`;
         else if (invVal) ref = `Invoice #${invVal}`;
         else if (ordVal) ref = `Order #${ordVal}`;
         else if (chVal) ref = `Challan #${chVal}`;
@@ -541,8 +553,9 @@ const formatLogDescription = (desc, log) => {
         if (desc.includes('clicked "Edit PI"') && mod === 'PI') {
             return `User clicked "Edit Original PI" in PI`;
         }
-        if (/clicked "(Edit|Save|Update) Record"/i.test(desc)) {
-            const verb = desc.match(/clicked "(Edit|Save|Update) Record"/i)[1];
+        if (/clicked "(Edit|Save|Update|Delete) Record"/i.test(desc) || /clicked "(Edit|Save|Update|Delete)" in/i.test(desc)) {
+            const verbMatch = desc.match(/clicked "(Edit|Save|Update|Delete)(?:\s+Record)?"/i);
+            const verb = verbMatch ? verbMatch[1] : 'Action';
             const isCnf = /cnf|c&f/i.test(mod) || (typeof details.view === 'string' && /cnf/i.test(details.view));
             if (isCnf) {
                 return `User clicked "${verb} C&F Commission" in ${mod}`;
@@ -558,8 +571,8 @@ const formatLogDescription = (desc, log) => {
         if (/clicked "Edit Record" in (Ip|IP)/i.test(desc)) {
             return `User clicked "Edit IP Record" in IP`;
         }
-        if (desc.includes('clicked "+" in Ip')) {
-            return `User clicked "Create New IP" in IP`;
+        if (desc.includes('clicked "+"') || desc.includes('clicked "+ Add"') || desc.includes('clicked "+ New"')) {
+            return `User clicked "Create New ${mod}" in ${mod}`;
         }
         if (desc.endsWith(' in Ip')) {
             return desc.replace(/ in Ip$/, ' in IP');
@@ -778,6 +791,13 @@ const getLogFilledFields = (log) => {
         }
         if (inv) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(inv) });
 
+        let ord = targetObj.orderNo;
+        if (!ord && typeof log.description === 'string') {
+            const m = log.description.match(/Order #?([A-Z0-9_-]+)/i);
+            if (m) ord = m[1].trim();
+        }
+        if (ord) list.push({ field: 'orderNo', label: 'Order No', value: String(ord) });
+
         let cust = targetObj.customerName || targetObj.companyName || targetObj.name;
         if (!cust && typeof log.description === 'string') {
             const m = log.description.match(/Updated\s+(?:Sales|Customer|PI):\s*"([^"]+)"/i) || log.description.match(/\("([^"]+)"\)/);
@@ -903,8 +923,14 @@ const getLogFilledFields = (log) => {
         const challan = targetObj.challanNo || targetObj.challanNumber;
         if (challan) list.push({ field: 'challanNo', label: 'Challan No', value: String(challan) });
 
-        const name = targetObj.customerName || targetObj.companyName || targetObj.name || targetObj.supplierName || targetObj.employeeName;
+        const name = targetObj.customerName || targetObj.companyName || targetObj.name || targetObj.supplierName || targetObj.importerName || targetObj.exporterName || targetObj.employeeName || targetObj.bankName || targetObj.warehouseName || targetObj.warehouse;
         if (name && !party && !prod) list.push({ field: 'name', label: 'Entity / Name', value: String(name) });
+        if (targetObj.accountNumber || targetObj.accountNo) list.push({ field: 'accountNumber', label: 'Account No', value: String(targetObj.accountNumber || targetObj.accountNo) });
+        if (targetObj.accountName) list.push({ field: 'accountName', label: 'Account Name', value: String(targetObj.accountName) });
+        if (targetObj.branch) list.push({ field: 'branch', label: 'Branch', value: String(targetObj.branch) });
+        if (targetObj.reason) list.push({ field: 'reason', label: 'Reason', value: String(targetObj.reason) });
+        if (targetObj.damageNo) list.push({ field: 'damageNo', label: 'Damage No', value: String(targetObj.damageNo) });
+        if (targetObj.warehouse && targetObj.warehouse !== name) list.push({ field: 'warehouse', label: 'Warehouse', value: String(targetObj.warehouse) });
         if (targetObj.totalAmount || targetObj.grandTotal || targetObj.amount) {
             list.push({ field: 'totalAmount', label: 'Total Amount', value: formatFieldValue(targetObj.totalAmount || targetObj.grandTotal || targetObj.amount) });
         }
@@ -981,13 +1007,17 @@ const getLogFilledFields = (log) => {
             return log.details._filledFields;
         }
         const list = [];
-        if (targetObj.employeeId) list.push({ field: 'employeeId', label: 'Employee ID', value: String(targetObj.employeeId) });
-        if (targetObj.customerId) list.push({ field: 'customerId', label: 'Customer ID', value: String(targetObj.customerId) });
-        if (targetObj.productId) list.push({ field: 'productId', label: 'Product Code', value: String(targetObj.productId) });
         if (targetObj.invoiceNo) list.push({ field: 'invoiceNo', label: 'Invoice No', value: String(targetObj.invoiceNo) });
         if (targetObj.orderNo) list.push({ field: 'orderNo', label: 'Order No', value: String(targetObj.orderNo) });
         if (targetObj.lcNo) list.push({ field: 'lcNo', label: 'LC No', value: String(targetObj.lcNo) });
-        const nameVal = targetObj.name || targetObj.customerName || targetObj.employeeName || targetObj.companyName || targetObj.productName || targetObj.value || targetObj.label;
+        if (targetObj.ipNumber || targetObj.ipNo) list.push({ field: 'ipNumber', label: 'IP Number', value: String(targetObj.ipNumber || targetObj.ipNo) });
+        if (targetObj.employeeId) list.push({ field: 'employeeId', label: 'Employee ID', value: String(targetObj.employeeId) });
+        if (targetObj.customerId) list.push({ field: 'customerId', label: 'Customer ID', value: String(targetObj.customerId) });
+        if (targetObj.productId) list.push({ field: 'productId', label: 'Product Code', value: String(targetObj.productId) });
+        if (targetObj.accountNumber || targetObj.accountNo) list.push({ field: 'accountNumber', label: 'Account No', value: String(targetObj.accountNumber || targetObj.accountNo) });
+        if (targetObj.warehouse) list.push({ field: 'warehouse', label: 'Warehouse', value: String(targetObj.warehouse) });
+        if (targetObj.damageNo) list.push({ field: 'damageNo', label: 'Damage No', value: String(targetObj.damageNo) });
+        const nameVal = targetObj.name || targetObj.customerName || targetObj.supplierName || targetObj.importerName || targetObj.exporterName || targetObj.bankName || targetObj.employeeName || targetObj.companyName || targetObj.productName || targetObj.value || targetObj.label;
         if (nameVal) list.push({ field: 'name', label: targetObj.value ? 'Item / Value' : 'Name', value: String(nameVal) });
         if (targetObj.category) list.push({ field: 'category', label: 'Category', value: String(targetObj.category) });
         if (targetObj.designation) list.push({ field: 'designation', label: 'Designation', value: String(targetObj.designation) });

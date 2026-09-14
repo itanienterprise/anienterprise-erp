@@ -596,6 +596,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                     {!showForm && (
                         <button
                             onClick={() => setShowForm(true)}
+                            data-action="Create New Damage"
                             className="h-10 border border-transparent w-full md:w-auto px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all transform active:scale-95 flex items-center justify-center text-sm"
                         >
                             <span className="mr-2 text-xl font-bold">+</span>
@@ -1018,8 +1019,8 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
 
                         <div className="md:col-span-2 lg:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
                             {submitStatus === 'success' && <span className="text-emerald-600 text-sm font-bold mr-auto">✓ Saved successfully!</span>}
-                            <button type="submit" disabled={isSubmitting} className={`px-8 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-colors ${isSubmitting ? 'opacity-50' : ''}`}>
-                                {isSubmitting ? 'Saving...' : 'Save Record'}
+                            <button type="submit" disabled={isSubmitting} data-action={editingId ? `Update Damage (${formData.productName || formData.reason || ''})` : `Save New Damage`} className={`px-8 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-colors ${isSubmitting ? 'opacity-50' : ''}`}>
+                                {isSubmitting ? 'Saving...' : editingId ? 'Update Record' : 'Save Record'}
                             </button>
                         </div>
                     </form>
@@ -1075,9 +1076,9 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                             )}
                                             <td className="px-6 py-4">
                                                 <div className="flex justify-center gap-2">
-                                                    <button onClick={() => handleEdit(item)} className="p-1.5 hover:bg-blue-100 text-gray-400 hover:text-blue-600 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleEdit(item)} data-action={`Edit Damage (${item.productName || item.reason || ''})`} title={`Edit Damage (${item.productName || item.reason || ''})`} className="p-1.5 hover:bg-blue-100 text-gray-400 hover:text-blue-600 rounded-lg transition-colors"><EditIcon className="w-4 h-4" /></button>
                                                     {canDelete && (
-                                                        <button onClick={() => handleDelete(item._id)} className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-600 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => handleDelete(item._id)} data-action={`Delete Damage (${item.productName || item.reason || ''})`} title={`Delete Damage (${item.productName || item.reason || ''})`} className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-600 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
                                                     )}
                                                 </div>
                                             </td>
@@ -1174,6 +1175,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                                 <div className="flex gap-2">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
+                                                        data-action={`Edit Damage (${item.productName || item.reason || ''})`}
                                                         className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-50 text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
                                                     >
                                                         <EditIcon className="w-3.5 h-3.5" /> Edit
@@ -1181,6 +1183,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                                     {canDelete && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(item._id); }}
+                                                            data-action={`Delete Damage (${item.productName || item.reason || ''})`}
                                                             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-50 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all"
                                                         >
                                                             <TrashIcon className="w-3.5 h-3.5" /> Delete

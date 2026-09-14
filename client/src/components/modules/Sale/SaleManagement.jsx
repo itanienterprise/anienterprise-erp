@@ -522,15 +522,6 @@ const SaleManagement = ({
                     } : {})
                 };
 
-                const modName = saleType === 'Border' ? 'Border Sale' : saleType === 'Order' ? 'Order Sale' : 'Sales';
-                trackUserAction('Accept', modName, {
-                    action: 'ACCEPT',
-                    actionCategory: 'APPROVAL',
-                    invoiceNo: sale?.invoiceNo,
-                    customerName: sale?.customerName || sale?.companyName,
-                    targetId: sale?._id
-                });
-
                 await axios.put(`${API_BASE_URL}/api/sales/${_id}`, updatedData);
 
                 if (finalStatus === 'Complete' || finalStatus === 'Pending') {
@@ -932,7 +923,8 @@ const SaleManagement = ({
 
                 const updatedCustomer = {
                     ...customer,
-                    salesHistory: [...newSaleEntries, ...baseHistory]
+                    salesHistory: [...newSaleEntries, ...baseHistory],
+                    _skipActivityLog: true
                 };
 
                 await axios.put(`${API_BASE_URL}/api/customers/${targetCustomerId}`, updatedCustomer);
@@ -947,7 +939,8 @@ const SaleManagement = ({
                                 try {
                                     await axios.put(`${API_BASE_URL}/api/customers/${c._id}`, {
                                         ...c,
-                                        salesHistory: cleanedHistory
+                                        salesHistory: cleanedHistory,
+                                        _skipActivityLog: true
                                     });
                                 } catch (e) { }
                             }
@@ -1008,25 +1001,6 @@ const SaleManagement = ({
             const actionBy = currentUser ? (currentUser.name || currentUser.username || '') : '';
             const actionUsername = currentUser ? (currentUser.username || '') : '';
             const { _id, createdAt: _createdAt, ...rest } = sale;
-
-            const modName = saleType === 'Border' ? 'Border Sale' : saleType === 'Order' ? 'Order Sale' : 'Sales';
-            if (newStatus === 'accepted') {
-                trackUserAction('Accept', modName, {
-                    action: 'ACCEPT',
-                    actionCategory: 'APPROVAL',
-                    invoiceNo: sale?.invoiceNo,
-                    customerName: sale?.customerName || sale?.companyName,
-                    targetId: sale?._id
-                });
-            } else if (newStatus === 'Rejected') {
-                trackUserAction('Reject', modName, {
-                    action: 'REJECT',
-                    actionCategory: 'APPROVAL',
-                    invoiceNo: sale?.invoiceNo,
-                    customerName: sale?.customerName || sale?.companyName,
-                    targetId: sale?._id
-                });
-            }
 
             const finalStatus = newStatus === 'accepted'
                 ? ((parseFloat(sale.paidAmount || 0) >= parseFloat(sale.totalAmount || 0) && parseFloat(sale.totalAmount || 0) > 0) ? 'Complete' : 'Pending')
@@ -6073,6 +6047,7 @@ const SaleManagement = ({
                                 {isRequestedOnly && canApprove && (
                                     <button
                                         onClick={handleBulkAccept}
+                                        data-action={`Bulk Accept Sales Requests (${selectedItems.size} items)`}
                                         disabled={isSubmitting}
                                         className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
                                         title="Accept all selected requests"
@@ -6424,8 +6399,22 @@ const SaleManagement = ({
                                                                 )}
                                                                 {canApprove && (
                                                                     <>
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Reject"><XIcon className="w-5 h-5" /></button>
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }}
+                                                                            data-action={`Accept ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
+                                                                            className="text-gray-400 hover:text-emerald-600 transition-colors"
+                                                                            title="Accept"
+                                                                        >
+                                                                            <CheckIcon className="w-5 h-5" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }}
+                                                                            data-action={`Reject ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
+                                                                            className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                            title="Reject"
+                                                                        >
+                                                                            <XIcon className="w-5 h-5" />
+                                                                        </button>
                                                                     </>
                                                                 )}
                                                             </>
@@ -6819,8 +6808,22 @@ const SaleManagement = ({
                                                             )}
                                                             {canApprove && (
                                                                 <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Accept"><CheckIcon className="w-5 h-5" /></button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Reject"><XIcon className="w-5 h-5" /></button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }}
+                                                                        data-action={`Accept ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
+                                                                        className="text-gray-400 hover:text-emerald-600 transition-colors"
+                                                                        title="Accept"
+                                                                    >
+                                                                        <CheckIcon className="w-5 h-5" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }}
+                                                                        data-action={`Reject ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
+                                                                        className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                        title="Reject"
+                                                                    >
+                                                                        <XIcon className="w-5 h-5" />
+                                                                    </button>
                                                                 </>
                                                             )}
                                                         </>
@@ -7011,8 +7014,22 @@ const SaleManagement = ({
                                                             )}
                                                             {canApprove && (
                                                                 <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }} className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg transition-colors hover:bg-emerald-100" title="Accept"><CheckIcon className="w-4 h-4" /></button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }} className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100" title="Reject"><XIcon className="w-4 h-4" /></button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'accepted'); }}
+                                                                        data-action={`Accept ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
+                                                                        className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg transition-colors hover:bg-emerald-100"
+                                                                        title="Accept"
+                                                                    >
+                                                                        <CheckIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleStatusUpdate(sale, 'Rejected'); }}
+                                                                        data-action={`Reject ${sale.status === 'Edit_Requested' ? 'Edit Request' : 'Sale Request'} (${sale.orderNo || sale.invoiceNo || 'Sale'}${sale.customerName ? ` - ${sale.customerName}` : ''})`}
+                                                                        className="p-2 text-red-600 bg-red-50/50 rounded-lg transition-colors hover:bg-red-100"
+                                                                        title="Reject"
+                                                                    >
+                                                                        <XIcon className="w-4 h-4" />
+                                                                    </button>
                                                                 </>
                                                             )}
                                                         </>
