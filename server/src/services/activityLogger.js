@@ -8,6 +8,7 @@ const MODULE_PATH_MAP = [
     { pattern: /^\/api\/sales/i, module: 'Sales' },
     { pattern: /^\/api\/orders/i, module: 'Order' },
     { pattern: /^\/api\/pi/i, module: 'PI' },
+    { pattern: /^\/api\/ip-records/i, module: 'IP' },
     { pattern: /^\/api\/purchase-receives/i, module: 'Purchase Receive' },
     { pattern: /^\/api\/purchase/i, module: 'Purchase' },
     { pattern: /^\/api\/stock-baseline/i, module: 'Stock Baseline' },
@@ -90,7 +91,10 @@ const resolveModuleFromPath = (path, body) => {
     if (!path) return 'System';
     const targetObj = resolvePayloadObject(body);
 
-    // Border Sale vs Sales
+    // C&F Commission update vs Border Sale vs Sales
+    if (targetObj.isCnfCommissionUpdate === true || targetObj.cnfName) {
+        return 'C&F';
+    }
     if (/^\/api\/sales/i.test(path)) {
         if (
             targetObj.saleType === 'Border' ||
@@ -233,12 +237,32 @@ const FIELD_LABEL_MAP = {
     closedBy: 'Closed By',
     productsList: 'Products',
     ipNumbers: 'IP Numbers',
+    ipNumber: 'IP Number',
+    referenceNo: 'Reference No',
+    ipParty: 'IP Party / Importer',
+    openingDate: 'Opening Date',
+    closeDate: 'Expiry Date',
+    remainingQuantity: 'Remaining Qty',
+    isExtended: 'Extended',
+    ipAttachmentName: 'Attachment',
     grandTotalQuantity: 'Grand Total Quantity',
     grandTotal: 'Grand Total',
     piRevision: 'Revision',
     reviseNo: 'Revise No',
     reviseDate: 'Revise Date',
-    revisions: 'Revisions'
+    revisions: 'Revisions',
+    indCommissionRate: 'Indian Commission Rate',
+    indCommissionUom: 'Indian Commission UOM',
+    indCommissionTotal: 'Indian Commission Total',
+    bdCommissionRate: 'BD Commission Rate',
+    bdCommissionUom: 'BD Commission UOM',
+    bdCommissionTotal: 'BD Commission Total',
+    indCnFComm: 'Indian C&F Rate',
+    indCnFCost: 'Indian C&F Total',
+    indCnFUom: 'Indian C&F UOM',
+    bdCnFComm: 'BD C&F Rate',
+    bdCnFCost: 'BD C&F Total',
+    bdCnFUom: 'BD C&F UOM'
 };
 
 const formatFieldLabel = (key) => {
@@ -373,10 +397,20 @@ const extractFilledFields = (body, action) => {
 /**
  * Determine action and actionCategory with full payload context
  */
-const resolveActionDetails = (method, path, body) => {
+const resolveActionDetails = (method, path, body, previousDocSnapshot) => {
     const lowerPath = (path || '').toLowerCase();
     const m = (method || '').toUpperCase();
     const targetObj = resolvePayloadObject(body);
+    const prevObj = resolvePayloadObject(previousDocSnapshot);
+
+    // Explicit UPDATE override (e.g. C&F commission update, or explicit actionType)
+    if (
+        targetObj.isCnfCommissionUpdate === true ||
+        targetObj.actionType === 'UPDATE' ||
+        targetObj.action === 'UPDATE'
+    ) {
+        return { action: 'UPDATE', category: 'MUTATION' };
+    }
 
     if (lowerPath.includes('/login')) {
         return { action: 'LOGIN', category: 'AUTH' };
@@ -391,48 +425,72 @@ const resolveActionDetails = (method, path, body) => {
         return { action: 'RESTORE', category: 'SYSTEM' };
     }
 
-    // Accept Check
-    if (
-        lowerPath.includes('/accept') ||
+    // Accept Check: Genuine accept transition only
+    const wasAlreadyAccepted = prevObj && (
+        (typeof prevObj.status === 'string' && prevObj.status.toLowerCase().includes('accept')) ||
+        prevObj.acceptedBy ||
+        prevObj.acceptedByUsername
+    );
+    const isExplicitAccept = lowerPath.includes('/accept') || targetObj.actionType === 'ACCEPT' || targetObj.action === 'ACCEPT';
+    const isTransitionToAccept = !wasAlreadyAccepted && (
         (typeof targetObj.status === 'string' && targetObj.status.toLowerCase().includes('accept')) ||
-        targetObj.acceptedBy ||
-        targetObj.acceptedByUsername
-    ) {
+        (targetObj.acceptedBy && !prevObj?.acceptedBy) ||
+        (targetObj.acceptedByUsername && !prevObj?.acceptedByUsername)
+    );
+
+    if (isExplicitAccept || isTransitionToAccept) {
         return { action: 'ACCEPT', category: 'APPROVAL' };
     }
 
     // Rejection Check
-    if (
-        lowerPath.includes('/reject') ||
-        targetObj.rejectedBy ||
-        targetObj.rejectionReason ||
-        (typeof targetObj.status === 'string' && targetObj.status.toLowerCase().includes('reject'))
-    ) {
+    const wasAlreadyRejected = prevObj && (
+        (typeof prevObj.status === 'string' && prevObj.status.toLowerCase().includes('reject')) ||
+        prevObj.rejectedBy
+    );
+    const isExplicitReject = lowerPath.includes('/reject') || targetObj.actionType === 'REJECT' || targetObj.action === 'REJECT';
+    const isTransitionToReject = !wasAlreadyRejected && (
+        (typeof targetObj.status === 'string' && targetObj.status.toLowerCase().includes('reject')) ||
+        (targetObj.rejectedBy && !prevObj?.rejectedBy) ||
+        (targetObj.rejectionReason && !prevObj?.rejectionReason)
+    );
+
+    if (isExplicitReject || isTransitionToReject) {
         return { action: 'REJECT', category: 'APPROVAL' };
     }
 
     // Approval Check
-    if (
-        lowerPath.includes('/approve') ||
-        lowerPath.includes('/1st-approve') ||
-        lowerPath.includes('/2nd-approve') ||
-        targetObj.approvedBy ||
-        targetObj.approvedByName ||
-        targetObj.firstApprovedBy ||
-        targetObj.secondApprovedBy ||
-        targetObj.smApprovedBy ||
-        targetObj.editApprovedBy
-    ) {
+    const wasAlreadyApproved = prevObj && (
+        (typeof prevObj.status === 'string' && prevObj.status.toLowerCase().includes('approve')) ||
+        prevObj.approvedBy ||
+        prevObj.approvedByName
+    );
+    const isExplicitApprove = lowerPath.includes('/approve') || lowerPath.includes('/1st-approve') || lowerPath.includes('/2nd-approve') || targetObj.actionType === 'APPROVE' || targetObj.action === 'APPROVE';
+    const isTransitionToApprove = !wasAlreadyApproved && (
+        (targetObj.approvedBy && !prevObj?.approvedBy) ||
+        (targetObj.approvedByName && !prevObj?.approvedByName) ||
+        (targetObj.firstApprovedBy && !prevObj?.firstApprovedBy) ||
+        (targetObj.secondApprovedBy && !prevObj?.secondApprovedBy) ||
+        (targetObj.editApprovedBy && !prevObj?.editApprovedBy)
+    );
+
+    if (isExplicitApprove || isTransitionToApprove) {
         return { action: 'APPROVE', category: 'APPROVAL' };
     }
 
     // Close Check
-    if (
-        lowerPath.includes('/close') ||
-        targetObj.closedBy ||
+    const wasAlreadyClosed = prevObj && (
+        prevObj.closedBy ||
+        prevObj.isClosed === true ||
+        (typeof prevObj.status === 'string' && ['closed', 'close'].includes(prevObj.status.toLowerCase()))
+    );
+    const isExplicitClose = lowerPath.includes('/close') || targetObj.actionType === 'CLOSE' || targetObj.action === 'CLOSE';
+    const isTransitionToClose = !wasAlreadyClosed && (
+        (targetObj.closedBy && !prevObj?.closedBy) ||
         targetObj.isClosed === true ||
         (typeof targetObj.status === 'string' && ['closed', 'close'].includes(targetObj.status.toLowerCase()))
-    ) {
+    );
+
+    if (isExplicitClose || isTransitionToClose) {
         return { action: 'CLOSE', category: 'OPERATION' };
     }
 
@@ -481,6 +539,8 @@ const extractReferenceNumber = (targetObj) => {
     if (ord) return `Order #${ord}`;
     const challan = targetObj.challanNo || targetObj.challanNumber;
     if (challan) return `Challan #${challan}`;
+    const ip = targetObj.ipNumber || targetObj.ipNo;
+    if (ip) return `IP #${ip}`;
     const gatePass = targetObj.gatePassNo || targetObj.gatePassNumber;
     if (gatePass) return `Gate Pass #${gatePass}`;
     const truck = targetObj.truckNo || targetObj.truckNumber;
@@ -491,7 +551,7 @@ const extractReferenceNumber = (targetObj) => {
 /**
  * Generate human-friendly description of the operation with full field details
  */
-const generateOperationDescription = (method, path, module, body, statusCode, updatedFields = []) => {
+const generateOperationDescription = (method, path, module, body, statusCode, updatedFields = [], explicitAction = null, previousDocSnapshot = null) => {
     const isError = statusCode >= 400;
     const errorPrefix = isError ? '[FAILED] ' : '';
 
@@ -528,13 +588,13 @@ const generateOperationDescription = (method, path, module, body, statusCode, up
     }
 
     const targetObj = resolvePayloadObject(body);
-    const { action } = resolveActionDetails(method, path, body);
+    const { action } = explicitAction ? { action: explicitAction } : resolveActionDetails(method, path, body, previousDocSnapshot);
 
     const nameIdentifier = targetObj.customerName || targetObj.companyName || targetObj.name || 
         targetObj.productName || targetObj.employeeName || targetObj.supplierName || targetObj.importerName || 
-        targetObj.exporterName || targetObj.bankName || targetObj.title || targetObj.value || targetObj.label ||
+        targetObj.exporterName || targetObj.ipParty || targetObj.bankName || targetObj.title || targetObj.value || targetObj.label ||
         targetObj.piNumber || targetObj.piNo || targetObj.piNumbers || targetObj.invoiceNo || targetObj.lcNo || 
-        targetObj.orderNo || targetObj.challanNo || targetObj.truckNo;
+        targetObj.orderNo || targetObj.challanNo || targetObj.truckNo || targetObj.ipNumber;
 
     // ACCEPT
     if (action === 'ACCEPT') {
@@ -645,7 +705,7 @@ const generateOperationDescription = (method, path, module, body, statusCode, up
             const refNo = extractReferenceNumber(targetObj);
             const entityName = targetObj.customerName || targetObj.companyName || targetObj.name || 
                 targetObj.productName || targetObj.employeeName || targetObj.supplierName || 
-                targetObj.importerName || targetObj.exporterName || targetObj.bankName;
+                targetObj.importerName || targetObj.exporterName || targetObj.ipParty || targetObj.bankName;
             const codeId = targetObj.customerId ? `ID: ${targetObj.customerId}` :
                 targetObj.employeeId ? `ID: ${targetObj.employeeId}` :
                 targetObj.productId ? `Code: ${targetObj.productId}` : null;
@@ -671,11 +731,12 @@ const generateOperationDescription = (method, path, module, body, statusCode, up
         case 'PUT':
         case 'PATCH': {
             const isOriginalPi = (module === 'PI') && (action === 'UPDATE_ORIGINAL' || targetObj.isOriginalPi || targetObj.piTargetType === 'Original PI' || (!targetObj.isRevision && !targetObj.piRevision && (!targetObj.revisions || targetObj.revisions.length <= 1)));
-            let desc = isOriginalPi ? `${errorPrefix}Updated Original ${module}` : `${errorPrefix}Updated ${module}`;
+            const isCnfComm = targetObj.isCnfCommissionUpdate === true || module === 'C&F' || Boolean(targetObj.cnfName);
+            let desc = isOriginalPi ? `${errorPrefix}Updated Original ${module}` : isCnfComm ? `${errorPrefix}Updated C&F Commission` : `${errorPrefix}Updated ${module}`;
             const refNo = extractReferenceNumber(targetObj);
-            const entityName = targetObj.customerName || targetObj.companyName || targetObj.name || 
+            const entityName = isCnfComm ? (targetObj.cnfName || targetObj.indianCnF || targetObj.bdCnf || targetObj.customerName || targetObj.name) : (targetObj.customerName || targetObj.companyName || targetObj.name || 
                 targetObj.productName || targetObj.employeeName || targetObj.supplierName || 
-                targetObj.importerName || targetObj.exporterName || targetObj.bankName;
+                targetObj.importerName || targetObj.exporterName || targetObj.ipParty || targetObj.bankName);
             const codeId = targetObj.customerId ? `ID: ${targetObj.customerId}` :
                 targetObj.employeeId ? `ID: ${targetObj.employeeId}` :
                 targetObj.productId ? `Code: ${targetObj.productId}` : null;
@@ -835,7 +896,8 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
         'isedited', 'editedby', 'editedbyname', 'editedbyusername',
         'requestedby', 'requestedbyusername', 'saletype', 'view', 'targetid',
         'revisions', 'pirevision', 'lastrevisedat', 'revisedby', 'revisedbyname',
-        'isrevision', 'currentreviseno', 'actiontype', 'isrevisiondelete', 'deletedrevisionno'
+        'isrevision', 'currentreviseno', 'actiontype', 'isrevisiondelete', 'deletedrevisionno',
+        'iscnfcommissionupdate', 'indcommissionedited', 'bdcommissionedited', 'indcnfedited', 'indcnfbulkedited', 'cnfname'
     ]);
 
     const changes = [];
@@ -1100,8 +1162,14 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
         const strNew = (newVal === null || newVal === undefined) ? '' : String(newVal).trim();
 
         if (strOld !== strNew) {
-            const formatted = formatFieldValue(newVal);
-            const formattedOld = formatFieldValue(oldVal);
+            let formatted = formatFieldValue(newVal);
+            let formattedOld = formatFieldValue(oldVal);
+            if (['indcommissiontotal', 'bdcommissiontotal', 'indcnfcost', 'bdcnfcost'].includes(key.toLowerCase())) {
+                const numNew = parseFloat(newVal);
+                const numOld = parseFloat(oldVal);
+                if (!isNaN(numNew)) formatted = `৳${numNew.toLocaleString('en-IN')}`;
+                if (!isNaN(numOld)) formattedOld = `৳${numOld.toLocaleString('en-IN')}`;
+            }
             if (formatted) {
                 changes.push({
                     field: key,

@@ -1504,6 +1504,9 @@ function IPManagement({
                         {canManage && (
                             <button
                                 onClick={() => setShowIpForm(!showIpForm)}
+                                data-action="Create New IP"
+                                title="Create New IP"
+                                aria-label="Create New IP"
                                 className="flex-1 md:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center justify-center whitespace-nowrap"
                             >
                                 <span className="mr-1.5 font-bold text-lg leading-none">+</span> New IP
@@ -1519,7 +1522,13 @@ function IPManagement({
 
                     <div className="flex items-center justify-between mb-6 border-b border-gray-200/50 pb-4 relative z-10">
                         <h3 className="text-xl font-semibold text-gray-800">{editingId ? 'Edit IP Record' : 'Create New IP'}</h3>
-                        <button onClick={() => { setShowIpForm(false); resetIpForm(); }} className="text-gray-400 hover:text-red-500 transition-colors">
+                        <button
+                            onClick={() => { setShowIpForm(false); resetIpForm(); }}
+                            data-action="Close IP Form"
+                            title="Close IP Form"
+                            aria-label="Close IP Form"
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                        >
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     </div>
@@ -1836,9 +1845,10 @@ function IPManagement({
                             <button
                                 type="submit"
                                 disabled={isSubmitting || isDuplicateIpNumber}
+                                data-action={editingId ? `Update IP (${formData.ipNumber || 'Record'})` : `Save IP (${formData.ipNumber || 'Record'})`}
                                 className={`px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center ${(isSubmitting || isDuplicateIpNumber) ? 'opacity-50 cursor-not-allowed grayscale scale-100' : ''}`}
                             >
-                                {isSubmitting ? 'Saving...' : 'Save IP Record'}
+                                {isSubmitting ? 'Saving...' : (editingId ? 'Update IP Record' : 'Save IP Record')}
                             </button>
                         </div>
                     </form>
@@ -2004,7 +2014,13 @@ function IPManagement({
                                                 )}
                                                 <td className="px-3 py-3">
                                                     <div className="flex items-center space-x-3">
-                                                        <button onClick={(e) => { e.stopPropagation(); setViewIpLcData(record); }} className="text-gray-400 hover:text-indigo-600 transition-colors" title="View LCs">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setViewIpLcData(record); }}
+                                                            className="text-gray-400 hover:text-indigo-600 transition-colors"
+                                                            title={`View LCs (${record.ipNumber || 'IP'})`}
+                                                            aria-label={`View LCs (${record.ipNumber || 'IP'})`}
+                                                            data-action={`View LCs (${record.ipNumber || 'IP'})`}
+                                                        >
                                                             <EyeIcon className="w-5 h-5" />
                                                         </button>
                                                         <button
@@ -2019,16 +2035,30 @@ function IPManagement({
                                                             }}
                                                             className={`${record.ipAttachment ? 'text-blue-500 hover:text-blue-700' : 'text-gray-200 cursor-not-allowed'} transition-colors`}
                                                             title={record.ipAttachment ? `View ${record.ipAttachmentName || 'PDF'}` : 'No PDF attached'}
+                                                            aria-label={record.ipAttachment ? `View ${record.ipAttachmentName || 'PDF'}` : 'No PDF attached'}
+                                                            data-action={`View PDF (${record.ipNumber || 'IP'})`}
                                                         >
                                                             <PDFIcon className="w-5 h-5" />
                                                         </button>
                                                         {canManage && (
                                                             <>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(record); }} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit Record">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                                                    title={`Edit IP (${record.ipNumber || 'Record'})`}
+                                                                    aria-label={`Edit IP (${record.ipNumber || 'Record'})`}
+                                                                    data-action={`Edit IP (${record.ipNumber || 'Record'})`}
+                                                                >
                                                                     <EditIcon className="w-5 h-5" />
                                                                 </button>
                                                                 {canDelete && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }} className="text-gray-400 hover:text-red-600 transition-colors" title="Delete Record">
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                                        className="text-gray-400 hover:text-red-600 transition-colors"
+                                                                        title={`Delete IP (${record.ipNumber || 'Record'})`}
+                                                                        aria-label={`Delete IP (${record.ipNumber || 'Record'})`}
+                                                                        data-action={`Delete IP (${record.ipNumber || 'Record'})`}
+                                                                    >
                                                                         <TrashIcon className="w-5 h-5" />
                                                                     </button>
                                                                 )}
@@ -2162,6 +2192,7 @@ function IPManagement({
                                                             <div className="flex flex-row gap-2">
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); setViewIpLcData(record); }}
+                                                                    data-action={`View LCs (${record.ipNumber || 'IP'})`}
                                                                     className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-indigo-50 text-indigo-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
                                                                 >
                                                                     <EyeIcon className="w-3.5 h-3.5" /> LCs
@@ -2176,6 +2207,7 @@ function IPManagement({
                                                                             alert("No PDF document has been uploaded for this IP record.");
                                                                         }
                                                                     }}
+                                                                    data-action={`View PDF (${record.ipNumber || 'IP'})`}
                                                                     className={`flex-1 flex items-center justify-center gap-1.5 py-3 ${record.ipAttachment ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'} rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95`}
                                                                 >
                                                                     <PDFIcon className="w-3.5 h-3.5" /> PDF
@@ -2183,6 +2215,7 @@ function IPManagement({
                                                                 {canManage && (
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); handleEdit(record); }}
+                                                                        data-action={`Edit IP (${record.ipNumber || 'Record'})`}
                                                                         className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
                                                                     >
                                                                         <EditIcon className="w-3.5 h-3.5" /> Edit
@@ -2192,6 +2225,7 @@ function IPManagement({
                                                             {canManage && canDelete && (
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); handleDelete(record._id); }}
+                                                                    data-action={`Delete IP (${record.ipNumber || 'Record'})`}
                                                                     className="w-full flex items-center justify-center gap-1.5 py-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
                                                                 >
                                                                     <TrashIcon className="w-3.5 h-3.5" /> Delete

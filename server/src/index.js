@@ -500,7 +500,7 @@ apiRouter.use(async (req, res, next) => {
       }
 
       const module = resolveModuleFromPath(url, reqBodySnapshot);
-      const { action, category } = resolveActionDetails(method, url, reqBodySnapshot);
+      const { action, category } = resolveActionDetails(method, url, reqBodySnapshot, previousDocSnapshot);
       const status = res.statusCode < 400 ? 'SUCCESS' : 'FAILED';
 
       let cleanSnapshot = resolvePayloadObject(reqBodySnapshot);
@@ -521,7 +521,7 @@ apiRouter.use(async (req, res, next) => {
         filledFields = extractFilledFields(cleanSnapshot, action);
       }
 
-      const description = generateOperationDescription(method, url, module, cleanSnapshot, res.statusCode, filledFields);
+      const description = generateOperationDescription(method, url, module, cleanSnapshot, res.statusCode, filledFields, action, previousDocSnapshot);
 
       logActivity({
         userId,

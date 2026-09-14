@@ -107,12 +107,32 @@ const FIELD_LABEL_MAP = {
     closedBy: 'Closed By',
     productsList: 'Products',
     ipNumbers: 'IP Numbers',
+    ipNumber: 'IP Number',
+    referenceNo: 'Reference No',
+    ipParty: 'IP Party / Importer',
+    openingDate: 'Opening Date',
+    closeDate: 'Expiry Date',
+    remainingQuantity: 'Remaining Qty',
+    isExtended: 'Extended',
+    ipAttachmentName: 'Attachment',
     grandTotalQuantity: 'Total Quantity',
     grandTotal: 'Grand Total',
     piRevision: 'Revision',
     reviseNo: 'Revise No',
     reviseDate: 'Revise Date',
-    revisions: 'Revisions'
+    revisions: 'Revisions',
+    indCommissionRate: 'Indian Commission Rate',
+    indCommissionUom: 'Indian Commission UOM',
+    indCommissionTotal: 'Indian Commission Total',
+    bdCommissionRate: 'BD Commission Rate',
+    bdCommissionUom: 'BD Commission UOM',
+    bdCommissionTotal: 'BD Commission Total',
+    indCnFComm: 'Indian C&F Rate',
+    indCnFCost: 'Indian C&F Total',
+    indCnFUom: 'Indian C&F UOM',
+    bdCnFComm: 'BD C&F Rate',
+    bdCnFCost: 'BD C&F Total',
+    bdCnFUom: 'BD C&F UOM'
 };
 
 const formatFieldLabel = (key) => {
@@ -153,11 +173,21 @@ const getLogModule = (log) => {
     if (log.path?.includes('/notifications')) return 'Notification';
     if (log.path?.includes('/metadata')) return 'Settings / Metadata';
     
-    // Check if Border Sale
     let details = log.details || {};
     if (details.data && typeof details.data === 'object' && !Array.isArray(details.data)) {
         details = details.data;
     }
+
+    if (
+        details.isCnfCommissionUpdate === true ||
+        Boolean(details.cnfName) ||
+        log.module === 'C&F' ||
+        (typeof log.description === 'string' && log.description.toLowerCase().includes('c&f commission'))
+    ) {
+        return 'C&F';
+    }
+
+    // Check if Border Sale
     const isBorder = (log.module === 'Border Sale') ||
         details.saleType === 'Border' ||
         details.isBorderSale === true ||
@@ -165,6 +195,18 @@ const getLogModule = (log) => {
         (typeof log.description === 'string' && (log.description.includes('BS') || log.description.toLowerCase().includes('border sale')));
     
     if (isBorder) return 'Border Sale';
+
+    // IP module normalization
+    if (
+        log.module === 'Ip' ||
+        log.module === 'ip' ||
+        log.module === 'IP' ||
+        log.path?.includes('/ip-records') ||
+        (typeof details.view === 'string' && details.view.includes('ip')) ||
+        (typeof log.description === 'string' && /in ip\b/i.test(log.description))
+    ) {
+        return 'IP';
+    }
 
     return log.module || 'System';
 };
@@ -174,12 +216,21 @@ const getLogAction = (log) => {
     let act = (log.action || '').toUpperCase().trim();
     if (act === 'CARD_OPEN') act = 'CARD OPEN';
     if (act === 'CARD_CLOSE') act = 'CARD CLOSE';
-    if (act === 'ACCEPT' || act === 'REJECT' || act === 'APPROVE' || act === 'CLOSE' || act === 'CARD OPEN' || act === 'CARD CLOSE') return act;
 
     let details = log.details || {};
     if (details.data && typeof details.data === 'object' && !Array.isArray(details.data)) {
         details = details.data;
     }
+
+    // Explicit override for C&F commission edits
+    if (
+        details.isCnfCommissionUpdate === true ||
+        (typeof log.description === 'string' && log.description.toLowerCase().includes('c&f commission'))
+    ) {
+        return 'UPDATE';
+    }
+
+    if (act === 'ACCEPT' || act === 'REJECT' || act === 'APPROVE' || act === 'CLOSE' || act === 'CARD OPEN' || act === 'CARD CLOSE') return act;
     const path = (log.path || '').toLowerCase();
     const desc = (log.description || '').toLowerCase();
 
@@ -441,6 +492,7 @@ const formatLogDescription = (desc, log) => {
 
     // New Entry / Creation
     if (action === 'CREATE' || desc.startsWith('Created ')) {
+        const ipVal = details.ipNumber || details.ipNo;
         const piVal = details.piNumber || details.piNo || details.piNumbers;
         const lcVal = details.lcNo || details.lcNumber;
         const invVal = details.invoiceNo || details.invoiceNumber;
@@ -448,20 +500,21 @@ const formatLogDescription = (desc, log) => {
         const chVal = details.challanNo || details.challanNumber;
 
         let ref = '';
-        if (piVal) ref = `PI #${piVal}`;
+        if (ipVal) ref = `IP #${ipVal}`;
+        else if (piVal) ref = `PI #${piVal}`;
         else if (lcVal) ref = `LC #${lcVal}`;
         else if (invVal) ref = `Invoice #${invVal}`;
         else if (ordVal) ref = `Order #${ordVal}`;
         else if (chVal) ref = `Challan #${chVal}`;
         else {
-            const match = desc.match(/(?:Invoice|Order|LC|PI|Challan)\s*#?\s*["']?([^"',\]()]+)["']?/i);
+            const match = desc.match(/(?:IP|Invoice|Order|LC|PI|Challan)\s*#([A-Za-z0-9_-]+)/i) || desc.match(/(?:IP|Invoice|Order|LC|PI|Challan)\s*#?\s*["']?([^"',\]()]+)["']?/i);
             if (match) ref = match[0].trim();
         }
 
         const invPart = ref;
-        let name = details.customerName || details.companyName || details.name || details.productName || details.employeeName || details.supplierName || '';
+        let name = details.ipParty || details.customerName || details.companyName || details.name || details.productName || details.employeeName || details.supplierName || '';
         if (!name) {
-            const nameMatch = desc.match(/"([^"]+)"/);
+            const nameMatch = desc.match(/\("([^"]+)"\)/) || desc.match(/"([^"]+)"/);
             if (nameMatch) name = nameMatch[1].trim();
         }
         const namePart = name ? `("${name}")` : '';
@@ -487,6 +540,29 @@ const formatLogDescription = (desc, log) => {
     if (action === 'CLICK' || log?.actionCategory === 'UI_CLICK') {
         if (desc.includes('clicked "Edit PI"') && mod === 'PI') {
             return `User clicked "Edit Original PI" in PI`;
+        }
+        if (/clicked "(Edit|Save|Update) Record"/i.test(desc)) {
+            const verb = desc.match(/clicked "(Edit|Save|Update) Record"/i)[1];
+            const isCnf = /cnf|c&f/i.test(mod) || (typeof details.view === 'string' && /cnf/i.test(details.view));
+            if (isCnf) {
+                return `User clicked "${verb} C&F Commission" in ${mod}`;
+            }
+            if (/^ip$/i.test(mod) || (typeof details.view === 'string' && /ip/i.test(details.view))) {
+                return `User clicked "${verb} IP Record" in IP`;
+            }
+            return `User clicked "${verb} ${mod}" in ${mod}`;
+        }
+        if (/clicked "Save IP Record" in (Ip|IP)/i.test(desc)) {
+            return `User clicked "Save IP Record" in IP`;
+        }
+        if (/clicked "Edit Record" in (Ip|IP)/i.test(desc)) {
+            return `User clicked "Edit IP Record" in IP`;
+        }
+        if (desc.includes('clicked "+" in Ip')) {
+            return `User clicked "Create New IP" in IP`;
+        }
+        if (desc.endsWith(' in Ip')) {
+            return desc.replace(/ in Ip$/, ' in IP');
         }
     }
 
@@ -583,9 +659,14 @@ const formatLogDescription = (desc, log) => {
         }
 
         const isOrigPi = (mod === 'PI') && (action === 'UPDATE_ORIGINAL' || details.isOriginalPi || details.piTargetType === 'Original PI' || !details.isRevision);
+        const isCnfComm = details.isCnfCommissionUpdate === true || mod === 'C&F' || (typeof desc === 'string' && desc.toLowerCase().includes('c&f commission')) || Boolean(details.cnfName);
         const updatePrefix = isOrigPi ? 'Updated Original' : 'Updated';
         let baseDesc = '';
-        if (refPart && namePart) {
+        if (isCnfComm) {
+            const cName = details.cnfName || details.indianCnF || details.bdCnf || name;
+            const cPart = cName ? ` ("${cName}")` : '';
+            baseDesc = `Updated C&F Commission${refPart ? `: ${refPart}` : ''}${cPart}`;
+        } else if (refPart && namePart) {
             baseDesc = `${updatePrefix} ${mod}: ${refPart} ${namePart}`;
         } else if (refPart) {
             baseDesc = `${updatePrefix} ${mod}: ${refPart}`;
@@ -795,6 +876,22 @@ const getLogFilledFields = (log) => {
     // For Create actions, extract clean summary fields
     if (action === 'CREATE') {
         const list = [];
+        const ip = targetObj.ipNumber || targetObj.ipNo;
+        if (ip) list.push({ field: 'ipNumber', label: 'IP Number', value: String(ip) });
+        const refNo = targetObj.referenceNo;
+        if (refNo) list.push({ field: 'referenceNo', label: 'Reference No', value: String(refNo) });
+        const party = targetObj.ipParty || targetObj.importerName;
+        if (party) list.push({ field: 'ipParty', label: 'IP Party / Importer', value: String(party) });
+        const prod = targetObj.productName;
+        if (prod) list.push({ field: 'productName', label: 'Product', value: String(prod) });
+        const port = targetObj.port;
+        if (port) list.push({ field: 'port', label: 'Port', value: String(port) });
+        const qty = targetObj.quantity;
+        if (qty) list.push({ field: 'quantity', label: 'Quantity', value: formatFieldValue(qty) });
+        const openD = targetObj.openingDate;
+        if (openD) list.push({ field: 'openingDate', label: 'Opening Date', value: String(openD) });
+        const closeD = targetObj.closeDate;
+        if (closeD) list.push({ field: 'closeDate', label: 'Expiry Date', value: String(closeD) });
         const pi = targetObj.piNumber || targetObj.piNo || targetObj.piNumbers;
         if (pi) list.push({ field: 'piNumber', label: 'PI No', value: String(pi) });
         const lc = targetObj.lcNo || targetObj.lcNumber;
@@ -806,8 +903,8 @@ const getLogFilledFields = (log) => {
         const challan = targetObj.challanNo || targetObj.challanNumber;
         if (challan) list.push({ field: 'challanNo', label: 'Challan No', value: String(challan) });
 
-        const name = targetObj.customerName || targetObj.companyName || targetObj.name || targetObj.supplierName || targetObj.employeeName || targetObj.productName;
-        if (name) list.push({ field: 'name', label: 'Entity / Name', value: String(name) });
+        const name = targetObj.customerName || targetObj.companyName || targetObj.name || targetObj.supplierName || targetObj.employeeName;
+        if (name && !party && !prod) list.push({ field: 'name', label: 'Entity / Name', value: String(name) });
         if (targetObj.totalAmount || targetObj.grandTotal || targetObj.amount) {
             list.push({ field: 'totalAmount', label: 'Total Amount', value: formatFieldValue(targetObj.totalAmount || targetObj.grandTotal || targetObj.amount) });
         }
@@ -815,6 +912,16 @@ const getLogFilledFields = (log) => {
             list.push({ field: 'paidAmount', label: 'Paid Amount', value: formatFieldValue(targetObj.paidAmount) });
         }
         if (targetObj.status) list.push({ field: 'status', label: 'Status', value: String(targetObj.status) });
+
+        // Fallback for IP creation if details were minimal
+        if (list.length === 0 && (log.module === 'IP' || log.path?.includes('/ip-records'))) {
+            const desc = log.description || '';
+            const ipMatch = desc.match(/IP\s*#?([A-Za-z0-9_-]+)/i);
+            if (ipMatch) list.push({ field: 'ipNumber', label: 'IP Number', value: ipMatch[1].trim() });
+            const partyMatch = desc.match(/\("([^"]+)"\)/) || desc.match(/"([^"]+)"/);
+            if (partyMatch) list.push({ field: 'ipParty', label: 'IP Party / Importer', value: partyMatch[1].trim() });
+        }
+
         if (list.length > 0) return list;
     }
 
@@ -834,7 +941,7 @@ const getLogFilledFields = (log) => {
     if (action === 'UPDATE' || action === 'UPDATE_ORIGINAL' || action === 'REVISE' || action === 'REVISED') {
         const mapFieldLabels = (fields) => {
             return (fields || [])
-                .filter(f => !['revisions', 'pirevision', 'lastrevisedat', 'isrevision', 'currentreviseno', 'actiontype', 'id', '_id', 'updatedat'].includes((f.field || '').toLowerCase()))
+                .filter(f => !['revisions', 'pirevision', 'lastrevisedat', 'isrevision', 'currentreviseno', 'actiontype', 'id', '_id', 'updatedat', 'iscnfcommissionupdate', 'indcommissionedited', 'bdcommissionedited', 'indcnfedited', 'indcnfbulkedited', 'cnfname'].includes((f.field || '').toLowerCase()))
                 .map(f => {
                     let label = f.label;
                     if (!label || label === f.field) {
@@ -856,11 +963,11 @@ const getLogFilledFields = (log) => {
         }
         if (Array.isArray(log.details?._filledFields) && log.details._filledFields.length > 0) {
             const clean = log.details._filledFields.filter(
-                f => !IGNORED_KEYS.has((f.field || '').toLowerCase()) && !isEncryptedString(f.value) && !/^[a-f0-9]{24}$/i.test(f.value)
+                f => !IGNORED_KEYS.has((f.field || '').toLowerCase()) && !['iscnfcommissionupdate', 'indcommissionedited', 'bdcommissionedited', 'indcnfedited', 'indcnfbulkedited', 'cnfname'].includes((f.field || '').toLowerCase()) && !isEncryptedString(f.value) && !/^[a-f0-9]{24}$/i.test(f.value)
             );
             // If it was a legacy full-payload dump with > 5 fields, don't show whole record
             if (clean.length > 5) {
-                const operationalKeys = new Set(['truckno', 'challanno', 'rate', 'quantity', 'unitprice', 'totalamount', 'paidamount', 'dueamount', 'discount', 'paymentmethod', 'remarks', 'department', 'designation', 'salary', 'phone', 'email', 'grandtotal', 'grandtotalquantity', 'productslist', 'ipnumbers', 'accountno', 'accountname', 'branch', 'bankname']);
+                const operationalKeys = new Set(['truckno', 'challanno', 'rate', 'quantity', 'unitprice', 'totalamount', 'paidamount', 'dueamount', 'discount', 'paymentmethod', 'remarks', 'department', 'designation', 'salary', 'phone', 'email', 'grandtotal', 'grandtotalquantity', 'productslist', 'ipnumbers', 'accountno', 'accountname', 'branch', 'bankname', 'indcommissionrate', 'indcommissionuom', 'indcommissiontotal', 'bdcommissionrate', 'bdcommissionuom', 'bdcommissiontotal', 'indcnfcomm', 'indcnfcost', 'indcnfuom', 'bdcnfcomm', 'bdcnfcost', 'bdcnfuom']);
                 return mapFieldLabels(clean.filter(f => operationalKeys.has((f.field || '').toLowerCase())));
             }
             return mapFieldLabels(clean);

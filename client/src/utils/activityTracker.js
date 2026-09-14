@@ -8,11 +8,29 @@ let getCurrentView = () => 'General';
 const recentClicks = new Map();
 let pendingCreateModule = null;
 
+const VIEW_MODULE_MAP = {
+    'ip-section': 'IP',
+    'ip': 'IP',
+    'lc-section': 'LC Management',
+    'lc': 'LC Management',
+    'pi-section': 'PI',
+    'pi': 'PI',
+    'cnf-section': 'C&F',
+    'cnf': 'C&F',
+    'indian-cnf': 'Indian C&F',
+    'bd-cnf': 'BD C&F',
+    'tr-setup': 'TR Setup',
+    'cost-of-goods': 'Cost of Goods',
+    'hrms-section': 'HRMS / Employee',
+    'hrms': 'HRMS / Employee'
+};
+
 /**
  * Format view name to human friendly module name
  */
 const viewToModuleName = (view) => {
     if (!view) return 'System';
+    if (VIEW_MODULE_MAP[view]) return VIEW_MODULE_MAP[view];
     const clean = view.replace(/-section$/, '').replace(/-/g, ' ');
     return clean.replace(/\b\w/g, c => c.toUpperCase());
 };
@@ -250,7 +268,7 @@ export const initActivityTracker = (userGetter, viewGetter) => {
                 targetId: clickable.id || undefined,
                 targetName: clickable.name || undefined
             });
-        } catch (err) {
+        } catch (_err) {
             // Ignore click tracker errors
         }
     }, true);

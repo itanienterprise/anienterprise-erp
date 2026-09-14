@@ -953,6 +953,8 @@ const CnF = ({
                 }
 
                 updatedSale.isCnfCommissionUpdate = true;
+                updatedSale.actionType = 'UPDATE';
+                updatedSale.cnfName = viewData?.name;
                 await axios.put(`${API_BASE_URL}/api/sales/${saleId}`, updatedSale);
             } else {
                 // ORIGINAL BRANCH FOR STOCK (LC)
@@ -979,6 +981,9 @@ const CnF = ({
                     updatedData.bdCnFBulkEdited = true;
                 }
 
+                updatedData.isCnfCommissionUpdate = true;
+                updatedData.actionType = 'UPDATE';
+                updatedData.cnfName = viewData?.name;
                 await axios.put(`${API_BASE_URL}/api/stock/${editRecord._id}`, updatedData);
             }
             setEditRecord(null);
@@ -1129,6 +1134,8 @@ const CnF = ({
                     }
 
                     updatedSale.isCnfCommissionUpdate = true;
+                    updatedSale.actionType = 'UPDATE';
+                    updatedSale.cnfName = viewData?.name;
                     await axios.put(`${API_BASE_URL}/api/sales/${saleId}`, updatedSale);
                 }
             }
@@ -2110,7 +2117,7 @@ const CnF = ({
                                                                 </td>
                                                                 <td className="cnf-table-cell text-center">
                                                                     {canUserEditRecord(row) ? (
-                                                                        <button onClick={(e) => { e.stopPropagation(); handleEditHistory(row); }} className="hover:bg-gray-100 p-1.5 rounded-md transition-colors">
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleEditHistory(row); }} data-action={`Edit C&F Commission (${viewData?.name || 'C&F'})`} title="Edit C&F Commission" aria-label="Edit C&F Commission" className="hover:bg-gray-100 p-1.5 rounded-md transition-colors">
                                                                             <EditIcon className="w-4 h-4 text-gray-400 hover:text-gray-900" />
                                                                         </button>
                                                                     ) : (
@@ -2632,7 +2639,7 @@ const CnF = ({
 
                             <div className="flex gap-3">
                                 <button onClick={() => setEditRecord(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 transition-colors rounded-xl font-bold text-gray-700">Cancel</button>
-                                <button onClick={handleSaveHistory} className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all flex-[2] justify-center text-lg h-[50px]">Update Record</button>
+                                <button onClick={handleSaveHistory} data-action={`Update C&F Commission (${viewData?.name || 'C&F'})`} className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all flex-[2] justify-center text-lg h-[50px]">Update Record</button>
                             </div>
                         </div>
                     </div>
@@ -2669,7 +2676,7 @@ const CnF = ({
 
                             <div className="flex gap-3">
                                 <button onClick={() => setIsBulkEditModalOpen(false)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 transition-colors rounded-xl font-bold text-gray-700">Cancel</button>
-                                <button onClick={handleBulkUpdateHistory} className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all flex-[2] justify-center text-lg h-[50px]">Apply to {selectedHistoryIds.size} Records</button>
+                                <button onClick={handleBulkUpdateHistory} data-action={`Bulk Update C&F Commission (${viewData?.name || 'C&F'})`} className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all flex-[2] justify-center text-lg h-[50px]">Apply to {selectedHistoryIds.size} Records</button>
                             </div>
                         </div>
                     </div>
