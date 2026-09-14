@@ -4,8 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-ENV NODE_OPTIONS="--max-old-space-size=8192"
-RUN npm run build
+RUN if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then npm run build; fi
 
 # Production stage
 FROM nginx:alpine

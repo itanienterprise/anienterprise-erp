@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
     legacy({
       targets: ['defaults', 'not IE 11', 'chrome 30', 'safari 7', 'ios 7', 'bb 10'],
       renderLegacyChunks: true,
-      modernPolyfills: true,
+      modernPolyfills: false,
     }),
     removeCrossorigin(),
     // TEMPORARILY DISABLED: The javascript-obfuscator is causing Docker to run out of memory (ResourceExhausted).
@@ -79,7 +79,11 @@ export default defineConfig(({ mode }) => ({
       output: {
         entryFileNames: `s/[hash].js`,
         chunkFileNames: `s/[hash].js`,
-        assetFileNames: `s/[hash].[ext]`
+        assetFileNames: `s/[hash].[ext]`,
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'axios', 'crypto-js'],
+          export: ['xlsx', 'jspdf', 'jspdf-autotable']
+        }
       }
     }
   }
