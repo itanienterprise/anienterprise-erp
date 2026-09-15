@@ -294,6 +294,7 @@ const SaleManagement = ({
     const [editingId, setEditingId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
+    const [submitError, setSubmitError] = useState('');
     const [viewData, setViewData] = useState(null);
     const [confirmModalConfig, setConfirmModalConfig] = useState(null);
     const [_customerSearch, setCustomerSearch] = useState('');
@@ -1946,6 +1947,7 @@ const SaleManagement = ({
         }
         setIsSubmitting(true);
         setSubmitStatus(null);
+        setSubmitError('');
         try {
             const url = editingId ? `${API_BASE_URL}/api/sales/${editingId}` : `${API_BASE_URL}/api/sales`;
 
@@ -1955,6 +1957,7 @@ const SaleManagement = ({
                 const isAcceptedEdit = origStatus !== 'requested';
                 const isAdminUser = currentUser?.username === 'admin' || (currentUser?.role || '').toLowerCase() === 'admin';
                 const editorName = currentUser ? (currentUser.name || currentUser.username || '') : '';
+                const editorUsername = currentUser ? (currentUser.username || '') : '';
                 const diffUpdatedFields = [];
                 if (originalData) {
                     const ignoreKeys = new Set(['_id', '__v', 'createdAt', 'updatedAt', 'isEdited', 'editedBy', 'editedByName', 'editedByUsername', 'status', 'saleType']);
@@ -2181,10 +2184,12 @@ const SaleManagement = ({
                 }, 1500);
             } else {
                 setSubmitStatus('error');
+                setSubmitError(response?.data?.message || 'Failed to save sale. Please try again.');
             }
         } catch (error) {
             console.error('Error submitting form:', error);
             setSubmitStatus('error');
+            setSubmitError(error.response?.data?.message || error.message || 'Failed to save sale. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -2264,6 +2269,7 @@ const SaleManagement = ({
         setActiveItemIndex(null);
         setActiveEntryIndex(null);
         setSubmitStatus(null);
+        setSubmitError('');
     };
 
     const handleEdit = (sale) => {
@@ -5964,7 +5970,7 @@ const SaleManagement = ({
                                     {submitStatus === 'error' && (
                                         <p className="text-red-600 font-medium flex items-center justify-center">
                                             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                            Failed to save sale. Please try again.
+                                            {submitError || 'Failed to save sale. Please try again.'}
                                         </p>
                                     )}
                                     <div className="flex items-center justify-center w-full relative z-10">
