@@ -69,7 +69,8 @@ const activityLogSchema = new mongoose.Schema({
         enum: ['SUCCESS', 'FAILED', 'INFO']
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    versionKey: false
 });
 
 // Composite index for fast querying & sorting

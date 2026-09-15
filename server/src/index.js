@@ -4170,20 +4170,25 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
     const actions = {};
     actionStats.forEach(a => { if (a._id) actions[a._id] = a.count; });
 
-    let storageSizeFormatted = '0.5 MB';
-    let dataSizeFormatted = '0 KB';
+    let storageSizeFormatted = '0 B';
+    let dataSizeFormatted = '0 B';
     try {
       const collStats = await mongoose.connection.db.command({ collStats: 'activitylogs' });
       if (collStats) {
         const diskBytes = collStats.storageSize || 0;
         const logicalBytes = collStats.size || 0;
-        const effectiveBytes = diskBytes > 0 ? diskBytes : logicalBytes;
-        if (effectiveBytes < 1024 * 1024) {
-          storageSizeFormatted = (effectiveBytes / 1024).toFixed(1) + ' KB';
-        } else {
-          storageSizeFormatted = (effectiveBytes / (1024 * 1024)).toFixed(2) + ' MB';
-        }
-        dataSizeFormatted = Math.round(logicalBytes / 1024) + ' KB';
+        // For small collections (< 64 KB, such as 1-20 logs), logicalBytes accurately reflects true data size
+        const actualBytes = (logicalBytes > 0 && logicalBytes < 64 * 1024) ? logicalBytes : (diskBytes > 0 ? diskBytes : logicalBytes);
+        
+        const formatDynamicBytes = (bytes) => {
+          if (!bytes || bytes <= 0) return '0 B';
+          if (bytes < 1024) return `${bytes} B`;
+          if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+          return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        };
+
+        storageSizeFormatted = formatDynamicBytes(actualBytes);
+        dataSizeFormatted = formatDynamicBytes(logicalBytes);
       }
     } catch (statErr) {}
 

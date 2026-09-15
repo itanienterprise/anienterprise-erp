@@ -1182,8 +1182,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
         totalLogs: 0,
         todayLogs: 0,
         todayActiveUsers: 0,
-        storageSize: '0.5 MB',
-        dataSize: '0 KB',
+        storageSize: '0 B',
+        dataSize: '0 B',
         categories: {},
         actions: {}
     });
@@ -1338,8 +1338,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     totalLogs: statsRes.data.totalLogs || 0,
                     todayLogs: statsRes.data.todayLogs || 0,
                     todayActiveUsers: statsRes.data.todayActiveUsers || 0,
-                    storageSize: statsRes.data.storageSize || '0.5 MB',
-                    dataSize: statsRes.data.dataSize || '0 KB',
+                    storageSize: statsRes.data.storageSize || '0 B',
+                    dataSize: statsRes.data.dataSize || '0 B',
                     categories: statsRes.data.categories || {},
                     actions: statsRes.data.actions || {}
                 });
@@ -1620,7 +1620,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                 Live Tracking
                             </span>
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                                Storage: {stats.storageSize || '0.5 MB'}
+                                Storage: {stats.storageSize || '0 B'}
                             </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
@@ -1726,7 +1726,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             {stats.totalLogs.toLocaleString()}
                         </div>
                         <p className="text-xs text-slate-500 mt-1">
-                            All recorded actions • {stats.storageSize || '0.5 MB'}
+                            All recorded actions • {stats.storageSize || '0 B'}
                         </p>
                     </div>
 

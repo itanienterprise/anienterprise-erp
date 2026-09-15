@@ -909,14 +909,41 @@ const logActivity = async (entry) => {
             cleanDetails = {};
         }
 
-        // Limit filled/updated field diffs to max 15 to avoid massive arrays
-        if (Array.isArray(cleanDetails._filledFields) && cleanDetails._filledFields.length > 15) {
-            cleanDetails._filledFields = cleanDetails._filledFields.slice(0, 15);
-            cleanDetails._filledFields.push({ field: 'more', label: '...and more items', value: '' });
+        // Clean empty/null/undefined keys to heavily compress payload
+        for (const [k, v] of Object.entries(cleanDetails)) {
+            if (v === '' || v === null || v === undefined) {
+                delete cleanDetails[k];
+            }
         }
-        if (Array.isArray(cleanDetails._updatedFields) && cleanDetails._updatedFields.length > 15) {
-            cleanDetails._updatedFields = cleanDetails._updatedFields.slice(0, 15);
-            cleanDetails._updatedFields.push({ field: 'more', label: '...and more changes', value: '' });
+        delete cleanDetails.__v;
+        if (cleanDetails._id) delete cleanDetails._id;
+
+        // Limit filled/updated field diffs to max 6 to avoid massive arrays
+        if (Array.isArray(cleanDetails._filledFields) && cleanDetails._filledFields.length > 6) {
+            cleanDetails._filledFields = cleanDetails._filledFields.slice(0, 6);
+        }
+        if (Array.isArray(cleanDetails._updatedFields) && cleanDetails._updatedFields.length > 8) {
+            cleanDetails._updatedFields = cleanDetails._updatedFields.slice(0, 8);
+        }
+
+        // Simplify user agent to compact string (e.g. "Chrome (macOS)")
+        let compactUserAgent = entry.userAgent || '';
+        if (compactUserAgent.length > 25) {
+            let browser = 'Browser';
+            if (compactUserAgent.includes('Firefox/')) browser = 'Firefox';
+            else if (compactUserAgent.includes('Edg/')) browser = 'Edge';
+            else if (compactUserAgent.includes('Chrome/') && !compactUserAgent.includes('Edg/')) browser = 'Chrome';
+            else if (compactUserAgent.includes('Safari/') && !compactUserAgent.includes('Chrome/')) browser = 'Safari';
+            else if (compactUserAgent.includes('Opera/') || compactUserAgent.includes('OPR/')) browser = 'Opera';
+
+            let os = 'Device';
+            if (compactUserAgent.includes('Macintosh') || compactUserAgent.includes('Mac OS X')) os = 'macOS';
+            else if (compactUserAgent.includes('Windows NT')) os = 'Windows';
+            else if (compactUserAgent.includes('iPhone') || compactUserAgent.includes('iPad')) os = 'iOS';
+            else if (compactUserAgent.includes('Android')) os = 'Android';
+            else if (compactUserAgent.includes('Linux')) os = 'Linux';
+
+            compactUserAgent = `${browser} (${os})`;
         }
 
         const logDoc = new ActivityLog({
@@ -931,7 +958,7 @@ const logActivity = async (entry) => {
             description: entry.description || 'System operation performed',
             details: cleanDetails,
             ip: entry.ip || '',
-            userAgent: entry.userAgent || '',
+            userAgent: compactUserAgent,
             method: entry.method || '',
             path: entry.path || '',
             status: entry.status || 'SUCCESS'
