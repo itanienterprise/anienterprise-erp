@@ -130,7 +130,8 @@ const resolveModuleFromPath = (path, body) => {
 const HEAVY_KEYS = new Set([
     'saleshistory', 'paymenthistory', 'history', 'collections', 'backupdata',
     'data', 'allrecords', 'allsalesrecords', 'raw', 'buffer', 'image', 'photo',
-    'base64', 'file', 'attachments'
+    'base64', 'file', 'attachments', 'attachment', 'ipattachment', 'filedata',
+    'filecontent', 'pdf', 'document', 'doc', 'avatar', 'receiptfile'
 ]);
 
 /**
@@ -960,7 +961,8 @@ const computeUpdatedFields = (oldDoc, newDoc) => {
         'requestedby', 'requestedbyusername', 'saletype', 'view', 'targetid',
         'revisions', 'pirevision', 'lastrevisedat', 'revisedby', 'revisedbyname',
         'isrevision', 'currentreviseno', 'actiontype', 'isrevisiondelete', 'deletedrevisionno',
-        'iscnfcommissionupdate', 'indcommissionedited', 'bdcommissionedited', 'indcnfedited', 'indcnfbulkedited', 'cnfname'
+        'iscnfcommissionupdate', 'indcommissionedited', 'bdcommissionedited', 'indcnfedited', 'indcnfbulkedited', 'cnfname',
+        'currenttotalqty', 'currenttotaltrucks', 'totaltrucks', 'totalqty'
     ]);
 
     const changes = [];

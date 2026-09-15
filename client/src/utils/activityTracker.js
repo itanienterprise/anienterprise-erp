@@ -357,16 +357,19 @@ const extractModalDetails = (clickable, modal) => {
  * Identify canonical action verb from element attributes or SVG icon
  */
 const detectButtonVerb = (clickable, rawLabel) => {
-    const l = (rawLabel || '').toLowerCase();
+    let clean = (rawLabel || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    // Strip leading '+' or '+ ' if followed by words (e.g. '+ update sale' -> 'update sale')
+    clean = clean.replace(/^\+\s*/, '');
+    const l = clean;
     
     // Explicit label matches
     if (/^(edit|edit record|edit original|revise)\b/i.test(l)) return 'Edit';
     if (/^(delete|trash|remove)\b/i.test(l)) return 'Delete';
     if (/^(view|preview|view details)\b/i.test(l)) return 'View';
-    if (/^(save|save record|save changes)\b/i.test(l)) return 'Save';
-    if (/^(update|update record)\b/i.test(l)) return 'Update';
-    if (/^(submit|confirm)\b/i.test(l)) return 'Submit';
-    if (/^(\+ new|\+ add|\+|new|add)\b/i.test(l)) return 'Create New';
+    if (/^(save|save record|save changes|save sale)\b/i.test(l)) return 'Save';
+    if (/^(update|update record|update sale)\b/i.test(l)) return 'Update';
+    if (/^(submit|confirm|confirm sale)\b/i.test(l)) return 'Submit';
+    if (/^(new|add|\+ new|\+ add)\b/i.test(l) || (rawLabel || '').trim() === '+') return 'Create New';
     if (/^(accept|approve)\b/i.test(l)) return 'Accept';
     if (/^(reject|decline)\b/i.test(l)) return 'Reject';
     if (/^(download|export|excel|pdf)\b/i.test(l)) return 'Download';
@@ -597,11 +600,11 @@ export const initActivityTracker = (userGetter, viewGetter) => {
 
             // If not explicit, identify canonical verb & context
             if (!label) {
-                const rawLabel = clickable.getAttribute('title') ||
+                const rawLabel = (clickable.getAttribute('title') ||
                     clickable.getAttribute('aria-label') ||
-                    clickable.innerText?.trim() ||
+                    clickable.innerText ||
                     clickable.name ||
-                    clickable.id || '';
+                    clickable.id || '').replace(/\s+/g, ' ').trim();
 
                 const cleanRaw = rawLabel.trim().toLowerCase();
                 if (NAV_FILTER_KEYWORDS.has(cleanRaw) || /^(requested|edit requested)(\s+\d+)?$/i.test(cleanRaw)) {
@@ -632,8 +635,11 @@ export const initActivityTracker = (userGetter, viewGetter) => {
 
             if (!label || typeof label !== 'string') return;
 
-            // Trim label and sanitize
-            label = label.split('\n')[0].trim();
+            // Normalize label and sanitize
+            label = label.replace(/\s+/g, ' ').trim();
+            if (/^\+\s+[A-Za-z]/.test(label)) {
+                label = label.replace(/^\+\s*/, '');
+            }
             const cleanLower = label.toLowerCase();
             if (NAV_FILTER_KEYWORDS.has(cleanLower) || /^(requested|edit requested)(\s+\d+)?$/i.test(cleanLower)) {
                 return;

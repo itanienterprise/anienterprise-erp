@@ -4175,8 +4175,15 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
     try {
       const collStats = await mongoose.connection.db.command({ collStats: 'activitylogs' });
       if (collStats) {
-        storageSizeFormatted = (collStats.storageSize / (1024 * 1024)).toFixed(2) + ' MB';
-        dataSizeFormatted = Math.round(collStats.size / 1024) + ' KB';
+        const diskBytes = collStats.storageSize || 0;
+        const logicalBytes = collStats.size || 0;
+        const effectiveBytes = diskBytes > 0 ? diskBytes : logicalBytes;
+        if (effectiveBytes < 1024 * 1024) {
+          storageSizeFormatted = (effectiveBytes / 1024).toFixed(1) + ' KB';
+        } else {
+          storageSizeFormatted = (effectiveBytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+        dataSizeFormatted = Math.round(logicalBytes / 1024) + ' KB';
       }
     } catch (statErr) {}
 

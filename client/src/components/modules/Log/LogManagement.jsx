@@ -267,54 +267,6 @@ const getLogAction = (log) => {
         return 'CARD CLOSE';
     }
 
-    // Check rejection
-    if (
-        path.includes('/reject') ||
-        details.rejectedBy ||
-        details.rejectionReason ||
-        (typeof details.status === 'string' && details.status.toLowerCase().includes('reject')) ||
-        desc.startsWith('rejected ')
-    ) {
-        return 'REJECT';
-    }
-
-    // Check accept (specific for requests/sales where accept is used)
-    if (
-        path.includes('/accept') ||
-        (typeof details.status === 'string' && details.status.toLowerCase().includes('accept')) ||
-        details.acceptedBy ||
-        details.acceptedByName ||
-        details.acceptedByUsername ||
-        desc.startsWith('accepted ')
-    ) {
-        return 'ACCEPT';
-    }
-
-    // Check approval
-    if (
-        path.includes('/approve') ||
-        details.approvedBy ||
-        details.approvedByName ||
-        details.firstApprovedBy ||
-        details.secondApprovedBy ||
-        details.smApprovedBy ||
-        details.editApprovedBy ||
-        desc.startsWith('approved ')
-    ) {
-        return 'APPROVE';
-    }
-
-    // Check close
-    if (
-        path.includes('/close') ||
-        details.closedBy ||
-        details.isClosed === true ||
-        (typeof details.status === 'string' && ['closed', 'close'].includes(details.status.toLowerCase())) ||
-        desc.startsWith('closed ')
-    ) {
-        return 'CLOSE';
-    }
-
     // Check revision delete
     if (
         act === 'DELETE_REVISION' ||
@@ -351,6 +303,62 @@ const getLogAction = (log) => {
         (path.includes('/pi') && act === 'UPDATE' && !details.isRevision && !details.piRevision && (desc.toLowerCase().includes('original') || (!details.revisions || details.revisions.length <= 1)))
     ) {
         return 'UPDATE_ORIGINAL';
+    }
+
+    // Authoritative Mutation Actions: Never convert UPDATE, CREATE, or DELETE to approval/accept
+    if (act === 'UPDATE' || desc.startsWith('updated ')) {
+        return 'UPDATE';
+    }
+    if (act === 'CREATE' || desc.startsWith('created ')) {
+        return 'CREATE';
+    }
+    if (act === 'DELETE' || desc.startsWith('deleted ')) {
+        return 'DELETE';
+    }
+
+    // Check rejection (explicit action, path, or transition in updatedFields only)
+    if (
+        path.includes('/reject') ||
+        details.actionType === 'REJECT' ||
+        details.action === 'REJECT' ||
+        desc.startsWith('rejected ') ||
+        (Array.isArray(details._updatedFields) && details._updatedFields.some(f => f.field === 'status' && String(f.value).toLowerCase().includes('reject')))
+    ) {
+        return 'REJECT';
+    }
+
+    // Check accept (explicit action, path, or transition in updatedFields only)
+    if (
+        path.includes('/accept') ||
+        details.actionType === 'ACCEPT' ||
+        details.action === 'ACCEPT' ||
+        desc.startsWith('accepted ') ||
+        (Array.isArray(details._updatedFields) && details._updatedFields.some(f => f.field === 'acceptedBy' || (f.field === 'status' && String(f.value).toLowerCase().includes('accept'))))
+    ) {
+        return 'ACCEPT';
+    }
+
+    // Check approval (explicit action, path, or transition in updatedFields only)
+    if (
+        path.includes('/approve') ||
+        path.includes('/1st-approve') ||
+        path.includes('/2nd-approve') ||
+        details.actionType === 'APPROVE' ||
+        details.action === 'APPROVE' ||
+        desc.startsWith('approved ') ||
+        (Array.isArray(details._updatedFields) && details._updatedFields.some(f => f.field?.toLowerCase().includes('approv')))
+    ) {
+        return 'APPROVE';
+    }
+
+    // Check close
+    if (
+        path.includes('/close') ||
+        details.actionType === 'CLOSE' ||
+        details.action === 'CLOSE' ||
+        desc.startsWith('closed ')
+    ) {
+        return 'CLOSE';
     }
 
     return act;
@@ -645,12 +653,18 @@ const formatLogDescription = (desc, log) => {
         let refPart = '';
         if (piVal) refPart = `PI #${piVal}`;
         else if (lcVal) refPart = `LC #${lcVal}`;
+        else if (ordVal && invVal && ordVal !== invVal) refPart = `Order #${ordVal} (Invoice #${invVal})`;
         else if (invVal) refPart = `Invoice #${invVal}`;
         else if (ordVal) refPart = `Order #${ordVal}`;
         else if (chVal) refPart = `Challan #${chVal}`;
         else {
-            const match = desc.match(/(?:Invoice|Order|LC|PI|Challan)\s*#?\s*["']?([^"',\]()]+)["']?/i);
-            if (match) refPart = match[0].trim();
+            const ordInvMatch = desc.match(/Order\s*#?([A-Za-z0-9_-]+)\s*\(\s*Invoice\s*#?([A-Za-z0-9_-]+)\s*\)/i);
+            if (ordInvMatch) {
+                refPart = `Order #${ordInvMatch[1].trim()} (Invoice #${ordInvMatch[2].trim()})`;
+            } else {
+                const match = desc.match(/(?:Invoice|Order|LC|PI|Challan)\s*#?\s*["']?([^"',\]()]+)["']?/i);
+                if (match) refPart = match[0].trim();
+            }
         }
 
         let name = details.customerName || details.companyName || details.name || details.productName || details.employeeName || details.supplierName || details.bankName || '';
@@ -692,7 +706,9 @@ const formatLogDescription = (desc, log) => {
         }
 
         // Append specific changed fields if recorded in details._updatedFields
-        const upd = Array.isArray(details._updatedFields) && details._updatedFields.length > 0 ? details._updatedFields : [];
+        const ignoredDiffKeys = new Set(['id', '_id', 'updatedat', 'revisions', 'lastrevisedat', 'pirevision', 'isrevision', 'currentreviseno', 'actiontype', 'editingrevisionno', 'currenttotalqty', 'currenttotaltrucks', 'totaltrucks', 'totalqty']);
+        const rawUpd = Array.isArray(details._updatedFields) && details._updatedFields.length > 0 ? details._updatedFields : [];
+        const upd = rawUpd.filter(f => !ignoredDiffKeys.has((f.field || '').toLowerCase()));
         if (upd.length > 0) {
             if (upd.length === 1) {
                 const f = upd[0];
@@ -1042,7 +1058,7 @@ const getLogFilledFields = (log) => {
     if (action === 'UPDATE' || action === 'UPDATE_ORIGINAL' || action === 'REVISE' || action === 'REVISED') {
         const mapFieldLabels = (fields) => {
             return (fields || [])
-                .filter(f => !['revisions', 'pirevision', 'lastrevisedat', 'isrevision', 'currentreviseno', 'actiontype', 'id', '_id', 'updatedat', 'iscnfcommissionupdate', 'indcommissionedited', 'bdcommissionedited', 'indcnfedited', 'indcnfbulkedited', 'cnfname'].includes((f.field || '').toLowerCase()))
+                .filter(f => !['revisions', 'pirevision', 'lastrevisedat', 'isrevision', 'currentreviseno', 'actiontype', 'id', '_id', 'updatedat', 'iscnfcommissionupdate', 'indcommissionedited', 'bdcommissionedited', 'indcnfedited', 'indcnfbulkedited', 'cnfname', 'currenttotalqty', 'currenttotaltrucks', 'totaltrucks', 'totalqty'].includes((f.field || '').toLowerCase()))
                 .map(f => {
                     let label = f.label;
                     if (!label || label === f.field) {

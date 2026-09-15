@@ -5977,6 +5977,11 @@ const SaleManagement = ({
                                         <button
                                             type="submit"
                                             disabled={isSubmitting}
+                                            data-action={editingId ? `Update ${saleType || 'General'} Sale (${[formData.orderNo, formData.invoiceNo].filter(Boolean).join(' - ')})` : `Confirm ${saleType || 'General'} Sale`}
+                                            data-customer-name={formData.customerName || ''}
+                                            data-total-amount={formData.totalAmount || ''}
+                                            data-invoice-no={formData.invoiceNo || ''}
+                                            data-order-no={formData.orderNo || ''}
                                             className={`px-10 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
                                             {isSubmitting ? (
@@ -5988,9 +5993,13 @@ const SaleManagement = ({
                                                     Processing...
                                                 </span>
                                             ) : (
-                                                <span className="flex items-center gap-1">
-                                                    <span className="text-base">+</span>
-                                                    {editingId ? 'Update Sale' : 'Confirm Sale'}
+                                                <span className="flex items-center gap-1.5">
+                                                    {editingId ? (
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"></path></svg>
+                                                    ) : (
+                                                        <span className="text-base font-bold leading-none">+</span>
+                                                    )}
+                                                    <span>{editingId ? 'Update Sale' : 'Confirm Sale'}</span>
                                                 </span>
                                             )}
                                         </button>
