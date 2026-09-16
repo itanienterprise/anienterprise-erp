@@ -166,15 +166,15 @@ const cleanupZeroStockBaselineItems = async () => {
         return true;
       });
 
-      // 2. Renaming mappings in HILI:
-      // - VD (59,830 kg) -> PUSKAR NANO
-      // - SONPURI (42,680 kg) -> V D
-      // - RANGOLI (41,990 kg) -> RANI MIX
+      // 2. Renaming mappings in HILI & BOGURA:
+      // - VD (59,830 kg in HILI, 600 kg in BOGURA) -> PUSKAR NANO
+      // - SONPURI (42,680 kg in HILI) -> V D
+      // - RANGOLI (41,990 kg in HILI) -> RANI MIX
       const normalized = filtered.map(r => {
         const b = (r.brand || '').trim().toLowerCase();
         const wh = (r.warehouse || '').trim().toUpperCase();
 
-        if (wh === 'HILI' && b === 'v d' && (r.lcNo === '087326010686' || r.lcNo === '087326010693')) {
+        if (b === 'v d' && (r.lcNo === '087326010686' || r.lcNo === '087326010693')) {
           changed = true;
           return { ...r, brand: 'PUSKAR NANO' };
         }
