@@ -154,15 +154,12 @@ const cleanupZeroStockBaselineItems = async () => {
 
       let changed = false;
 
-      // 1. Filter out ghost entries
+      // 1. Filter out ghost entries (< 100 kg remainder)
       const filtered = decrypted.snapshotRecords.filter(r => {
         const b = (r.brand || '').trim().toLowerCase();
-        const wh = (r.warehouse || '').trim().toUpperCase();
         const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
 
-        if (b === 'seven star') { changed = true; return false; }
         if (b === 'rangoli' && qty < 100) { changed = true; return false; }
-        if (b === 'rani mix' && wh === 'HILI' && (Math.abs(qty - 5880) < 1 || Math.abs(qty - 21051) < 1)) { changed = true; return false; }
         return true;
       });
 
@@ -170,9 +167,12 @@ const cleanupZeroStockBaselineItems = async () => {
       // - VD (59,830 kg in HILI, 600 kg in BOGURA) -> PUSKAR NANO
       // - SONPURI (42,680 kg in HILI) -> V D
       // - RANGOLI (41,990 kg in HILI) -> RANI MIX
+      // - SEVEN STAR (41,566 kg + 17,475 kg in HILI) -> SHIDDHART MEDIUM
+      // - 5,880 kg & 21,051 kg -> RAPID MEDIUM
       const normalized = filtered.map(r => {
         const b = (r.brand || '').trim().toLowerCase();
         const wh = (r.warehouse || '').trim().toUpperCase();
+        const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
 
         if (b === 'v d' && (r.lcNo === '087326010686' || r.lcNo === '087326010693')) {
           changed = true;
@@ -185,6 +185,14 @@ const cleanupZeroStockBaselineItems = async () => {
         if (wh === 'HILI' && b === 'rangoli' && r.lcNo === '087326010693') {
           changed = true;
           return { ...r, brand: 'RANI MIX' };
+        }
+        if (wh === 'HILI' && b === 'seven star') {
+          changed = true;
+          return { ...r, brand: 'SHIDDHART MEDIUM' };
+        }
+        if (wh === 'HILI' && b === 'rani mix' && (Math.abs(qty - 5880) < 1 || Math.abs(qty - 21051) < 1)) {
+          changed = true;
+          return { ...r, brand: 'RAPID MEDIUM' };
         }
         return r;
       });
