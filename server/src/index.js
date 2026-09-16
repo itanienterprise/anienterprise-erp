@@ -672,10 +672,10 @@ apiRouter.use(async (req, res, next) => {
   res.on('finish', () => {
     try {
       const user = req.session?.user;
-      const username = user?.username || reqBodySnapshot?.username || 'anonymous';
-      const userRole = user?.role || '';
-      const displayName = user?.name || username;
-      const userId = user?.id || '';
+      const username = user?.username || reqBodySnapshot?.username || reqBodySnapshot?.entryBy || reqBodySnapshot?.updatedBy || reqBodySnapshot?.userId || reqBodySnapshot?.user?.username || 'anonymous';
+      const userRole = user?.role || reqBodySnapshot?.userRole || reqBodySnapshot?.createdRole || '';
+      const displayName = user?.name || reqBodySnapshot?.entryByName || reqBodySnapshot?.updatedByName || username;
+      const userId = user?.id || reqBodySnapshot?.userId || '';
 
       if (username === 'anonymous' && !url.includes('/login')) {
         return;
@@ -4395,11 +4395,15 @@ apiRouter.get('/api/logs', adminOnly, async (req, res) => {
     if (category && category !== 'ALL') {
       query.actionCategory = category;
     }
-    if (action && action !== 'ALL') {
+    if (action === 'NO_CLICKS' || action === '!CLICK') {
+      query.action = { $ne: 'CLICK' };
+    } else if (action && action !== 'ALL') {
       const actionsList = typeof action === 'string'
         ? action.split(',').map(a => a.trim()).filter(Boolean)
         : Array.isArray(action) ? action : [action];
-      if (actionsList.length === 1) {
+      if (actionsList.includes('NO_CLICKS') || actionsList.includes('!CLICK')) {
+        query.action = { $ne: 'CLICK' };
+      } else if (actionsList.length === 1) {
         query.action = actionsList[0];
       } else if (actionsList.length > 1) {
         query.action = { $in: actionsList };
@@ -4408,12 +4412,12 @@ apiRouter.get('/api/logs', adminOnly, async (req, res) => {
     if (startDate || endDate) {
       query.timestamp = {};
       if (startDate) {
-        const start = startDate.includes('T') ? new Date(startDate) : new Date(`${startDate}T00:00:00`);
-        query.timestamp.$gte = start;
+        const startStr = startDate.includes('T') ? startDate : `${startDate}T00:00:00+06:00`;
+        query.timestamp.$gte = new Date(startStr);
       }
       if (endDate) {
-        const end = endDate.includes('T') ? new Date(endDate) : new Date(`${endDate}T23:59:59.999`);
-        query.timestamp.$lte = end;
+        const endStr = endDate.includes('T') ? endDate : `${endDate}T23:59:59.999+06:00`;
+        query.timestamp.$lte = new Date(endStr);
       }
     }
     if (search && search.trim()) {
@@ -4546,6 +4550,7 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
 
     // Fetch detailed activity for active users today
     let todayActiveUsersList = [];
+    let todayLiveUsers = 0;
     try {
       const activeAgg = await ActivityLog.aggregate([
         { $match: { ...baseFilter, timestamp: { $gte: todayStart } } },
@@ -4588,7 +4593,7 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
         };
       });
 
-      const todayLiveUsers = todayActiveUsersList.filter(u => u.isLive).length;
+      todayLiveUsers = todayActiveUsersList.filter(u => u.isLive).length;
     } catch (aggErr) {
       console.error('Error aggregating today active users:', aggErr);
     }
@@ -4598,7 +4603,7 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       totalLogs,
       todayLogs,
       todayActiveUsers: todayUsers.length,
-      todayLiveUsers: typeof todayLiveUsers !== 'undefined' ? todayLiveUsers : 0,
+      todayLiveUsers,
       todayActiveUsersList,
       storageSize: storageSizeFormatted,
       dataSize: dataSizeFormatted,

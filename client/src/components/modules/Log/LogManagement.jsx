@@ -1187,9 +1187,9 @@ const getCleanDetails = (details) => {
 };
 
 const ALL_ACTION_TYPES = [
-    'CREATE', 'UPDATE', 'DELETE', 'ACCEPT', 'REJECT', 'CLICK', 'LOGIN', 'REVISE', 'BACKUP', 'RESTORE'
+    'CREATE', 'UPDATE', 'DELETE', 'ACCEPT', 'REJECT', 'CLICK', 'LOGIN', 'REVISE', 'BACKUP', 'RESTORE', 'APPROVE', 'UPDATE_ORIGINAL', 'CLOSE'
 ];
-const DEFAULT_NON_CLICK_ACTIONS = ALL_ACTION_TYPES.filter(a => a !== 'CLICK');
+const DEFAULT_NON_CLICK_ACTIONS = ['NO_CLICKS'];
 
 const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     // Data states
@@ -1214,7 +1214,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUser, setSelectedUser] = useState('ALL');
     const [selectedModule, setSelectedModule] = useState('ALL');
-    const [selectedActions, setSelectedActions] = useState(DEFAULT_NON_CLICK_ACTIONS); // Default: All except CLICK
+    const [selectedActions, setSelectedActions] = useState([]); // Default: All actions including clicks and mutations
     const getTodayStr = () => {
         const now = new Date();
         const y = now.getFullYear();
@@ -1233,8 +1233,9 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     const [totalPages, setTotalPages] = useState(1);
 
     // Auto-refresh interval (in seconds, 0 = off)
-    const [autoRefreshInterval, setAutoRefreshInterval] = useState(15);
+    const [autoRefreshInterval, setAutoRefreshInterval] = useState(10);
     const timerRef = useRef(null);
+    const [syncError, setSyncError] = useState(null);
 
     // Modal states
     const [selectedLog, setSelectedLog] = useState(null);
@@ -1314,6 +1315,42 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
         openUserHistory(userHistoryModal.username, userHistoryModal.displayName, userHistoryModal.userRole, month);
     };
 
+    const userHistoryModalRef = useRef(userHistoryModal);
+    userHistoryModalRef.current = userHistoryModal;
+
+    // Auto-refresh user history modal every 5s while open
+    useEffect(() => {
+        if (!userHistoryModal.isOpen || !userHistoryModal.username) return;
+
+        const refreshHistory = async () => {
+            try {
+                const current = userHistoryModalRef.current;
+                if (!current.isOpen || !current.username) return;
+                const params = { username: current.username };
+                if (current.selectedMonth) params.month = current.selectedMonth;
+                params.tz = '+06:00';
+                params._t = Date.now();
+                const res = await axios.get('/api/logs/user-history', { params });
+                if (res.data && res.data.success) {
+                    setUserHistoryModal(prev => {
+                        if (!prev.isOpen || prev.username !== res.data.username) return prev;
+                        return {
+                            ...prev,
+                            displayName: res.data.displayName || prev.displayName,
+                            userRole: res.data.userRole || prev.userRole,
+                            selectedMonth: res.data.selectedMonth || prev.selectedMonth,
+                            availableMonths: res.data.availableMonths || prev.availableMonths,
+                            history: res.data.history || []
+                        };
+                    });
+                }
+            } catch (e) {}
+        };
+
+        const timer = setInterval(refreshHistory, 5000);
+        return () => clearInterval(timer);
+    }, [userHistoryModal.isOpen, userHistoryModal.username, userHistoryModal.selectedMonth]);
+
     // Custom popover dropdown states
     const [openDropdown, setOpenDropdown] = useState(null); // 'user', 'module', 'action', 'refresh', 'limit', null
     const userDropdownRef = useRef(null);
@@ -1328,10 +1365,15 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     // Toggle multi-select action
     const toggleAction = (act) => {
         setSelectedActions(prev => {
-            if (prev.includes(act)) {
-                return prev.filter(a => a !== act);
+            let current = prev.length === 0
+                ? [...actionOptions]
+                : prev.includes('NO_CLICKS')
+                ? actionOptions.filter(a => a !== 'CLICK')
+                : [...prev];
+            if (current.includes(act)) {
+                return current.filter(a => a !== act);
             } else {
-                return [...prev, act];
+                return [...current, act];
             }
         });
         setPage(1);
@@ -1401,7 +1443,11 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             if (searchTerm.trim()) queryParams.append('search', searchTerm.trim());
             if (selectedUser && selectedUser !== 'ALL') queryParams.append('user', selectedUser);
             if (selectedModule && selectedModule !== 'ALL') queryParams.append('module', selectedModule);
-            if (selectedActions.length > 0) queryParams.append('action', selectedActions.join(','));
+            if (selectedActions.includes('NO_CLICKS')) {
+                queryParams.append('action', 'NO_CLICKS');
+            } else if (selectedActions.length > 0) {
+                queryParams.append('action', selectedActions.join(','));
+            }
             if (activeCategory && activeCategory !== 'ALL') queryParams.append('category', activeCategory);
             if (startDate) queryParams.append('startDate', startDate);
             if (endDate) queryParams.append('endDate', endDate);
@@ -1484,14 +1530,16 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             }
 
             setLastRefreshedAt(new Date());
-
-            if (isManual && addNotification) {
-                addNotification('Activity logs refreshed successfully', 'success');
-            }
+            setSyncError(null);
         } catch (err) {
             console.error('Error fetching logs:', err);
-            if (addNotification) {
-                addNotification('Failed to load activity logs', 'error');
+            const status = err?.response?.status;
+            if (status === 401 || status === 403) {
+                setSyncError('Admin access required or session expired');
+            } else if (err?.code === 'ERR_NETWORK') {
+                setSyncError('Network connection lost');
+            } else {
+                setSyncError('Sync failed');
             }
         } finally {
             setIsLoading(false);
@@ -1508,6 +1556,9 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
         }
     };
 
+    const fetchLogsRef = useRef(fetchLogs);
+    fetchLogsRef.current = fetchLogs;
+
     // Trigger fetch on dependencies change
     useEffect(() => {
         fetchLogs(true);
@@ -1522,7 +1573,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    // Auto-refresh interval
+    // Auto-refresh interval (always uses fetchLogsRef to avoid stale closures)
     useEffect(() => {
         if (timerRef.current) {
             clearInterval(timerRef.current);
@@ -1531,14 +1582,16 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
         if (autoRefreshInterval > 0) {
             timerRef.current = setInterval(() => {
-                fetchLogs(false);
+                if (fetchLogsRef.current) {
+                    fetchLogsRef.current(false);
+                }
             }, autoRefreshInterval * 1000);
         }
 
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [autoRefreshInterval, page, limit, activeCategory, selectedUser, selectedModule, selectedActions, startDate, endDate, searchTerm]);
+    }, [autoRefreshInterval]);
 
     // Format relative time
     const formatTimeAgo = (isoDate) => {
@@ -1760,10 +1813,20 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     <div>
                         <div className="flex items-center gap-2 flex-wrap">
                             <h1 className="text-xl font-bold text-slate-800 tracking-tight">System Operation & Audit Logs</h1>
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Live Tracking
-                            </span>
+                            {syncError ? (
+                                <span 
+                                    title={syncError}
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200"
+                                >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                    Sync Warning: {syncError}
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    Live Tracking
+                                </span>
+                            )}
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                                 Storage: {stats.storageSize || '0 B'}
                             </span>
@@ -2216,10 +2279,11 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                         {/* Filter by Action Dropdown Button (Multi-Selectable) */}
                         {(() => {
                             const isDefaultNoClicks =
-                                selectedActions.length > 0 &&
+                                selectedActions.includes('NO_CLICKS') ||
+                                (selectedActions.length > 0 &&
                                 !selectedActions.includes('CLICK') &&
-                                actionOptions.filter(a => a !== 'CLICK').every(a => selectedActions.includes(a));
-                            const isAllSelected = selectedActions.length > 0 && actionOptions.every(a => selectedActions.includes(a));
+                                actionOptions.filter(a => a !== 'CLICK').every(a => selectedActions.includes(a)));
+                            const isAllSelected = selectedActions.length > 0 && !selectedActions.includes('NO_CLICKS') && actionOptions.every(a => selectedActions.includes(a));
 
                             return (
                                 <div className="relative min-w-[135px] flex-1 sm:flex-none" ref={actionDropdownRef}>
@@ -2282,15 +2346,14 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                         Actions
                                                     </span>
                                                     <span className="text-3xs font-semibold text-slate-400 whitespace-nowrap">
-                                                        ({selectedActions.length}/{actionOptions.length})
+                                                        ({selectedActions.length === 0 ? actionOptions.length : selectedActions.includes('NO_CLICKS') ? actionOptions.filter(a => a !== 'CLICK').length : selectedActions.length}/{actionOptions.length})
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center p-0.5 bg-slate-100/90 rounded-lg border border-slate-200/80 gap-0.5 shrink-0">
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            const nonClicks = actionOptions.filter(a => a !== 'CLICK');
-                                                            setSelectedActions(nonClicks.length > 0 ? nonClicks : DEFAULT_NON_CLICK_ACTIONS);
+                                                            setSelectedActions(['NO_CLICKS']);
                                                             setPage(1);
                                                         }}
                                                         title="Select all actions except clicks (Default)"
@@ -2352,7 +2415,11 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                 {actionOptions
                                                     .filter(a => !actionSearchText || a.toLowerCase().includes(actionSearchText.toLowerCase()))
                                                     .map(act => {
-                                                        const isSelected = selectedActions.includes(act);
+                                                        const isSelected = selectedActions.length === 0
+                                                            ? true
+                                                            : selectedActions.includes('NO_CLICKS')
+                                                            ? act !== 'CLICK'
+                                                            : selectedActions.includes(act);
                                                         const count = stats.actions?.[act] || 0;
                                                         const isClick = act === 'CLICK';
                                                         return (
