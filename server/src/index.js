@@ -4234,11 +4234,55 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       });
     } catch (logErr) {}
 
+    // Fetch detailed activity for active users today
+    let todayActiveUsersList = [];
+    try {
+      const activeAgg = await ActivityLog.aggregate([
+        { $match: { ...baseFilter, timestamp: { $gte: todayStart } } },
+        { $sort: { timestamp: -1 } },
+        {
+          $group: {
+            _id: '$username',
+            firstActive: { $last: '$timestamp' },
+            lastActive: { $first: '$timestamp' },
+            actionCount: { $sum: 1 },
+            lastAction: { $first: '$action' },
+            lastModule: { $first: '$module' },
+            lastIp: { $first: '$ip' },
+            displayName: { $first: '$displayName' },
+            userRole: { $first: '$userRole' }
+          }
+        },
+        { $sort: { lastActive: -1 } }
+      ]);
+
+      const currentUser = req.session?.user;
+      todayActiveUsersList = activeAgg.map(u => {
+        const isCurrent = Boolean(currentUser && currentUser.username === u._id);
+        const lastActiveDate = isCurrent ? new Date() : u.lastActive;
+        return {
+          username: u._id,
+          name: userNamesMap[u._id] || u.displayName || (u._id === 'admin' ? 'Administrator' : u._id),
+          role: u.userRole || (u._id === 'admin' ? 'Administrator' : 'User'),
+          firstActive: u.firstActive,
+          lastActive: lastActiveDate,
+          actionCount: u.actionCount,
+          lastAction: u.lastAction,
+          lastModule: u.lastModule,
+          lastIp: u.lastIp,
+          isCurrent
+        };
+      });
+    } catch (aggErr) {
+      console.error('Error aggregating today active users:', aggErr);
+    }
+
     res.json({
       success: true,
       totalLogs,
       todayLogs,
       todayActiveUsers: todayUsers.length,
+      todayActiveUsersList,
       storageSize: storageSizeFormatted,
       dataSize: dataSizeFormatted,
       categories,

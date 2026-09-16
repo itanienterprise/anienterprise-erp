@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
 import {
@@ -1187,6 +1188,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
         totalLogs: 0,
         todayLogs: 0,
         todayActiveUsers: 0,
+        todayActiveUsersList: [],
         storageSize: '0 B',
         dataSize: '0 B',
         categories: {},
@@ -1226,6 +1228,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     // Modal states
     const [selectedLog, setSelectedLog] = useState(null);
     const [showClearModal, setShowClearModal] = useState(false);
+    const [showActiveUsersModal, setShowActiveUsersModal] = useState(false);
     const [clearOlderThan, setClearOlderThan] = useState('30');
     const [clearAllConfirm, setClearAllConfirm] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
@@ -1383,6 +1386,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     totalLogs: statsRes.data.totalLogs || 0,
                     todayLogs: statsRes.data.todayLogs || 0,
                     todayActiveUsers: statsRes.data.todayActiveUsers || 0,
+                    todayActiveUsersList: statsRes.data.todayActiveUsersList || [],
                     storageSize: statsRes.data.storageSize || '0 B',
                     dataSize: statsRes.data.dataSize || '0 B',
                     categories: statsRes.data.categories || {},
@@ -1835,18 +1839,33 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                         <p className="text-xs text-slate-500 mt-1">Activity since midnight</p>
                     </div>
 
-                    {/* Active Users Today */}
-                    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow">
+                    {/* Active Users Today - Clickable Card */}
+                    <div
+                        onClick={() => setShowActiveUsersModal(true)}
+                        title="Click to view list of active users and their activity times today"
+                        className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs hover:shadow-md hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 transition-all cursor-pointer group"
+                    >
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Users Today</span>
-                            <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider group-hover:text-indigo-600 transition-colors">
+                                Active Users Today
+                            </span>
+                            <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-2xs">
                                 <UserIcon className="w-4 h-4" />
                             </span>
                         </div>
-                        <div className="mt-2 text-2xl font-black text-indigo-600 tracking-tight">
-                            {stats.todayActiveUsers}
+                        <div className="mt-2 flex items-baseline justify-between">
+                            <div className="text-2xl font-black text-indigo-600 tracking-tight">
+                                {stats.todayActiveUsers}
+                            </div>
+                            <span className="text-3xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full group-hover:bg-indigo-100 transition-colors flex items-center gap-0.5">
+                                <span>View list</span>
+                                <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                            </span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">Distinct users logged in</p>
+                        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Distinct users logged in today
+                        </p>
                     </div>
 
                     {/* Action Breakdown */}
@@ -2688,17 +2707,21 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             </div>
 
             {/* Inspection Modal */}
-            {selectedLog && (() => {
-                const modalAction = getLogAction(selectedLog);
-                const modalModule = getLogModule(selectedLog);
-                const modalFilledFields = getLogFilledFields(selectedLog);
-                const cleanPayload = getCleanDetails(selectedLog.details);
+            {selectedLog && typeof document !== 'undefined' && document.body && createPortal(
+                (() => {
+                    const modalAction = getLogAction(selectedLog);
+                    const modalModule = getLogModule(selectedLog);
+                    const modalFilledFields = getLogFilledFields(selectedLog);
+                    const cleanPayload = getCleanDetails(selectedLog.details);
 
-                return (
-                    <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-                        <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
-                            {/* Modal Header */}
-                            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                    return (
+                        <div
+                            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
+                            onClick={(e) => { if (e.target === e.currentTarget) setSelectedLog(null); }}
+                        >
+                            <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden ring-1 ring-black/5 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
+                                {/* Modal Header */}
+                                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
                                         <ActivityLogIcon className="w-5 h-5" />
@@ -2838,12 +2861,17 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                         </div>
                     </div>
                 );
-            })()}
+            })(),
+            document.body
+        )}
 
             {/* Clear Logs Confirmation Modal */}
-            {showClearModal && (
-                <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            {showClearModal && typeof document !== 'undefined' && document.body && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowClearModal(false); }}
+                >
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 ring-1 ring-black/5 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-3 text-rose-600">
                             <div className="p-2.5 rounded-full bg-rose-100">
                                 <TrashIcon className="w-6 h-6" />
@@ -2924,7 +2952,228 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Active Users Today Modal */}
+            {showActiveUsersModal && typeof document !== 'undefined' && document.body && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowActiveUsersModal(false); }}
+                >
+                    <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-slate-200/90 overflow-hidden ring-1 ring-black/5 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div className="px-6 py-4.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-blue-50/30 flex items-center justify-between">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 ring-4 ring-indigo-50 shrink-0">
+                                    <UserIcon className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-bold text-slate-800 text-base">Active Users Today</h3>
+                                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-bold text-2xs shadow-2xs">
+                                            <span className="relative flex h-1.5 w-1.5">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                            </span>
+                                            <span>{stats.todayActiveUsersList?.length || stats.todayActiveUsers || 0} active now</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        Users logged in and operating on the system since midnight today
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowActiveUsersModal(false)}
+                                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors"
+                            >
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body: Active Users Cards */}
+                        <div className="p-5 overflow-y-auto space-y-3 bg-slate-50/40">
+                            {(!stats.todayActiveUsersList || stats.todayActiveUsersList.length === 0) ? (
+                                <div className="py-16 text-center text-slate-400 bg-white rounded-xl border border-slate-200/60">
+                                    <UserIcon className="w-12 h-12 mx-auto mb-2 opacity-25 text-slate-400" />
+                                    <p className="font-bold text-sm text-slate-700">No active users recorded today yet</p>
+                                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                                        Activity will appear here automatically when staff log in and perform actions on the ERP
+                                    </p>
+                                </div>
+                            ) : (
+                                stats.todayActiveUsersList.map((user, idx) => {
+                                    const lastTime = user.lastActive ? new Date(user.lastActive) : null;
+                                    const firstTime = user.firstActive ? new Date(user.firstActive) : null;
+
+                                    const getRelativeTime = (date, isCurrent) => {
+                                        if (isCurrent) return 'Active now';
+                                        if (!date) return '';
+                                        const diffSec = Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 1000));
+                                        if (diffSec < 60) return 'Just now';
+                                        const diffMin = Math.floor(diffSec / 60);
+                                        if (diffMin < 60) return `${diffMin}m ago`;
+                                        const diffHr = Math.floor(diffMin / 60);
+                                        return `${diffHr}h ${diffMin % 60}m ago`;
+                                    };
+
+                                    const formatDuration = (start, end, isCurrent) => {
+                                        if (!start) return '1 min';
+                                        const now = Date.now();
+                                        const startMs = new Date(start).getTime();
+                                        const endMs = end ? new Date(end).getTime() : startMs;
+
+                                        // A user is actively in session if they are currently logged in,
+                                        // or their last action was recent (within 2 hours), or if start === end (single action session)
+                                        const isRecentlyActive = isCurrent || (now - endMs) < 2 * 60 * 60 * 1000;
+                                        const durationMs = isRecentlyActive ? Math.max(0, now - startMs) : Math.max(0, endMs - startMs);
+                                        const diffMin = Math.floor(durationMs / 60000);
+
+                                        if (diffMin < 1) return '1 min';
+                                        if (diffMin < 60) return `${diffMin} ${diffMin === 1 ? 'min' : 'mins'}`;
+                                        const hours = Math.floor(diffMin / 60);
+                                        const remainingMins = diffMin % 60;
+                                        if (remainingMins === 0) {
+                                            return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+                                        }
+                                        return `${hours}h ${remainingMins}m`;
+                                    };
+
+                                    const initials = (user.name || user.username || 'U')
+                                        .split(' ')
+                                        .filter(Boolean)
+                                        .slice(0, 2)
+                                        .map(n => n[0].toUpperCase())
+                                        .join('');
+
+                                    return (
+                                        <div
+                                            key={user.username || idx}
+                                            className="bg-white rounded-xl p-4 border border-slate-200/80 hover:border-indigo-300 hover:shadow-md transition-all duration-200 group"
+                                        >
+                                            {/* Top Row: User Identity & Action Button */}
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-blue-600 text-white font-black text-sm flex items-center justify-center shadow-xs ring-2 ring-indigo-50 shrink-0">
+                                                        {initials}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <h4 className="font-bold text-slate-800 text-sm truncate">
+                                                                {user.name || user.username}
+                                                            </h4>
+                                                            <span className="font-mono text-3xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold border border-slate-200/70">
+                                                                @{user.username}
+                                                            </span>
+                                                            {user.role && (
+                                                                <span className="text-3xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wide">
+                                                                    {user.role}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-2xs text-slate-400 mt-0.5 flex items-center gap-2">
+                                                            {user.lastIp && (
+                                                                <span>IP: <strong className="font-mono text-slate-600">{user.lastIp}</strong></span>
+                                                            )}
+                                                            {user.lastIp && firstTime && <span>•</span>}
+                                                            {firstTime && (
+                                                                <span>Started today at {firstTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedUser(user.username);
+                                                            setDatePreset('TODAY');
+                                                            setPage(1);
+                                                            setShowActiveUsersModal(false);
+                                                        }}
+                                                        className="inline-flex items-center gap-1 text-2xs font-bold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-2xs"
+                                                    >
+                                                        <span>View Logs</span>
+                                                        <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Micro-Metrics 3-Column Strip */}
+                                            <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                {/* Metric 1: Total Active Duration */}
+                                                <div className="p-2 rounded-lg bg-indigo-50/60 border border-indigo-100 flex items-center gap-2.5">
+                                                    <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="block text-3xs font-bold text-indigo-900/60 uppercase tracking-wider">Total Active</span>
+                                                        <span className="text-xs font-black text-indigo-700 truncate block">
+                                                            {formatDuration(firstTime, lastTime, user.isCurrent)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Metric 2: Last Active Time */}
+                                                <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70 flex items-center gap-2.5">
+                                                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="block text-3xs font-bold text-slate-400 uppercase tracking-wider">Last Active</span>
+                                                        <span className="text-xs font-bold text-slate-700 truncate block">
+                                                            {lastTime ? lastTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                                            <span className="text-3xs font-medium text-slate-500 ml-1">({getRelativeTime(lastTime, user.isCurrent)})</span>
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Metric 3: Activity & Latest Operation */}
+                                                <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70 flex items-center gap-2.5">
+                                                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                                        <ActivityLogIcon className="w-3.5 h-3.5" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="block text-3xs font-bold text-slate-400 uppercase tracking-wider">Activity Count</span>
+                                                        <div className="text-xs font-bold text-slate-700 truncate flex items-center gap-1">
+                                                            <span>{user.actionCount || 1} {user.actionCount === 1 ? 'action' : 'actions'}</span>
+                                                            {user.lastAction && (
+                                                                <span className="text-3xs font-semibold px-1 py-0.2 rounded bg-slate-200 text-slate-700 font-mono">
+                                                                    {user.lastAction}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
+                            <span className="text-slate-500 text-2xs">
+                                Times and active durations are tracked from system logs
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setShowActiveUsersModal(false)}
+                                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-xs transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     );
