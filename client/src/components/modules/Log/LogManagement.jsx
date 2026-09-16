@@ -1229,6 +1229,17 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     const [selectedLog, setSelectedLog] = useState(null);
     const [showClearModal, setShowClearModal] = useState(false);
     const [showActiveUsersModal, setShowActiveUsersModal] = useState(false);
+    const [userHistoryModal, setUserHistoryModal] = useState({
+        isOpen: false,
+        username: '',
+        displayName: '',
+        userRole: '',
+        selectedMonth: '',
+        availableMonths: [],
+        history: [],
+        loading: false,
+        error: null
+    });
     const [clearOlderThan, setClearOlderThan] = useState('30');
     const [clearAllConfirm, setClearAllConfirm] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
@@ -1248,6 +1259,48 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             return `${uname} (${name})`;
         }
         return uname;
+    };
+
+    const openUserHistory = async (username, displayName, userRole, month = null) => {
+        setShowActiveUsersModal(false);
+        setUserHistoryModal(prev => ({
+            ...prev,
+            isOpen: true,
+            username,
+            displayName: displayName || username,
+            userRole: userRole || 'User',
+            loading: true,
+            error: null
+        }));
+
+        try {
+            const params = { username };
+            if (month) params.month = month;
+            params.tz = '+06:00';
+            const res = await axios.get('/api/logs/user-history', { params });
+            if (res.data && res.data.success) {
+                setUserHistoryModal(prev => ({
+                    ...prev,
+                    username: res.data.username,
+                    displayName: res.data.displayName || prev.displayName,
+                    userRole: res.data.userRole || prev.userRole,
+                    selectedMonth: res.data.selectedMonth,
+                    availableMonths: res.data.availableMonths || [res.data.selectedMonth],
+                    history: res.data.history || [],
+                    loading: false
+                }));
+            } else {
+                setUserHistoryModal(prev => ({ ...prev, loading: false, error: 'Could not load activity history' }));
+            }
+        } catch (err) {
+            console.error('Failed to fetch user activity history:', err);
+            setUserHistoryModal(prev => ({ ...prev, loading: false, error: 'Failed to load activity history' }));
+        }
+    };
+
+    const handleMonthChange = (month) => {
+        if (!userHistoryModal.username) return;
+        openUserHistory(userHistoryModal.username, userHistoryModal.displayName, userHistoryModal.userRole, month);
     };
 
     // Custom popover dropdown states
@@ -3089,15 +3142,11 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     <button
                                                         type="button"
-                                                        onClick={() => {
-                                                            setSelectedUser(user.username);
-                                                            setDatePreset('TODAY');
-                                                            setPage(1);
-                                                            setShowActiveUsersModal(false);
-                                                        }}
-                                                        className="inline-flex items-center gap-1 text-2xs font-bold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-2xs"
+                                                        onClick={() => openUserHistory(user.username, user.name || user.username, user.role)}
+                                                        className="inline-flex items-center gap-1.5 text-2xs font-bold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-2xs group-hover:border-indigo-300 shrink-0"
                                                     >
-                                                        <span>View Logs</span>
+                                                        <CalendarIcon className="w-3.5 h-3.5 text-indigo-500 group-hover:text-white transition-colors" />
+                                                        <span>History</span>
                                                         <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                                                     </button>
                                                 </div>
@@ -3166,6 +3215,281 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             <button
                                 type="button"
                                 onClick={() => setShowActiveUsersModal(false)}
+                                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-xs transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Monthly User Activity History Modal */}
+            {userHistoryModal.isOpen && typeof document !== 'undefined' && document.body && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            setUserHistoryModal(prev => ({ ...prev, isOpen: false }));
+                        }
+                    }}
+                >
+                    <div
+                        className="bg-white rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-slate-200/90 overflow-hidden ring-1 ring-black/5 animate-in zoom-in-95 duration-150"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-blue-50/30 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-indigo-500/25 ring-4 ring-indigo-50 shrink-0">
+                                    {(userHistoryModal.displayName || userHistoryModal.username || 'U')
+                                        .split(' ')
+                                        .filter(Boolean)
+                                        .slice(0, 2)
+                                        .map(n => n[0].toUpperCase())
+                                        .join('')}
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h3 className="font-bold text-slate-800 text-base">
+                                            {userHistoryModal.displayName}
+                                        </h3>
+                                        <span className="font-mono text-3xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold border border-slate-200/70">
+                                            @{userHistoryModal.username}
+                                        </span>
+                                        {userHistoryModal.userRole && (
+                                            <span className="text-3xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wide">
+                                                {userHistoryModal.userRole}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                                        <span>Monthly Activity & Attendance Breakdown</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                {/* Month Selector */}
+                                <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs hover:border-indigo-300 transition-colors">
+                                    <CalendarIcon className="w-4 h-4 text-indigo-600 shrink-0" />
+                                    <select
+                                        value={userHistoryModal.selectedMonth}
+                                        onChange={(e) => handleMonthChange(e.target.value)}
+                                        className="text-xs font-bold text-slate-700 bg-transparent border-0 focus:ring-0 cursor-pointer pr-1"
+                                    >
+                                        {(userHistoryModal.availableMonths || []).map(m => {
+                                            const [y, mon] = (m || '').split('-');
+                                            const d = new Date(parseInt(y, 10), parseInt(mon, 10) - 1, 1);
+                                            const label = !isNaN(d.getTime()) ? d.toLocaleString('default', { month: 'long', year: 'numeric' }) : m;
+                                            return (
+                                                <option key={m} value={m}>
+                                                    {label}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setUserHistoryModal(prev => ({ ...prev, isOpen: false }))}
+                                    className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors"
+                                >
+                                    <XIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Monthly Summary 4-Card Bar */}
+                        <div className="px-6 py-3 bg-slate-50/80 border-b border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs">
+                                <span className="text-3xs font-bold text-slate-400 uppercase tracking-wider block">Days Active</span>
+                                <span className="text-sm font-extrabold text-slate-800 mt-0.5 block">
+                                    {userHistoryModal.history.length} {userHistoryModal.history.length === 1 ? 'day' : 'days'}
+                                </span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs">
+                                <span className="text-3xs font-bold text-indigo-500 uppercase tracking-wider block">Total Active Time</span>
+                                <span className="text-sm font-extrabold text-indigo-700 mt-0.5 block">
+                                    {(() => {
+                                        const ms = userHistoryModal.history.reduce((acc, h) => acc + (h.totalActiveMs || 0), 0);
+                                        const totalMinutes = Math.floor(ms / 60000);
+                                        const hours = Math.floor(totalMinutes / 60);
+                                        const mins = totalMinutes % 60;
+                                        if (hours === 0) return `${mins || 1} min`;
+                                        if (mins === 0) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+                                        return `${hours}h ${mins}m`;
+                                    })()}
+                                </span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs">
+                                <span className="text-3xs font-bold text-emerald-500 uppercase tracking-wider block">Total Operations</span>
+                                <span className="text-sm font-extrabold text-emerald-700 mt-0.5 block">
+                                    {userHistoryModal.history.reduce((acc, h) => acc + (h.activityCount || 0), 0).toLocaleString()} actions
+                                </span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200/70 shadow-2xs">
+                                <span className="text-3xs font-bold text-slate-400 uppercase tracking-wider block">Daily Average</span>
+                                <span className="text-sm font-extrabold text-slate-700 mt-0.5 block">
+                                    {userHistoryModal.history.length > 0 ? (() => {
+                                        const ms = Math.round(userHistoryModal.history.reduce((acc, h) => acc + (h.totalActiveMs || 0), 0) / userHistoryModal.history.length);
+                                        const totalMinutes = Math.floor(ms / 60000);
+                                        const hours = Math.floor(totalMinutes / 60);
+                                        const mins = totalMinutes % 60;
+                                        if (hours === 0) return `${mins || 1} min`;
+                                        if (mins === 0) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+                                        return `${hours}h ${mins}m`;
+                                    })() : '0 min'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Table Body */}
+                        <div className="flex-1 overflow-y-auto bg-slate-50/30">
+                            {userHistoryModal.loading ? (
+                                <div className="py-16 text-center text-slate-400">
+                                    <RefreshIcon className="w-7 h-7 mx-auto mb-2 animate-spin text-indigo-600" />
+                                    <p className="text-xs font-semibold text-slate-600">Loading monthly activity history...</p>
+                                </div>
+                            ) : userHistoryModal.history.length === 0 ? (
+                                <div className="py-16 text-center text-slate-400">
+                                    <CalendarIcon className="w-10 h-10 mx-auto mb-2 opacity-25 text-slate-400" />
+                                    <p className="font-bold text-sm text-slate-700">No activity recorded for this month</p>
+                                    <p className="text-xs text-slate-400 mt-1">Select another month from the top right to view historical records.</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-slate-200/80 bg-slate-100/75 text-slate-500 font-bold uppercase tracking-wider text-3xs sticky top-0 z-10 backdrop-blur-xs">
+                                                <th className="px-6 py-3">Date</th>
+                                                <th className="px-5 py-3">Started Time</th>
+                                                <th className="px-5 py-3">Total Active</th>
+                                                <th className="px-5 py-3">Last Active</th>
+                                                <th className="px-6 py-3 text-right">Activity Count</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 bg-white">
+                                            {userHistoryModal.history.map((row) => {
+                                                const formatDuration = (ms) => {
+                                                    if (!ms || ms < 60000) return '1 min';
+                                                    const totalMinutes = Math.floor(ms / 60000);
+                                                    const hours = Math.floor(totalMinutes / 60);
+                                                    const mins = totalMinutes % 60;
+                                                    if (hours === 0) return `${mins} ${mins === 1 ? 'min' : 'mins'}`;
+                                                    if (mins === 0) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+                                                    return `${hours}h ${mins}m`;
+                                                };
+
+                                                const formatTime = (iso) => {
+                                                    if (!iso) return '-';
+                                                    try {
+                                                        const d = new Date(iso);
+                                                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+                                                    } catch (e) {
+                                                        return '-';
+                                                    }
+                                                };
+
+                                                const formatDate = (dateStr) => {
+                                                    if (!dateStr) return '';
+                                                    try {
+                                                        const [y, m, d] = dateStr.split('-').map(Number);
+                                                        const date = new Date(y, m - 1, d);
+                                                        return date.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+                                                    } catch (e) {
+                                                        return dateStr;
+                                                    }
+                                                };
+
+                                                return (
+                                                    <tr key={row.date} className="hover:bg-indigo-50/25 transition-colors group">
+                                                        {/* Date */}
+                                                        <td className="px-6 py-3.5 whitespace-nowrap">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-slate-800">{formatDate(row.date)}</span>
+                                                                {row.isToday && (
+                                                                    <span className="px-2 py-0.5 rounded-full text-3xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                        Today
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Started Time */}
+                                                        <td className="px-5 py-3.5 whitespace-nowrap font-mono text-slate-600 font-medium">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                </svg>
+                                                                <span>{formatTime(row.startedTime)}</span>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Total Active */}
+                                                        <td className="px-5 py-3.5 whitespace-nowrap">
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-2xs border border-indigo-100 shadow-2xs">
+                                                                {formatDuration(row.totalActiveMs)}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Last Active */}
+                                                        <td className="px-5 py-3.5 whitespace-nowrap font-mono text-slate-600 font-medium">
+                                                            <div className="flex items-center gap-2">
+                                                                <span>{formatTime(row.lastActive)}</span>
+                                                                {row.isLive && (
+                                                                    <span className="inline-flex items-center gap-1 text-3xs font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                                                        Active now
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Activity Count */}
+                                                        <td className="px-6 py-3.5 whitespace-nowrap text-right">
+                                                            <div className="inline-flex items-center gap-1.5 justify-end">
+                                                                <span className="font-extrabold text-slate-800 text-xs">
+                                                                    {row.activityCount}
+                                                                </span>
+                                                                <span className="text-3xs text-slate-400 font-semibold">
+                                                                    {row.activityCount === 1 ? 'action' : 'actions'}
+                                                                </span>
+                                                                {row.lastAction && (
+                                                                    <span className="text-3xs font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                                                        {row.lastAction}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setUserHistoryModal(prev => ({ ...prev, isOpen: false }));
+                                    setShowActiveUsersModal(true);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold shadow-2xs transition-colors"
+                            >
+                                <ChevronLeftIcon className="w-4 h-4" />
+                                <span>Back to Active Users</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setUserHistoryModal(prev => ({ ...prev, isOpen: false }))}
                                 className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-xs transition-colors"
                             >
                                 Close

@@ -4298,6 +4298,151 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
   }
 });
 
+// 2.5. Fetch monthly user activity history for a specific user
+apiRouter.get('/api/logs/user-history', adminOnly, async (req, res) => {
+  try {
+    const { username, month, tz = '+06:00' } = req.query;
+    if (!username) {
+      return res.status(400).json({ success: false, message: 'Username is required' });
+    }
+
+    // Determine year and month
+    let yearNum, monthNum;
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const parts = month.split('-');
+      yearNum = parseInt(parts[0], 10);
+      monthNum = parseInt(parts[1], 10);
+    } else {
+      const now = new Date();
+      yearNum = now.getFullYear();
+      monthNum = now.getMonth() + 1;
+    }
+
+    const queryStart = new Date(yearNum, monthNum - 1, 1, 0, 0, 0, 0);
+    queryStart.setDate(queryStart.getDate() - 1);
+    const queryEnd = new Date(yearNum, monthNum, 1, 0, 0, 0, 0);
+    queryEnd.setDate(queryEnd.getDate() + 1);
+
+    const currentUser = req.session?.user;
+    const isCurrentLoggedInUser = Boolean(currentUser && currentUser.username === username);
+
+    // Fetch user display info & full name
+    let displayName = username === 'admin' ? 'Administrator' : username;
+    let userRole = username === 'admin' ? 'Administrator' : 'User';
+
+    try {
+      const employees = await Employee.find();
+      for (const emp of employees) {
+        try {
+          let decrypted = decryptData(emp.data);
+          if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
+            try { decrypted = decryptData(decrypted.data); } catch (e) {}
+          }
+          if (decrypted && (decrypted.employeeId === username || decrypted.username === username || decrypted.email === username)) {
+            if (decrypted.name) displayName = decrypted.name.trim();
+            if (decrypted.designation || decrypted.role) userRole = decrypted.designation || decrypted.role;
+            break;
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+
+    // Group logs by day within the target month using timezone
+    const targetMonthKey = `${yearNum}-${String(monthNum).padStart(2, '0')}`;
+    const dayAgg = await ActivityLog.aggregate([
+      {
+        $match: {
+          username: username,
+          timestamp: { $gte: queryStart, $lte: queryEnd }
+        }
+      },
+      {
+        $project: {
+          timestamp: 1,
+          action: 1,
+          module: 1,
+          dateStr: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp", timezone: tz } },
+          monthStr: { $dateToString: { format: "%Y-%m", date: "$timestamp", timezone: tz } }
+        }
+      },
+      {
+        $match: {
+          monthStr: targetMonthKey
+        }
+      },
+      { $sort: { timestamp: 1 } },
+      {
+        $group: {
+          _id: "$dateStr",
+          startedTime: { $first: "$timestamp" },
+          lastActive: { $last: "$timestamp" },
+          activityCount: { $sum: 1 },
+          lastAction: { $last: "$action" },
+          lastModule: { $last: "$module" }
+        }
+      },
+      { $sort: { _id: -1 } }
+    ]);
+
+    const todayStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz === '+06:00' ? 'Asia/Dhaka' : undefined
+    }).format(new Date());
+
+    const history = dayAgg.map(day => {
+      const isToday = day._id === todayStr;
+      let lastActiveDate = day.lastActive;
+      if (isToday && isCurrentLoggedInUser) {
+        lastActiveDate = new Date();
+      }
+
+      const startMs = new Date(day.startedTime).getTime();
+      const endMs = new Date(lastActiveDate).getTime();
+      const durationMs = Math.max(60000, endMs - startMs);
+
+      return {
+        date: day._id,
+        startedTime: day.startedTime,
+        lastActive: lastActiveDate,
+        totalActiveMs: durationMs,
+        activityCount: day.activityCount,
+        lastAction: day.lastAction,
+        lastModule: day.lastModule,
+        isToday,
+        isLive: isToday && isCurrentLoggedInUser
+      };
+    });
+
+    // Available months for this user
+    const availableMonthsAgg = await ActivityLog.aggregate([
+      { $match: { username: username } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m", date: "$timestamp", timezone: tz } }
+        }
+      },
+      { $sort: { _id: -1 } }
+    ]);
+
+    const availableMonths = availableMonthsAgg.map(m => m._id).filter(Boolean);
+    if (!availableMonths.includes(targetMonthKey)) {
+      availableMonths.unshift(targetMonthKey);
+    }
+
+    res.json({
+      success: true,
+      username,
+      displayName,
+      userRole,
+      selectedMonth: targetMonthKey,
+      availableMonths,
+      history
+    });
+  } catch (err) {
+    console.error('Error fetching user activity history:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch user activity history' });
+  }
+});
+
 // 3. Client-side user action & click logger (authenticated users only)
 apiRouter.post('/api/logs/client-action', async (req, res) => {
   try {
