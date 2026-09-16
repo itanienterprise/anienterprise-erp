@@ -119,6 +119,16 @@ const resolveModuleFromPath = (path, body) => {
         return 'General Sale';
     }
 
+    if (/^\/api\/stock-baseline/i.test(path)) {
+        return 'Stock Baseline';
+    }
+    if (/^\/api\/stock/i.test(path)) {
+        if (targetObj.purchaseReceiveId || targetObj.requestedBy === 'PurchaseReceive' || targetObj.isPurchase) {
+            return 'Purchase Receive';
+        }
+        return 'LC Receive';
+    }
+
     for (const item of MODULE_PATH_MAP) {
         if (item.pattern.test(path)) {
             return item.module;

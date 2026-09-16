@@ -1092,11 +1092,14 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                                 if (isWhFilter && saleWH && !saleWH.startsWith(stockFilters.warehouse.toLowerCase()) && saleWH !== stockFilters.warehouse.toLowerCase()) return;
 
                                 const sq = safeParse(be.quantity);
-                                let sp = safeParse(be.packet);
+                                let sp = safeParse(be.bag !== undefined && be.bag !== null && be.bag !== '' ? be.bag : be.packet);
+                                const pSize = brandObj.packetSize || 30;
 
-                                if (sp <= 0 && sq > 0) {
-                                    const pSize = brandObj.packetSize || 30;
-                                    sp = sq / pSize;
+                                if (sq > 0 && pSize > 0) {
+                                    const expectedPkt = sq / pSize;
+                                    if (sp <= 0 || Math.abs(sp * pSize - sq) > (pSize * 0.5)) {
+                                        sp = expectedPkt;
+                                    }
                                 }
 
                                 consumedSales.add(saleEntryId);
@@ -1397,10 +1400,13 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                     const sDate = (sale.date || '').split('T')[0];
                     const isBefore = startDate && sDate < startDate;
                     const sq = safeParse(be.quantity);
-                    let sp = safeParse(be.packet);
-                    if (sp <= 0 && sq > 0) {
-                        const pSize = brandObj.packetSize || 30;
-                        sp = sq / pSize;
+                    let sp = safeParse(be.bag !== undefined && be.bag !== null && be.bag !== '' ? be.bag : be.packet);
+                    const pSize = brandObj.packetSize || 30;
+                    if (sq > 0 && pSize > 0) {
+                        const expectedPkt = sq / pSize;
+                        if (sp <= 0 || Math.abs(sp * pSize - sq) > (pSize * 0.5)) {
+                            sp = expectedPkt;
+                        }
                     }
 
                     const sType = (sale.saleType || '').toLowerCase();

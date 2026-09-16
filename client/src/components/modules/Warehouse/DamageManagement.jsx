@@ -6,12 +6,14 @@ import CustomDatePicker from '../../shared/CustomDatePicker';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
+import { calculateStockData, calculatePktRemainder, isLcMatch } from '../../../utils/stockHelpers';
 
-const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, stockRecords, damages, fetchDamages, fetchStockRecords, addNotification }) => {
+const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, stockRecords, damages, fetchDamages, fetchStockRecords, addNotification, activeBaseline: propActiveBaseline }) => {
     const canDelete = hasPermission(currentUser, 'warehouse', 'delete');
     const canShowEntryBy = hasPermission(currentUser, 'warehouse', 'showEntryBy');
     const isDataEntry = (currentUser?.role || '').toLowerCase() === 'data entry';
     const [employeesMap, setEmployeesMap] = useState({});
+    const [activeBaseline, setActiveBaseline] = useState(propActiveBaseline || null);
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
@@ -30,6 +32,16 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         reason: 'Broken',
         remarks: ''
     });
+
+    useEffect(() => {
+        if (propActiveBaseline) {
+            setActiveBaseline(propActiveBaseline);
+        } else {
+            axios.get(`${API_BASE_URL}/api/stock-baseline/active`)
+                .then(res => setActiveBaseline(res.data || null))
+                .catch(err => console.error('Error fetching baseline in DamageManagement:', err));
+        }
+    }, [propActiveBaseline]);
 
     useEffect(() => {
         if (fetchDamages) fetchDamages();
@@ -61,6 +73,195 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [activeDropdown]);
 
+    const uniqueWarehouses = useMemo(() => {
+        const whSet = new Set();
+        (warehouseData || []).forEach(w => {
+            const name = (w.whName || w.warehouse || w.name || '').trim();
+            if (name && name !== 'Inventory Adjustment') whSet.add(name);
+        });
+        (stockRecords || []).forEach(s => {
+            const name = (s.name || s.whName || s.warehouse || '').trim();
+            if (name && name !== 'Inventory Adjustment') whSet.add(name);
+        });
+        if (activeBaseline && activeBaseline.status === 'active' && Array.isArray(activeBaseline.snapshotRecords)) {
+            activeBaseline.snapshotRecords.forEach(s => {
+                const name = (s.warehouse || s.whName || '').trim();
+                if (name && name !== 'Inventory Adjustment') whSet.add(name);
+            });
+        }
+        return Array.from(whSet).sort();
+    }, [warehouseData, stockRecords, activeBaseline]);
+
+    // Calculate warehouse stock using centralized stock calculation
+    const warehouseStock = useMemo(() => {
+        const wh = (formData.warehouse || '').trim();
+        if (!wh) return [];
+
+        const res = calculateStockData(
+            stockRecords,
+            { warehouse: wh, reportType: 'price' },
+            '',
+            warehouseData,
+            salesRecords,
+            products,
+            damages,
+            activeBaseline
+        );
+
+        return res?.displayRecords || [];
+    }, [formData.warehouse, stockRecords, warehouseData, salesRecords, products, damages, activeBaseline]);
+
+    const filteredProducts = useMemo(() => {
+        const prodSet = new Set();
+
+        // 1. Incorporate products from products catalog
+        (products || []).forEach(p => {
+            const pName = typeof p === 'string' ? p : (p.name || p.productName);
+            if (pName) prodSet.add(pName.trim());
+        });
+
+        // 2. Incorporate stockRecords, warehouseData, activeBaseline
+        (stockRecords || []).forEach(s => {
+            const pName = s.productName || s.product;
+            if (pName) prodSet.add(pName.trim());
+        });
+        (warehouseData || []).forEach(w => {
+            const pName = w.productName || w.product;
+            if (pName) prodSet.add(pName.trim());
+        });
+        if (activeBaseline && activeBaseline.status === 'active' && Array.isArray(activeBaseline.snapshotRecords)) {
+            activeBaseline.snapshotRecords.forEach(s => {
+                if (s.productName) prodSet.add(s.productName.trim());
+            });
+        }
+
+        // 3. Also incorporate warehouseStock
+        if (warehouseStock && warehouseStock.length > 0) {
+            warehouseStock.forEach(p => {
+                if (p.productName) prodSet.add(p.productName.trim());
+            });
+        }
+
+        const allProds = Array.from(prodSet).sort().map(name => ({ _id: name, name }));
+
+        if (!formData.lcNo) return allProds;
+
+        const targetLc = (formData.lcNo || '').trim().toLowerCase();
+        const isGeneralLc = !targetLc || targetLc === '-';
+
+        return allProds.filter(p => {
+            const pName = (p.name || '').trim().toLowerCase();
+            if (formData.warehouse && warehouseStock) {
+                const matched = warehouseStock.find(item => (item.productName || '').trim().toLowerCase() === pName);
+                if (matched && matched.brandList && matched.brandList.length > 0) {
+                    return matched.brandList.some(b => {
+                        const lc = (b.lcNo || '').trim().toLowerCase();
+                        return isGeneralLc ? (!lc || lc === '-') : isLcMatch(lc, targetLc);
+                    });
+                }
+            }
+            return true;
+        });
+    }, [formData.warehouse, warehouseStock, products, stockRecords, warehouseData, activeBaseline, formData.lcNo]);
+
+    const selectedProductBrands = useMemo(() => {
+        if (!formData.productName) return [];
+        const targetProd = formData.productName.trim().toLowerCase();
+        const targetLc = (formData.lcNo || '').trim().toLowerCase();
+        const isGeneralLc = !targetLc || targetLc === '-';
+
+        const brandsMap = {};
+
+        // 1. From warehouseStock if warehouse selected
+        if (formData.warehouse && warehouseStock) {
+            const matchedProd = warehouseStock.find(p => (p.productName || '').trim().toLowerCase() === targetProd);
+            if (matchedProd && matchedProd.brandList) {
+                matchedProd.brandList.forEach(b => {
+                    const bName = (b.brand || '').trim();
+                    const lc = (b.lcNo || '').trim().toLowerCase();
+                    const lcMatch = !targetLc || (isGeneralLc ? (!lc || lc === '-') : isLcMatch(lc, targetLc));
+                    if (bName && lcMatch) {
+                        brandsMap[bName.toLowerCase()] = {
+                            brand: bName,
+                            rate: b.purchasedPrice ?? b.rate ?? 0,
+                            packetSize: b.packetSize || matchedProd.packetSize || 30
+                        };
+                    }
+                });
+            }
+        }
+
+        // 2. Fallbacks & additions: stockRecords, warehouseData, activeBaseline, products catalog
+        (stockRecords || []).forEach(s => {
+            const prod = (s.productName || s.product || '').trim().toLowerCase();
+            if (prod !== targetProd) return;
+            const lc = (s.lcNo || '').trim().toLowerCase();
+            const lcMatch = !targetLc || (isGeneralLc ? (!lc || lc === '-') : isLcMatch(lc, targetLc));
+            if (!lcMatch) return;
+
+            if (s.brand && typeof s.brand === 'string') {
+                const k = s.brand.trim().toLowerCase();
+                if (!brandsMap[k]) brandsMap[k] = { brand: s.brand.trim() };
+            }
+            if (s.brandList && Array.isArray(s.brandList)) {
+                s.brandList.forEach(b => {
+                    const bName = typeof b === 'string' ? b : (b.brand || b.quality);
+                    if (bName) {
+                        const k = bName.trim().toLowerCase();
+                        if (!brandsMap[k]) brandsMap[k] = { brand: bName.trim(), rate: b.purchasedPrice ?? b.rate ?? 0 };
+                    }
+                });
+            }
+        });
+
+        (warehouseData || []).forEach(w => {
+            const prod = (w.productName || w.product || '').trim().toLowerCase();
+            if (prod !== targetProd) return;
+            const lc = (w.lcNo || '').trim().toLowerCase();
+            const lcMatch = !targetLc || (isGeneralLc ? (!lc || lc === '-') : isLcMatch(lc, targetLc));
+            if (!lcMatch) return;
+
+            const bName = w.brand || w.quality;
+            if (bName && typeof bName === 'string') {
+                const k = bName.trim().toLowerCase();
+                if (!brandsMap[k]) brandsMap[k] = { brand: bName.trim() };
+            }
+        });
+
+        if (activeBaseline && activeBaseline.status === 'active' && Array.isArray(activeBaseline.snapshotRecords)) {
+            activeBaseline.snapshotRecords.forEach(s => {
+                const prod = (s.productName || '').trim().toLowerCase();
+                if (prod !== targetProd) return;
+                const lc = (s.lcNo || '').trim().toLowerCase();
+                const lcMatch = !targetLc || (isGeneralLc ? (!lc || lc === '-') : isLcMatch(lc, targetLc));
+                if (!lcMatch) return;
+                if (s.brand) {
+                    const k = s.brand.trim().toLowerCase();
+                    if (!brandsMap[k]) brandsMap[k] = { brand: s.brand.trim(), rate: s.purchasedPrice ?? s.rate ?? 0 };
+                }
+            });
+        }
+
+        const product = products?.find(p => (p.name || p.productName || '').trim().toLowerCase() === targetProd);
+        if (product) {
+            const rawBrands = product.brands || product.brandList || [];
+            if (Array.isArray(rawBrands)) {
+                rawBrands.forEach(b => {
+                    const bName = typeof b === 'string' ? b : (b.brand || b.name || b.quality);
+                    if (bName) {
+                        const k = bName.trim().toLowerCase();
+                        if (!brandsMap[k]) brandsMap[k] = { brand: bName.trim() };
+                    }
+                });
+            } else if (typeof rawBrands === 'string') {
+                const k = rawBrands.trim().toLowerCase();
+                if (!brandsMap[k]) brandsMap[k] = { brand: rawBrands.trim() };
+            }
+        }
+
+        return Object.values(brandsMap).sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
+    }, [formData.productName, formData.lcNo, formData.warehouse, warehouseStock, products, stockRecords, warehouseData, activeBaseline]);
+
     const uniqueLcNos = useMemo(() => {
         const lcsSet = new Set();
         let hasEmptyLc = false;
@@ -68,6 +269,26 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
         const targetProd = (formData.productName || '').trim().toLowerCase();
         const targetBrand = (formData.brand || '').trim().toLowerCase();
 
+        // 1. From warehouseStock if warehouse selected
+        if (formData.warehouse && warehouseStock) {
+            const matchedProd = warehouseStock.find(p => (p.productName || '').trim().toLowerCase() === targetProd);
+            if (matchedProd && matchedProd.brandList) {
+                matchedProd.brandList.forEach(b => {
+                    const bName = (b.brand || '').trim().toLowerCase();
+                    const brandMatch = !targetBrand || bName === targetBrand || (bName === '-' && targetBrand === '') || (bName === '' && targetBrand === '-');
+                    if (!brandMatch) return;
+
+                    const lc = (b.lcNo || '').trim();
+                    if (!lc || lc === '-') {
+                        hasEmptyLc = true;
+                    } else {
+                        lcsSet.add(lc);
+                    }
+                });
+            }
+        }
+
+        // 2. Fallbacks: stockRecords, warehouseData, activeBaseline
         const processEntry = (pName, bName, lc) => {
             if (targetProd && (pName || '').trim().toLowerCase() !== targetProd) return;
             if (targetBrand) {
@@ -97,191 +318,70 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             processEntry(w.productName || w.product, w.brand || w.quality, w.lcNo);
         });
 
-        const validLcs = [...lcsSet].sort();
-        return hasEmptyLc ? ['-', ...validLcs] : validLcs;
-    }, [stockRecords, warehouseData, formData.productName, formData.brand]);
-
-    const filteredProducts = useMemo(() => {
-        let allProdList = Array.isArray(products) ? products : [];
-
-        const stockProdNames = new Set();
-        (stockRecords || []).forEach(s => {
-            const pName = s.productName || s.product;
-            if (pName) stockProdNames.add(pName);
-        });
-        (warehouseData || []).forEach(w => {
-            const pName = w.productName || w.product;
-            if (pName) stockProdNames.add(pName);
-        });
-
-        const existingNames = new Set((allProdList || []).map(p => typeof p === 'string' ? p : (p.name || '')));
-        stockProdNames.forEach(name => {
-            if (!existingNames.has(name)) {
-                allProdList = [...allProdList, { _id: name, name: name }];
-            }
-        });
-
-        if (!formData.lcNo) return allProdList;
-
-        const targetLc = (formData.lcNo || '').trim().toLowerCase();
-        const isGeneralLc = !targetLc || targetLc === '-';
-        const matchingStocks = stockRecords?.filter(s => {
-            const lc = (s.lcNo || '').trim().toLowerCase();
-            return isGeneralLc ? (!lc || lc === '-') : (lc === targetLc);
-        }) || [];
-        const productNames = new Set(matchingStocks.map(s => s.productName || s.product).filter(Boolean));
-        if (productNames.size > 0) {
-            return allProdList.filter(p => {
-                const pName = typeof p === 'string' ? p : (p.name || '');
-                return productNames.has(pName);
+        if (activeBaseline && activeBaseline.status === 'active' && Array.isArray(activeBaseline.snapshotRecords)) {
+            activeBaseline.snapshotRecords.forEach(s => {
+                processEntry(s.productName, s.brand || s.quality, s.lcNo);
             });
         }
-        return allProdList;
-    }, [formData.lcNo, products, stockRecords, warehouseData]);
 
-    const selectedProductBrands = useMemo(() => {
-        if (!formData.productName) return [];
-        const targetProd = formData.productName.trim().toLowerCase();
-        const targetLc = (formData.lcNo || '').trim().toLowerCase();
-        const isGeneralLc = !targetLc || targetLc === '-';
+        const validLcs = [...lcsSet].sort();
+        return hasEmptyLc ? ['-', ...validLcs] : validLcs;
+    }, [formData.warehouse, warehouseStock, stockRecords, warehouseData, activeBaseline, formData.productName, formData.brand]);
 
-        const brandsSet = new Set();
+    const currentStock = useMemo(() => {
+        if (!formData.productName || !formData.warehouse) return null;
 
-        // 1. From stockRecords
-        (stockRecords || []).forEach(s => {
-            const prod = (s.productName || s.product || '').trim().toLowerCase();
-            if (prod !== targetProd) return;
-            const lc = (s.lcNo || '').trim().toLowerCase();
-            const lcMatch = isGeneralLc ? (!lc || lc === '-') : (lc === targetLc);
-            if (!lcMatch) return;
+        const targetProd = (formData.productName || '').trim().toLowerCase();
+        const targetBrand = (formData.brand || '').trim().toLowerCase();
+        const targetLc = (formData.lcNo || '').trim();
 
-            if (s.brand && typeof s.brand === 'string') brandsSet.add(s.brand.trim());
-            if (s.brandList && Array.isArray(s.brandList)) {
-                s.brandList.forEach(b => {
-                    const bName = typeof b === 'string' ? b : (b.brand || b.quality);
-                    if (bName) brandsSet.add(bName.trim());
-                });
+        const matchedProd = (warehouseStock || []).find(p => (p.productName || '').trim().toLowerCase() === targetProd);
+        if (!matchedProd || !matchedProd.brandList) return { quantity: 0, packetSize: 30, whole: 0, remainder: 0, bagsFormatted: '0 - 0 kg' };
+
+        let totalQty = 0;
+        let packetSize = matchedProd.packetSize || 30;
+
+        matchedProd.brandList.forEach(b => {
+            const bName = (b.brand || '').trim().toLowerCase();
+            const bLc = (b.lcNo || '').trim();
+
+            const brandMatch = !targetBrand || bName === targetBrand || (bName === '-' && targetBrand === '') || (bName === '' && targetBrand === '-');
+            const lcMatch = !targetLc || isLcMatch(bLc, targetLc);
+
+            if (brandMatch && lcMatch) {
+                totalQty += (b.inHouseQuantity || 0);
+                if (b.packetSize && b.packetSize > 0) packetSize = b.packetSize;
             }
         });
 
-        // 2. From warehouseData
-        (warehouseData || []).forEach(w => {
-            const prod = (w.productName || w.product || '').trim().toLowerCase();
-            if (prod !== targetProd) return;
-            const lc = (w.lcNo || '').trim().toLowerCase();
-            const lcMatch = isGeneralLc ? (!lc || lc === '-') : (lc === targetLc);
-            if (!lcMatch) return;
+        // If editing, add back the quantity of the record being edited
+        if (editingId && damages) {
+            const editingRecord = damages.find(d => d._id === editingId);
+            if (editingRecord) {
+                const edWH = (editingRecord.warehouse || '').trim().toLowerCase();
+                const edProd = (editingRecord.productName || '').trim().toLowerCase();
+                const edBrand = (editingRecord.brand || '').trim().toLowerCase();
+                const edLc = (editingRecord.lcNo || '').trim();
 
-            const bName = w.brand || w.quality;
-            if (bName && typeof bName === 'string') brandsSet.add(bName.trim());
-        });
-
-        // 3. From products catalog
-        const product = products?.find(p => (p.name || p.productName || '').trim().toLowerCase() === targetProd);
-        if (product) {
-            const rawBrands = product.brands || product.brandList || [];
-            if (Array.isArray(rawBrands)) {
-                rawBrands.forEach(b => {
-                    const bName = typeof b === 'string' ? b : (b.brand || b.name || b.quality);
-                    if (bName) brandsSet.add(bName.trim());
-                });
-            } else if (typeof rawBrands === 'string') {
-                brandsSet.add(rawBrands.trim());
+                if (edWH === (formData.warehouse || '').trim().toLowerCase() &&
+                    edProd === targetProd &&
+                    (!targetBrand || edBrand === targetBrand) &&
+                    (!targetLc || isLcMatch(edLc, targetLc))) {
+                    totalQty += (parseFloat(editingRecord.quantity) || 0);
+                }
             }
         }
 
-        return [...brandsSet].filter(Boolean).map(brand => ({ brand }));
-    }, [formData.productName, formData.lcNo, products, stockRecords, warehouseData]);
-
-
-    const currentStock = useMemo(() => {
-        if (!formData.productName || !formData.warehouse) return null; // Return null to indicate missing selection
-
-        const targetWH = formData.warehouse.trim().toLowerCase();
-        const targetProd = formData.productName.trim().toLowerCase();
-        const targetBrand = (formData.brand || '').trim().toLowerCase();
-        const targetLc = (formData.lcNo || '').trim().toLowerCase();
-
-        // Standardize "General / In Stock" name matching
-        const isGeneralWH = targetWH === 'general / in stock' || targetWH === '';
-        const isGeneralLc = !targetLc || targetLc === '-';
-
-        // 1. Sum physical warehouse stock from warehouseData
-        const matches = warehouseData?.filter(w => {
-            const wh = (w.whName || w.warehouse || w.name || '').trim().toLowerCase();
-            const prod = (w.productName || w.product || '').trim().toLowerCase();
-            const brand = (w.brand || w.quality || '').trim().toLowerCase();
-            const lc = (w.lcNo || '').trim().toLowerCase();
-
-            const whMatch = wh === targetWH || (isGeneralWH && (wh === '' || wh === 'general / in stock'));
-            const prodMatch = prod === targetProd;
-
-            // Fixed brand match: if targetBrand is empty, sum ALL brands.
-            // If targetBrand is specified, match it exactly, OR match '-' if item has no brand.
-            const brandMatch = !targetBrand || brand === targetBrand || (brand === '-' && targetBrand === '');
-            
-            // LC match
-            const lcMatch = isGeneralLc ? (!lc || lc === '-') : (lc === targetLc);
-
-            return whMatch && prodMatch && brandMatch && lcMatch;
-        });
-
-        let physicalStock = matches?.reduce((sum, m) => sum + (parseFloat(m.whQty) || 0), 0) || 0;
-
-        // 2. Subtract sales matching this specific warehouse + product + brand + lcNo
-        let totalSales = 0;
-        salesRecords?.forEach(sale => {
-            const sStatus = (sale.status || '').toLowerCase();
-            if (sStatus !== 'accepted' && sStatus !== 'pending') return;
-
-            if (sale.items && Array.isArray(sale.items)) {
-                sale.items.forEach(saleItem => {
-                    const prodName = (saleItem.productName || '').trim().toLowerCase();
-                    if (prodName !== targetProd) return;
-
-                    if (saleItem.brandEntries && Array.isArray(saleItem.brandEntries)) {
-                        saleItem.brandEntries.forEach(entry => {
-                            const whName = (entry.warehouseName || '').trim().toLowerCase();
-                            const brandName = (entry.brand || entry.quality || '').trim().toLowerCase();
-                            const lcName = ((entry.lcNo !== undefined && entry.lcNo !== null) ? entry.lcNo : (saleItem.lcNo || sale.lcNo || '')).trim().toLowerCase();
-
-                            const whMatch = whName === targetWH || (isGeneralWH && (whName === '' || whName === 'general / in stock'));
-                            if (whMatch) {
-                                const brandMatch = !targetBrand || brandName === targetBrand || (brandName === '-' && targetBrand === '') || (brandName === '' && targetBrand === '');
-                                const lcMatch = !targetLc || lcName === targetLc;
-                                if (brandMatch && lcMatch) {
-                                    totalSales += parseFloat(entry.originalQuantity || entry.quantity) || 0;
-                                }
-                            }
-                        });
-                    }
-                });
-            }
-        });
-
-        // 3. Subtract other damages for this specific warehouse + product + brand + lcNo
-        let totalDamages = 0;
-        damages?.forEach(d => {
-            // Skip the current record being edited to avoid double subtraction
-            if (editingId && d._id === editingId) return;
-
-            const dWH = (d.warehouse || '').trim().toLowerCase();
-            const dProd = (d.productName || '').trim().toLowerCase();
-            const dBrand = (d.brand || '').trim().toLowerCase();
-            const dLc = (d.lcNo || '').trim().toLowerCase();
-
-            const whMatch = dWH === targetWH || (isGeneralWH && (dWH === '' || dWH === 'general / in stock'));
-            if (whMatch && dProd === targetProd) {
-                const brandMatch = !targetBrand || dBrand === targetBrand || (dBrand === '-' && targetBrand === '') || (dBrand === '' && targetBrand === '');
-                const lcMatch = !targetLc || dLc === targetLc;
-                if (brandMatch && lcMatch) {
-                    totalDamages += parseFloat(d.quantity) || 0;
-                }
-            }
-        });
-
-        return Math.max(0, physicalStock - totalSales - totalDamages);
-    }, [formData.productName, formData.brand, formData.lcNo, formData.warehouse, warehouseData, salesRecords, damages, editingId]);
+        const safeQty = Math.max(0, totalQty);
+        const { whole, remainder } = calculatePktRemainder(safeQty, packetSize);
+        return {
+            quantity: safeQty,
+            packetSize,
+            whole,
+            remainder,
+            bagsFormatted: `${whole.toLocaleString('en-US')} - ${Math.abs(remainder).toLocaleString('en-US')} kg`
+        };
+    }, [formData.warehouse, formData.productName, formData.brand, formData.lcNo, warehouseStock, editingId, damages]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -314,6 +414,7 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
             setSubmitStatus('success');
             if (addNotification) addNotification('success', `Damage record ${editingId ? 'updated' : 'added'} successfully`);
             if (fetchDamages) fetchDamages();
+            if (fetchStockRecords) fetchStockRecords();
             setTimeout(() => {
                 setShowForm(false);
                 setEditingId(null);
@@ -375,17 +476,13 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                 await axios.delete(`${API_BASE_URL}/api/damages/${id}`);
                 if (addNotification) addNotification('success', 'Damage record deleted');
                 if (fetchDamages) fetchDamages();
+                if (fetchStockRecords) fetchStockRecords();
             } catch (error) {
                 console.error('Error deleting damage:', error);
                 if (addNotification) addNotification('error', 'Failed to delete damage record');
             }
         }
     };
-
-    const uniqueWarehouses = useMemo(() => {
-        if (!warehouseData) return [];
-        return [...new Set(warehouseData.map(w => w.whName || w.warehouse || w.name).filter(Boolean))];
-    }, [warehouseData]);
 
     const fetchEmployees = async () => {
         try {
@@ -759,7 +856,9 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
                                                     key={idx}
                                                     type="button"
                                                     onClick={() => {
-                                                        setFormData({ ...formData, brand: b.brand });
+                                                        const matchedBrandInfo = selectedProductBrands.find(item => item.brand === b.brand);
+                                                        const newPrice = (matchedBrandInfo?.rate && (!formData.price || formData.price === '0')) ? matchedBrandInfo.rate : formData.price;
+                                                        setFormData({ ...formData, brand: b.brand, price: newPrice });
                                                         setBrandSearch(b.brand);
                                                         setActiveDropdown(null);
                                                     }}
@@ -925,8 +1024,17 @@ const DamageManagement = ({ currentUser, products, warehouseData, salesRecords, 
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Available Stock</label>
-                            <div className={`w-full px-4 py-2.5 rounded-xl text-sm font-bold h-[45px] flex items-center border transition-colors ${currentStock === null ? 'bg-gray-50 border-gray-100 text-gray-400 italic' : 'bg-blue-50/50 border-blue-100 text-blue-700'}`}>
-                                {currentStock === null ? 'Select product & warehouse' : `${currentStock.toLocaleString('en-IN')} kg`}
+                            <div className={`w-full px-4 py-2 rounded-xl text-sm font-bold h-[45px] flex items-center border transition-colors ${currentStock === null ? 'bg-gray-50 border-gray-100 text-gray-400 italic' : 'bg-blue-50/50 border-blue-100 text-blue-700'}`}>
+                                {currentStock === null ? (
+                                    'Select product & warehouse'
+                                ) : (
+                                    <div className="flex items-center justify-between w-full">
+                                        <span className="truncate pr-2">{currentStock.bagsFormatted}</span>
+                                        <span className="text-xs bg-white px-2.5 py-0.5 rounded-lg border border-blue-200 font-black text-blue-900 shadow-sm shrink-0">
+                                            {Math.round(currentStock.quantity).toLocaleString('en-US')} kg
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

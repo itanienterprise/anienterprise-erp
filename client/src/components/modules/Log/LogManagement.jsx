@@ -209,6 +209,17 @@ const getLogModule = (log) => {
         return 'IP';
     }
 
+    // LC Receive module normalization
+    if (
+        log.module === 'LC Receive' ||
+        log.module === 'LC Entry' ||
+        (log.module === 'Stock' && !details.purchaseReceiveId && !details.isPurchase) ||
+        (log.path?.includes('/api/stock') && !log.path?.includes('/stock-baseline') && !details.purchaseReceiveId && !details.isPurchase) ||
+        (typeof details.view === 'string' && (details.view.includes('lc-entry') || details.view.includes('lc-receive')))
+    ) {
+        return 'LC Receive';
+    }
+
     return log.module || 'System';
 };
 

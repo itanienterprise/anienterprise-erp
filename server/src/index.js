@@ -68,6 +68,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/erp_db')
   .then(() => {
     console.log('MongoDB connected successfully');
     seedAdminUser();
+    cleanupZeroStockBaselineItems();
   })
   .catch(err => console.log('MongoDB connection error:', err));
 
@@ -134,6 +135,58 @@ const seedAdminUser = async () => {
     }
   } catch (error) {
     console.error('Error seeding admin user:', error);
+  }
+};
+
+// Clean up zero/obsolete stock baseline records (SEVEN STAR, SONPURI, and RANGOLI)
+const cleanupZeroStockBaselineItems = async () => {
+  try {
+    const baselines = await StockBaseline.find({});
+    for (const doc of baselines) {
+      if (!doc.data) continue;
+      let decrypted;
+      try {
+        decrypted = decryptData(doc.data);
+      } catch (e) {
+        continue;
+      }
+      if (!decrypted || !Array.isArray(decrypted.snapshotRecords)) continue;
+
+      const initialCount = decrypted.snapshotRecords.length;
+      const filtered = decrypted.snapshotRecords.filter(r => {
+        const b = (r.brand || '').trim().toLowerCase();
+        return b !== 'seven star' && b !== 'sonpuri' && b !== 'rangoli';
+      });
+
+      if (filtered.length !== initialCount) {
+        let totalInHouseBags = 0;
+        let totalInHouseKg = 0;
+        let totalStockValuation = 0;
+
+        filtered.forEach(r => {
+          const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
+          const pkt = parseFloat(r.inHousePacket ?? r.packet) || 0;
+          const rate = parseFloat(r.purchasedPrice ?? r.rate) || 0;
+          totalInHouseKg += qty;
+          totalInHouseBags += pkt;
+          totalStockValuation += (qty * rate);
+        });
+
+        decrypted.snapshotRecords = filtered;
+        if (decrypted.summary) {
+          decrypted.summary.totalInHouseQuantity = totalInHouseKg;
+          decrypted.summary.totalInHousePacket = totalInHouseBags;
+          decrypted.summary.totalValuation = totalStockValuation;
+          decrypted.summary.totalBrands = new Set(filtered.map(s => `${s.productName}|${s.brand}`)).size;
+        }
+
+        const encrypted = encryptData(decrypted);
+        await StockBaseline.updateOne({ _id: doc._id }, { $set: { data: encrypted } });
+        console.log(`[Startup Migration] Cleaned up obsolete SEVEN STAR, SONPURI, and RANGOLI records from StockBaseline ${doc._id}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error cleaning up baseline items on startup:', error);
   }
 };
 
@@ -1048,14 +1101,21 @@ apiRouter.post('/api/stock', async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: You do not have permission to add stock/LC Receive records.' });
     }
 
-    const encryptedData = encryptData(req.body);
-    const stockDoc = { data: encryptedData };
-    if (req.body.createdAt) {
-      stockDoc.createdAt = new Date(req.body.createdAt);
+    let finalData;
+    let resolvedBody = req.body;
+    if (req.body && typeof req.body.data === 'string' && req.body.data.startsWith('U2FsdGVk')) {
+      finalData = req.body.data;
+      try { resolvedBody = decryptData(req.body.data) || req.body; } catch(e) {}
+    } else {
+      finalData = encryptData(req.body);
+    }
+    const stockDoc = { data: finalData };
+    if (resolvedBody.createdAt || req.body.createdAt) {
+      stockDoc.createdAt = new Date(resolvedBody.createdAt || req.body.createdAt);
     }
     const newStock = new Stock(stockDoc);
     const savedStock = await newStock.save();
-    res.status(201).json({ ...req.body, _id: savedStock._id, createdAt: req.body.createdAt || savedStock.createdAt });
+    res.status(201).json({ ...resolvedBody, _id: savedStock._id, createdAt: resolvedBody.createdAt || savedStock.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -1163,13 +1223,20 @@ apiRouter.put('/api/stock/:id', async (req, res) => {
       }
     }
 
-    const encryptedData = encryptData(req.body);
-    const updateDoc = { data: encryptedData };
-    if (req.body.createdAt) {
-      updateDoc.createdAt = new Date(req.body.createdAt);
+    let finalData;
+    let resolvedBody = req.body;
+    if (req.body && typeof req.body.data === 'string' && req.body.data.startsWith('U2FsdGVk')) {
+      finalData = req.body.data;
+      try { resolvedBody = decryptData(req.body.data) || req.body; } catch(e) {}
+    } else {
+      finalData = encryptData(req.body);
+    }
+    const updateDoc = { data: finalData };
+    if (resolvedBody.createdAt || req.body.createdAt) {
+      updateDoc.createdAt = new Date(resolvedBody.createdAt || req.body.createdAt);
     }
     const updatedStock = await Stock.findByIdAndUpdate(req.params.id, updateDoc, { returnDocument: 'after' });
-    res.json({ ...req.body, createdAt: req.body.createdAt || updatedStock?.createdAt });
+    res.json({ ...resolvedBody, _id: req.params.id, createdAt: resolvedBody.createdAt || updatedStock?.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -3855,14 +3922,15 @@ const performDatabaseRestore = async (backupData) => {
     }
   }
 
-  // Ensure admin user exists if user collection was modified
+  // Ensure obsolete zero-stock baseline records are cleaned up if baselines were restored
   try {
-    if (typeof seedAdminUser === 'function') {
-      await seedAdminUser();
+    if (typeof cleanupZeroStockBaselineItems === 'function') {
+      await cleanupZeroStockBaselineItems();
     }
   } catch (e) {
-    console.error('Error verifying admin user after restore:', e);
+    console.error('Error cleaning up baseline items after restore:', e);
   }
+
 
   return {
     success: true,

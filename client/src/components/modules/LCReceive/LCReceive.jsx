@@ -30,6 +30,20 @@ const formatRequestedBy = (requestedBy, requestedByUsername, employeesMap = {}) 
     return name || username || '-';
 };
 
+export const getLCReceiveGroupKey = (item) => {
+    if (!item) return '';
+    const date = (item.date || '').split('T')[0];
+    const lc = (item.lcNo || '').trim();
+    const wh = (item.warehouse || item.whName || '').trim();
+    const port = (item.port || '').trim();
+    const imp = (item.importer || '').trim();
+    const exp = (item.exporter || '').trim();
+    const boe = (item.billOfEntry || '').trim();
+    const indCnF = (item.indianCnF || '').trim();
+    const bdCnF = (item.bdCnF || '').trim();
+    return `${date}__${lc}__${wh}__${port}__${imp}__${exp}__${boe}__${indCnF}__${bdCnF}`;
+};
+
 const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }) => {
     if (!data) return null;
 
@@ -2338,15 +2352,14 @@ function LCReceive({
 
         // Search across all records (including requested ones) for selected items in 'Requested' status
         const requestedSelectedRecords = lcReceiveRecords.filter(item => {
-            const dateStr = formatDate(item.date);
-            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+            const groupedKey = getLCReceiveGroupKey(item);
             const isSelected = selectedItems.has(groupedKey) || selectedItems.has(item._id);
             const isReq = (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected';
             return isSelected && isReq;
         });
 
         const recordsToAcceptMap = requestedSelectedRecords.reduce((acc, item) => {
-            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+            const groupedKey = getLCReceiveGroupKey(item);
             if (!acc[groupedKey]) {
                 acc[groupedKey] = {
                     groupedKey,
@@ -2469,14 +2482,14 @@ function LCReceive({
         if (!selectedItems || selectedItems.size === 0) return;
 
         const requestedSelectedRecords = lcReceiveRecords.filter(item => {
-            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+            const groupedKey = getLCReceiveGroupKey(item);
             const isSelected = selectedItems.has(groupedKey) || selectedItems.has(item._id);
             const isReq = (item.status || '').toLowerCase().includes('requested') && (item.status || '').toLowerCase() !== 'rejected';
             return isSelected && isReq;
         });
 
         const recordsToRejectMap = requestedSelectedRecords.reduce((acc, item) => {
-            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+            const groupedKey = getLCReceiveGroupKey(item);
             if (!acc[groupedKey]) {
                 acc[groupedKey] = {
                     groupedKey,
@@ -2833,7 +2846,7 @@ function LCReceive({
 
     const groupedRecordsList = useMemo(() => {
         return Object.values(filteredRecords.reduce((acc, item) => {
-            const groupedKey = `${item.date}-${item.warehouse}-${item.indianCnF}-${item.bdCnF}-${item.importer}-${item.exporter}`;
+            const groupedKey = getLCReceiveGroupKey(item);
 
             if (!acc[groupedKey]) {
                 acc[groupedKey] = {
@@ -4823,8 +4836,7 @@ function LCReceive({
                                 </div>
                             ) : (
                                 Object.values(filteredRecords.reduce((acc, item) => {
-                                    const dateStr = formatDate(item.date);
-                                    const groupedKey = `${dateStr}-${item.lcNo}-${item.port}-${item.importer}-${item.billOfEntry}-${item.indianCnF}-${item.bdCnF}`;
+                                    const groupedKey = getLCReceiveGroupKey(item);
 
                                     if (!acc[groupedKey]) {
                                         acc[groupedKey] = {

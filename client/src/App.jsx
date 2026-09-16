@@ -2020,6 +2020,7 @@ function App() {
             fetchStockRecords={fetchStockRecords}
             addNotification={addNotification}
             refreshPendingIndicators={fetchPendingEntries}
+            activeBaseline={activeBaseline}
           />
         );
       case 'transfer-section':
