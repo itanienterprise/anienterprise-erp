@@ -138,7 +138,7 @@ const seedAdminUser = async () => {
   }
 };
 
-// Clean up zero/obsolete stock baseline records (SEVEN STAR, SONPURI, and RANGOLI)
+// Normalize stock baseline records (PUSKAR NANO, V D, RANI MIX, and cleanup obsolete SEVEN STAR / ghost entries)
 const cleanupZeroStockBaselineItems = async () => {
   try {
     const baselines = await StockBaseline.find({});
@@ -152,18 +152,49 @@ const cleanupZeroStockBaselineItems = async () => {
       }
       if (!decrypted || !Array.isArray(decrypted.snapshotRecords)) continue;
 
-      const initialCount = decrypted.snapshotRecords.length;
+      let changed = false;
+
+      // 1. Filter out ghost entries
       const filtered = decrypted.snapshotRecords.filter(r => {
         const b = (r.brand || '').trim().toLowerCase();
-        return b !== 'seven star' && b !== 'sonpuri' && b !== 'rangoli';
+        const wh = (r.warehouse || '').trim().toUpperCase();
+        const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
+
+        if (b === 'seven star') { changed = true; return false; }
+        if (b === 'rangoli' && qty < 100) { changed = true; return false; }
+        if (b === 'rani mix' && wh === 'HILI' && (Math.abs(qty - 5880) < 1 || Math.abs(qty - 21051) < 1)) { changed = true; return false; }
+        return true;
       });
 
-      if (filtered.length !== initialCount) {
+      // 2. Renaming mappings in HILI:
+      // - VD (59,830 kg) -> PUSKAR NANO
+      // - SONPURI (42,680 kg) -> V D
+      // - RANGOLI (41,990 kg) -> RANI MIX
+      const normalized = filtered.map(r => {
+        const b = (r.brand || '').trim().toLowerCase();
+        const wh = (r.warehouse || '').trim().toUpperCase();
+
+        if (wh === 'HILI' && b === 'v d' && (r.lcNo === '087326010686' || r.lcNo === '087326010693')) {
+          changed = true;
+          return { ...r, brand: 'PUSKAR NANO' };
+        }
+        if (wh === 'HILI' && b === 'sonpuri' && r.lcNo === '0385') {
+          changed = true;
+          return { ...r, brand: 'V D' };
+        }
+        if (wh === 'HILI' && b === 'rangoli' && r.lcNo === '087326010693') {
+          changed = true;
+          return { ...r, brand: 'RANI MIX' };
+        }
+        return r;
+      });
+
+      if (changed || normalized.length !== decrypted.snapshotRecords.length) {
         let totalInHouseBags = 0;
         let totalInHouseKg = 0;
         let totalStockValuation = 0;
 
-        filtered.forEach(r => {
+        normalized.forEach(r => {
           const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
           const pkt = parseFloat(r.inHousePacket ?? r.packet) || 0;
           const rate = parseFloat(r.purchasedPrice ?? r.rate) || 0;
@@ -172,17 +203,17 @@ const cleanupZeroStockBaselineItems = async () => {
           totalStockValuation += (qty * rate);
         });
 
-        decrypted.snapshotRecords = filtered;
+        decrypted.snapshotRecords = normalized;
         if (decrypted.summary) {
           decrypted.summary.totalInHouseQuantity = totalInHouseKg;
           decrypted.summary.totalInHousePacket = totalInHouseBags;
           decrypted.summary.totalValuation = totalStockValuation;
-          decrypted.summary.totalBrands = new Set(filtered.map(s => `${s.productName}|${s.brand}`)).size;
+          decrypted.summary.totalBrands = new Set(normalized.map(s => `${s.productName}|${s.brand}`)).size;
         }
 
         const encrypted = encryptData(decrypted);
         await StockBaseline.updateOne({ _id: doc._id }, { $set: { data: encrypted } });
-        console.log(`[Startup Migration] Cleaned up obsolete SEVEN STAR, SONPURI, and RANGOLI records from StockBaseline ${doc._id}`);
+        console.log(`[Startup Migration] Normalized PUSKAR NANO, V D, and RANI MIX records in StockBaseline ${doc._id}`);
       }
     }
   } catch (error) {
