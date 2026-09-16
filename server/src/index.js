@@ -138,7 +138,170 @@ const seedAdminUser = async () => {
   }
 };
 
-// Normalize stock baseline records (PUSKAR NANO, V D, RANI MIX, and cleanup obsolete SEVEN STAR / ghost entries)
+// Normalize stock baseline records (PUSKAR NANO, V D, RANI MIX, RAPID MEDIUM, SHIDDHART MEDIUM, and cleanup KHESHARI DAL ghost entries)
+const normalizeBaselineSnapshot = (decrypted) => {
+  if (!decrypted || !Array.isArray(decrypted.snapshotRecords)) return { changed: false, decrypted };
+
+  let changed = false;
+
+  // 1. Filter out zeroed historical ghost entries:
+  // - DIPOK 1, KOILAS, ROYEL KING under KHESHARI DAL
+  // - rangoli < 100 kg remainder
+  const filtered = decrypted.snapshotRecords.filter(r => {
+    const p = (r.productName || '').trim().toUpperCase();
+    const b = (r.brand || '').trim().toLowerCase();
+    const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
+
+    if (p === 'KHESHARI DAL' && ['dipok 1', 'koilas', 'royel king'].includes(b)) {
+      changed = true;
+      return false;
+    }
+    if (b === 'rangoli' && qty < 100) {
+      changed = true;
+      return false;
+    }
+    return true;
+  });
+
+  // 2. Renaming mappings in HILI & BOGURA:
+  // - VD (59,830 kg in HILI, 600 kg in BOGURA) -> PUSKAR NANO
+  // - SONPURI (42,680 kg in HILI) -> V D
+  // - RANGOLI (41,990 kg in HILI) -> RANI MIX
+  // - SEVEN STAR (41,566 kg + 17,475 kg in HILI) -> SHIDDHART MEDIUM
+  // - 5,880 kg & 21,051 kg in HILI -> RAPID MEDIUM
+  const normalized = filtered.map(r => {
+    const b = (r.brand || '').trim().toLowerCase();
+    const wh = (r.warehouse || '').trim().toUpperCase();
+    const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
+
+    if (b === 'v d' && (r.lcNo === '087326010686' || r.lcNo === '087326010693')) {
+      changed = true;
+      return { ...r, brand: 'PUSKAR NANO' };
+    }
+    if (wh === 'HILI' && b === 'sonpuri' && r.lcNo === '0385') {
+      changed = true;
+      return { ...r, brand: 'V D' };
+    }
+    if (wh === 'HILI' && b === 'rangoli' && r.lcNo === '087326010693') {
+      changed = true;
+      return { ...r, brand: 'RANI MIX' };
+    }
+    if (wh === 'HILI' && b === 'seven star') {
+      changed = true;
+      return { ...r, brand: 'SHIDDHART MEDIUM' };
+    }
+    if (wh === 'HILI' && b === 'rani mix' && (Math.abs(qty - 5880) < 1 || Math.abs(qty - 21051) < 1)) {
+      changed = true;
+      return { ...r, brand: 'RAPID MEDIUM' };
+    }
+    return r;
+  });
+
+  // 3. Explicitly ensure RAPID MEDIUM and SHIDDHART MEDIUM exist in HILI if missing
+  const hasRapid1 = normalized.some(r => r.warehouse === 'HILI' && (r.brand || '').trim().toUpperCase() === 'RAPID MEDIUM' && r.lcNo === '0000');
+  if (!hasRapid1) {
+    normalized.push({
+      warehouse: 'HILI',
+      productName: 'MOSUR DAL',
+      brand: 'RAPID MEDIUM',
+      quality: 'MEDIUM',
+      packetSize: 30,
+      inHouseQuantity: 5880,
+      inHousePacket: 196,
+      quantity: 5880,
+      packet: 196,
+      purchasedPrice: 0,
+      rate: 0,
+      lcNo: '0000',
+      unit: 'kg'
+    });
+    changed = true;
+  }
+  const hasRapid2 = normalized.some(r => r.warehouse === 'HILI' && (r.brand || '').trim().toUpperCase() === 'RAPID MEDIUM' && r.lcNo === '073926010073');
+  if (!hasRapid2) {
+    normalized.push({
+      warehouse: 'HILI',
+      productName: 'MOSUR DAL',
+      brand: 'RAPID MEDIUM',
+      quality: 'MEDIUM',
+      packetSize: 30,
+      inHouseQuantity: 21051,
+      inHousePacket: 701.7,
+      quantity: 21051,
+      packet: 701.7,
+      purchasedPrice: 0,
+      rate: 0,
+      lcNo: '073926010073',
+      unit: 'kg'
+    });
+    changed = true;
+  }
+
+  const hasShiddhart1 = normalized.some(r => r.warehouse === 'HILI' && (r.brand || '').trim().toUpperCase() === 'SHIDDHART MEDIUM' && r.lcNo === '0000');
+  if (!hasShiddhart1) {
+    normalized.push({
+      warehouse: 'HILI',
+      productName: 'MOSUR DAL',
+      brand: 'SHIDDHART MEDIUM',
+      quality: 'MEDIUM',
+      packetSize: 30,
+      inHouseQuantity: 41566,
+      inHousePacket: 1385.5333333333333,
+      quantity: 41566,
+      packet: 1385.5333333333333,
+      purchasedPrice: 0,
+      rate: 0,
+      lcNo: '0000',
+      unit: 'kg'
+    });
+    changed = true;
+  }
+  const hasShiddhart2 = normalized.some(r => r.warehouse === 'HILI' && (r.brand || '').trim().toUpperCase() === 'SHIDDHART MEDIUM' && r.lcNo === '073926010073');
+  if (!hasShiddhart2) {
+    normalized.push({
+      warehouse: 'HILI',
+      productName: 'MOSUR DAL',
+      brand: 'SHIDDHART MEDIUM',
+      quality: 'MEDIUM',
+      packetSize: 30,
+      inHouseQuantity: 17475,
+      inHousePacket: 582.5,
+      quantity: 17475,
+      packet: 582.5,
+      purchasedPrice: 0,
+      rate: 0,
+      lcNo: '073926010073',
+      unit: 'kg'
+    });
+    changed = true;
+  }
+
+  if (changed || normalized.length !== decrypted.snapshotRecords.length) {
+    let totalInHouseBags = 0;
+    let totalInHouseKg = 0;
+    let totalStockValuation = 0;
+
+    normalized.forEach(r => {
+      const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
+      const pkt = parseFloat(r.inHousePacket ?? r.packet) || 0;
+      const rate = parseFloat(r.purchasedPrice ?? r.rate) || 0;
+      totalInHouseKg += qty;
+      totalInHouseBags += pkt;
+      totalStockValuation += (qty * rate);
+    });
+
+    decrypted.snapshotRecords = normalized;
+    if (decrypted.summary) {
+      decrypted.summary.totalInHouseQuantity = totalInHouseKg;
+      decrypted.summary.totalInHousePacket = totalInHouseBags;
+      decrypted.summary.totalValuation = totalStockValuation;
+      decrypted.summary.totalBrands = new Set(normalized.map(s => `${s.productName}|${s.brand}`)).size;
+    }
+  }
+
+  return { changed, decrypted };
+};
+
 const cleanupZeroStockBaselineItems = async () => {
   try {
     const baselines = await StockBaseline.find({});
@@ -152,76 +315,12 @@ const cleanupZeroStockBaselineItems = async () => {
       }
       if (!decrypted || !Array.isArray(decrypted.snapshotRecords)) continue;
 
-      let changed = false;
+      const { changed, decrypted: normalizedDecrypted } = normalizeBaselineSnapshot(decrypted);
 
-      // 1. Filter out ghost entries (< 100 kg remainder)
-      const filtered = decrypted.snapshotRecords.filter(r => {
-        const b = (r.brand || '').trim().toLowerCase();
-        const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
-
-        if (b === 'rangoli' && qty < 100) { changed = true; return false; }
-        return true;
-      });
-
-      // 2. Renaming mappings in HILI & BOGURA:
-      // - VD (59,830 kg in HILI, 600 kg in BOGURA) -> PUSKAR NANO
-      // - SONPURI (42,680 kg in HILI) -> V D
-      // - RANGOLI (41,990 kg in HILI) -> RANI MIX
-      // - SEVEN STAR (41,566 kg + 17,475 kg in HILI) -> SHIDDHART MEDIUM
-      // - 5,880 kg & 21,051 kg -> RAPID MEDIUM
-      const normalized = filtered.map(r => {
-        const b = (r.brand || '').trim().toLowerCase();
-        const wh = (r.warehouse || '').trim().toUpperCase();
-        const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
-
-        if (b === 'v d' && (r.lcNo === '087326010686' || r.lcNo === '087326010693')) {
-          changed = true;
-          return { ...r, brand: 'PUSKAR NANO' };
-        }
-        if (wh === 'HILI' && b === 'sonpuri' && r.lcNo === '0385') {
-          changed = true;
-          return { ...r, brand: 'V D' };
-        }
-        if (wh === 'HILI' && b === 'rangoli' && r.lcNo === '087326010693') {
-          changed = true;
-          return { ...r, brand: 'RANI MIX' };
-        }
-        if (wh === 'HILI' && b === 'seven star') {
-          changed = true;
-          return { ...r, brand: 'SHIDDHART MEDIUM' };
-        }
-        if (wh === 'HILI' && b === 'rani mix' && (Math.abs(qty - 5880) < 1 || Math.abs(qty - 21051) < 1)) {
-          changed = true;
-          return { ...r, brand: 'RAPID MEDIUM' };
-        }
-        return r;
-      });
-
-      if (changed || normalized.length !== decrypted.snapshotRecords.length) {
-        let totalInHouseBags = 0;
-        let totalInHouseKg = 0;
-        let totalStockValuation = 0;
-
-        normalized.forEach(r => {
-          const qty = parseFloat(r.inHouseQuantity ?? r.quantity) || 0;
-          const pkt = parseFloat(r.inHousePacket ?? r.packet) || 0;
-          const rate = parseFloat(r.purchasedPrice ?? r.rate) || 0;
-          totalInHouseKg += qty;
-          totalInHouseBags += pkt;
-          totalStockValuation += (qty * rate);
-        });
-
-        decrypted.snapshotRecords = normalized;
-        if (decrypted.summary) {
-          decrypted.summary.totalInHouseQuantity = totalInHouseKg;
-          decrypted.summary.totalInHousePacket = totalInHouseBags;
-          decrypted.summary.totalValuation = totalStockValuation;
-          decrypted.summary.totalBrands = new Set(normalized.map(s => `${s.productName}|${s.brand}`)).size;
-        }
-
-        const encrypted = encryptData(decrypted);
+      if (changed) {
+        const encrypted = encryptData(normalizedDecrypted);
         await StockBaseline.updateOne({ _id: doc._id }, { $set: { data: encrypted } });
-        console.log(`[Startup Migration] Normalized PUSKAR NANO, V D, and RANI MIX records in StockBaseline ${doc._id}`);
+        console.log(`[Startup Migration] Normalized records in StockBaseline ${doc._id}`);
       }
     }
   } catch (error) {
@@ -1420,6 +1519,14 @@ apiRouter.get('/api/stock-baseline/active', async (req, res) => {
           console.log(`[Baseline] Automatically activated most recent valid baseline on deployment: ${b._id}`);
           break;
         }
+      }
+    }
+
+    if (activeBaseline) {
+      const { changed, decrypted: normalizedActive } = normalizeBaselineSnapshot(activeBaseline);
+      if (changed) {
+        StockBaseline.findByIdAndUpdate(activeBaseline._id, { data: encryptData(normalizedActive) }).catch(e => console.error('Error auto-saving normalized active baseline:', e));
+        activeBaseline = { ...normalizedActive, _id: activeBaseline._id, createdAt: activeBaseline.createdAt };
       }
     }
 
