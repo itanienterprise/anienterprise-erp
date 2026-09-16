@@ -2906,8 +2906,8 @@ function PI({
         return true;
     });
 
-    // Date and Column Sorting (default: date descending)
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+    // Date and Column Sorting (default: create date descending)
+    const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
 
     const requestSort = (key) => {
         setSortConfig(prev => {
@@ -2940,6 +2940,10 @@ function PI({
         if (!dVal) return 0;
         if (dVal instanceof Date) return isNaN(dVal.getTime()) ? 0 : dVal.getTime();
         const str = String(dVal).trim();
+        if (str.includes('T')) {
+            const t = new Date(str).getTime();
+            if (!isNaN(t)) return t;
+        }
         if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
             const [y, m, d] = str.split('T')[0].split('-').map(Number);
             return new Date(y, m - 1, d).getTime();
@@ -5561,6 +5565,7 @@ function PI({
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50/80">
+                                        <th className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap text-center">SL NO</th>
                                         <th
                                             className="px-2 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 whitespace-nowrap cursor-pointer hover:bg-gray-100/70 transition-colors select-none"
                                             onClick={() => requestSort('createdAt')}
@@ -5662,11 +5667,11 @@ function PI({
                                     {isLoading ? (
                                         Array(3).fill(0).map((_, i) => (
                                             <tr key={i} className="animate-pulse">
-                                                <td colSpan={12 + (canShowEntryBy ? 1 : 0)} className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
+                                                <td colSpan={13 + (canShowEntryBy ? 1 : 0)} className="px-2 py-3.5"><div className="h-4 bg-gray-100 rounded w-full"></div></td>
                                             </tr>
                                         ))
                                     ) : sortedRecords.length > 0 ? (
-                                        sortedRecords.map(record => {
+                                        sortedRecords.map((record, index) => {
                                             const displayProducts = record.productsList && record.productsList.length > 0
                                                 ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
                                                 : record.productName || 'N/A';
@@ -5701,6 +5706,7 @@ function PI({
                                                     piList.forEach(p => { rowRefs.current[p] = el; });
                                                 }}
                                                     style={highlightId && (String(record._id) === String(highlightId) || (record.piNumber && String(record.piNumber).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}>
+                                                    <td className="px-2 py-3.5 text-sm text-gray-500 font-semibold whitespace-nowrap text-center">{index + 1}</td>
                                                     <td className="px-2 py-3.5 text-sm text-gray-600 font-medium whitespace-nowrap">{formatDate(getRecordEffectiveCreateDate(record))}</td>
                                                     <td className="px-2 py-3.5 text-sm text-gray-600 font-medium whitespace-nowrap">{formatDate(record.revisions && record.revisions.length > 0 ? (record.revisions[record.revisions.length - 1].reviseDate || record.date) : record.date)}</td>
                                                     <td className="px-2 py-3.5 text-sm font-bold text-blue-600 whitespace-nowrap">
@@ -5903,7 +5909,7 @@ function PI({
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={12 + (canShowEntryBy ? 1 : 0)} className="px-2 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
+                                            <td colSpan={13 + (canShowEntryBy ? 1 : 0)} className="px-2 py-12 text-center text-gray-400 font-bold">No PI records found.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -5922,7 +5928,7 @@ function PI({
                                 </div>
                             ))
                         ) : sortedRecords.length > 0 ? (
-                            sortedRecords.map(record => {
+                            sortedRecords.map((record, index) => {
                                 const isExpanded = expandedCardId === record._id;
                                 const displayProducts = record.productsList && record.productsList.length > 0
                                     ? record.productsList.map(p => p.productName).filter(Boolean).join(', ')
@@ -5963,6 +5969,9 @@ function PI({
                                             {/* Single Line Header: PI Number & Status Tag */}
                                             <div className="flex items-center justify-between gap-3">
                                                 <div className="flex items-start min-w-0 flex-1">
+                                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md mr-2 shrink-0">
+                                                        SL: {index + 1}
+                                                    </span>
                                                     <span className="w-[48px] text-[11px] font-black text-blue-500 uppercase tracking-widest shrink-0 whitespace-nowrap mt-0.5">PI No.</span>
                                                     <span className="text-blue-500 font-bold mx-2 mt-0.5">-</span>
                                                     {piList.length > 1 ? (

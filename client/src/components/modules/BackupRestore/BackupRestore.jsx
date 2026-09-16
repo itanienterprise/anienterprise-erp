@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { DatabaseIcon, DownloadIcon, UploadIcon, RotateCcwIcon, TrashIcon, XIcon } from '../../Icons';
+import { DatabaseIcon, DownloadIcon, UploadIcon, RotateCcwIcon, TrashIcon, XIcon, SearchIcon, CheckIcon, BoxIcon } from '../../Icons';
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 
@@ -42,6 +42,30 @@ const saveDirHandle = (handle) => {
   });
 };
 
+// Fallback modules list in case API fails or is loading
+const FALLBACK_MODULES = [
+  { key: 'pi', label: 'PI Management', description: 'Proforma Invoices & Packing Lists', models: ['PI', 'PackingList'], totalRecords: 0 },
+  { key: 'ipManagement', label: 'IP Management', description: 'Import Permissions', models: ['IpRecord'], totalRecords: 0 },
+  { key: 'lcManagement', label: 'LC Management', description: 'LCs, Gate Passes, LC Expenses & Margin Returns', models: ['LCManagement', 'LCGatePass', 'LCExpense', 'MarginReturn'], totalRecords: 0 },
+  { key: 'sales', label: 'Sales', description: 'General & Border Sales records', models: ['Sale'], totalRecords: 0 },
+  { key: 'purchase', label: 'Purchase & Receive', description: 'Purchases & Goods Receipts', models: ['Purchase', 'PurchaseReceive'], totalRecords: 0 },
+  { key: 'stockWarehouse', label: 'Stock & Warehouses', description: 'Stock, Baselines, Warehouses & Damage records', models: ['Stock', 'StockBaseline', 'Warehouse', 'Damage'], totalRecords: 0 },
+  { key: 'customer', label: 'Customers', description: 'Customer profiles & balances', models: ['Customer'], totalRecords: 0 },
+  { key: 'supplier', label: 'Suppliers', description: 'Supplier directory & balances', models: ['Supplier'], totalRecords: 0 },
+  { key: 'port', label: 'Ports', description: 'Ports of loading / discharge', models: ['Port'], totalRecords: 0 },
+  { key: 'importerExporter', label: 'Importers & Exporters', description: 'Registered Importers & Exporters', models: ['Importer', 'Exporter'], totalRecords: 0 },
+  { key: 'product', label: 'Products', description: 'Product catalog & categories', models: ['Product'], totalRecords: 0 },
+  { key: 'bank', label: 'Banks', description: 'Bank accounts & configurations', models: ['Bank'], totalRecords: 0 },
+  { key: 'cnf', label: 'C&F Management', description: 'C&F Agents & payment transactions', models: ['CnF', 'CnFPayment'], totalRecords: 0 },
+  { key: 'insurance', label: 'Insurance', description: 'Insurance policies & payments', models: ['Insurance', 'InsurancePayment'], totalRecords: 0 },
+  { key: 'costOfGoods', label: 'Cost of Goods', description: 'COG sheets & cost calculations', models: ['CostOfGoods'], totalRecords: 0 },
+  { key: 'employees', label: 'HRMS & Users', description: 'Employees & system users', models: ['Employee', 'User'], totalRecords: 0 },
+  { key: 'returns', label: 'Returns', description: 'Sales & purchase returns', models: ['Return'], totalRecords: 0 },
+  { key: 'trSetup', label: 'TR Setup', description: 'TR setups & configurations', models: ['TRSetup'], totalRecords: 0 },
+  { key: 'activityLogs', label: 'Activity & Notifications', description: 'Audit logs & notification history', models: ['ActivityLog', 'Notification'], totalRecords: 0 },
+  { key: 'systemSettings', label: 'System Settings', description: 'Meta data & backup settings', models: ['MetaData', 'BackupSetting'], totalRecords: 0 }
+];
+
 const BackupRestore = ({ addNotification }) => {
     const [isBackingUp, setIsBackingUp] = useState(false);
     const [isRestoring, setIsRestoring] = useState(false);
@@ -63,10 +87,20 @@ const BackupRestore = ({ addNotification }) => {
     const [savedFiles, setSavedFiles] = useState([]);
     const [isLoadingFiles, setIsLoadingFiles] = useState(false);
 
-    // Modal state
+    // Module-based backup state
+    const [availableModules, setAvailableModules] = useState(FALLBACK_MODULES);
+    const [isLoadingModules, setIsLoadingModules] = useState(false);
+    const [showModuleModal, setShowModuleModal] = useState(false);
+    const [selectedModuleKeys, setSelectedModuleKeys] = useState(new Set());
+    const [moduleSearchQuery, setModuleSearchQuery] = useState('');
+
+    // Restore Modal & Selective Restore state
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmText, setConfirmText] = useState('');
     const [restoreTarget, setRestoreTarget] = useState(null); // { type: 'local' | 'uploaded', filename?: string }
+    const [restoreDetectedCollections, setRestoreDetectedCollections] = useState({}); // { [modelName]: count }
+    const [selectedRestoreModels, setSelectedRestoreModels] = useState(new Set());
+    const [isLoadingRestorePreview, setIsLoadingRestorePreview] = useState(false);
 
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
@@ -123,11 +157,24 @@ const BackupRestore = ({ addNotification }) => {
         }
     };
 
-    // We removed local auto-download polling loop from here as it is now globally handled in App.jsx.
-
     useEffect(() => {
         fetchSettingsAndFiles();
+        fetchModules();
     }, []);
+
+    const fetchModules = async () => {
+        setIsLoadingModules(true);
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/backup-modules`);
+            if (res.data?.success && Array.isArray(res.data.modules)) {
+                setAvailableModules(res.data.modules);
+            }
+        } catch (error) {
+            console.error('Error fetching backup modules:', error);
+        } finally {
+            setIsLoadingModules(false);
+        }
+    };
 
     const fetchSettingsAndFiles = async () => {
         setIsLoadingFiles(true);
@@ -152,6 +199,7 @@ const BackupRestore = ({ addNotification }) => {
         }
     };
 
+    // Full system backup download
     const handleTakeBackup = async () => {
         setIsBackingUp(true);
         setErrorMessage('');
@@ -162,7 +210,7 @@ const BackupRestore = ({ addNotification }) => {
             
             const dateStr = new Date().toISOString().slice(0, 10);
             const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
-            const filename = `ani_erp_backup_${dateStr}_${timeStr}.json`;
+            const filename = `ani_erp_backup_full_${dateStr}_${timeStr}.json`;
 
             const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -175,15 +223,60 @@ const BackupRestore = ({ addNotification }) => {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            setSuccessMessage(`Backup completed successfully! Saved as ${filename}`);
+            setSuccessMessage(`Full system backup completed successfully! Saved as ${filename}`);
             if (addNotification) {
-                addNotification('System Backup', 'Database backup downloaded successfully.', ['admin'], [], true);
+                addNotification('System Backup', 'Full database backup downloaded successfully.', ['admin'], [], true);
             }
-            // Refresh list of files in case of server side copies
             fetchSettingsAndFiles();
         } catch (error) {
             console.error('Backup error:', error);
             setErrorMessage(error.response?.data?.message || 'Error occurred while taking database backup.');
+        } finally {
+            setIsBackingUp(false);
+        }
+    };
+
+    // Module-based backup download
+    const handleTakeModuleBackup = async () => {
+        if (selectedModuleKeys.size === 0) {
+            setErrorMessage('Please select at least one module to backup.');
+            return;
+        }
+
+        setIsBackingUp(true);
+        setErrorMessage('');
+        setSuccessMessage('');
+        try {
+            const keysArray = Array.from(selectedModuleKeys);
+            const modulesParam = keysArray.join(',');
+            const response = await axios.get(`${API_BASE_URL}/api/backup-database?modules=${encodeURIComponent(modulesParam)}`);
+            const backupObj = response.data;
+            
+            const dateStr = new Date().toISOString().slice(0, 10);
+            const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
+            const moduleNameSuffix = keysArray.length === 1 ? keysArray[0] : `${keysArray.length}_modules`;
+            const filename = `ani_erp_backup_${moduleNameSuffix}_${dateStr}_${timeStr}.json`;
+
+            const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            setShowModuleModal(false);
+            setSuccessMessage(`Module backup completed successfully! Saved as ${filename}`);
+            if (addNotification) {
+                addNotification('System Backup', `Module backup (${keysArray.length} modules) downloaded successfully.`, ['admin'], [], true);
+            }
+            fetchSettingsAndFiles();
+        } catch (error) {
+            console.error('Module backup error:', error);
+            setErrorMessage(error.response?.data?.message || 'Error occurred while taking module backup.');
         } finally {
             setIsBackingUp(false);
         }
@@ -233,15 +326,79 @@ const BackupRestore = ({ addNotification }) => {
         e.preventDefault();
     };
 
-    const handleRestoreClick = (type, filename = '') => {
+    // Open selective restore modal for uploaded or saved file
+    const handleRestoreClick = async (type, filename = '') => {
         setRestoreTarget({ type, filename });
         setConfirmText('');
+        setErrorMessage('');
+        setIsLoadingRestorePreview(true);
         setShowConfirmModal(true);
+
+        try {
+            if (type === 'uploaded') {
+                if (fileData && fileData.data) {
+                    const counts = {};
+                    Object.keys(fileData.data).forEach(col => {
+                        counts[col] = Array.isArray(fileData.data[col]) ? fileData.data[col].length : 0;
+                    });
+                    setRestoreDetectedCollections(counts);
+                    setSelectedRestoreModels(new Set(Object.keys(counts)));
+                } else {
+                    setRestoreDetectedCollections({});
+                    setSelectedRestoreModels(new Set());
+                }
+            } else {
+                // Saved server file: fetch JSON to inspect its collections
+                const res = await axios.get(`${API_BASE_URL}/api/backup-files/${filename}`);
+                if (res.data?.data) {
+                    const counts = {};
+                    Object.keys(res.data.data).forEach(col => {
+                        counts[col] = Array.isArray(res.data.data[col]) ? res.data.data[col].length : 0;
+                    });
+                    setRestoreDetectedCollections(counts);
+                    setSelectedRestoreModels(new Set(Object.keys(counts)));
+                } else {
+                    setRestoreDetectedCollections({});
+                    setSelectedRestoreModels(new Set());
+                }
+            }
+        } catch (err) {
+            console.error('Error inspecting backup file for restore:', err);
+            setErrorMessage('Failed to inspect backup file details.');
+        } finally {
+            setIsLoadingRestorePreview(false);
+        }
+    };
+
+    const toggleRestoreModel = (modelName) => {
+        setSelectedRestoreModels(prev => {
+            const next = new Set(prev);
+            if (next.has(modelName)) {
+                next.delete(modelName);
+            } else {
+                next.add(modelName);
+            }
+            return next;
+        });
+    };
+
+    const toggleSelectAllRestoreModels = () => {
+        const allKeys = Object.keys(restoreDetectedCollections);
+        if (selectedRestoreModels.size === allKeys.length) {
+            setSelectedRestoreModels(new Set());
+        } else {
+            setSelectedRestoreModels(new Set(allKeys));
+        }
     };
 
     const executeRestore = async () => {
         if (confirmText !== 'RESTORE') {
             setErrorMessage('Confirmation keyword mismatch. Please type "RESTORE" exactly.');
+            return;
+        }
+
+        if (selectedRestoreModels.size === 0) {
+            setErrorMessage('Please select at least one collection to restore.');
             return;
         }
 
@@ -252,38 +409,25 @@ const BackupRestore = ({ addNotification }) => {
 
         try {
             let response;
+            const modelsToRestore = Array.from(selectedRestoreModels);
+
             if (restoreTarget.type === 'uploaded') {
-                if (!backupFile && !fileData) {
+                if (!backupFile) {
                     setErrorMessage('Please select a backup file first.');
                     return;
                 }
+                const formData = new FormData();
+                formData.append('backupFile', backupFile);
+                formData.append('selectedModels', JSON.stringify(modelsToRestore));
 
-                let uploadSuccess = false;
-                if (backupFile) {
-                    try {
-                        const formData = new FormData();
-                        formData.append('backupFile', backupFile);
-                        // Do not manually set Content-Type so Axios/browser computes multipart boundary
-                        response = await axios.post(`${API_BASE_URL}/api/restore-database-upload`, formData, {
-                            timeout: 600000
-                        });
-                        uploadSuccess = true;
-                    } catch (uploadErr) {
-                        console.warn('Multipart upload encountered error, attempting direct JSON fallback:', uploadErr);
-                    }
-                }
-
-                // Fallback to direct JSON payload if multipart failed or fileData is available
-                if (!uploadSuccess && fileData) {
-                    response = await axios.post(`${API_BASE_URL}/api/restore-database`, fileData, {
-                        headers: { 'Content-Type': 'application/json' },
-                        timeout: 600000
-                    });
-                } else if (!uploadSuccess && !response) {
-                    throw new Error('Could not upload backup file or parse JSON data.');
-                }
+                response = await axios.post(`${API_BASE_URL}/api/restore-database-upload`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    timeout: 600000
+                });
             } else {
-                response = await axios.post(`${API_BASE_URL}/api/backup-files/${restoreTarget.filename}/restore`, {}, {
+                response = await axios.post(`${API_BASE_URL}/api/backup-files/${restoreTarget.filename}/restore`, {
+                    selectedModels: modelsToRestore
+                }, {
                     timeout: 600000
                 });
             }
@@ -291,7 +435,7 @@ const BackupRestore = ({ addNotification }) => {
             if (response.data.success) {
                 setSuccessMessage(response.data.message || 'Database restored successfully! Reloading page to apply changes...');
                 if (addNotification) {
-                    addNotification('System Restore', 'Database has been restored successfully.', ['admin'], [], true);
+                    addNotification('System Restore', `Restored ${modelsToRestore.length} collection(s) successfully.`, ['admin'], [], true);
                 }
                 setTimeout(() => {
                     window.location.reload();
@@ -375,6 +519,43 @@ const BackupRestore = ({ addNotification }) => {
         }
     };
 
+    // Filter modules for custom backup modal
+    const filteredModules = useMemo(() => {
+        if (!moduleSearchQuery.trim()) return availableModules;
+        const q = moduleSearchQuery.toLowerCase();
+        return availableModules.filter(m =>
+            m.label.toLowerCase().includes(q) ||
+            m.description.toLowerCase().includes(q) ||
+            (m.models && m.models.some(modelName => modelName.toLowerCase().includes(q)))
+        );
+    }, [availableModules, moduleSearchQuery]);
+
+    const toggleModuleSelection = (key) => {
+        setSelectedModuleKeys(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
+    };
+
+    const toggleSelectAllModules = () => {
+        if (selectedModuleKeys.size === availableModules.length) {
+            setSelectedModuleKeys(new Set());
+        } else {
+            setSelectedModuleKeys(new Set(availableModules.map(m => m.key)));
+        }
+    };
+
+    const totalSelectedRecords = useMemo(() => {
+        return availableModules
+            .filter(m => selectedModuleKeys.has(m.key))
+            .reduce((sum, m) => sum + (m.totalRecords || 0), 0);
+    }, [availableModules, selectedModuleKeys]);
+
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
             {/* Header */}
@@ -385,7 +566,7 @@ const BackupRestore = ({ addNotification }) => {
                         Backup & Restore Database
                     </h1>
                     <p className="mt-1 text-sm text-gray-500">
-                        Admin utility to configure automated schedules, download backups, or restore database states.
+                        Admin utility to take full or module-based backups, restore specific modules, or configure automated schedules.
                     </p>
                 </div>
             </div>
@@ -405,7 +586,7 @@ const BackupRestore = ({ addNotification }) => {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Take Backup Card */}
+                {/* Take Backup Card (Full & Module Based) */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-all duration-300">
                     <div className="space-y-4">
                         <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
@@ -413,11 +594,11 @@ const BackupRestore = ({ addNotification }) => {
                         </div>
                         <h2 className="text-lg font-bold text-gray-900">Take System Backup</h2>
                         <p className="text-sm text-gray-500 leading-relaxed">
-                            Export the entire MongoDB state as a single JSON file. This includes all products, stocks, sales history, employee listings, bank transactions, and customer records.
+                            Export your ERP data as a structured JSON file. You can download the complete database or selectively export specific modules (PI, LC, Sales, Inventory, etc.).
                         </p>
                     </div>
 
-                    <div className="mt-8">
+                    <div className="mt-8 space-y-3">
                         <button
                             onClick={handleTakeBackup}
                             disabled={isBackingUp || isRestoring}
@@ -431,14 +612,26 @@ const BackupRestore = ({ addNotification }) => {
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                     </svg>
-                                    Backing up system...
+                                    Exporting data...
                                 </>
                             ) : (
                                 <>
                                     <DownloadIcon className="w-5 h-5 mr-2" />
-                                    Download System Backup
+                                    Download Full Backup
                                 </>
                             )}
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                setShowModuleModal(true);
+                                fetchModules();
+                            }}
+                            disabled={isBackingUp || isRestoring}
+                            className="w-full flex items-center justify-center px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-medium text-sm transition-all shadow-xs active:scale-[0.98] cursor-pointer"
+                        >
+                            <BoxIcon className="w-4 h-4 mr-2" />
+                            Module-Based Backup...
                         </button>
                     </div>
                 </div>
@@ -451,7 +644,7 @@ const BackupRestore = ({ addNotification }) => {
                         </div>
                         <h2 className="text-lg font-bold text-gray-900">Upload & Restore</h2>
                         <p className="text-sm text-gray-500 leading-relaxed">
-                            Upload a previously exported database JSON file. This will overwrite the current system collections.
+                            Upload a previously exported database or module JSON file. You can choose to restore all or only selected collections.
                         </p>
                     </div>
 
@@ -483,7 +676,7 @@ const BackupRestore = ({ addNotification }) => {
                                     </div>
                                     <button
                                         onClick={clearSelectedFile}
-                                        className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                                        className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer"
                                     >
                                         <XIcon className="w-4 h-4" />
                                     </button>
@@ -491,7 +684,12 @@ const BackupRestore = ({ addNotification }) => {
 
                                 {fileData && fileData.data && (
                                     <div className="border-t border-gray-200 pt-3">
-                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Detected Collections</p>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Detected Collections</p>
+                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                                {Object.keys(fileData.data).length} total
+                                            </span>
+                                        </div>
                                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 max-h-24 overflow-y-auto pr-1">
                                             {Object.keys(fileData.data).map((col) => (
                                                 <div key={col} className="flex justify-between items-center text-xs py-0.5 border-b border-gray-100">
@@ -506,7 +704,7 @@ const BackupRestore = ({ addNotification }) => {
                                 <button
                                     onClick={() => handleRestoreClick('uploaded')}
                                     disabled={isBackingUp || isRestoring}
-                                    className="w-full mt-2 flex items-center justify-center px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-all shadow-sm"
+                                    className="w-full mt-2 flex items-center justify-center px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-all shadow-sm cursor-pointer"
                                 >
                                     <RotateCcwIcon className="w-4 h-4 mr-2" />
                                     Restore Database...
@@ -556,7 +754,7 @@ const BackupRestore = ({ addNotification }) => {
                                             <button
                                                 type="button"
                                                 onClick={handleSelectFolder}
-                                                className="w-full px-3 py-2 border border-dashed border-blue-300 bg-blue-50/20 hover:bg-blue-50 text-blue-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                                                className="w-full px-3 py-2 border border-dashed border-blue-300 bg-blue-50/20 hover:bg-blue-50 text-blue-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9l-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -656,7 +854,7 @@ const BackupRestore = ({ addNotification }) => {
                             <button
                                 type="submit"
                                 disabled={isSavingSettings}
-                                className="w-full flex items-center justify-center px-4 py-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm active:scale-[0.98]"
+                                className="w-full flex items-center justify-center px-4 py-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm active:scale-[0.98] cursor-pointer"
                             >
                                 {isSavingSettings ? 'Saving Settings...' : 'Save Schedule Settings'}
                             </button>
@@ -698,19 +896,19 @@ const BackupRestore = ({ addNotification }) => {
                                         <td className="px-4 py-3 text-right space-x-2.5">
                                             <button
                                                 onClick={() => handleDownloadSavedFile(file.filename)}
-                                                className="text-blue-600 hover:text-blue-800 text-xs font-semibold hover:underline"
+                                                className="text-blue-600 hover:text-blue-800 text-xs font-semibold hover:underline cursor-pointer"
                                             >
                                                 Download
                                             </button>
                                             <button
                                                 onClick={() => handleRestoreClick('local', file.filename)}
-                                                className="text-amber-600 hover:text-amber-800 text-xs font-semibold hover:underline"
+                                                className="text-amber-600 hover:text-amber-800 text-xs font-semibold hover:underline cursor-pointer"
                                             >
-                                                Restore
+                                                Restore...
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteFile(file.filename)}
-                                                className="text-red-600 hover:text-red-800 text-xs font-semibold hover:underline"
+                                                className="text-red-600 hover:text-red-800 text-xs font-semibold hover:underline cursor-pointer"
                                             >
                                                 Delete
                                             </button>
@@ -729,29 +927,229 @@ const BackupRestore = ({ addNotification }) => {
                 <div>
                     <h3 className="text-sm font-bold text-amber-900">Warning: Proceed with Extreme Caution</h3>
                     <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                        Database restoration overwrites all current database records with the contents of the backup file. Any changes made to the system after the backup was taken will be lost. Ensure you have downloaded a current backup before restoring.
+                        Database restoration overwrites the records of the selected collections with the contents of the backup file. Any changes made to those collections after the backup was created will be permanently replaced. Ensure you have a recent full backup before performing any restoration.
                     </p>
                 </div>
             </div>
 
-            {/* Confirm Restoring Modal */}
-            {showConfirmModal && typeof document !== 'undefined' && document.body && createPortal(
+            {/* Module-Based Backup Selection Modal */}
+            {showModuleModal && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)}></div>
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl p-6 max-w-md w-full relative z-10 animate-in zoom-in duration-200">
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-bold text-gray-900">Confirm System Restoration</h3>
-                            <p className="text-sm text-gray-500 leading-relaxed">
-                                {restoreTarget?.type === 'local' ? (
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowModuleModal(false)}></div>
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl p-6 max-w-2xl w-full relative z-10 animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                                    <BoxIcon className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Module-Based Backup</h3>
+                                    <p className="text-xs text-gray-500">Select which business modules to include in your backup file.</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowModuleModal(false)}
+                                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                            >
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Search & Quick Toggles */}
+                        <div className="py-3.5 space-y-2.5 border-b border-gray-100">
+                            <div className="relative">
+                                <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                <input
+                                    type="text"
+                                    placeholder="Search modules or collections..."
+                                    value={moduleSearchQuery}
+                                    onChange={(e) => setModuleSearchQuery(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-500 font-medium">
+                                    <strong className="text-blue-600 font-bold">{selectedModuleKeys.size}</strong> of {availableModules.length} modules selected ({totalSelectedRecords.toLocaleString()} records)
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={toggleSelectAllModules}
+                                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                    >
+                                        {selectedModuleKeys.size === availableModules.length ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Module Grid List */}
+                        <div className="flex-1 overflow-y-auto py-3 space-y-2 pr-1">
+                            {isLoadingModules ? (
+                                <div className="py-12 text-center text-gray-400 text-sm">Loading module information...</div>
+                            ) : filteredModules.length === 0 ? (
+                                <div className="py-12 text-center text-gray-400 text-sm">No matching modules found.</div>
+                            ) : (
+                                filteredModules.map((mod) => {
+                                    const isSelected = selectedModuleKeys.has(mod.key);
+                                    return (
+                                        <div
+                                            key={mod.key}
+                                            onClick={() => toggleModuleSelection(mod.key)}
+                                            className={`p-3 rounded-xl border transition-all cursor-pointer select-none flex items-center justify-between gap-3 ${
+                                                isSelected
+                                                    ? 'bg-blue-50/50 border-blue-300 ring-1 ring-blue-100'
+                                                    : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
+                                            }`}
+                                        >
+                                            <div className="flex items-start gap-3 min-w-0">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => {}} // Handled by outer container click
+                                                    className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer pointer-events-none"
+                                                />
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-bold text-gray-900 truncate">{mod.label}</span>
+                                                        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                                                            {mod.models?.join(', ')}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 mt-0.5 truncate">{mod.description}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="shrink-0 text-right">
+                                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                                    isSelected ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                    {(mod.totalRecords || 0).toLocaleString()} records
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowModuleModal(false)}
+                                className="px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-medium text-sm transition-all cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleTakeModuleBackup}
+                                disabled={selectedModuleKeys.size === 0 || isBackingUp}
+                                className="flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed"
+                            >
+                                {isBackingUp ? (
                                     <>
-                                        Are you sure you want to restore the system state from the backup file <strong className="text-gray-900">{restoreTarget.filename}</strong>?
+                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                        Generating Backup...
                                     </>
                                 ) : (
                                     <>
-                                        Are you sure you want to restore the system state from the uploaded file?
+                                        <DownloadIcon className="w-4 h-4 mr-2" />
+                                        Download Backup ({selectedModuleKeys.size} {selectedModuleKeys.size === 1 ? 'module' : 'modules'})
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Confirm Restoring Modal with Selective Module Choice */}
+            {showConfirmModal && typeof document !== 'undefined' && document.body && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)}></div>
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl p-6 max-w-lg w-full relative z-10 animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+                        <div className="space-y-4 flex-1 overflow-y-auto pr-1">
+                            <div className="flex items-start justify-between">
+                                <h3 className="text-lg font-bold text-gray-900">Confirm System Restoration</h3>
+                                <button onClick={() => setShowConfirmModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                                    <XIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <p className="text-sm text-gray-500 leading-relaxed">
+                                {restoreTarget?.type === 'local' ? (
+                                    <>
+                                        Restoring from server file <strong className="text-gray-900">{restoreTarget.filename}</strong>.
+                                    </>
+                                ) : (
+                                    <>
+                                        Restoring from uploaded file <strong className="text-gray-900">{backupFile?.name}</strong>.
                                     </>
                                 )}
                             </p>
+
+                            {/* Selective Collections to Restore */}
+                            <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/50 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                        Select Collections to Restore ({selectedRestoreModels.size} of {Object.keys(restoreDetectedCollections).length})
+                                    </span>
+                                    {Object.keys(restoreDetectedCollections).length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={toggleSelectAllRestoreModels}
+                                            className="text-[11px] font-semibold text-blue-600 hover:underline cursor-pointer"
+                                        >
+                                            {selectedRestoreModels.size === Object.keys(restoreDetectedCollections).length ? 'Deselect All' : 'Select All'}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {isLoadingRestorePreview ? (
+                                    <div className="py-4 text-center text-xs text-gray-400">Inspecting backup file...</div>
+                                ) : Object.keys(restoreDetectedCollections).length === 0 ? (
+                                    <div className="py-3 text-center text-xs text-gray-400">No collections detected in this backup.</div>
+                                ) : (
+                                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                                        {Object.entries(restoreDetectedCollections).map(([col, count]) => {
+                                            const isChecked = selectedRestoreModels.has(col);
+                                            return (
+                                                <label
+                                                    key={col}
+                                                    className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer select-none transition-colors ${
+                                                        isChecked ? 'bg-white border-blue-200 shadow-2xs' : 'bg-gray-100/50 border-gray-200 opacity-60'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={() => toggleRestoreModel(col)}
+                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        />
+                                                        <span className="font-semibold text-gray-900 truncate">{col}</span>
+                                                    </div>
+                                                    <span className="text-gray-500 font-medium shrink-0">{count} records</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-1">
+                                <p className="font-bold">Notice:</p>
+                                <p>Only the <strong>{selectedRestoreModels.size} selected collection(s)</strong> will be overwritten in the database. Any collections left unchecked will remain intact.</p>
+                            </div>
+
                             <p className="text-sm text-gray-500 leading-relaxed">
                                 To confirm, please type <strong className="text-red-600 select-all">RESTORE</strong> in the input field below.
                             </p>
@@ -765,18 +1163,18 @@ const BackupRestore = ({ addNotification }) => {
                             <div className="flex space-x-3 pt-2">
                                 <button
                                     onClick={() => setShowConfirmModal(false)}
-                                    className="flex-1 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-medium text-sm transition-all"
+                                    className="flex-1 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-medium text-sm transition-all cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={executeRestore}
-                                    disabled={confirmText !== 'RESTORE'}
-                                    className={`flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all ${
-                                        confirmText !== 'RESTORE' ? 'cursor-not-allowed' : ''
+                                    disabled={confirmText !== 'RESTORE' || selectedRestoreModels.size === 0}
+                                    className={`flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all cursor-pointer ${
+                                        confirmText !== 'RESTORE' || selectedRestoreModels.size === 0 ? 'cursor-not-allowed' : ''
                                     }`}
                                 >
-                                    Overwrite System Data
+                                    Overwrite Selected Data ({selectedRestoreModels.size})
                                 </button>
                             </div>
                         </div>

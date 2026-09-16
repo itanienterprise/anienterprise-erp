@@ -20,7 +20,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 const backupUpload = multer ? multer({
-  storage: multer.memoryStorage(),
+  dest: uploadDir,
   limits: { fileSize: 500 * 1024 * 1024 } // 500 MB limit
 }) : {
   single: () => (req, res, next) => next()
@@ -4005,13 +4005,90 @@ apiRouter.put('/api/notifications/:id', async (req, res) => {
   }
 });
 
-// Backup Database API
+// Business module to Mongoose model mappings
+const ERP_MODULE_COLLECTIONS = {
+  pi: { label: 'PI Management', models: ['PI', 'PackingList'], description: 'Proforma Invoices & Packing Lists' },
+  ipManagement: { label: 'IP Management', models: ['IpRecord'], description: 'Import Permissions' },
+  lcManagement: { label: 'LC Management', models: ['LCManagement', 'LCGatePass', 'LCExpense', 'MarginReturn'], description: 'LCs, Gate Passes, LC Expenses & Margin Returns' },
+  sales: { label: 'Sales', models: ['Sale'], description: 'General & Border Sales records' },
+  purchase: { label: 'Purchase & Receive', models: ['Purchase', 'PurchaseReceive'], description: 'Purchases & Goods Receipts' },
+  stockWarehouse: { label: 'Stock & Warehouses', models: ['Stock', 'StockBaseline', 'Warehouse', 'Damage'], description: 'Stock, Baselines, Warehouses & Damage records' },
+  customer: { label: 'Customers', models: ['Customer'], description: 'Customer profiles & balances' },
+  supplier: { label: 'Suppliers', models: ['Supplier'], description: 'Supplier directory & balances' },
+  port: { label: 'Ports', models: ['Port'], description: 'Ports of loading / discharge' },
+  importerExporter: { label: 'Importers & Exporters', models: ['Importer', 'Exporter'], description: 'Registered Importers & Exporters' },
+  product: { label: 'Products', models: ['Product'], description: 'Product catalog & categories' },
+  bank: { label: 'Banks', models: ['Bank'], description: 'Bank accounts & configurations' },
+  cnf: { label: 'C&F Management', models: ['CnF', 'CnFPayment'], description: 'C&F Agents & payment transactions' },
+  insurance: { label: 'Insurance', models: ['Insurance', 'InsurancePayment'], description: 'Insurance policies & payments' },
+  costOfGoods: { label: 'Cost of Goods', models: ['CostOfGoods'], description: 'COG sheets & cost calculations' },
+  employees: { label: 'HRMS & Users', models: ['Employee', 'User'], description: 'Employees & system users' },
+  returns: { label: 'Returns', models: ['Return'], description: 'Sales & purchase returns' },
+  trSetup: { label: 'TR Setup', models: ['TRSetup'], description: 'TR setups & configurations' },
+  activityLogs: { label: 'Activity & Notifications', models: ['ActivityLog', 'Notification'], description: 'Audit logs & notification history' },
+  systemSettings: { label: 'System Settings', models: ['MetaData', 'BackupSetting'], description: 'Meta data & backup settings' }
+};
+
+// GET /api/backup-modules: Fetch all business modules with their collections & document counts
+apiRouter.get('/api/backup-modules', adminOnly, async (req, res) => {
+  try {
+    const models = mongoose.connection.models;
+    const modulesWithCounts = await Promise.all(
+      Object.entries(ERP_MODULE_COLLECTIONS).map(async ([key, mod]) => {
+        let totalRecords = 0;
+        const modelCounts = {};
+        for (const mName of mod.models) {
+          const Model = models[mName];
+          if (Model) {
+            const count = await Model.estimatedDocumentCount().catch(() => Model.countDocuments({}));
+            modelCounts[mName] = count;
+            totalRecords += count;
+          } else {
+            modelCounts[mName] = 0;
+          }
+        }
+        return {
+          key,
+          label: mod.label,
+          description: mod.description,
+          models: mod.models,
+          modelCounts,
+          totalRecords
+        };
+      })
+    );
+    res.json({ success: true, modules: modulesWithCounts });
+  } catch (err) {
+    console.error('Fetch backup modules error:', err);
+    res.status(500).json({ message: 'Failed to fetch backup modules: ' + err.message });
+  }
+});
+
+// Backup Database API (Supports full database or specific modules/models)
 apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
   try {
     const models = mongoose.connection.models;
     const backupData = {};
+    const { modules: moduleQuery, models: modelsQuery } = req.query;
+
+    let targetModelNames = null;
+
+    if (moduleQuery) {
+      const selectedModuleKeys = moduleQuery.split(',').map(s => s.trim()).filter(Boolean);
+      targetModelNames = new Set();
+      for (const mKey of selectedModuleKeys) {
+        if (ERP_MODULE_COLLECTIONS[mKey]) {
+          ERP_MODULE_COLLECTIONS[mKey].models.forEach(m => targetModelNames.add(m));
+        }
+      }
+    } else if (modelsQuery) {
+      targetModelNames = new Set(modelsQuery.split(',').map(s => s.trim()).filter(Boolean));
+    }
 
     for (const modelName in models) {
+      if (targetModelNames && !targetModelNames.has(modelName)) {
+        continue;
+      }
       const Model = models[modelName];
       const documents = await Model.find({}).lean();
       backupData[modelName] = documents;
@@ -4020,6 +4097,9 @@ apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
     res.json({
       success: true,
       version: '1.0',
+      backupType: targetModelNames ? 'module' : 'full',
+      selectedModules: moduleQuery ? moduleQuery.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+      selectedModels: targetModelNames ? Array.from(targetModelNames) : undefined,
       timestamp: new Date().toISOString(),
       data: backupData
     });
@@ -4029,8 +4109,8 @@ apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
   }
 });
 
-// Helper function to perform robust, batch-chunked database restore
-const performDatabaseRestore = async (backupData) => {
+// Helper function to perform robust, batch-chunked database restore (supports optional selectedModels filter)
+const performDatabaseRestore = async (backupData, selectedModels = null) => {
   const { data } = backupData;
   if (!data || typeof data !== 'object') {
     throw new Error('Invalid backup file structure: missing "data" object.');
@@ -4041,6 +4121,11 @@ const performDatabaseRestore = async (backupData) => {
   let totalDocsRestored = 0;
 
   for (const modelName in data) {
+    // If selectedModels is provided, only restore those models
+    if (Array.isArray(selectedModels) && selectedModels.length > 0 && !selectedModels.includes(modelName)) {
+      continue;
+    }
+
     let Model = models[modelName];
     if (!Model) {
       try {
@@ -4077,7 +4162,6 @@ const performDatabaseRestore = async (backupData) => {
     console.error('Error cleaning up baseline items after restore:', e);
   }
 
-
   return {
     success: true,
     message: `Database restored successfully (${totalDocsRestored} records restored across ${restoredCollections.length} collections).`,
@@ -4086,49 +4170,42 @@ const performDatabaseRestore = async (backupData) => {
   };
 };
 
-// Restore Database via Upload (Multipart/form-data with buffer & fallback)
-apiRouter.post('/api/restore-database-upload', adminOnly, (req, res, next) => {
-  backupUpload.single('backupFile')(req, res, (err) => {
-    if (err) {
-      console.warn('Multer parse warning:', err.message);
-    }
-    next();
-  });
-}, async (req, res) => {
+// Restore Database via Upload (Multipart/form-data for large backup files, supports selective restore)
+apiRouter.post('/api/restore-database-upload', adminOnly, backupUpload.single('backupFile'), async (req, res) => {
   let tempFilePath = null;
   try {
-    let backupJson = null;
-
+    let backupJson;
     if (req.file) {
-      const rawData = req.file.buffer
-        ? req.file.buffer.toString('utf8')
-        : (req.file.path ? fs.readFileSync(req.file.path, 'utf8') : null);
+      tempFilePath = req.file.path;
+      const rawData = fs.readFileSync(tempFilePath, 'utf8');
+      backupJson = JSON.parse(rawData);
 
-      if (req.file.path) tempFilePath = req.file.path;
-
-      if (rawData) {
-        backupJson = JSON.parse(rawData);
-
-        // Save a copy in BACKUP_DIR so it also appears under Saved Auto Backups on Server
-        try {
-          const BACKUP_DIR = await getBackupDir();
-          const originalName = req.file.originalname || `uploaded_backup_${Date.now()}.json`;
-          const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const savedPath = path.join(BACKUP_DIR, safeName);
-          fs.writeFileSync(savedPath, rawData);
-        } catch (saveErr) {
-          console.warn('Could not save uploaded backup copy to backups directory:', saveErr);
-        }
+      // Save a copy in BACKUP_DIR so it also appears under Saved Auto Backups on Server
+      try {
+        const BACKUP_DIR = await getBackupDir();
+        const originalName = req.file.originalname || `uploaded_backup_${Date.now()}.json`;
+        const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const savedPath = path.join(BACKUP_DIR, safeName);
+        fs.writeFileSync(savedPath, rawData);
+      } catch (saveErr) {
+        console.warn('Could not save uploaded backup copy to backups directory:', saveErr);
       }
-    } else if (req.body && (req.body.data || typeof req.body === 'object')) {
+    } else if (req.body && req.body.data) {
       backupJson = req.body;
-    }
-
-    if (!backupJson || !backupJson.data) {
+    } else {
       return res.status(400).json({ message: 'No backup file received. Please choose a valid JSON file.' });
     }
 
-    const result = await performDatabaseRestore(backupJson);
+    let selectedModels = null;
+    if (req.body && req.body.selectedModels) {
+      try {
+        selectedModels = typeof req.body.selectedModels === 'string' ? JSON.parse(req.body.selectedModels) : req.body.selectedModels;
+      } catch (e) {
+        selectedModels = null;
+      }
+    }
+
+    const result = await performDatabaseRestore(backupJson, selectedModels);
     res.json(result);
   } catch (err) {
     console.error('Restore database upload error:', err);
@@ -4145,7 +4222,9 @@ apiRouter.post('/api/restore-database-upload', adminOnly, (req, res, next) => {
 // Restore Database API (JSON body fallback)
 apiRouter.post('/api/restore-database', adminOnly, async (req, res) => {
   try {
-    const result = await performDatabaseRestore(req.body);
+    const backupJson = req.body.backupData || req.body;
+    const selectedModels = req.body.selectedModels || null;
+    const result = await performDatabaseRestore(backupJson, selectedModels);
     res.json(result);
   } catch (err) {
     console.error('Restore database error:', err);
@@ -4256,7 +4335,8 @@ apiRouter.post('/api/backup-files/:filename/restore', adminOnly, async (req, res
       return res.status(404).json({ message: 'Backup file not found' });
     }
     const backupData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    const result = await performDatabaseRestore(backupData);
+    const selectedModels = req.body && Array.isArray(req.body.selectedModels) ? req.body.selectedModels : null;
+    const result = await performDatabaseRestore(backupData, selectedModels);
     res.json(result);
   } catch (err) {
     console.error('Saved backup restore error:', err);
@@ -4487,9 +4567,12 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       ]);
 
       const currentUser = req.session?.user;
+      const nowMs = Date.now();
       todayActiveUsersList = activeAgg.map(u => {
         const isCurrent = Boolean(currentUser && currentUser.username === u._id);
         const lastActiveDate = isCurrent ? new Date() : u.lastActive;
+        const lastMs = new Date(u.lastActive).getTime();
+        const isLive = isCurrent || (nowMs - lastMs <= 15 * 60 * 1000);
         return {
           username: u._id,
           name: userNamesMap[u._id] || u.displayName || (u._id === 'admin' ? 'Administrator' : u._id),
@@ -4500,9 +4583,12 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
           lastAction: u.lastAction,
           lastModule: u.lastModule,
           lastIp: u.lastIp,
-          isCurrent
+          isCurrent,
+          isLive
         };
       });
+
+      const todayLiveUsers = todayActiveUsersList.filter(u => u.isLive).length;
     } catch (aggErr) {
       console.error('Error aggregating today active users:', aggErr);
     }
@@ -4512,6 +4598,7 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       totalLogs,
       todayLogs,
       todayActiveUsers: todayUsers.length,
+      todayLiveUsers: typeof todayLiveUsers !== 'undefined' ? todayLiveUsers : 0,
       todayActiveUsersList,
       storageSize: storageSizeFormatted,
       dataSize: dataSizeFormatted,

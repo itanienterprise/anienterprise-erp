@@ -1917,19 +1917,42 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                 <UserIcon className="w-4 h-4" />
                             </span>
                         </div>
-                        <div className="mt-2 flex items-baseline justify-between">
-                            <div className="text-2xl font-black text-indigo-600 tracking-tight">
-                                {stats.todayActiveUsers}
-                            </div>
-                            <span className="text-3xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full group-hover:bg-indigo-100 transition-colors flex items-center gap-0.5">
-                                <span>View list</span>
-                                <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                            </span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            Distinct users logged in today
-                        </p>
+                        {(() => {
+                            const liveCount = (stats.todayActiveUsersList || []).filter(u => {
+                                if (u.isLive || u.isCurrent) return true;
+                                if (!u.lastActive) return false;
+                                return (Date.now() - new Date(u.lastActive).getTime()) <= 15 * 60 * 1000;
+                            }).length;
+
+                            return (
+                                <>
+                                    <div className="mt-2 flex items-baseline justify-between">
+                                        <div className="flex items-baseline gap-2">
+                                            <span className="text-2xl font-black text-indigo-600 tracking-tight">
+                                                {stats.todayActiveUsers}
+                                            </span>
+                                            {liveCount > 0 && (
+                                                <span className="text-3xs font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                                                    <span className="relative flex h-1.5 w-1.5">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                                    </span>
+                                                    <span>{liveCount} live</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="text-3xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full group-hover:bg-indigo-100 transition-colors flex items-center gap-0.5">
+                                            <span>View list</span>
+                                            <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                        <span className={`w-1.5 h-1.5 rounded-full ${liveCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                                        {liveCount > 0 ? `${liveCount} currently online • ${stats.todayActiveUsers} active today` : `${stats.todayActiveUsers} active today`}
+                                    </p>
+                                </>
+                            );
+                        })()}
                     </div>
 
                     {/* Action Breakdown */}
@@ -1998,9 +2021,10 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                 {/* Filter Toolbar */}
                 <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                        {/* Search Input */}
-                        <div className="md:col-span-3 relative group">
+                    <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap sm:flex-nowrap">
+                            {/* Search Input */}
+                            <div className="relative flex-1 min-w-[180px] max-w-sm group">
                             <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500 transition-colors" />
                             <input
                                 type="text"
@@ -2019,8 +2043,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             )}
                         </div>
 
-                        {/* Filter by User Dropdown Button */}
-                        <div className="md:col-span-2 relative" ref={userDropdownRef}>
+                            {/* Filter by User Dropdown Button */}
+                            <div className="relative min-w-[125px] flex-1 sm:flex-none" ref={userDropdownRef}>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -2114,8 +2138,8 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             )}
                         </div>
 
-                        {/* Filter by Module Dropdown Button */}
-                        <div className="md:col-span-2 relative" ref={moduleDropdownRef}>
+                            {/* Filter by Module Dropdown Button */}
+                            <div className="relative min-w-[115px] flex-1 sm:flex-none" ref={moduleDropdownRef}>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -2198,7 +2222,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             const isAllSelected = selectedActions.length > 0 && actionOptions.every(a => selectedActions.includes(a));
 
                             return (
-                                <div className="md:col-span-2 relative" ref={actionDropdownRef}>
+                                <div className="relative min-w-[135px] flex-1 sm:flex-none" ref={actionDropdownRef}>
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -2378,8 +2402,10 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             );
                         })()}
 
-                        {/* Date Preset Buttons */}
-                        <div className="md:col-span-3 flex items-center justify-end gap-1 flex-wrap">
+                        </div>
+
+                        {/* Date Preset Buttons in a Single Line */}
+                        <div className="flex items-center justify-end gap-1 flex-nowrap shrink-0 overflow-x-auto py-0.5">
                             {[
                                 { key: 'ALL', label: 'All Time' },
                                 { key: 'TODAY', label: 'Today' },
@@ -2391,9 +2417,9 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                 <button
                                     key={btn.key}
                                     onClick={() => setDatePreset(btn.key)}
-                                    className={`px-2 py-1 text-2xs font-semibold rounded-md transition-colors ${
+                                    className={`px-2.5 py-1.5 text-2xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
                                         datePreset === btn.key
-                                            ? 'bg-blue-600 text-white shadow-xs'
+                                            ? 'bg-blue-600 text-white shadow-xs font-bold'
                                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800'
                                     }`}
                                 >
@@ -2405,25 +2431,17 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                     {/* Active Filter Tags */}
                     {(() => {
-                        const isDefaultNoClicks =
-                            selectedActions.length > 0 &&
-                            !selectedActions.includes('CLICK') &&
-                            actionOptions.filter(a => a !== 'CLICK').every(a => selectedActions.includes(a));
-                        const isAllSelected = selectedActions.length > 0 && actionOptions.every(a => selectedActions.includes(a));
-                        const hasCustomActions = selectedActions.length > 0 && !isDefaultNoClicks && !isAllSelected;
+                        const hasSearch = Boolean(searchTerm.trim());
+                        const hasUser = selectedUser !== 'ALL';
+                        const hasModule = selectedModule !== 'ALL';
 
-                        const hasAnyFilter =
-                            searchTerm.trim() ||
-                            selectedUser !== 'ALL' ||
-                            selectedModule !== 'ALL' ||
-                            !isDefaultNoClicks;
-
+                        const hasAnyFilter = hasSearch || hasUser || hasModule;
                         if (!hasAnyFilter) return null;
 
                         return (
                             <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 flex-wrap text-2xs">
                                 <span className="text-slate-400 font-medium">Active:</span>
-                                {searchTerm.trim() && (
+                                {hasSearch && (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
                                         Keyword: "{searchTerm}"
                                         <button type="button" onClick={() => setSearchTerm('')} className="hover:text-blue-900">
@@ -2431,7 +2449,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                         </button>
                                     </span>
                                 )}
-                                {selectedUser !== 'ALL' && (
+                                {hasUser && (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
                                         User: {getUserLabel(selectedUser)}
                                         <button type="button" onClick={() => setSelectedUser('ALL')} className="hover:text-blue-900">
@@ -2439,7 +2457,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                         </button>
                                     </span>
                                 )}
-                                {selectedModule !== 'ALL' && (
+                                {hasModule && (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
                                         Module: {selectedModule}
                                         <button type="button" onClick={() => setSelectedModule('ALL')} className="hover:text-blue-900">
@@ -2447,31 +2465,6 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                         </button>
                                     </span>
                                 )}
-                                {isAllSelected && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
-                                        Action: All (Including Clicks)
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const nonClicks = actionOptions.filter(a => a !== 'CLICK');
-                                                setSelectedActions(nonClicks.length > 0 ? nonClicks : DEFAULT_NON_CLICK_ACTIONS);
-                                                setPage(1);
-                                            }}
-                                            title="Exclude clicks"
-                                            className="hover:text-slate-900"
-                                        >
-                                            <XIcon className="w-2.5 h-2.5" />
-                                        </button>
-                                    </span>
-                                )}
-                                {hasCustomActions && selectedActions.map(act => (
-                                    <span key={act} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
-                                        Action: {act}
-                                        <button type="button" onClick={() => toggleAction(act)} className="hover:text-indigo-900">
-                                            <XIcon className="w-2.5 h-2.5" />
-                                        </button>
-                                    </span>
-                                ))}
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -3028,38 +3021,52 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                 >
                     <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-slate-200/90 overflow-hidden ring-1 ring-black/5 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
                         {/* Modal Header */}
-                        <div className="px-6 py-4.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-blue-50/30 flex items-center justify-between">
-                            <div className="flex items-center gap-3.5">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 ring-4 ring-indigo-50 shrink-0">
-                                    <UserIcon className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="font-bold text-slate-800 text-base">Active Users Today</h3>
-                                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-bold text-2xs shadow-2xs">
-                                            <span className="relative flex h-1.5 w-1.5">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                                            </span>
-                                            <span>{stats.todayActiveUsersList?.length || stats.todayActiveUsers || 0} active now</span>
+                        {(() => {
+                            const liveCount = (stats.todayActiveUsersList || []).filter(u => {
+                                if (u.isLive || u.isCurrent) return true;
+                                if (!u.lastActive) return false;
+                                return (Date.now() - new Date(u.lastActive).getTime()) <= 15 * 60 * 1000;
+                            }).length;
+                            const totalCount = stats.todayActiveUsersList?.length || stats.todayActiveUsers || 0;
+
+                            return (
+                                <div className="px-6 py-4.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-blue-50/30 flex items-center justify-between">
+                                    <div className="flex items-center gap-3.5">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 ring-4 ring-indigo-50 shrink-0">
+                                            <UserIcon className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h3 className="font-bold text-slate-800 text-base">Active Users Today</h3>
+                                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-bold text-2xs shadow-2xs">
+                                                    <span className="relative flex h-2 w-2">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                                    </span>
+                                                    <span>{liveCount} Live Now</span>
+                                                </div>
+                                                <span className="text-xs text-slate-500 font-medium">
+                                                    • {totalCount} active today
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                Users logged in and operating on the system since midnight today
+                                            </p>
                                         </div>
                                     </div>
-                                    <p className="text-xs text-slate-500 mt-0.5">
-                                        Users logged in and operating on the system since midnight today
-                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowActiveUsersModal(false)}
+                                        className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors"
+                                    >
+                                        <XIcon className="w-5 h-5" />
+                                    </button>
                                 </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setShowActiveUsersModal(false)}
-                                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors"
-                            >
-                                <XIcon className="w-5 h-5" />
-                            </button>
-                        </div>
+                            );
+                        })()}
 
                         {/* Modal Body: Active Users Cards */}
-                        <div className="p-5 overflow-y-auto space-y-3 bg-slate-50/40">
+                        <div className="p-5 overflow-y-auto space-y-3.5 bg-slate-50/40">
                             {(!stats.todayActiveUsersList || stats.todayActiveUsersList.length === 0) ? (
                                 <div className="py-16 text-center text-slate-400 bg-white rounded-xl border border-slate-200/60">
                                     <UserIcon className="w-12 h-12 mx-auto mb-2 opacity-25 text-slate-400" />
@@ -3072,9 +3079,14 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                 stats.todayActiveUsersList.map((user, idx) => {
                                     const lastTime = user.lastActive ? new Date(user.lastActive) : null;
                                     const firstTime = user.firstActive ? new Date(user.firstActive) : null;
+                                    const isUserLive = Boolean(
+                                        user.isLive ||
+                                        user.isCurrent ||
+                                        (lastTime && Date.now() - lastTime.getTime() <= 15 * 60 * 1000)
+                                    );
 
-                                    const getRelativeTime = (date, isCurrent) => {
-                                        if (isCurrent) return 'Active now';
+                                    const getRelativeTime = (date, isLive) => {
+                                        if (isLive) return 'Active now';
                                         if (!date) return '';
                                         const diffSec = Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 1000));
                                         if (diffSec < 60) return 'Just now';
@@ -3084,16 +3096,13 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                         return `${diffHr}h ${diffMin % 60}m ago`;
                                     };
 
-                                    const formatDuration = (start, end, isCurrent) => {
+                                    const formatDuration = (start, end, isLive) => {
                                         if (!start) return '1 min';
                                         const now = Date.now();
                                         const startMs = new Date(start).getTime();
                                         const endMs = end ? new Date(end).getTime() : startMs;
 
-                                        // A user is actively in session if they are currently logged in,
-                                        // or their last action was recent (within 2 hours), or if start === end (single action session)
-                                        const isRecentlyActive = isCurrent || (now - endMs) < 2 * 60 * 60 * 1000;
-                                        const durationMs = isRecentlyActive ? Math.max(0, now - startMs) : Math.max(0, endMs - startMs);
+                                        const durationMs = isLive ? Math.max(0, now - startMs) : Math.max(0, endMs - startMs);
                                         const diffMin = Math.floor(durationMs / 60000);
 
                                         if (diffMin < 1) return '1 min';
@@ -3116,33 +3125,57 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                     return (
                                         <div
                                             key={user.username || idx}
-                                            className="bg-white rounded-xl p-4 border border-slate-200/80 hover:border-indigo-300 hover:shadow-md transition-all duration-200 group"
+                                            className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200/80 hover:border-indigo-300 hover:shadow-md transition-all duration-200 group"
                                         >
-                                            {/* Top Row: User Identity & Action Button */}
+                                            {/* Top Row: User Identity, Live Status & Action Button */}
                                             <div className="flex items-center justify-between gap-3">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-blue-600 text-white font-black text-sm flex items-center justify-center shadow-xs ring-2 ring-indigo-50 shrink-0">
-                                                        {initials}
+                                                <div className="flex items-center gap-3.5 min-w-0">
+                                                    <div className="relative shrink-0">
+                                                        <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-blue-600 text-white font-black text-sm flex items-center justify-center shadow-xs ring-2 ring-indigo-50">
+                                                            {initials}
+                                                        </div>
+                                                        {isUserLive ? (
+                                                            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center shadow-xs" title="Live Now">
+                                                                <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-emerald-400 opacity-75"></span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-slate-300 border-2 border-white rounded-full shadow-xs" title="Offline"></span>
+                                                        )}
                                                     </div>
                                                     <div className="min-w-0">
                                                         <div className="flex items-center gap-2 flex-wrap">
-                                                            <h4 className="font-bold text-slate-800 text-sm truncate">
+                                                            <h4 className="font-bold text-slate-800 text-[15px] truncate">
                                                                 {user.name || user.username}
                                                             </h4>
-                                                            <span className="font-mono text-3xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold border border-slate-200/70">
+                                                            <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold border border-slate-200/70">
                                                                 @{user.username}
                                                             </span>
                                                             {user.role && (
-                                                                <span className="text-3xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wide">
+                                                                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wide">
                                                                     {user.role}
                                                                 </span>
                                                             )}
-                                                        </div>
-                                                        <div className="text-2xs text-slate-400 mt-0.5 flex items-center gap-2">
-                                                            {user.lastIp && (
-                                                                <span>IP: <strong className="font-mono text-slate-600">{user.lastIp}</strong></span>
+                                                            {/* Prominent Live Active Status Badge */}
+                                                            {isUserLive ? (
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200/90 shadow-2xs">
+                                                                    <span className="relative flex h-1.5 w-1.5">
+                                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                                                    </span>
+                                                                    <span>LIVE NOW</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200/80">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                                                    <span>Offline</span>
+                                                                </span>
                                                             )}
-                                                            {user.lastIp && firstTime && <span>•</span>}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                                                            {user.lastIp && (
+                                                                <span>IP: <strong className="font-mono text-slate-700 font-semibold">{user.lastIp}</strong></span>
+                                                            )}
+                                                            {user.lastIp && firstTime && <span className="text-slate-300">•</span>}
                                                             {firstTime && (
                                                                 <span>Started today at {firstTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                                             )}
@@ -3154,7 +3187,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                                     <button
                                                         type="button"
                                                         onClick={() => openUserHistory(user.username, user.name || user.username, user.role)}
-                                                        className="inline-flex items-center gap-1.5 text-2xs font-bold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-2xs group-hover:border-indigo-300 shrink-0"
+                                                        className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-2xs group-hover:border-indigo-300 shrink-0"
                                                     >
                                                         <CalendarIcon className="w-3.5 h-3.5 text-indigo-500 group-hover:text-white transition-colors" />
                                                         <span>History</span>
@@ -3164,51 +3197,58 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                             </div>
 
                                             {/* Micro-Metrics 3-Column Strip */}
-                                            <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                            <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                                 {/* Metric 1: Total Active Duration */}
-                                                <div className="p-2 rounded-lg bg-indigo-50/60 border border-indigo-100 flex items-center gap-2.5">
-                                                    <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
-                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                         </svg>
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <span className="block text-3xs font-bold text-indigo-900/60 uppercase tracking-wider">Total Active</span>
-                                                        <span className="text-xs font-black text-indigo-700 truncate block">
-                                                            {formatDuration(firstTime, lastTime, user.isCurrent)}
+                                                        <span className="block text-[11px] font-bold text-indigo-900/60 uppercase tracking-wider">Total Active</span>
+                                                        <span className="text-sm font-black text-indigo-700 truncate block">
+                                                            {formatDuration(firstTime, lastTime, isUserLive)}
                                                         </span>
                                                     </div>
                                                 </div>
 
                                                 {/* Metric 2: Last Active Time */}
-                                                <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70 flex items-center gap-2.5">
-                                                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                <div className={`p-2.5 rounded-xl border flex items-center gap-3 ${
+                                                    isUserLive ? 'bg-emerald-50/60 border-emerald-200/80' : 'bg-slate-50 border-slate-200/70'
+                                                }`}>
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                                        isUserLive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                                                    }`}>
+                                                        {isUserLive ? (
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                        ) : (
+                                                            <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
+                                                        )}
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <span className="block text-3xs font-bold text-slate-400 uppercase tracking-wider">Last Active</span>
-                                                        <span className="text-xs font-bold text-slate-700 truncate block">
+                                                        <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Last Active</span>
+                                                        <span className="text-sm font-bold text-slate-700 truncate block">
                                                             {lastTime ? lastTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                                                            <span className="text-3xs font-medium text-slate-500 ml-1">({getRelativeTime(lastTime, user.isCurrent)})</span>
+                                                            <span className={`text-xs font-semibold ml-1.5 ${isUserLive ? 'text-emerald-700 font-bold' : 'text-slate-500'}`}>
+                                                                ({getRelativeTime(lastTime, isUserLive)})
+                                                            </span>
                                                         </span>
                                                     </div>
                                                 </div>
 
                                                 {/* Metric 3: Activity & Latest Operation */}
-                                                <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/70 flex items-center gap-2.5">
-                                                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                                                        <ActivityLogIcon className="w-3.5 h-3.5" />
+                                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                                        <ActivityLogIcon className="w-4 h-4" />
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <span className="block text-3xs font-bold text-slate-400 uppercase tracking-wider">Activity Count</span>
-                                                        <div className="text-xs font-bold text-slate-700 truncate flex items-center gap-1">
-                                                            <span>{user.actionCount || 1} {user.actionCount === 1 ? 'action' : 'actions'}</span>
-                                                            {user.lastAction && (
-                                                                <span className="text-3xs font-semibold px-1 py-0.2 rounded bg-slate-200 text-slate-700 font-mono">
-                                                                    {user.lastAction}
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                        <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Activity Count</span>
+                                                        <span className="text-sm font-bold text-slate-700 truncate block">
+                                                            {user.actionCount || 1} {user.actionCount === 1 ? 'action' : 'actions'}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -3220,7 +3260,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                         {/* Modal Footer */}
                         <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
-                            <span className="text-slate-500 text-2xs">
+                            <span className="text-slate-500 text-xs">
                                 Times and active durations are tracked from system logs
                             </span>
                             <button
@@ -3462,18 +3502,13 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                                                         {/* Activity Count */}
                                                         <td className="px-6 py-3.5 whitespace-nowrap text-right">
-                                                            <div className="inline-flex items-center gap-1.5 justify-end">
+                                                            <div className="inline-flex items-center gap-1 justify-end">
                                                                 <span className="font-extrabold text-slate-800 text-xs">
                                                                     {row.activityCount}
                                                                 </span>
-                                                                <span className="text-3xs text-slate-400 font-semibold">
+                                                                <span className="text-xs text-slate-400 font-medium">
                                                                     {row.activityCount === 1 ? 'action' : 'actions'}
                                                                 </span>
-                                                                {row.lastAction && (
-                                                                    <span className="text-3xs font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                                                                        {row.lastAction}
-                                                                    </span>
-                                                                )}
                                                             </div>
                                                         </td>
                                                     </tr>
