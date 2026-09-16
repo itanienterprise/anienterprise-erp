@@ -4087,10 +4087,17 @@ const performDatabaseRestore = async (backupData) => {
 };
 
 // Restore Database via Upload (Multipart/form-data for large backup files)
-apiRouter.post('/api/restore-database-upload', adminOnly, backupUpload.single('backupFile'), async (req, res) => {
+apiRouter.post('/api/restore-database-upload', adminOnly, (req, res, next) => {
+  backupUpload.single('backupFile')(req, res, (err) => {
+    if (err) {
+      console.warn('Multer backup upload notice:', err.message);
+    }
+    next();
+  });
+}, async (req, res) => {
   let tempFilePath = null;
   try {
-    let backupJson;
+    let backupJson = null;
     if (req.file) {
       tempFilePath = req.file.path;
       const rawData = fs.readFileSync(tempFilePath, 'utf8');
@@ -4108,8 +4115,15 @@ apiRouter.post('/api/restore-database-upload', adminOnly, backupUpload.single('b
       }
     } else if (req.body && req.body.data) {
       backupJson = req.body;
-    } else {
-      return res.status(400).json({ message: 'No backup file received. Please choose a valid JSON file.' });
+    } else if (typeof req.body === 'string') {
+      try {
+        const parsed = JSON.parse(req.body);
+        if (parsed && parsed.data) backupJson = parsed;
+      } catch (e) {}
+    }
+
+    if (!backupJson || !backupJson.data) {
+      return res.status(400).json({ message: 'No backup file received or invalid format. Please choose a valid JSON file.' });
     }
 
     const result = await performDatabaseRestore(backupJson);
