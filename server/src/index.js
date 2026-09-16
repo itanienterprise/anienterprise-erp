@@ -4086,7 +4086,14 @@ apiRouter.get('/api/logs', adminOnly, async (req, res) => {
       query.actionCategory = category;
     }
     if (action && action !== 'ALL') {
-      query.action = action;
+      const actionsList = typeof action === 'string'
+        ? action.split(',').map(a => a.trim()).filter(Boolean)
+        : Array.isArray(action) ? action : [action];
+      if (actionsList.length === 1) {
+        query.action = actionsList[0];
+      } else if (actionsList.length > 1) {
+        query.action = { $in: actionsList };
+      }
     }
     if (startDate || endDate) {
       query.timestamp = {};
@@ -4173,12 +4180,14 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
     let storageSizeFormatted = '0 B';
     let dataSizeFormatted = '0 B';
     try {
-      const collStats = await mongoose.connection.db.command({ collStats: 'activitylogs' });
+      const collStats = await mongoose.connection.db.command({ collStats: 'activitylogs', verbose: true });
       if (collStats) {
+        const checkpointBytes = collStats.wiredTiger && collStats.wiredTiger['block-manager'] ? collStats.wiredTiger['block-manager']['checkpoint size'] : 0;
         const diskBytes = collStats.storageSize || 0;
         const logicalBytes = collStats.size || 0;
-        // For small collections (< 64 KB, such as 1-20 logs), logicalBytes accurately reflects true data size
-        const actualBytes = (logicalBytes > 0 && logicalBytes < 64 * 1024) ? logicalBytes : (diskBytes > 0 ? diskBytes : logicalBytes);
+        
+        // checkpointBytes in WiredTiger represents the exact physical compressed data footprint on disk
+        const actualBytes = (checkpointBytes > 0 && checkpointBytes < diskBytes) ? checkpointBytes : (diskBytes > 0 ? diskBytes : logicalBytes);
         
         const formatDynamicBytes = (bytes) => {
           if (!bytes || bytes <= 0) return '0 B';
@@ -4192,6 +4201,39 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       }
     } catch (statErr) {}
 
+    // Build user mapping (username -> full displayName)
+    const userNamesMap = {
+      admin: 'Administrator',
+      System: 'System'
+    };
+
+    try {
+      const employees = await Employee.find();
+      for (const emp of employees) {
+        try {
+          let decrypted = decryptData(emp.data);
+          if (decrypted && decrypted.data && typeof decrypted.data === 'string' && !decrypted.employeeId) {
+            try { decrypted = decryptData(decrypted.data); } catch (e) {}
+          }
+          if (decrypted && decrypted.employeeId && decrypted.name) {
+            userNamesMap[decrypted.employeeId] = decrypted.name.trim();
+          }
+        } catch (e) {}
+      }
+    } catch (empErr) {}
+
+    try {
+      const logNames = await ActivityLog.aggregate([
+        { $match: { displayName: { $exists: true, $nin: [null, ''] } } },
+        { $group: { _id: '$username', displayName: { $first: '$displayName' } } }
+      ]);
+      logNames.forEach(l => {
+        if (l._id && l.displayName && !userNamesMap[l._id]) {
+          userNamesMap[l._id] = l.displayName.trim();
+        }
+      });
+    } catch (logErr) {}
+
     res.json({
       success: true,
       totalLogs,
@@ -4202,7 +4244,9 @@ apiRouter.get('/api/logs/stats', adminOnly, async (req, res) => {
       categories,
       actions,
       distinctUsers: (distinctUsers || []).filter(Boolean).sort(),
-      distinctModules: (distinctModules || []).filter(m => m && m !== 'Notification').sort()
+      distinctModules: (distinctModules || []).filter(m => m && m !== 'Notification').sort(),
+      distinctActions: Object.keys(actions).sort(),
+      userNamesMap
     });
   } catch (err) {
     console.error('Error fetching log stats:', err);
@@ -4221,33 +4265,57 @@ apiRouter.post('/api/logs/client-action', async (req, res) => {
     const rawActions = Array.isArray(req.body.actions) ? req.body.actions : [req.body];
     const actions = rawActions.slice(0, 10);
     const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '';
-    const userAgent = req.headers['user-agent'] || '';
+    const rawUserAgent = req.headers['user-agent'] || '';
+
+    // Simplify user agent
+    let compactUserAgent = rawUserAgent;
+    if (compactUserAgent.length > 25) {
+      let browser = 'Browser';
+      if (compactUserAgent.includes('Firefox/')) browser = 'Firefox';
+      else if (compactUserAgent.includes('Edg/')) browser = 'Edge';
+      else if (compactUserAgent.includes('Chrome/')) browser = 'Chrome';
+      else if (compactUserAgent.includes('Safari/')) browser = 'Safari';
+      else if (compactUserAgent.includes('Opera/') || compactUserAgent.includes('OPR/')) browser = 'Opera';
+
+      let os = 'Device';
+      if (compactUserAgent.includes('Macintosh') || compactUserAgent.includes('Mac OS X')) os = 'macOS';
+      else if (compactUserAgent.includes('Windows')) os = 'Windows';
+      else if (compactUserAgent.includes('iPhone') || compactUserAgent.includes('iPad')) os = 'iOS';
+      else if (compactUserAgent.includes('Android')) os = 'Android';
+      else if (compactUserAgent.includes('Linux')) os = 'Linux';
+
+      compactUserAgent = `${browser} (${os})`;
+    }
 
     const logsToInsert = actions.map(act => {
       let cleanDetails = sanitizePayload(act.details || {});
+      const pruned = {};
       if (cleanDetails && typeof cleanDetails === 'object') {
-        const str = JSON.stringify(cleanDetails);
-        if (str.length > 1000) {
-          cleanDetails = { view: cleanDetails.view, tag: cleanDetails.tag, targetId: cleanDetails.targetId };
-        }
+        if (cleanDetails.view) pruned.view = cleanDetails.view;
+        if (cleanDetails.tag && cleanDetails.tag !== 'button') pruned.tag = cleanDetails.tag;
+        if (cleanDetails.targetId) pruned.targetId = cleanDetails.targetId;
+        if (cleanDetails.targetName) pruned.targetName = cleanDetails.targetName;
+        if (cleanDetails.receiptNo) pruned.receiptNo = cleanDetails.receiptNo;
       }
-      return {
+
+      const doc = {
         timestamp: act.timestamp ? new Date(act.timestamp) : new Date(),
-        userId: user?.id || '',
         username: user?.username || 'System',
-        userRole: user?.role || '',
-        displayName: user?.name || user?.username || 'User',
         module: act.module || 'System',
         action: act.action || 'CLICK',
         actionCategory: act.actionCategory || 'UI_CLICK',
-        description: act.description || `User clicked "${act.actionName || 'Button'}" in ${act.module || 'System'}`,
-        details: cleanDetails,
-        ip: clientIp,
-        userAgent,
-        method: 'CLICK',
-        path: act.path || '',
-        status: 'SUCCESS'
+        description: act.description || `User clicked "${act.actionName || 'Button'}" in ${act.module || 'System'}`
       };
+
+      if (user?.id) doc.userId = user.id;
+      if (user?.role) doc.userRole = user.role;
+      if (user?.name && user.name !== user.username) doc.displayName = user.name;
+      if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') doc.ip = clientIp;
+      if (compactUserAgent) doc.userAgent = compactUserAgent;
+      if (act.path && act.path !== '/') doc.path = act.path;
+      if (Object.keys(pruned).length > 0) doc.details = pruned;
+
+      return doc;
     });
 
     if (logsToInsert.length > 0) {

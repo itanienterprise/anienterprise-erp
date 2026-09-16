@@ -1174,6 +1174,11 @@ const getCleanDetails = (details) => {
     return copy;
 };
 
+const ALL_ACTION_TYPES = [
+    'CREATE', 'UPDATE', 'DELETE', 'ACCEPT', 'REJECT', 'CLICK', 'LOGIN', 'REVISE', 'BACKUP', 'RESTORE'
+];
+const DEFAULT_NON_CLICK_ACTIONS = ALL_ACTION_TYPES.filter(a => a !== 'CLICK');
+
 const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     // Data states
     const [logs, setLogs] = useState([]);
@@ -1189,12 +1194,14 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     });
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
 
     // Filters state
     const [activeCategory, setActiveCategory] = useState('ALL'); // ALL, MUTATION, APPROVAL, AUTH, UI_CLICK
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUser, setSelectedUser] = useState('ALL');
     const [selectedModule, setSelectedModule] = useState('ALL');
+    const [selectedActions, setSelectedActions] = useState(DEFAULT_NON_CLICK_ACTIONS); // Default: All except CLICK
     const getTodayStr = () => {
         const now = new Date();
         const y = now.getFullYear();
@@ -1223,18 +1230,45 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     const [clearAllConfirm, setClearAllConfirm] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
 
-    // List of distinct users and modules for filter dropdowns
+    // List of distinct users, modules, and actions for filter dropdowns
     const [userOptions, setUserOptions] = useState([]);
+    const [userNamesMap, setUserNamesMap] = useState({});
     const [moduleOptions, setModuleOptions] = useState([]);
+    const [actionOptions, setActionOptions] = useState([
+        'CREATE', 'UPDATE', 'DELETE', 'ACCEPT', 'REJECT', 'CLICK', 'LOGIN', 'REVISE', 'BACKUP', 'RESTORE'
+    ]);
+
+    const getUserLabel = (uname) => {
+        if (!uname || uname === 'ALL') return 'All Users';
+        const name = userNamesMap[uname];
+        if (name && name.toLowerCase() !== uname.toLowerCase()) {
+            return `${uname} (${name})`;
+        }
+        return uname;
+    };
 
     // Custom popover dropdown states
-    const [openDropdown, setOpenDropdown] = useState(null); // 'user', 'module', 'refresh', 'limit', null
+    const [openDropdown, setOpenDropdown] = useState(null); // 'user', 'module', 'action', 'refresh', 'limit', null
     const userDropdownRef = useRef(null);
     const moduleDropdownRef = useRef(null);
+    const actionDropdownRef = useRef(null);
     const autoRefreshRef = useRef(null);
     const limitRef = useRef(null);
     const [userSearchText, setUserSearchText] = useState('');
     const [moduleSearchText, setModuleSearchText] = useState('');
+    const [actionSearchText, setActionSearchText] = useState('');
+
+    // Toggle multi-select action
+    const toggleAction = (act) => {
+        setSelectedActions(prev => {
+            if (prev.includes(act)) {
+                return prev.filter(a => a !== act);
+            } else {
+                return [...prev, act];
+            }
+        });
+        setPage(1);
+    };
 
     // Close dropdowns on click outside
     useEffect(() => {
@@ -1242,6 +1276,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             if (
                 (userDropdownRef.current && userDropdownRef.current.contains(event.target)) ||
                 (moduleDropdownRef.current && moduleDropdownRef.current.contains(event.target)) ||
+                (actionDropdownRef.current && actionDropdownRef.current.contains(event.target)) ||
                 (autoRefreshRef.current && autoRefreshRef.current.contains(event.target)) ||
                 (limitRef.current && limitRef.current.contains(event.target))
             ) {
@@ -1287,10 +1322,11 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
     }, [datePreset]);
 
     // Fetch logs from backend
-    const fetchLogs = async (showLoading = true) => {
+    const fetchLogs = async (showLoading = true, isManual = false) => {
         if (showLoading) setIsLoading(true);
         else setIsRefreshing(true);
 
+        const startTime = Date.now();
         try {
             const queryParams = new URLSearchParams();
             queryParams.append('page', page);
@@ -1298,15 +1334,18 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             if (searchTerm.trim()) queryParams.append('search', searchTerm.trim());
             if (selectedUser && selectedUser !== 'ALL') queryParams.append('user', selectedUser);
             if (selectedModule && selectedModule !== 'ALL') queryParams.append('module', selectedModule);
+            if (selectedActions.length > 0) queryParams.append('action', selectedActions.join(','));
             if (activeCategory && activeCategory !== 'ALL') queryParams.append('category', activeCategory);
             if (startDate) queryParams.append('startDate', startDate);
             if (endDate) queryParams.append('endDate', endDate);
+            // Cache-buster parameter to ensure completely fresh data
+            queryParams.append('_t', Date.now());
 
             const url = `/api/logs?${queryParams.toString()}`;
 
             const [logsRes, statsRes] = await Promise.all([
                 axios.get(url),
-                axios.get('/api/logs/stats')
+                axios.get(`/api/logs/stats?_t=${Date.now()}`)
             ]);
 
             if (logsRes.data?.success) {
@@ -1319,7 +1358,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                 setTotalLogs(logsRes.data.total || 0);
                 setTotalPages(logsRes.data.totalPages || 1);
 
-                // Collect distinct users & modules from current batch as fallback
+                // Collect distinct users, modules & actions from current batch as fallback
                 setUserOptions(prev => {
                     const set = new Set(prev);
                     fetchedLogs.forEach(l => { if (l.username) set.add(l.username); });
@@ -1330,6 +1369,12 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     const set = new Set(prev);
                     fetchedLogs.forEach(l => { if (l.module && l.module !== 'Notification') set.add(l.module); });
                     return Array.from(set).filter(m => m !== 'Notification').sort();
+                });
+
+                setActionOptions(prev => {
+                    const set = new Set(prev);
+                    fetchedLogs.forEach(l => { if (l.action) set.add(l.action); });
+                    return Array.from(set).sort();
                 });
             }
 
@@ -1344,13 +1389,36 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                     actions: statsRes.data.actions || {}
                 });
 
-                // Set complete list of distinct users and modules across all logs
+                // Set complete list of distinct users, modules, and actions across all logs
+                if (statsRes.data?.userNamesMap && typeof statsRes.data.userNamesMap === 'object') {
+                    setUserNamesMap(prev => ({ ...prev, ...statsRes.data.userNamesMap }));
+                }
                 if (Array.isArray(statsRes.data.distinctUsers) && statsRes.data.distinctUsers.length > 0) {
                     setUserOptions(statsRes.data.distinctUsers);
                 }
                 if (Array.isArray(statsRes.data.distinctModules) && statsRes.data.distinctModules.length > 0) {
                     setModuleOptions(statsRes.data.distinctModules.filter(m => m && m !== 'Notification'));
                 }
+                if (Array.isArray(statsRes.data.distinctActions) && statsRes.data.distinctActions.length > 0) {
+                    setActionOptions(prev => {
+                        const set = new Set([...prev, ...statsRes.data.distinctActions]);
+                        return Array.from(set).sort();
+                    });
+                } else if (statsRes.data.actions && typeof statsRes.data.actions === 'object') {
+                    const acts = Object.keys(statsRes.data.actions).filter(Boolean);
+                    if (acts.length > 0) {
+                        setActionOptions(prev => {
+                            const set = new Set([...prev, ...acts]);
+                            return Array.from(set).sort();
+                        });
+                    }
+                }
+            }
+
+            setLastRefreshedAt(new Date());
+
+            if (isManual && addNotification) {
+                addNotification('Activity logs refreshed successfully', 'success');
             }
         } catch (err) {
             console.error('Error fetching logs:', err);
@@ -1359,14 +1427,23 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
             }
         } finally {
             setIsLoading(false);
-            setIsRefreshing(false);
+            if (isManual) {
+                // Ensure at least 600ms spinner duration for clear visual confirmation
+                const elapsed = Date.now() - startTime;
+                const remaining = Math.max(0, 600 - elapsed);
+                setTimeout(() => {
+                    setIsRefreshing(false);
+                }, remaining);
+            } else {
+                setIsRefreshing(false);
+            }
         }
     };
 
     // Trigger fetch on dependencies change
     useEffect(() => {
         fetchLogs(true);
-    }, [page, limit, activeCategory, selectedUser, selectedModule, startDate, endDate]);
+    }, [page, limit, activeCategory, selectedUser, selectedModule, selectedActions, startDate, endDate]);
 
     // Debounced search
     useEffect(() => {
@@ -1393,7 +1470,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [autoRefreshInterval, page, limit, activeCategory, selectedUser, selectedModule, startDate, endDate, searchTerm]);
+    }, [autoRefreshInterval, page, limit, activeCategory, selectedUser, selectedModule, selectedActions, startDate, endDate, searchTerm]);
 
     // Format relative time
     const formatTimeAgo = (isoDate) => {
@@ -1622,6 +1699,14 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                                 Storage: {stats.storageSize || '0 B'}
                             </span>
+                            {lastRefreshedAt && (
+                                <span 
+                                    title={`Last synced: ${lastRefreshedAt.toLocaleTimeString()}`}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200"
+                                >
+                                    Updated: {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                </span>
+                            )}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
                             Comprehensive record of all user operations, mutations, approvals, and interface interactions
@@ -1681,13 +1766,19 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
 
                     {/* Manual Refresh Button */}
                     <button
-                        onClick={() => fetchLogs(false)}
+                        type="button"
+                        data-action="Refresh Logs"
+                        onClick={() => fetchLogs(false, true)}
                         disabled={isRefreshing || isLoading}
-                        title="Refresh now"
-                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-2xs disabled:opacity-50"
+                        title="Refresh activity logs and metrics now"
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border transition-all duration-150 shadow-2xs ${
+                            isRefreshing
+                                ? 'bg-blue-50 text-blue-700 border-blue-300 ring-2 ring-blue-500/20 cursor-wait'
+                                : 'text-slate-700 bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98]'
+                        } disabled:opacity-60`}
                     >
-                        <RefreshIcon className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
-                        Refresh
+                        <RefreshIcon className={`w-3.5 h-3.5 transition-transform duration-300 ${isRefreshing ? 'animate-spin text-blue-600' : 'text-slate-600'}`} />
+                        <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                     </button>
 
                     {/* Export CSV Button */}
@@ -1795,6 +1886,11 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             key={tab.key}
                             onClick={() => {
                                 setActiveCategory(tab.key);
+                                if (tab.key === 'UI_CLICK') {
+                                    setSelectedActions(['CLICK']);
+                                } else if (selectedActions.length === 1 && selectedActions[0] === 'CLICK') {
+                                    setSelectedActions(DEFAULT_NON_CLICK_ACTIONS);
+                                }
                                 setPage(1);
                             }}
                             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap ${
@@ -1821,12 +1917,11 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                 <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                         {/* Search Input */}
-                        {/* Search Input */}
-                        <div className="md:col-span-4 relative group">
+                        <div className="md:col-span-3 relative group">
                             <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-blue-500 transition-colors" />
                             <input
                                 type="text"
-                                placeholder="Search by keyword, user, module, IP..."
+                                placeholder="Search keyword, user, module..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-gray-200 hover:border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-800 shadow-xs transition-all"
@@ -1858,18 +1953,18 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                 }`}
                             >
                                 <span className="truncate">
-                                    {selectedUser === 'ALL' ? 'All Users' : selectedUser}
+                                    {selectedUser === 'ALL' ? 'All Users' : getUserLabel(selectedUser)}
                                 </span>
                                 <ChevronDownIcon className={`w-3.5 h-3.5 ml-1 text-gray-400 flex-shrink-0 transition-transform duration-200 ${openDropdown === 'user' ? 'rotate-180 text-blue-500' : ''}`} />
                             </button>
 
                             {openDropdown === 'user' && (
-                                <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-64 flex flex-col py-1 animate-in fade-in zoom-in-95 duration-150">
+                                <div className="absolute z-50 left-0 right-0 sm:right-auto sm:w-76 md:w-80 mt-1.5 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-64 flex flex-col py-1 animate-in fade-in zoom-in-95 duration-150">
                                     {userOptions.length > 5 && (
                                         <div className="p-2 border-b border-gray-100">
                                             <input
                                                 type="text"
-                                                placeholder="Search user..."
+                                                placeholder="Search user ID or name..."
                                                 value={userSearchText}
                                                 onChange={(e) => setUserSearchText(e.target.value)}
                                                 onClick={(e) => e.stopPropagation()}
@@ -1893,24 +1988,44 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                             {selectedUser === 'ALL' && <CheckIcon className="w-3.5 h-3.5 text-blue-600" />}
                                         </button>
                                         {userOptions
-                                            .filter(u => !userSearchText || u.toLowerCase().includes(userSearchText.toLowerCase()))
-                                            .map(u => (
-                                                <button
-                                                    key={u}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setSelectedUser(u);
-                                                        setPage(1);
-                                                        setOpenDropdown(null);
-                                                    }}
-                                                    className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between ${
-                                                        selectedUser === u ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
-                                                    }`}
-                                                >
-                                                    <span className="truncate">{u}</span>
-                                                    {selectedUser === u && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
-                                                </button>
-                                            ))}
+                                            .filter(u => {
+                                                if (!userSearchText) return true;
+                                                const q = userSearchText.toLowerCase();
+                                                const uname = (u || '').toLowerCase();
+                                                const name = (userNamesMap[u] || '').toLowerCase();
+                                                return uname.includes(q) || name.includes(q);
+                                            })
+                                            .map(u => {
+                                                const name = userNamesMap[u];
+                                                const hasName = name && name.toLowerCase() !== u.toLowerCase();
+                                                const isSelected = selectedUser === u;
+                                                return (
+                                                    <button
+                                                        key={u}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedUser(u);
+                                                            setPage(1);
+                                                            setOpenDropdown(null);
+                                                        }}
+                                                        className={`w-full px-3.5 py-2 text-left text-xs transition-colors flex items-center justify-between gap-2 ${
+                                                            isSelected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                                            <span className={isSelected ? 'font-bold text-blue-800' : 'font-semibold text-slate-800'}>
+                                                                {u}
+                                                            </span>
+                                                            {hasName && (
+                                                                <span className={`text-2xs truncate ${isSelected ? 'text-blue-600' : 'text-slate-500 font-normal'}`}>
+                                                                    ({name})
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {isSelected && <CheckIcon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />}
+                                                    </button>
+                                                );
+                                            })}
                                     </div>
                                 </div>
                             )}
@@ -1991,8 +2106,197 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             )}
                         </div>
 
+                        {/* Filter by Action Dropdown Button (Multi-Selectable) */}
+                        {(() => {
+                            const isDefaultNoClicks =
+                                selectedActions.length > 0 &&
+                                !selectedActions.includes('CLICK') &&
+                                actionOptions.filter(a => a !== 'CLICK').every(a => selectedActions.includes(a));
+                            const isAllSelected = selectedActions.length > 0 && actionOptions.every(a => selectedActions.includes(a));
+
+                            return (
+                                <div className="md:col-span-2 relative" ref={actionDropdownRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setOpenDropdown(prev => prev === 'action' ? null : 'action');
+                                            setActionSearchText('');
+                                        }}
+                                        className={`w-full px-3.5 py-2 bg-white border rounded-xl text-xs font-semibold text-left flex items-center justify-between transition-all shadow-xs ${
+                                            openDropdown === 'action'
+                                                ? 'border-blue-500 ring-2 ring-blue-500/20 text-blue-700 bg-blue-50/20'
+                                                : isDefaultNoClicks
+                                                ? 'border-indigo-300 bg-indigo-50/40 text-indigo-700 font-bold'
+                                                : selectedActions.length > 0
+                                                ? 'border-indigo-400 bg-indigo-50/60 text-indigo-800 font-bold'
+                                                : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-1.5 truncate">
+                                            {isDefaultNoClicks ? (
+                                                <span className="truncate">All (Except Clicks)</span>
+                                            ) : isAllSelected || selectedActions.length === 0 ? (
+                                                <span className="truncate">All Actions</span>
+                                            ) : selectedActions.length === 1 ? (
+                                                <span className="truncate">{selectedActions[0]}</span>
+                                            ) : (
+                                                <>
+                                                    <span className="truncate">Actions</span>
+                                                    <span className="inline-flex items-center justify-center px-1.5 py-0.2 text-3xs font-black bg-indigo-600 text-white rounded-full">
+                                                        {selectedActions.length}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1 ml-1 flex-shrink-0">
+                                            {selectedActions.length > 0 && !isDefaultNoClicks && (
+                                                <span
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedActions([]);
+                                                        setPage(1);
+                                                    }}
+                                                    title="Clear actions"
+                                                    className="p-0.5 rounded-md hover:bg-indigo-100 text-indigo-500 hover:text-indigo-700 transition-colors cursor-pointer"
+                                                >
+                                                    <XIcon className="w-3 h-3" />
+                                                </span>
+                                            )}
+                                            <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${openDropdown === 'action' ? 'rotate-180 text-blue-500' : ''}`} />
+                                        </div>
+                                    </button>
+
+                                    {openDropdown === 'action' && (
+                                        <div className="absolute z-50 left-0 w-76 sm:w-80 max-w-[calc(100vw-2rem)] mt-1.5 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-84 flex flex-col py-1 animate-in fade-in zoom-in-95 duration-150">
+                                            {/* Header with Quick Select Actions */}
+                                            <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between gap-2 bg-slate-50/80 rounded-t-xl">
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
+                                                        Actions
+                                                    </span>
+                                                    <span className="text-3xs font-semibold text-slate-400 whitespace-nowrap">
+                                                        ({selectedActions.length}/{actionOptions.length})
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center p-0.5 bg-slate-100/90 rounded-lg border border-slate-200/80 gap-0.5 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const nonClicks = actionOptions.filter(a => a !== 'CLICK');
+                                                            setSelectedActions(nonClicks.length > 0 ? nonClicks : DEFAULT_NON_CLICK_ACTIONS);
+                                                            setPage(1);
+                                                        }}
+                                                        title="Select all actions except clicks (Default)"
+                                                        className={`text-2xs px-2 py-0.5 rounded-md font-semibold transition-all whitespace-nowrap ${
+                                                            isDefaultNoClicks
+                                                                ? 'bg-white text-indigo-700 shadow-2xs font-bold'
+                                                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                                                        }`}
+                                                    >
+                                                        No Clicks
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedActions([...actionOptions]);
+                                                            setPage(1);
+                                                        }}
+                                                        title="Select all actions including clicks"
+                                                        className={`text-2xs px-2 py-0.5 rounded-md font-semibold transition-all whitespace-nowrap ${
+                                                            isAllSelected
+                                                                ? 'bg-white text-blue-700 shadow-2xs font-bold'
+                                                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                                                        }`}
+                                                    >
+                                                        All
+                                                    </button>
+                                                    {selectedActions.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedActions([]);
+                                                                setPage(1);
+                                                            }}
+                                                            title="Clear all selected actions"
+                                                            className="text-2xs px-2 py-0.5 rounded-md font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-all whitespace-nowrap"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Action Search if more than 5 */}
+                                            {actionOptions.length > 5 && (
+                                                <div className="p-2 border-b border-gray-100">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search actions..."
+                                                        value={actionSearchText}
+                                                        onChange={(e) => setActionSearchText(e.target.value)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="w-full px-2.5 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* Checkbox Options List */}
+                                            <div className="overflow-y-auto max-h-56 p-1 space-y-0.5">
+                                                {actionOptions
+                                                    .filter(a => !actionSearchText || a.toLowerCase().includes(actionSearchText.toLowerCase()))
+                                                    .map(act => {
+                                                        const isSelected = selectedActions.includes(act);
+                                                        const count = stats.actions?.[act] || 0;
+                                                        const isClick = act === 'CLICK';
+                                                        return (
+                                                            <button
+                                                                key={act}
+                                                                type="button"
+                                                                onClick={() => toggleAction(act)}
+                                                                className={`w-full px-2.5 py-1.5 text-left text-xs transition-colors rounded-lg flex items-center justify-between ${
+                                                                    isSelected
+                                                                        ? isClick
+                                                                            ? 'bg-slate-100 text-slate-900 font-semibold'
+                                                                            : 'bg-indigo-50 text-indigo-900 font-semibold'
+                                                                        : 'text-gray-700 hover:bg-gray-50'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-2 truncate">
+                                                                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
+                                                                        isSelected
+                                                                            ? isClick
+                                                                                ? 'bg-slate-700 border-slate-700 text-white'
+                                                                                : 'bg-indigo-600 border-indigo-600 text-white'
+                                                                            : 'border-gray-300 bg-white'
+                                                                    }`}>
+                                                                        {isSelected && <CheckIcon className="w-2.5 h-2.5 stroke-[3]" />}
+                                                                    </div>
+                                                                    <span className="truncate">{act}</span>
+                                                                    {isClick && (
+                                                                        <span className="text-3xs px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                                                            UI
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {count > 0 && (
+                                                                    <span className={`text-3xs font-medium px-1.5 py-0.5 rounded-full ${
+                                                                        isSelected ? 'bg-indigo-200/70 text-indigo-800' : 'bg-gray-100 text-gray-500'
+                                                                    }`}>
+                                                                        {count}
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
                         {/* Date Preset Buttons */}
-                        <div className="md:col-span-4 flex items-center justify-end gap-1 flex-wrap">
+                        <div className="md:col-span-3 flex items-center justify-end gap-1 flex-wrap">
                             {[
                                 { key: 'ALL', label: 'All Time' },
                                 { key: 'TODAY', label: 'Today' },
@@ -2004,7 +2308,7 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                                 <button
                                     key={btn.key}
                                     onClick={() => setDatePreset(btn.key)}
-                                    className={`px-2.5 py-1.5 text-2xs font-semibold rounded-md transition-colors ${
+                                    className={`px-2 py-1 text-2xs font-semibold rounded-md transition-colors ${
                                         datePreset === btn.key
                                             ? 'bg-blue-600 text-white shadow-xs'
                                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800'
@@ -2015,6 +2319,92 @@ const LogManagement = ({ currentUser: _currentUser, addNotification }) => {
                             ))}
                         </div>
                     </div>
+
+                    {/* Active Filter Tags */}
+                    {(() => {
+                        const isDefaultNoClicks =
+                            selectedActions.length > 0 &&
+                            !selectedActions.includes('CLICK') &&
+                            actionOptions.filter(a => a !== 'CLICK').every(a => selectedActions.includes(a));
+                        const isAllSelected = selectedActions.length > 0 && actionOptions.every(a => selectedActions.includes(a));
+                        const hasCustomActions = selectedActions.length > 0 && !isDefaultNoClicks && !isAllSelected;
+
+                        const hasAnyFilter =
+                            searchTerm.trim() ||
+                            selectedUser !== 'ALL' ||
+                            selectedModule !== 'ALL' ||
+                            !isDefaultNoClicks;
+
+                        if (!hasAnyFilter) return null;
+
+                        return (
+                            <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 flex-wrap text-2xs">
+                                <span className="text-slate-400 font-medium">Active:</span>
+                                {searchTerm.trim() && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                                        Keyword: "{searchTerm}"
+                                        <button type="button" onClick={() => setSearchTerm('')} className="hover:text-blue-900">
+                                            <XIcon className="w-2.5 h-2.5" />
+                                        </button>
+                                    </span>
+                                )}
+                                {selectedUser !== 'ALL' && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                                        User: {getUserLabel(selectedUser)}
+                                        <button type="button" onClick={() => setSelectedUser('ALL')} className="hover:text-blue-900">
+                                            <XIcon className="w-2.5 h-2.5" />
+                                        </button>
+                                    </span>
+                                )}
+                                {selectedModule !== 'ALL' && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                                        Module: {selectedModule}
+                                        <button type="button" onClick={() => setSelectedModule('ALL')} className="hover:text-blue-900">
+                                            <XIcon className="w-2.5 h-2.5" />
+                                        </button>
+                                    </span>
+                                )}
+                                {isAllSelected && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                                        Action: All (Including Clicks)
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const nonClicks = actionOptions.filter(a => a !== 'CLICK');
+                                                setSelectedActions(nonClicks.length > 0 ? nonClicks : DEFAULT_NON_CLICK_ACTIONS);
+                                                setPage(1);
+                                            }}
+                                            title="Exclude clicks"
+                                            className="hover:text-slate-900"
+                                        >
+                                            <XIcon className="w-2.5 h-2.5" />
+                                        </button>
+                                    </span>
+                                )}
+                                {hasCustomActions && selectedActions.map(act => (
+                                    <span key={act} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
+                                        Action: {act}
+                                        <button type="button" onClick={() => toggleAction(act)} className="hover:text-indigo-900">
+                                            <XIcon className="w-2.5 h-2.5" />
+                                        </button>
+                                    </span>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSearchTerm('');
+                                        setSelectedUser('ALL');
+                                        setSelectedModule('ALL');
+                                        setSelectedActions(DEFAULT_NON_CLICK_ACTIONS);
+                                        setPage(1);
+                                    }}
+                                    className="text-slate-500 hover:text-rose-600 hover:underline font-medium ml-1"
+                                >
+                                    Reset all
+                                </button>
+                            </div>
+                        );
+                    })()}
 
                     {/* Custom Date Range Picker when CUSTOM is selected */}
                     {datePreset === 'CUSTOM' && (

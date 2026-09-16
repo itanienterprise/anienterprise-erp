@@ -8,7 +8,7 @@ const activityLogSchema = new mongoose.Schema({
     },
     userId: {
         type: String,
-        default: ''
+        required: false
     },
     username: {
         type: String,
@@ -17,11 +17,11 @@ const activityLogSchema = new mongoose.Schema({
     },
     userRole: {
         type: String,
-        default: ''
+        required: false
     },
     displayName: {
         type: String,
-        default: ''
+        required: false
     },
     module: {
         type: String,
@@ -45,23 +45,23 @@ const activityLogSchema = new mongoose.Schema({
     },
     details: {
         type: mongoose.Schema.Types.Mixed,
-        default: {}
+        required: false
     },
     ip: {
         type: String,
-        default: ''
+        required: false
     },
     userAgent: {
         type: String,
-        default: ''
+        required: false
     },
     method: {
         type: String,
-        default: ''
+        required: false
     },
     path: {
         type: String,
-        default: ''
+        required: false
     },
     status: {
         type: String,
@@ -69,11 +69,12 @@ const activityLogSchema = new mongoose.Schema({
         enum: ['SUCCESS', 'FAILED', 'INFO']
     }
 }, {
-    timestamps: true,
+    timestamps: false,
     versionKey: false
 });
 
-// Composite index for fast querying & sorting
+// Lean composite indexes for efficient querying & sorting without index bloat
+activityLogSchema.index({ timestamp: -1 });
 activityLogSchema.index({ timestamp: -1, username: 1 });
 activityLogSchema.index({ timestamp: -1, module: 1 });
 activityLogSchema.index({ timestamp: -1, actionCategory: 1 });

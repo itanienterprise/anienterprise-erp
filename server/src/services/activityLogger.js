@@ -883,47 +883,90 @@ const logActivity = async (entry) => {
 
         let cleanDetails = sanitizePayload(entry.details || {});
 
-        // Strict storage size guard: if serialized details exceed 2500 bytes, prune down to essentials
+        // Heavily prune and compress details payload to essentials
         try {
-            const rawStr = JSON.stringify(cleanDetails);
-            if (rawStr.length > 2500) {
-                const essentialKeys = [
-                    '_id', 'id', 'invoiceNo', 'invoiceNumber', 'orderNo', 'orderNumber',
-                    'lcNo', 'lcNumber', 'piNo', 'piNumber', 'piNumbers', 'billNo', 'challanNo',
-                    'customerName', 'companyName', 'supplierName', 'employeeName', 'productName',
-                    'name', 'phone', 'totalAmount', 'grandTotal', 'amount', 'paidAmount', 'dueAmount',
-                    'status', 'view', 'tag', '_filledFields', '_updatedFields',
-                    'isRevision', 'reviseNo', 'currentReviseNo', 'piRevision', 'actionType',
-                    'deletedRevisionNo', 'isRevisionDelete', 'lastRevisedAt'
-                ];
-                const pruned = {};
-                for (const key of essentialKeys) {
-                    if (cleanDetails[key] !== undefined) {
-                        pruned[key] = cleanDetails[key];
-                    }
+            // Delete bulky nested structures and internal fields
+            delete cleanDetails.items;
+            delete cleanDetails.targetRoles;
+            delete cleanDetails.targetUsers;
+            delete cleanDetails.branches;
+            delete cleanDetails.password;
+            delete cleanDetails._id;
+            delete cleanDetails.__v;
+            delete cleanDetails.createdAt;
+            delete cleanDetails.updatedAt;
+            delete cleanDetails.data;
+            delete cleanDetails.ciphertext;
+            delete cleanDetails.payload;
+            delete cleanDetails.orderRequestedBy;
+            delete cleanDetails.orderRequestedByUsername;
+            delete cleanDetails.orderCreatedByName;
+            delete cleanDetails.orderCreatedBy;
+            delete cleanDetails.acceptedByUsername;
+            delete cleanDetails.approvedByUsername;
+            delete cleanDetails.editedByUsername;
+            delete cleanDetails.editRequestedByUsername;
+            delete cleanDetails.editApprovedByUsername;
+            delete cleanDetails.customerAddress;
+            delete cleanDetails.customerPhone;
+
+            const essentialKeys = new Set([
+                'invoiceNo', 'invoiceNumber', 'orderNo', 'orderNumber',
+                'lcNo', 'lcNumber', 'piNo', 'piNumber', 'billNo', 'challanNo',
+                'customerName', 'companyName', 'supplierName', 'employeeName', 'productName',
+                'totalAmount', 'grandTotal', 'amount', 'paidAmount', 'dueAmount',
+                'status', 'view', 'tag', '_filledFields', '_updatedFields',
+                'isRevision', 'reviseNo', 'currentReviseNo', 'piRevision', 'actionType',
+                'deletedRevisionNo', 'wasCreated', 'receiptNo', 'date'
+            ]);
+
+            const pruned = {};
+            for (const [k, v] of Object.entries(cleanDetails)) {
+                if (essentialKeys.has(k) && v !== '' && v !== null && v !== undefined) {
+                    pruned[k] = v;
                 }
-                pruned._truncated = true;
-                cleanDetails = pruned;
             }
+            cleanDetails = pruned;
         } catch (e) {
             cleanDetails = {};
         }
 
-        // Clean empty/null/undefined keys to heavily compress payload
+        // Limit and clean _filledFields diffs (max 4, no encrypted ciphertext)
+        if (Array.isArray(cleanDetails._filledFields)) {
+            cleanDetails._filledFields = cleanDetails._filledFields
+                .filter(f => {
+                    if (!f) return false;
+                    const val = String(f.value || '');
+                    return !val.startsWith('U2FsdGVkX1') && val.length < 80;
+                })
+                .slice(0, 4)
+                .map(f => ({ field: f.field, value: String(f.value || '').slice(0, 40) }));
+            if (cleanDetails._filledFields.length === 0) delete cleanDetails._filledFields;
+        }
+
+        // Limit and clean _updatedFields diffs (max 5, no encrypted ciphertext)
+        if (Array.isArray(cleanDetails._updatedFields)) {
+            cleanDetails._updatedFields = cleanDetails._updatedFields
+                .filter(f => {
+                    if (!f) return false;
+                    const oldV = String(f.oldValue || '');
+                    const newV = String(f.newValue || '');
+                    return !oldV.startsWith('U2FsdGVkX1') && !newV.startsWith('U2FsdGVkX1');
+                })
+                .slice(0, 5)
+                .map(f => ({
+                    field: f.field || f.label,
+                    oldValue: String(f.oldValue || '').slice(0, 30),
+                    newValue: String(f.newValue || '').slice(0, 30)
+                }));
+            if (cleanDetails._updatedFields.length === 0) delete cleanDetails._updatedFields;
+        }
+
+        // Clean empty/null/undefined keys
         for (const [k, v] of Object.entries(cleanDetails)) {
-            if (v === '' || v === null || v === undefined) {
+            if (v === '' || v === null || v === undefined || (Array.isArray(v) && v.length === 0)) {
                 delete cleanDetails[k];
             }
-        }
-        delete cleanDetails.__v;
-        if (cleanDetails._id) delete cleanDetails._id;
-
-        // Limit filled/updated field diffs to max 6 to avoid massive arrays
-        if (Array.isArray(cleanDetails._filledFields) && cleanDetails._filledFields.length > 6) {
-            cleanDetails._filledFields = cleanDetails._filledFields.slice(0, 6);
-        }
-        if (Array.isArray(cleanDetails._updatedFields) && cleanDetails._updatedFields.length > 8) {
-            cleanDetails._updatedFields = cleanDetails._updatedFields.slice(0, 8);
         }
 
         // Simplify user agent to compact string (e.g. "Chrome (macOS)")
@@ -946,24 +989,26 @@ const logActivity = async (entry) => {
             compactUserAgent = `${browser} (${os})`;
         }
 
-        const logDoc = new ActivityLog({
+        const docData = {
             timestamp: entry.timestamp || new Date(),
-            userId: entry.userId || '',
             username: entry.username || 'System',
-            userRole: entry.userRole || '',
-            displayName: entry.displayName || '',
             module: entry.module || 'System',
             action: entry.action || 'OPERATION',
             actionCategory: entry.actionCategory || 'MUTATION',
-            description: entry.description || 'System operation performed',
-            details: cleanDetails,
-            ip: entry.ip || '',
-            userAgent: compactUserAgent,
-            method: entry.method || '',
-            path: entry.path || '',
-            status: entry.status || 'SUCCESS'
-        });
+            description: entry.description || 'System operation performed'
+        };
 
+        if (entry.userId) docData.userId = entry.userId;
+        if (entry.userRole) docData.userRole = entry.userRole;
+        if (entry.displayName && entry.displayName !== entry.username) docData.displayName = entry.displayName;
+        if (entry.ip && entry.ip !== '127.0.0.1' && entry.ip !== '::1') docData.ip = entry.ip;
+        if (compactUserAgent) docData.userAgent = compactUserAgent;
+        if (entry.method && entry.method !== 'CLICK') docData.method = entry.method;
+        if (entry.path && entry.path !== '/') docData.path = entry.path;
+        if (entry.status && entry.status !== 'SUCCESS') docData.status = entry.status;
+        if (cleanDetails && Object.keys(cleanDetails).length > 0) docData.details = cleanDetails;
+
+        const logDoc = new ActivityLog(docData);
         await logDoc.save();
     } catch (err) {
         console.error('[ActivityLogger] Error saving log:', err.message);
