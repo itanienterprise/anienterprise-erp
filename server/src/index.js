@@ -20,7 +20,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 const backupUpload = multer ? multer({
-  dest: uploadDir,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 * 1024 } // 500 MB limit
 }) : {
   single: () => (req, res, next) => next()
@@ -4086,11 +4086,11 @@ const performDatabaseRestore = async (backupData) => {
   };
 };
 
-// Restore Database via Upload (Multipart/form-data for large backup files)
+// Restore Database via Upload (Multipart/form-data with buffer & fallback)
 apiRouter.post('/api/restore-database-upload', adminOnly, (req, res, next) => {
   backupUpload.single('backupFile')(req, res, (err) => {
     if (err) {
-      console.warn('Multer backup upload notice:', err.message);
+      console.warn('Multer parse warning:', err.message);
     }
     next();
   });
@@ -4098,32 +4098,34 @@ apiRouter.post('/api/restore-database-upload', adminOnly, (req, res, next) => {
   let tempFilePath = null;
   try {
     let backupJson = null;
-    if (req.file) {
-      tempFilePath = req.file.path;
-      const rawData = fs.readFileSync(tempFilePath, 'utf8');
-      backupJson = JSON.parse(rawData);
 
-      // Save a copy in BACKUP_DIR so it also appears under Saved Auto Backups on Server
-      try {
-        const BACKUP_DIR = await getBackupDir();
-        const originalName = req.file.originalname || `uploaded_backup_${Date.now()}.json`;
-        const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const savedPath = path.join(BACKUP_DIR, safeName);
-        fs.writeFileSync(savedPath, rawData);
-      } catch (saveErr) {
-        console.warn('Could not save uploaded backup copy to backups directory:', saveErr);
+    if (req.file) {
+      const rawData = req.file.buffer
+        ? req.file.buffer.toString('utf8')
+        : (req.file.path ? fs.readFileSync(req.file.path, 'utf8') : null);
+
+      if (req.file.path) tempFilePath = req.file.path;
+
+      if (rawData) {
+        backupJson = JSON.parse(rawData);
+
+        // Save a copy in BACKUP_DIR so it also appears under Saved Auto Backups on Server
+        try {
+          const BACKUP_DIR = await getBackupDir();
+          const originalName = req.file.originalname || `uploaded_backup_${Date.now()}.json`;
+          const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const savedPath = path.join(BACKUP_DIR, safeName);
+          fs.writeFileSync(savedPath, rawData);
+        } catch (saveErr) {
+          console.warn('Could not save uploaded backup copy to backups directory:', saveErr);
+        }
       }
-    } else if (req.body && req.body.data) {
+    } else if (req.body && (req.body.data || typeof req.body === 'object')) {
       backupJson = req.body;
-    } else if (typeof req.body === 'string') {
-      try {
-        const parsed = JSON.parse(req.body);
-        if (parsed && parsed.data) backupJson = parsed;
-      } catch (e) {}
     }
 
     if (!backupJson || !backupJson.data) {
-      return res.status(400).json({ message: 'No backup file received or invalid format. Please choose a valid JSON file.' });
+      return res.status(400).json({ message: 'No backup file received. Please choose a valid JSON file.' });
     }
 
     const result = await performDatabaseRestore(backupJson);

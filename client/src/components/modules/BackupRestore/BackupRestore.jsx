@@ -258,22 +258,29 @@ const BackupRestore = ({ addNotification }) => {
                     return;
                 }
 
-                try {
-                    const formData = new FormData();
-                    if (backupFile) formData.append('backupFile', backupFile);
-                    response = await axios.post(`${API_BASE_URL}/api/restore-database-upload`, formData, {
-                        timeout: 600000
-                    });
-                } catch (uploadErr) {
-                    console.warn('Multipart upload failed or rejected, attempting JSON payload fallback:', uploadErr);
-                    if (fileData) {
-                        response = await axios.post(`${API_BASE_URL}/api/restore-database`, fileData, {
-                            headers: { 'Content-Type': 'application/json' },
+                let uploadSuccess = false;
+                if (backupFile) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('backupFile', backupFile);
+                        // Do not manually set Content-Type so Axios/browser computes multipart boundary
+                        response = await axios.post(`${API_BASE_URL}/api/restore-database-upload`, formData, {
                             timeout: 600000
                         });
-                    } else {
-                        throw uploadErr;
+                        uploadSuccess = true;
+                    } catch (uploadErr) {
+                        console.warn('Multipart upload encountered error, attempting direct JSON fallback:', uploadErr);
                     }
+                }
+
+                // Fallback to direct JSON payload if multipart failed or fileData is available
+                if (!uploadSuccess && fileData) {
+                    response = await axios.post(`${API_BASE_URL}/api/restore-database`, fileData, {
+                        headers: { 'Content-Type': 'application/json' },
+                        timeout: 600000
+                    });
+                } else if (!uploadSuccess && !response) {
+                    throw new Error('Could not upload backup file or parse JSON data.');
                 }
             } else {
                 response = await axios.post(`${API_BASE_URL}/api/backup-files/${restoreTarget.filename}/restore`, {}, {
