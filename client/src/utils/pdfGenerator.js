@@ -1908,8 +1908,20 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
 
         let customer = null;
 
-        // 1. Match by Customer ID
+        // Try to fetch fresh customer directly from backend to avoid stale cache
         if (targetCustId) {
+            try {
+                const fetchedCust = await api.get(`/api/customers/${targetCustId}`);
+                if (fetchedCust && (fetchedCust._id || fetchedCust.customerId)) {
+                    customer = fetchedCust;
+                }
+            } catch (e) {
+                // fallback to local list matching
+            }
+        }
+
+        // 1. Match by Customer ID from list if not fetched yet
+        if (!customer && targetCustId) {
             customer = customersList.find(c => (c._id && c._id.toString() === targetCustId) || (c.customerId && c.customerId.toString().toLowerCase() === targetCustId.toLowerCase()));
         }
 
@@ -1948,6 +1960,18 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
 
         if (!customer && sale.customer && typeof sale.customer === 'object') {
             customer = sale.customer;
+        }
+
+        // If matched from list, refresh its data from API if possible
+        if (customer && (customer._id || customer.customerId) && !targetCustId) {
+            try {
+                const refreshed = await api.get(`/api/customers/${customer._id || customer.customerId}`);
+                if (refreshed && (refreshed._id || refreshed.customerId)) {
+                    customer = refreshed;
+                }
+            } catch (e) {
+                // keep customer as is
+            }
         }
 
         if (customer) {
@@ -2064,18 +2088,20 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
 
             const currentInv = (sale.invoiceNo || '').trim().toUpperCase();
             const currentOrd = (sale.orderNo || '').trim().toUpperCase();
+            const currentId = (sale._id || sale.id || '').toString().trim();
 
-            const allHistory = [...sHistory, ...pHistory, ...ptcHistory, ...puHistory].sort(compareTransactions);
-
-            const prevTransactions = allHistory.filter(item => {
+            // Include all transactions of the customer up to now, excluding this specific invoice
+            const prevTransactions = [...sHistory, ...pHistory, ...ptcHistory, ...puHistory].filter(item => {
                 const hInv = (item.invoiceNo || item.orderNo || '').trim().toUpperCase();
                 if (currentInv && hInv === currentInv) return false;
                 if (currentOrd && hInv === currentOrd) return false;
+                const hId = (item._id || item.id || '').toString().trim();
+                if (currentId && hId && hId === currentId) return false;
 
-                return compareTransactions(item, sale) < 0;
+                return true;
             });
 
-            let calculatedPrevBalance = 0;
+            let calculatedPrevBalance = parseFloat(customer.openingBalance || 0);
             prevTransactions.forEach(item => {
                 if (item.type === 'sale') {
                     const amt = parseFloat(item.amount) || 0;
@@ -2581,7 +2607,7 @@ export const generateSaleInvoicePDF = async (sale, allCustomers = [], docType = 
 
             const discount = parseFloat(sale.discount || 0);
             const invoiceTotal = subtotal - discount;
-            const paidAmount = parseFloat(sale.paidAmount || 0);
+            const paidAmount = parseFloat(sale.paidAmount !== undefined && sale.paidAmount !== null && sale.paidAmount !== '' ? sale.paidAmount : (sale.paid || 0));
             const currentBalance = invoiceTotal - paidAmount;
             const totalBalance = currentBalance + previousBalance;
 
