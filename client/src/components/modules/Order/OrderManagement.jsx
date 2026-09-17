@@ -2710,13 +2710,13 @@ const OrderManagement = ({
                                                                         const rate = parseFloat(b.rate) || 0;
                                                                         const amt = parseFloat(b.amount) || (qty * rate);
                                                                         return (
-                                                                            <div key={bIdx} className="text-[13px] font-bold text-gray-900 whitespace-nowrap">
+                                                                            <div key={bIdx} className="text-[13px] font-semibold text-gray-800 whitespace-nowrap">
                                                                                 ৳{amt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                                                                             </div>
                                                                         );
                                                                     })
                                                                 ) : (
-                                                                    <div className="text-[13px] font-bold text-gray-900 whitespace-nowrap">-</div>
+                                                                    <div className="text-[13px] font-semibold text-gray-800 whitespace-nowrap">-</div>
                                                                 )}
                                                             </div>
                                                         ))}
