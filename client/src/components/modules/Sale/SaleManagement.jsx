@@ -6714,18 +6714,47 @@ const SaleManagement = ({
                                                 </div>
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
-                                                <div className="text-[13px] font-black text-gray-900">
-                                                    ৳ {(() => {
-                                                        const storedTotal = parseFloat(sale.totalAmount) || 0;
-                                                        if (storedTotal > 0) return storedTotal.toLocaleString('en-IN');
-                                                        // Fallback for corrupted data: Recalculate from items
-                                                        const calculatedTotal = items.reduce((sum, it) => {
+                                                {items.length > 1 && (!isMultiple || isExpanded) ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        {items.map((it, idx) => {
                                                             const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
-                                                            return sum + (qty * parseFloat(it.unitPrice || 0));
-                                                        }, 0);
-                                                        return calculatedTotal.toLocaleString('en-IN');
-                                                    })()}
-                                                </div>
+                                                            const price = parseFloat(it.unitPrice || 0);
+                                                            const itTotal = (it.totalAmount !== undefined && it.totalAmount !== null && it.totalAmount !== '' && !isNaN(parseFloat(it.totalAmount)))
+                                                                ? parseFloat(it.totalAmount)
+                                                                : (qty * price);
+                                                            return (
+                                                                <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                    ৳ {itTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        <div className="border-t border-gray-300 pt-1 text-[13px] font-black text-blue-600">
+                                                            ৳ {(() => {
+                                                                const storedTotal = parseFloat(sale.totalAmount) || 0;
+                                                                if (storedTotal > 0) return storedTotal.toLocaleString('en-IN');
+                                                                // Fallback for corrupted data: Recalculate from items
+                                                                const calculatedTotal = items.reduce((sum, it) => {
+                                                                    const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                                                                    return sum + (qty * parseFloat(it.unitPrice || 0));
+                                                                }, 0);
+                                                                return calculatedTotal.toLocaleString('en-IN');
+                                                            })()}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-[13px] font-black text-blue-600">
+                                                        ৳ {(() => {
+                                                            const storedTotal = parseFloat(sale.totalAmount) || 0;
+                                                            if (storedTotal > 0) return storedTotal.toLocaleString('en-IN');
+                                                            // Fallback for corrupted data: Recalculate from items
+                                                            const calculatedTotal = items.reduce((sum, it) => {
+                                                                const qty = it.uom === 'BAG' ? (parseFloat(it.bag) || 0) : (parseFloat(it.quantity) || 0);
+                                                                return sum + (qty * parseFloat(it.unitPrice || 0));
+                                                            }, 0);
+                                                            return calculatedTotal.toLocaleString('en-IN');
+                                                        })()}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-center">
                                                 <div className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold inline-block border border-emerald-100/50">
