@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-RUN if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then npm run build; fi
+RUN npm run build
 
 # Production stage
 FROM nginx:alpine
