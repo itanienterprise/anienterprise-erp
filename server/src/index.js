@@ -194,6 +194,12 @@ const normalizeBaselineSnapshot = (decrypted) => {
       changed = true;
       return { ...r, brand: 'RAPID MEDIUM' };
     }
+    if ((r.productName || '').trim().toUpperCase() === 'WHEAT' && (r.lcNo || '').trim() === '087326010665') {
+      if ((r.brand || '').trim().toUpperCase() !== 'F C I') {
+        changed = true;
+        return { ...r, brand: 'F C I' };
+      }
+    }
     return r;
   });
 
