@@ -371,9 +371,10 @@ app.get('/', (req, res) => {
 // Admin Authorization Helper & Middleware
 const isUserAdmin = async (user) => {
   if (!user) return false;
-  if (user.username === 'admin') return true;
+  const usernameLower = (user.username || '').toLowerCase().trim();
+  if (usernameLower === 'admin' || usernameLower === 'superadmin') return true;
   const roleLower = (user.role || '').toLowerCase().trim();
-  if (roleLower === 'admin') return true;
+  if (roleLower === 'admin' || roleLower === 'superadmin' || roleLower === 'incharge') return true;
 
   // Check if role is an ID that resolves to Admin in MetaData
   if (/^[0-9a-fA-F]{24}$/.test(user.role)) {
@@ -382,9 +383,15 @@ const isUserAdmin = async (user) => {
       const rec = await MetaData.findById(user.role);
       if (rec) {
         const d = decryptData(rec.data);
-        if (d && (d.name || '').toLowerCase().trim() === 'admin') return true;
+        const name = (d?.name || '').toLowerCase().trim();
+        if (['admin', 'superadmin', 'incharge'].includes(name)) return true;
       }
     } catch (e) {}
+  }
+
+  // Check custom permissions for backupRestore module
+  if (user.permissions && user.permissions.backupRestore && (user.permissions.backupRestore.view || user.permissions.backupRestore.edit || user.permissions.backupRestore.add || user.permissions.backupRestore.special)) {
+    return true;
   }
 
   // Check custom permissions for log module
