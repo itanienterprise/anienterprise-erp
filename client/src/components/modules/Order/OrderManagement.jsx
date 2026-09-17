@@ -2535,6 +2535,7 @@ const OrderManagement = ({
                                 ) : getFilteredData.map((order, index) => {
                                     const { deliveryMap, totalOrderedQty, totalDeliveredQty, statusText, statusBadgeClass } = computeOrderFulfillment(order, allSalesRecords);
                                     const totalAmt = calculateOrderTotal(order.items);
+                                    const allEntriesCount = (order.items || []).reduce((acc, item) => acc + Math.max(1, (item.brandEntries || []).length), 0);
                                     const isRequested = (order.status || '').toLowerCase() === 'requested';
                                     const isEditRequested = order.isEdited === true && !isRequested;
 
@@ -2553,7 +2554,7 @@ const OrderManagement = ({
                                                     toggleSelection(order._id);
                                                 }
                                             }}
-                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-middle ${selectedItems.has(order._id) ? 'bg-blue-50' : ''} ${highlightId && (String(order._id) === String(highlightId) || (order.invoiceNo && String(order.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
+                                            className={`hover:bg-blue-50/50 transition-all group border-b border-gray-50 last:border-0 align-top ${selectedItems.has(order._id) ? 'bg-blue-50' : ''} ${highlightId && (String(order._id) === String(highlightId) || (order.invoiceNo && String(order.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? "notif-row-highlight" : ""}`}
                                             ref={el => { const id = order.invoiceNo || order.orderNo; if (id) rowRefs.current[id] = el; }}
                                                     style={highlightId && (String(order._id) === String(highlightId) || (order.invoiceNo && String(order.invoiceNo).toLowerCase().trim() === String(highlightId).toLowerCase().trim())) ? { borderLeft: '5px solid #f59e0b' } : undefined}
                                         >
@@ -2698,8 +2699,36 @@ const OrderManagement = ({
                                                 </div>
                                             </td>
 
-                                            <td className="px-3 py-4 whitespace-nowrap text-center font-black text-emerald-700">
-                                                ৳{Math.round(totalAmt).toLocaleString('en-US')}
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                {allEntriesCount > 1 ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        {(order.items || []).map((item, i) => (
+                                                            <div key={i} className="flex flex-col gap-1">
+                                                                {(item.brandEntries || []).length > 0 ? (
+                                                                    item.brandEntries.map((b, bIdx) => {
+                                                                        const qty = parseFloat(b.quantity) || 0;
+                                                                        const rate = parseFloat(b.rate) || 0;
+                                                                        const amt = parseFloat(b.amount) || (qty * rate);
+                                                                        return (
+                                                                            <div key={bIdx} className="text-[13px] font-bold text-gray-900 whitespace-nowrap">
+                                                                                ৳{amt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                                            </div>
+                                                                        );
+                                                                    })
+                                                                ) : (
+                                                                    <div className="text-[13px] font-bold text-gray-900 whitespace-nowrap">-</div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                        <div className="border-t border-gray-300 pt-1 text-[13px] font-black text-emerald-700 whitespace-nowrap">
+                                                            ৳{totalAmt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-[13px] font-black text-emerald-700 whitespace-nowrap">
+                                                        ৳{totalAmt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                                    </div>
+                                                )}
                                             </td>
 
                                             <td className="px-3 py-4 text-center">

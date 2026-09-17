@@ -6723,7 +6723,7 @@ const SaleManagement = ({
                                                                 ? parseFloat(it.totalAmount)
                                                                 : (qty * price);
                                                             return (
-                                                                <div key={idx} className={`text-[13px] font-semibold text-gray-800 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
+                                                                <div key={idx} className={`text-[13px] font-bold text-gray-900 ${idx < items.length - 1 ? 'border-b border-gray-100 pb-1' : ''}`}>
                                                                     ৳ {itTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                                                                 </div>
                                                             );
