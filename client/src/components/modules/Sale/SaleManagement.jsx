@@ -2567,6 +2567,7 @@ const SaleManagement = ({
             const custName = order.customerName || order.companyName || '';
             const phone = order.phone || order.contact || '';
             const address = order.address || '';
+            const custId = order.customerId || order.customer?._id || '';
 
             setCompanyNameSearch(comp);
 
@@ -2639,6 +2640,7 @@ const SaleManagement = ({
             setFormData(prev => ({
                 ...prev,
                 orderNo: ordId,
+                customerId: custId || prev.customerId || '',
                 orderRequestedBy: ordRequestedBy,
                 orderRequestedByUsername: ordRequestedByUsername,
                 orderCreatedByName: ordCreatedByName,

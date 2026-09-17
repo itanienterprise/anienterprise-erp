@@ -226,6 +226,7 @@ const OrderManagement = ({
     const initialFormState = {
         date: new Date().toISOString().split('T')[0],
         invoiceNo: '',
+        customerId: '',
         companyName: '',
         customerName: '',
         phone: '',
@@ -782,6 +783,7 @@ const OrderManagement = ({
         if (!customer) {
             setFormData(prev => ({
                 ...prev,
+                customerId: '',
                 companyName: '',
                 customerName: '',
                 address: '',
@@ -797,9 +799,11 @@ const OrderManagement = ({
         const custName = customer.customerName || customer.companyName || '';
         const addr = customer.address || '';
         const ph = customer.contact || customer.phone || '';
+        const custId = customer._id || customer.customerId || '';
 
         setFormData(prev => ({
             ...prev,
+            customerId: custId,
             companyName: compName,
             customerName: custName,
             address: addr,
@@ -916,9 +920,10 @@ const OrderManagement = ({
             date: sale.date || new Date().toISOString().split('T')[0],
             invoiceNo: ordId,
             orderNo: ordId,
+            customerId: sale.customerId || sale.customer?._id || '',
             companyName: comp,
             customerName: sale.customerName || comp,
-            phone: sale.phone || '',
+            phone: sale.phone || sale.contact || '',
             address: sale.address || '',
             notes: sale.notes || '',
             status: sale.status || 'Requested',
@@ -946,7 +951,9 @@ const OrderManagement = ({
                 date: formData.date,
                 companyName: formData.companyName || formData.customerName,
                 customerName: formData.customerName || formData.companyName,
+                customerId: formData.customerId || originalData?.customerId || '',
                 phone: formData.phone,
+                contact: formData.phone,
                 address: formData.address,
                 notes: formData.notes,
                 status: formData.status || 'Requested',
