@@ -2540,9 +2540,15 @@ const SaleManagement = ({
             // Exclude Border Sales (BS...) from the Order ID dropdown
             if (sType === 'border' || inv.startsWith('BS')) return false;
 
-            const st = (item.status || '').toLowerCase();
-            const isOrd = sType === 'order' || inv.startsWith('ORD') || item.isOrderEntry || (st === 'requested' && sType !== 'border' && !inv.startsWith('BS'));
+            const isOrd = sType === 'order' || inv.startsWith('ORD') || item.isOrderEntry === true;
             if (!isOrd) return false;
+
+            const st = (item.status || '').toLowerCase();
+
+            // Exclude unapproved / requested orders (only show approved/accepted orders)
+            if (st === 'requested') return false;
+            const isApproved = st === 'accepted' || !!(item.approvedBy || item.approvedByName || item.acceptedBy || item.acceptedByName);
+            if (!isApproved) return false;
 
             // Exclude orders that are currently in Edit Request status
             if (item.isEdited === true) return false;
