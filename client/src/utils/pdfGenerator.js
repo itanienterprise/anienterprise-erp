@@ -4,7 +4,7 @@ import { calculateStockData, getGroupedBrandList } from './stockHelpers';
 import { preloadFrauncesFont, ensureFrauncesFont } from './frauncesFontLoader';
 import { computeCustomerBalance, compareTransactions, getIsoDateString } from './helpers';
 import { api } from './api';
-import { getAdjustedLcValues, getRecCostingKg } from './lcValueUtils';
+import { getAdjustedLcValues, getRecCostingKg, getLcMilestoneFinances } from './lcValueUtils';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -4738,16 +4738,22 @@ export const generateInsurancePaymentReportPDF = (payments, filters, dateStr, lc
             totalPaid += paidVal;
             totalAdjusted += adjVal;
 
-            const grossPremStr = lc ? (parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+            const { grossPrem, expReturn } = getLcMilestoneFinances(lc, p.amendmentNo);
+
+            const grossPremStr = lc && grossPrem > 0 ? grossPrem.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
             const returnAmtStr = (p.isAdjustReturn || p.type === 'Return Collection')
-                ? (lc ? (parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-')
+                ? (lc && expReturn > 0 ? expReturn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-')
                 : '0.00';
+
+            const lcDisplay = p.lcNo 
+                ? (p.amendmentNo ? `${p.lcNo}\n(${p.amendmentNo})` : p.lcNo)
+                : '-';
 
             tableRows.push([
                 idx + 1,
                 formatDate(p.date),
                 p.companyName || '-',
-                p.lcNo || '-',
+                lcDisplay,
                 p.method || '-',
                 (p.reference || '').trim() || '-',
                 grossPremStr,

@@ -1,3 +1,5 @@
+import { formatDate } from './helpers';
+
 /**
  * Shared LC value calculation utilities.
  * Used by LCManagement and MarginReturn to produce consistent Total Value figures.
@@ -414,3 +416,160 @@ export const getAdjustedLcValues = (record, allStockRecords = [], allSalesRecord
         dollarRate
     };
 };
+
+export const getLcMilestoneFinances = (lc, amendmentNo) => {
+    if (!lc) return { grossPrem: 0, expReturn: 0 };
+    const amnds = Array.isArray(lc.amendments) ? lc.amendments : [];
+    const nonOrigAmnds = amnds.filter(a => a.amendmentNo !== 'Original LC');
+    const origSnapshot = amnds.find(a => a.amendmentNo === 'Original LC');
+
+    if (nonOrigAmnds.length === 0) {
+        return {
+            grossPrem: parseFloat(lc.grossPremium || 0),
+            expReturn: parseFloat(lc.expectedReturnAmount || 0)
+        };
+    }
+
+    if (amendmentNo === 'All (Entire LC)') {
+        return {
+            grossPrem: parseFloat(lc.grossPremium || 0),
+            expReturn: parseFloat(lc.expectedReturnAmount || 0)
+        };
+    }
+
+    if (amendmentNo && amendmentNo !== 'Original LC') {
+        const matched = nonOrigAmnds.find(a => a.amendmentNo === amendmentNo);
+        if (matched) {
+            return {
+                grossPrem: parseFloat(matched.grossPremium || 0),
+                expReturn: parseFloat(matched.expectedReturnAmount || 0)
+            };
+        }
+    }
+
+    // Original LC (or when amendmentNo is not provided or is 'Original LC')
+    if (origSnapshot) {
+        return {
+            grossPrem: parseFloat(origSnapshot.grossPremium || 0),
+            expReturn: parseFloat(origSnapshot.expectedReturnAmount || 0)
+        };
+    }
+
+    let sumAmndGross = 0;
+    let sumAmndReturn = 0;
+    nonOrigAmnds.forEach(a => {
+        sumAmndGross += (parseFloat(a.grossPremium) || 0);
+        sumAmndReturn += (parseFloat(a.expectedReturnAmount) || 0);
+    });
+
+    return {
+        grossPrem: Math.max(0, (parseFloat(lc.grossPremium) || 0) - sumAmndGross),
+        expReturn: Math.max(0, (parseFloat(lc.expectedReturnAmount) || 0) - sumAmndReturn)
+    };
+};
+
+export const getLcMilestonesBreakdown = (lc, payments = []) => {
+    if (!lc) return [];
+    const amnds = Array.isArray(lc.amendments) ? lc.amendments : [];
+    const nonOrigAmnds = amnds.filter(a => a.amendmentNo !== 'Original LC');
+    const origSnapshot = amnds.find(a => a.amendmentNo === 'Original LC');
+    const lcPayments = payments.filter(p => p.lcNo === lc.lcNo && p.status !== 'Requested');
+
+    const evaluateStatus = (milGross, milNet, milReturn, matchedPayments) => {
+        let paid = 0;
+        let retCollected = 0;
+        matchedPayments.forEach(p => {
+            const amt = parseFloat(p.amount || 0);
+            const adj = parseFloat(p.adjustedAmount || 0);
+            if (p.type === 'Return Collection') {
+                retCollected += amt;
+            } else {
+                paid += amt + adj;
+                if (p.isAdjustReturn) {
+                    retCollected += adj;
+                }
+            }
+        });
+        const isPremDone = paid >= (milNet - 1) || paid >= (milGross - 1);
+        const isRetDone = milReturn <= 0 || retCollected >= (milReturn - 1);
+        if (isPremDone && isRetDone) return 'complete';
+        if (retCollected > 0 && paid > 0) return 'partial';
+        if (retCollected > 0) return 'return recived';
+        if (paid > 0) return 'premium paid';
+        return 'not paid';
+    };
+
+    if (nonOrigAmnds.length === 0) {
+        const gross = parseFloat(lc.grossPremium || 0);
+        const net = parseFloat(lc.netPremium || 0);
+        const expRet = parseFloat(lc.expectedReturnAmount || 0);
+        const status = evaluateStatus(gross, net, expRet, lcPayments);
+        return [{
+            isOriginal: true,
+            label: 'Original LC',
+            date: formatDate(lc.openingDate),
+            coverNote: lc.marineCoverNote || lc.coverNoteNo || lc.coverNote || '-',
+            grossPremium: gross,
+            netPremium: net,
+            expectedReturnAmount: expRet,
+            status
+        }];
+    }
+
+    let sumAmndGross = 0;
+    let sumAmndNet = 0;
+    let sumAmndReturn = 0;
+    nonOrigAmnds.forEach(a => {
+        sumAmndGross += parseFloat(a.grossPremium || 0);
+        sumAmndNet += parseFloat(a.netPremium || 0);
+        sumAmndReturn += parseFloat(a.expectedReturnAmount || 0);
+    });
+
+    const origGross = origSnapshot
+        ? parseFloat(origSnapshot.grossPremium || 0)
+        : Math.max(0, parseFloat(lc.grossPremium || 0) - sumAmndGross);
+    const origNet = origSnapshot
+        ? parseFloat(origSnapshot.netPremium || 0)
+        : Math.max(0, parseFloat(lc.netPremium || 0) - sumAmndNet);
+    const origExpRet = origSnapshot
+        ? parseFloat(origSnapshot.expectedReturnAmount || 0)
+        : Math.max(0, parseFloat(lc.expectedReturnAmount || 0) - sumAmndReturn);
+
+    const origPayments = lcPayments.filter(p => !p.amendmentNo || p.amendmentNo === 'Original LC');
+    const origStatus = evaluateStatus(origGross, origNet, origExpRet, origPayments);
+
+    const milestones = [
+        {
+            isOriginal: true,
+            label: 'Original LC',
+            date: formatDate(origSnapshot?.amendmentDate || lc.openingDate),
+            coverNote: origSnapshot?.marineCoverNote || lc.marineCoverNote || lc.coverNoteNo || '-',
+            grossPremium: origGross,
+            netPremium: origNet,
+            expectedReturnAmount: origExpRet,
+            status: origStatus
+        }
+    ];
+
+    nonOrigAmnds.forEach((a, idx) => {
+        const amndGross = parseFloat(a.grossPremium || 0);
+        const amndNet = parseFloat(a.netPremium || 0);
+        const amndExpRet = parseFloat(a.expectedReturnAmount || 0);
+        const amndPayments = lcPayments.filter(p => p.amendmentNo === a.amendmentNo);
+        const amndStatus = evaluateStatus(amndGross, amndNet, amndExpRet, amndPayments);
+
+        milestones.push({
+            isOriginal: false,
+            label: a.amendmentNo || `Amendment-${String(idx + 1).padStart(2, '0')}`,
+            date: formatDate(a.amendmentDate || a.addnDate || a.date),
+            coverNote: a.addnNo || a.revisedCoverNoteNo || a.revisedCoverNote || a.marineCoverNote || a.amendmentNo,
+            grossPremium: amndGross,
+            netPremium: amndNet,
+            expectedReturnAmount: amndExpRet,
+            status: amndStatus
+        });
+    });
+
+    return milestones;
+};
+

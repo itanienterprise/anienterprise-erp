@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { formatDate, computeCustomerBalance, getLocalDateString, getIsoDateString } from './helpers';
 import { calculateStockData } from './stockHelpers';
+import { getLcMilestoneFinances } from './lcValueUtils';
 
 /**
  * Generates and downloads an Excel spreadsheet (.xlsx) for the Exporter Profile Transaction Report.
@@ -1181,19 +1182,22 @@ export const generateInsurancePaymentReportExcel = (payments = [], filters = {},
             const lc = (lcs || []).find(l => l.lcNo === p.lcNo);
             const paidVal = p.type === 'Return Collection' ? 0 : (parseFloat(p.amount) || 0);
             const adjVal = parseFloat(p.adjustedAmount) || 0;
-            const grossPrem = lc ? (parseFloat(lc.grossPremium) || 0) : 0;
-            const returnAmt = (p.isAdjustReturn || p.type === 'Return Collection')
-                ? (lc ? (parseFloat(lc.expectedReturnAmount) || 0) : 0)
-                : 0;
+
+            const { grossPrem, expReturn } = getLcMilestoneFinances(lc, p.amendmentNo);
+            const returnAmt = (p.isAdjustReturn || p.type === 'Return Collection') ? expReturn : 0;
 
             totalPaid += paidVal;
             totalAdjusted += adjVal;
+
+            const lcDisplay = p.lcNo 
+                ? (p.amendmentNo ? `${p.lcNo} (${p.amendmentNo})` : p.lcNo)
+                : '-';
 
             rows.push([
                 idx + 1,
                 formatDate(p.date),
                 p.companyName || '-',
-                p.lcNo || '-',
+                lcDisplay,
                 p.method || '-',
                 (p.reference || '').trim() || '-',
                 grossPrem > 0 ? grossPrem : '-',

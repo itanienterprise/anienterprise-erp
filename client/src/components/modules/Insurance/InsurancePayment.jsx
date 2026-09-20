@@ -11,6 +11,9 @@ import ReportFormatModal from '../../shared/ReportFormatModal';
 import { decryptData } from '../../../utils/encryption';
 import { formatFirstName } from '../IPManagement/IPManagement';
 
+import { getLcMilestoneFinances } from '../../../utils/lcValueUtils';
+export { getLcMilestoneFinances };
+
 const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highlightId, isRequestedNotif }) => {
     
     const [payments, setPayments] = useState([]);
@@ -129,6 +132,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     const insuranceDropdownRef = useRef(null);
     const methodDropdownRef = useRef(null);
     const lcDropdownRef = useRef(null);
+    const amendmentDropdownRef = useRef(null);
     const [highlightedLcIndex, setHighlightedLcIndex] = useState(-1);
     const [highlightedInsuranceIndex, setHighlightedInsuranceIndex] = useState(-1);
 
@@ -147,11 +151,13 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 const lc = filteredLcs[indexToSelect];
                 const insCoName = (lc.insuranceCo || '').toLowerCase().trim();
                 const matchingIns = insurances.find(i => (i.companyName || '').toLowerCase().trim() === insCoName);
+                const amnds = (lc.amendments || []).filter(a => a.amendmentNo !== 'Original LC');
 
                 setNewPayment(prev => ({
                     ...prev,
                     lcNo: lc.lcNo,
-                    insuranceId: matchingIns ? matchingIns._id : prev.insuranceId
+                    insuranceId: matchingIns ? matchingIns._id : prev.insuranceId,
+                    amendmentNo: amnds.length > 0 ? 'Original LC' : ''
                 }));
                 setLcSearchQuery(lc.lcNo);
                 if (matchingIns) {
@@ -199,6 +205,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     const [newPayment, setNewPayment] = useState({
         insuranceId: '',
         lcNo: '',
+        amendmentNo: '',
         type: 'Premium Payment',
         isAdjustReturn: true,
         date: new Date().toISOString().split('T')[0],
@@ -396,7 +403,6 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             const insurancesWithBalance = allInsurances.map(ins => {
                 const targetName = (ins.companyName || '').toLowerCase().trim();
 
-                // 1. Total Premium and Expected Return from LCs
                 let totalPremium = 0;
                 let expectedReturn = 0;
                 allLc.forEach(lc => {
@@ -473,6 +479,9 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 setActiveDropdown(null);
                 setLcSearchQuery(newPayment.lcNo || '');
             }
+            if (activeDropdown === 'amendment' && amendmentDropdownRef.current && !amendmentDropdownRef.current.contains(event.target)) {
+                setActiveDropdown(null);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -532,6 +541,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                 amount: parseFloat(newPayment.amount || 0),
                 adjustedAmount: newPayment.isAdjustReturn ? returnBal : 0,
                 status: initialStatus,
+                amendmentNo: newPayment.amendmentNo || '',
                 entryBy: currentUser?.username || currentUser?.id || 'admin',
                 entryByName: currentUser?.name || currentUser?.username || 'admin'
             };
@@ -543,16 +553,19 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             }
 
             if (addNotification) {
+                const targetLcLabel = paymentData.lcNo 
+                    ? `LC: ${paymentData.lcNo}${paymentData.amendmentNo ? ` (${paymentData.amendmentNo})` : ''}` 
+                    : paymentData.companyName;
                 if (isRequestMode) {
                     addNotification(
                         'New Insurance Payment Requested',
-                        `A payment request of ৳${paymentData.amount.toLocaleString('en-IN')} for ${paymentData.companyName} (${paymentData.lcNo ? `LC: ${paymentData.lcNo}` : paymentData.companyName}) was submitted by ${currentUser?.name || currentUser?.username || 'User'}.`,
+                        `A payment request of ৳${paymentData.amount.toLocaleString('en-IN')} for ${paymentData.companyName} (${targetLcLabel}) was submitted by ${currentUser?.name || currentUser?.username || 'User'}.`,
                         ['Admin', 'Incharge', 'Accounts Manager']
                     );
                 } else {
                     addNotification(
                         isEditMode ? 'Insurance Payment Updated' : 'New Insurance Payment Added',
-                        `Insurance payment for ${paymentData.companyName} (${paymentData.lcNo ? `LC: ${paymentData.lcNo}` : paymentData.companyName}) has been ${isEditMode ? 'updated' : 'added'} by ${currentUser?.name || currentUser?.username || 'User'}.`,
+                        `Insurance payment for ${paymentData.companyName} (${targetLcLabel}) has been ${isEditMode ? 'updated' : 'added'} by ${currentUser?.name || currentUser?.username || 'User'}.`,
                         ['Admin', 'Incharge', 'Accounts Manager']
                     );
                 }
@@ -625,6 +638,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
         setNewPayment({
             insuranceId: '',
             lcNo: '',
+            amendmentNo: '',
             type: 'Premium Payment',
             isAdjustReturn: true,
             date: new Date().toISOString().split('T')[0],
@@ -647,6 +661,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
         setNewPayment({
             insuranceId: payment.insuranceId,
             lcNo: payment.lcNo || '',
+            amendmentNo: payment.amendmentNo || '',
             type: payment.type || 'Premium Payment',
             isAdjustReturn: payment.isAdjustReturn !== undefined ? payment.isAdjustReturn : true,
             date: payment.date,
@@ -715,6 +730,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
             (p.method || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.reference || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.lcNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.amendmentNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.entryBy || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             getEntryByName(p.entryBy, p.entryByName).toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -737,21 +753,98 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
     const totalPaid = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
     const transactionCount = filteredPayments.length;
 
+    // Amendment state for current selection in form
+    const selectedLc = React.useMemo(() => {
+        if (!newPayment.lcNo) return null;
+        return lcs.find(lc => lc.lcNo === newPayment.lcNo) || null;
+    }, [newPayment.lcNo, lcs]);
+
+    const lcAmendments = React.useMemo(() => {
+        if (!selectedLc || !Array.isArray(selectedLc.amendments)) return [];
+        return selectedLc.amendments.filter(a => a.amendmentNo !== 'Original LC');
+    }, [selectedLc]);
+
+    const hasAmendments = lcAmendments.length > 0;
+
+    const originalSnapshot = React.useMemo(() => {
+        if (!selectedLc || !Array.isArray(selectedLc.amendments)) return null;
+        return selectedLc.amendments.find(a => a.amendmentNo === 'Original LC') || null;
+    }, [selectedLc]);
+
+    const amendmentOptions = React.useMemo(() => {
+        if (!selectedLc || lcAmendments.length === 0) return [];
+        const origFinances = getLcMilestoneFinances(selectedLc, 'Original LC');
+        const origCoverNote = originalSnapshot?.marineCoverNote || selectedLc.marineCoverNote || '';
+        const options = [
+            {
+                value: 'Original LC',
+                label: 'Original LC',
+                subtext: origCoverNote 
+                    ? `Cover Note: ${origCoverNote} • Prem: ৳${origFinances.grossPrem.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : `Prem: ৳${origFinances.grossPrem.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            }
+        ];
+
+        lcAmendments.forEach((amnd, idx) => {
+            const title = amnd.amendmentNo || `Amendment-${String(idx + 1).padStart(2, '0')}`;
+            const addn = amnd.addnNo || amnd.revisedCoverNoteNo || amnd.revisedCoverNote || '';
+            const prem = parseFloat(amnd.grossPremium || 0);
+            const ret = parseFloat(amnd.expectedReturnAmount || 0);
+
+            let sub = '';
+            if (addn) sub += `Addn: ${addn}`;
+            if (prem > 0) sub += `${sub ? ' • ' : ''}Prem: ৳${prem.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (ret > 0) sub += `${sub ? ' • ' : ''}Ret: ৳${ret.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (!sub && amnd.amendmentDate) sub = `Date: ${formatDate(amnd.amendmentDate)}`;
+
+            options.push({
+                value: title,
+                label: title,
+                subtext: sub || 'LC Amendment'
+            });
+        });
+
+        const allFinances = getLcMilestoneFinances(selectedLc, 'All (Entire LC)');
+        options.push({
+            value: 'All (Entire LC)',
+            label: 'All (Entire LC)',
+            subtext: `Combined Total • Prem: ৳${allFinances.grossPrem.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        });
+
+        return options;
+    }, [selectedLc, lcAmendments, originalSnapshot]);
+
     let displayPremiumBalance = 0;
     let displayReturnBalance = 0;
 
-    if (newPayment.lcNo) {
-        const selectedLc = lcs.find(lc => lc.lcNo === newPayment.lcNo);
-        if (selectedLc) {
-            let premiumPaid = 0;
-            let returnCollected = 0;
+    if (selectedLc) {
+        let premiumPaid = 0;
+        let returnCollected = 0;
 
-            payments.forEach(payment => {
-                if (payment.status === 'Requested') return;
-                if (isEditMode && editingPayment && payment._id === editingPayment._id) {
-                    return;
+        const isSpecificAmendment = hasAmendments && newPayment.amendmentNo && newPayment.amendmentNo !== 'Original LC' && newPayment.amendmentNo !== 'All (Entire LC)';
+        const isAllLc = hasAmendments && newPayment.amendmentNo === 'All (Entire LC)';
+        const isOriginalLc = !hasAmendments || !newPayment.amendmentNo || newPayment.amendmentNo === 'Original LC';
+
+        const { grossPrem: targetGrossPremium, expReturn: targetExpectedReturn } = getLcMilestoneFinances(selectedLc, newPayment.amendmentNo);
+
+        payments.forEach(payment => {
+            if (payment.status === 'Requested') return;
+            if (isEditMode && editingPayment && payment._id === editingPayment._id) {
+                return;
+            }
+            if (payment.lcNo === newPayment.lcNo) {
+                let matchesMilestone = true;
+                if (hasAmendments) {
+                    if (isAllLc) {
+                        matchesMilestone = true;
+                    } else if (isSpecificAmendment) {
+                        matchesMilestone = payment.amendmentNo === newPayment.amendmentNo;
+                    } else if (isOriginalLc) {
+                        matchesMilestone = !payment.amendmentNo || payment.amendmentNo === 'Original LC';
+                    }
                 }
-                if (payment.lcNo === newPayment.lcNo) {
+
+                if (matchesMilestone) {
                     const adjustment = parseFloat(payment.adjustedAmount || 0);
                     const amount = parseFloat(payment.amount || 0);
                     if (payment.type === 'Return Collection') {
@@ -763,11 +856,11 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                         }
                     }
                 }
-            });
+            }
+        });
 
-            displayPremiumBalance = (parseFloat(selectedLc.grossPremium) || 0) - premiumPaid;
-            displayReturnBalance = (parseFloat(selectedLc.expectedReturnAmount) || 0) - returnCollected;
-        }
+        displayPremiumBalance = targetGrossPremium - premiumPaid;
+        displayReturnBalance = targetExpectedReturn - returnCollected;
     } else if (newPayment.insuranceId) {
         const selectedIns = insurances.find(i => i._id === newPayment.insuranceId);
         if (selectedIns) {
@@ -996,7 +1089,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                            <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 ${hasAmendments ? 'xl:grid-cols-6' : 'xl:grid-cols-5'} gap-4 md:gap-5`}>
                                 {/* Row 1: Primary Info */}
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Payment Date</label>
@@ -1020,7 +1113,17 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                 setActiveDropdown('lc');
                                                 setHighlightedLcIndex(-1);
                                                 if (val === '') {
-                                                    setNewPayment(prev => ({ ...prev, lcNo: '' }));
+                                                    setNewPayment(prev => ({ ...prev, lcNo: '', amendmentNo: '' }));
+                                                } else {
+                                                    const matched = lcs.find(l => (l.lcNo || '').toLowerCase() === val.toLowerCase());
+                                                    if (matched) {
+                                                        const amnds = (matched.amendments || []).filter(a => a.amendmentNo !== 'Original LC');
+                                                        setNewPayment(prev => ({
+                                                            ...prev,
+                                                            lcNo: matched.lcNo,
+                                                            amendmentNo: amnds.length > 0 ? (prev.amendmentNo || 'Original LC') : ''
+                                                        }));
+                                                    }
                                                 }
                                             }}
                                             onKeyDown={handleLcKeyDown}
@@ -1032,7 +1135,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        setNewPayment(prev => ({ ...prev, lcNo: '' }));
+                                                        setNewPayment(prev => ({ ...prev, lcNo: '', amendmentNo: '' }));
                                                         setLcSearchQuery('');
                                                         setHighlightedLcIndex(-1);
                                                     }}
@@ -1055,11 +1158,13 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                         e.stopPropagation();
                                                         const insCoName = (lc.insuranceCo || '').toLowerCase().trim();
                                                         const matchingIns = insurances.find(i => (i.companyName || '').toLowerCase().trim() === insCoName);
+                                                        const amnds = (lc.amendments || []).filter(a => a.amendmentNo !== 'Original LC');
 
                                                         setNewPayment(prev => ({
                                                             ...prev,
                                                             lcNo: lc.lcNo,
-                                                            insuranceId: matchingIns ? matchingIns._id : prev.insuranceId
+                                                            insuranceId: matchingIns ? matchingIns._id : prev.insuranceId,
+                                                            amendmentNo: amnds.length > 0 ? 'Original LC' : ''
                                                         }));
                                                         setLcSearchQuery(lc.lcNo);
                                                         if (matchingIns) {
@@ -1084,6 +1189,63 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Row 1: Amendment Selection (Visible when LC has amendments) */}
+                                {hasAmendments && (
+                                    <div className="space-y-1.5 relative animate-in fade-in slide-in-from-top-1 duration-200" ref={amendmentDropdownRef}>
+                                        <div className="flex items-center justify-between ml-1">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amendment</label>
+                                            <span className="text-[9px] font-extrabold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 shadow-2xs">
+                                                {lcAmendments.length} {lcAmendments.length === 1 ? 'amendment' : 'amendments'}
+                                            </span>
+                                        </div>
+                                        <div className="relative">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveDropdown(activeDropdown === 'amendment' ? null : 'amendment')}
+                                                className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm shadow-sm hover:border-gray-200 transition-all focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none"
+                                            >
+                                                <span className="truncate font-bold text-gray-900">
+                                                    {newPayment.amendmentNo || 'Select Amendment'}
+                                                </span>
+                                                <ChevronDownIcon className="w-4 h-4 text-gray-400 shrink-0 ml-1" />
+                                            </button>
+                                            {activeDropdown === 'amendment' && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[110] max-h-64 overflow-y-auto py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    {amendmentOptions.map((opt) => (
+                                                        <button
+                                                            key={opt.value}
+                                                            type="button"
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                setNewPayment(prev => ({ ...prev, amendmentNo: opt.value }));
+                                                                setActiveDropdown(null);
+                                                            }}
+                                                            className={`w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between ${
+                                                                newPayment.amendmentNo === opt.value ? 'bg-blue-50' : 'hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            <div className="pr-2 min-w-0">
+                                                                <div className={`font-bold truncate ${newPayment.amendmentNo === opt.value ? 'text-blue-600' : 'text-gray-900'}`}>
+                                                                    {opt.label}
+                                                                </div>
+                                                                {opt.subtext && (
+                                                                    <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                                                                        {opt.subtext}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            {newPayment.amendmentNo === opt.value && (
+                                                                <CheckIcon className="w-4 h-4 text-blue-600 shrink-0" />
+                                                            )}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="space-y-1.5 relative" ref={insuranceDropdownRef}>
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Insurance Company</label>
@@ -1214,7 +1376,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                 <input
                                                     type="text"
                                                     readOnly
-                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? displayPremiumBalance.toLocaleString('en-US') : '0.00'}
+                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? displayPremiumBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                                                     className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                                 />
                                             </div>
@@ -1228,7 +1390,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                 <input
                                                     type="text"
                                                     readOnly
-                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? displayReturnBalance.toLocaleString('en-IN') : '0.00'}
+                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? displayReturnBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                                                     className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                                 />
                                             </div>
@@ -1242,7 +1404,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                 <input
                                                     type="text"
                                                     readOnly
-                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? (displayPremiumBalance - displayReturnBalance).toLocaleString('en-US') : '0.00'}
+                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? (displayPremiumBalance - displayReturnBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                                                     className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                                 />
                                             </div>
@@ -1279,7 +1441,7 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                 <input
                                                     type="text"
                                                     readOnly
-                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? (newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance).toLocaleString('en-US') : '0.00'}
+                                                    value={(newPayment.lcNo || newPayment.insuranceId) ? (newPayment.type === 'Premium Payment' ? displayPremiumBalance : displayReturnBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                                                     className="w-full pl-6 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-black text-gray-900 shadow-sm outline-none cursor-not-allowed"
                                                 />
                                             </div>
@@ -1450,17 +1612,31 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                     <td className="px-4 py-3 whitespace-nowrap">
                                                         <div className="font-bold text-gray-900">{p.companyName}</div>
                                                     </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.lcNo || '-'}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <div className="font-semibold text-gray-800">{p.lcNo || '-'}</div>
+                                                        {p.amendmentNo && (
+                                                            <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+                                                                {p.amendmentNo}
+                                                            </span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-4 py-3 whitespace-nowrap text-gray-500">{p.method}</td>
                                                     <td className="px-4 py-3 whitespace-nowrap text-gray-500 truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-blue-600">
-                                                        {lc ? `৳${(parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN')}` : '-'}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-indigo-600">
-                                                        {(p.isAdjustReturn || p.type === 'Return Collection')
-                                                            ? (lc ? `৳${(parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN')}` : '-')
-                                                            : '৳0'}
-                                                    </td>
+                                                    {(() => {
+                                                        const { grossPrem, expReturn } = getLcMilestoneFinances(lc, p.amendmentNo);
+                                                        return (
+                                                            <>
+                                                                <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-blue-600">
+                                                                    {lc ? `৳${grossPrem.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                                                                </td>
+                                                                <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-indigo-600">
+                                                                    {(p.isAdjustReturn || p.type === 'Return Collection')
+                                                                        ? (lc ? `৳${expReturn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-')
+                                                                        : '৳0.00'}
+                                                                </td>
+                                                            </>
+                                                        );
+                                                    })()}
                                                     <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-gray-700">
                                                         {p.type === 'Return Collection' ? '৳0' : `৳${p.amount.toLocaleString('en-IN')}`}
                                                     </td>
@@ -1598,25 +1774,39 @@ const InsurancePayment = ({ currentUser: propCurrentUser, addNotification, highl
                                                 <div className="grid grid-cols-[125px_8px_1fr] gap-y-2 pt-3 text-xs items-baseline">
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">LC No</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-semibold text-gray-700 uppercase truncate text-[11px]">{p.lcNo || '-'}</span>
+                                                    <span className="font-semibold text-gray-700 uppercase truncate text-[11px]">
+                                                        {p.lcNo || '-'}
+                                                        {p.amendmentNo && (
+                                                            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+                                                                {p.amendmentNo}
+                                                            </span>
+                                                        )}
+                                                    </span>
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reference</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                     <span className="font-semibold text-gray-700 text-[11px] truncate max-w-[150px]" title={p.reference}>{p.reference || '-'}</span>
 
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
-                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-bold text-blue-600 text-[11px]">
-                                                        {lc ? `৳${(parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN')}` : '-'}
-                                                    </span>
+                                                    {(() => {
+                                                        const { grossPrem, expReturn } = getLcMilestoneFinances(lc, p.amendmentNo);
+                                                        return (
+                                                            <>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="font-bold text-blue-600 text-[11px]">
+                                                                    {lc ? `৳${grossPrem.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                                                                </span>
 
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
-                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                    <span className="font-bold text-indigo-600 text-[11px]">
-                                                        {(p.isAdjustReturn || p.type === 'Return Collection')
-                                                            ? (lc ? `৳${(parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN')}` : '-')
-                                                            : '৳0'}
-                                                    </span>
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Return Amount</span>
+                                                                <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                <span className="font-bold text-indigo-600 text-[11px]">
+                                                                    {(p.isAdjustReturn || p.type === 'Return Collection')
+                                                                        ? (lc ? `৳${expReturn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-')
+                                                                        : '৳0.00'}
+                                                                </span>
+                                                            </>
+                                                        );
+                                                    })()}
 
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Paid</span>
                                                     <span className="text-gray-400 font-bold text-[10px]">:</span>

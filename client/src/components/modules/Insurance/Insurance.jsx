@@ -9,42 +9,35 @@ import { generateInsuranceHistoryReportPDF } from '../../../utils/pdfGenerator';
 import { generateInsuranceHistoryReportExcel } from '../../../utils/excelGenerator';
 import ReportFormatModal from '../../shared/ReportFormatModal';
 import { ViewDetailsModal } from '../LCManagement/LCManagement';
+import { getLcMilestoneFinances, getLcMilestonesBreakdown } from '../../../utils/lcValueUtils';
+
+const renderMilestoneStatusBadge = (status, label) => {
+    let bg = 'bg-rose-50 text-rose-600 border-rose-100/50';
+    let text = status || 'not paid';
+    if (status === 'complete') {
+        bg = 'bg-emerald-50 text-emerald-600 border-emerald-100/50';
+    } else if (status === 'return recived') {
+        bg = 'bg-amber-50 text-amber-600 border-amber-100/50';
+    } else if (status === 'partial' || status === 'premium paid') {
+        bg = 'bg-blue-50 text-blue-600 border-blue-100/50';
+    }
+    const prefix = label ? `${label}: ` : '';
+    return (
+        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border block text-center whitespace-nowrap ${bg}`}>
+            {prefix}{text}
+        </span>
+    );
+};
+
 const getLcInsuranceStatus = (lc, payments) => {
-    const lcNo = lc.lcNo;
-    const lcPayments = payments.filter(p => p.lcNo === lcNo);
-    
-    let premiumPaid = 0;
-    let returnCollected = 0;
-    
-    lcPayments.forEach(p => {
-        const amount = parseFloat(p.amount || 0);
-        const adj = parseFloat(p.adjustedAmount || 0);
-        if (p.type === 'Return Collection') {
-            returnCollected += amount;
-        } else {
-            premiumPaid += amount + adj;
-            if (p.isAdjustReturn) {
-                returnCollected += adj;
-            }
-        }
-    });
-
-    const grossPremium = parseFloat(lc.grossPremium || 0);
-    const netPremium = parseFloat(lc.netPremium || 0);
-    const expectedReturn = parseFloat(lc.expectedReturnAmount || 0);
-
-    const isPremiumPaidFully = premiumPaid >= (netPremium - 1) || premiumPaid >= (grossPremium - 1);
-    const isReturnCollectedFully = expectedReturn <= 0 || returnCollected >= (expectedReturn - 1);
-
-    if (isPremiumPaidFully && isReturnCollectedFully) {
-        return 'complete';
-    }
-    if (returnCollected > 0) {
-        return 'return recived';
-    }
-    if (premiumPaid > 0) {
-        return 'premium paid';
-    }
+    const milestones = getLcMilestonesBreakdown(lc, payments);
+    if (milestones.length === 0) return 'not paid';
+    const allComplete = milestones.every(m => m.status === 'complete');
+    if (allComplete) return 'complete';
+    const anyPaidOrComplete = milestones.some(m => m.status === 'complete' || m.status === 'partial' || m.status === 'premium paid');
+    const anyReturn = milestones.some(m => m.status === 'return recived');
+    if (anyPaidOrComplete) return 'partial';
+    if (anyReturn) return 'return recived';
     return 'not paid';
 };
 
@@ -1412,29 +1405,45 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                             <td className="px-6 py-4 text-xs font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
                                                             <td className="px-6 py-4 text-xs font-bold whitespace-nowrap">
                                                                 {item.lcNo ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleOpenLcConsumption(item.lcNo);
-                                                                        }}
-                                                                        className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
-                                                                        title={`View LC Details (${item.lcNo})`}
-                                                                    >
-                                                                        {item.lcNo}
-                                                                    </button>
-                                                                ) : '-'}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">{item.method}</td>
-                                                            <td className="px-6 py-4 text-xs text-gray-500 italic truncate max-w-[120px]" title={item.reference}>{item.reference || '-'}</td>
-                                                            <td className="px-6 py-4 text-xs font-bold text-blue-600 text-right whitespace-nowrap">
-                                                                {lc ? `৳${(parseFloat(lc.grossPremium) || 0).toLocaleString('en-IN')}` : '-'}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-xs font-bold text-indigo-600 text-right whitespace-nowrap">
-                                                                {(item.isAdjustReturn || item.type === 'Return Collection')
-                                                                    ? (lc ? `৳${(parseFloat(lc.expectedReturnAmount) || 0).toLocaleString('en-IN')}` : '-')
-                                                                    : '৳0'}
-                                                            </td>
+                                                                    <div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleOpenLcConsumption(item.lcNo);
+                                                                            }}
+                                                                            className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                            title={`View LC Details (${item.lcNo})`}
+                                                                        >
+                                                                            {item.lcNo}
+                                                                        </button>
+                                                                    {item.amendmentNo && (
+                                                                        <div className="mt-0.5">
+                                                                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+                                                                                {item.amendmentNo}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : '-'}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">{item.method}</td>
+                                                        <td className="px-6 py-4 text-xs text-gray-500 italic truncate max-w-[120px]" title={item.reference}>{item.reference || '-'}</td>
+                                                        {(() => {
+                                                            const { grossPrem, expReturn } = getLcMilestoneFinances(lc, item.amendmentNo);
+                                                            return (
+                                                                <>
+                                                                    <td className="px-6 py-4 text-xs font-bold text-blue-600 text-right whitespace-nowrap">
+                                                                        {lc ? `৳${grossPrem.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-xs font-bold text-indigo-600 text-right whitespace-nowrap">
+                                                                        {(item.isAdjustReturn || item.type === 'Return Collection')
+                                                                            ? (lc ? `৳${expReturn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-')
+                                                                            : '৳0.00'}
+                                                                    </td>
+                                                                </>
+                                                            );
+                                                        })()}
                                                             <td className="px-6 py-4 text-xs font-bold text-gray-700 text-right whitespace-nowrap">
                                                                 {item.type === 'Return Collection' ? '৳0' : `৳${(parseFloat(item.amount) || 0).toLocaleString('en-IN')}`}
                                                             </td>
@@ -1459,71 +1468,97 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                         </tr>
                                                     ) : (
                                                         <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                                                            <td className="px-6 py-4 text-xs font-medium whitespace-nowrap">
-                                                                <div className="text-gray-600 font-medium">{formatDate(item.openingDate)}</div>
-                                                                {getLcAmendmentDates(item).map((amdDate, aIdx) => (
-                                                                    <div key={aIdx} className="text-[11px] font-semibold text-amber-600 mt-0.5">
-                                                                        {amdDate}
-                                                                    </div>
-                                                                ))}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-xs font-bold whitespace-nowrap">
-                                                                {item.lcNo ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleOpenLcConsumption(item.lcNo);
-                                                                        }}
-                                                                        className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
-                                                                        title={`View LC Details (${item.lcNo})`}
-                                                                    >
-                                                                        {item.lcNo}
-                                                                    </button>
-                                                                ) : '-'}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-xs whitespace-nowrap">
-                                                                <div className="font-bold text-gray-800">{getLcCoverNote(item)}</div>
-                                                                {getLcRevisedCoverNotes(item).map((rcn, rIdx) => (
-                                                                    <div key={rIdx} className="text-[11px] font-semibold text-amber-600 mt-0.5">
-                                                                        {rcn}
-                                                                    </div>
-                                                                ))}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-xs text-gray-700 truncate max-w-[200px]" title={item.exporterName}>{item.exporterName}</td>
-                                                            <td className="px-6 py-4 text-xs font-black text-blue-600 text-right whitespace-nowrap">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-US')}</td>
-                                                            <td className="px-6 py-4 text-xs font-black text-rose-600 text-right whitespace-nowrap">৳{parseFloat(item.netPremium || 0).toLocaleString('en-US')}</td>
-                                                            <td className="px-6 py-4 text-xs font-black text-emerald-600 text-right whitespace-nowrap">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</td>
-                                                            <td className="px-6 py-4 text-xs text-center whitespace-nowrap">
-                                                                {(() => {
-                                                                    const status = getLcInsuranceStatus(item, insurancePayments);
-                                                                    if (status === 'complete') {
-                                                                        return (
-                                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-600 border-emerald-100/50">
-                                                                                complete
-                                                                            </span>
-                                                                        );
-                                                                    } else if (status === 'return recived') {
-                                                                        return (
-                                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-amber-50 text-amber-600 border-amber-100/50">
-                                                                                return recived
-                                                                            </span>
-                                                                        );
-                                                                    } else if (status === 'premium paid') {
-                                                                        return (
-                                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-blue-50 text-blue-600 border-blue-100/50">
-                                                                                premium paid
-                                                                            </span>
-                                                                        );
-                                                                    } else {
-                                                                        return (
-                                                                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border bg-rose-50 text-rose-600 border-rose-100/50">
-                                                                                not paid
-                                                                            </span>
-                                                                        );
-                                                                    }
-                                                                })()}
-                                                            </td>
+                                                            {(() => {
+                                                                const milestones = getLcMilestonesBreakdown(item, insurancePayments);
+                                                                const hasMultiple = milestones.length > 1;
+
+                                                                return (
+                                                                    <>
+                                                                        <td className="px-6 py-4 text-xs font-medium whitespace-nowrap">
+                                                                            {milestones.map((m, mIdx) => (
+                                                                                <div key={mIdx} className={m.isOriginal ? "text-gray-600 font-medium" : "text-[11px] font-semibold text-amber-600 mt-1"}>
+                                                                                    {m.date}
+                                                                                </div>
+                                                                            ))}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-xs font-bold whitespace-nowrap">
+                                                                            {item.lcNo ? (
+                                                                                <div>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleOpenLcConsumption(item.lcNo);
+                                                                                        }}
+                                                                                        className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-600 hover:text-white border border-blue-200/90 hover:border-blue-600 rounded-md shadow-2xs transition-all active:scale-95 cursor-pointer font-mono select-none"
+                                                                                        title={`View LC Details (${item.lcNo})`}
+                                                                                    >
+                                                                                        {item.lcNo}
+                                                                                    </button>
+                                                                                    {hasMultiple && (
+                                                                                        <div className="mt-1">
+                                                                                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+                                                                                                {milestones.length - 1} {milestones.length - 1 === 1 ? 'amendment' : 'amendments'}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            ) : '-'}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-xs whitespace-nowrap">
+                                                                            {milestones.map((m, mIdx) => (
+                                                                                <div key={mIdx} className={m.isOriginal ? "font-bold text-gray-800" : "text-[11px] font-semibold text-amber-600 mt-1"}>
+                                                                                    {m.coverNote}
+                                                                                </div>
+                                                                            ))}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-xs text-gray-700 truncate max-w-[200px]" title={item.exporterName}>{item.exporterName || '-'}</td>
+                                                                        <td className="px-6 py-4 text-xs font-black text-right whitespace-nowrap">
+                                                                            {milestones.map((m, mIdx) => (
+                                                                                <div key={mIdx} className={m.isOriginal ? "text-blue-600" : "text-[11px] font-semibold text-amber-600 mt-1"}>
+                                                                                    ৳{m.grossPremium.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                </div>
+                                                                            ))}
+                                                                            {hasMultiple && (
+                                                                                <div className="text-[10px] text-gray-400 font-bold pt-1 mt-1 border-t border-gray-100">
+                                                                                    ৳{parseFloat(item.grossPremium || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-xs font-black text-right whitespace-nowrap">
+                                                                            {milestones.map((m, mIdx) => (
+                                                                                <div key={mIdx} className={m.isOriginal ? "text-rose-600" : "text-[11px] font-semibold text-amber-600 mt-1"}>
+                                                                                    ৳{m.netPremium.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                </div>
+                                                                            ))}
+                                                                            {hasMultiple && (
+                                                                                <div className="text-[10px] text-gray-400 font-bold pt-1 mt-1 border-t border-gray-100">
+                                                                                    ৳{parseFloat(item.netPremium || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-xs font-black text-right whitespace-nowrap">
+                                                                            {milestones.map((m, mIdx) => (
+                                                                                <div key={mIdx} className={m.isOriginal ? "text-emerald-600" : "text-[11px] font-semibold text-amber-600 mt-1"}>
+                                                                                    ৳{m.expectedReturnAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                </div>
+                                                                            ))}
+                                                                            {hasMultiple && (
+                                                                                <div className="text-[10px] text-gray-400 font-bold pt-1 mt-1 border-t border-gray-100">
+                                                                                    ৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-xs text-center whitespace-nowrap">
+                                                                            {milestones.map((m, mIdx) => (
+                                                                                <div key={mIdx} className={mIdx > 0 ? "mt-1" : ""}>
+                                                                                    {renderMilestoneStatusBadge(m.status, hasMultiple ? (m.isOriginal ? 'ORIGINAL' : m.label) : null)}
+                                                                                </div>
+                                                                            ))}
+                                                                        </td>
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </tr>
                                                     );
                                                 })
@@ -1711,17 +1746,58 @@ const Insurance = ({ onDeleteConfirm }) => {
                                                                         <span className="text-gray-400 font-bold text-[10px]">:</span>
                                                                         <span className="font-semibold text-gray-700 truncate text-[11px]">{item.exporterName || '-'}</span>
 
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-blue-600 text-[11px]">৳{parseFloat(item.grossPremium || 0).toLocaleString('en-IN')}</span>
+                                                                        {(() => {
+                                                                            const milestones = getLcMilestonesBreakdown(item, insurancePayments);
+                                                                            const hasMultiple = milestones.length > 1;
+                                                                            return (
+                                                                                <>
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Premium</span>
+                                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                                    <div className="text-[11px] font-bold text-blue-600">
+                                                                                        {milestones.map((m, mIdx) => (
+                                                                                            <div key={mIdx} className={m.isOriginal ? "" : "text-amber-600 text-[10px] mt-0.5"}>
+                                                                                                {hasMultiple ? `${m.isOriginal ? 'Orig' : m.label}: ` : ''}৳{m.grossPremium.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                            </div>
+                                                                                        ))}
+                                                                                        {hasMultiple && (
+                                                                                            <div className="text-[10px] text-gray-400 font-bold pt-0.5 mt-0.5 border-t border-gray-100">
+                                                                                                Total: ৳{parseFloat(item.grossPremium || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
 
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Premium</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-rose-600 text-[11px]">৳{parseFloat(item.netPremium || 0).toLocaleString('en-IN')}</span>
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Premium</span>
+                                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                                    <div className="text-[11px] font-bold text-rose-600">
+                                                                                        {milestones.map((m, mIdx) => (
+                                                                                            <div key={mIdx} className={m.isOriginal ? "" : "text-amber-600 text-[10px] mt-0.5"}>
+                                                                                                {hasMultiple ? `${m.isOriginal ? 'Orig' : m.label}: ` : ''}৳{m.netPremium.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                            </div>
+                                                                                        ))}
+                                                                                        {hasMultiple && (
+                                                                                            <div className="text-[10px] text-gray-400 font-bold pt-0.5 mt-0.5 border-t border-gray-100">
+                                                                                                Total: ৳{parseFloat(item.netPremium || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
 
-                                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exp. Return</span>
-                                                                        <span className="text-gray-400 font-bold text-[10px]">:</span>
-                                                                        <span className="font-bold text-emerald-600 text-[11px]">৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN')}</span>
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exp. Return</span>
+                                                                                    <span className="text-gray-400 font-bold text-[10px]">:</span>
+                                                                                    <div className="text-[11px] font-bold text-emerald-600">
+                                                                                        {milestones.map((m, mIdx) => (
+                                                                                            <div key={mIdx} className={m.isOriginal ? "" : "text-amber-600 text-[10px] mt-0.5"}>
+                                                                                                {hasMultiple ? `${m.isOriginal ? 'Orig' : m.label}: ` : ''}৳{m.expectedReturnAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                            </div>
+                                                                                        ))}
+                                                                                        {hasMultiple && (
+                                                                                            <div className="text-[10px] text-gray-400 font-bold pt-0.5 mt-0.5 border-t border-gray-100">
+                                                                                                Total: ৳{parseFloat(item.expectedReturnAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </>
+                                                                            );
+                                                                        })()}
                                                                     </>
                                                                 )}
                                                             </div>
